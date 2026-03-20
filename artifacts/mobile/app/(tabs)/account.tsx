@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -7,6 +7,8 @@ import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { CompanyFooter } from '@/components/CompanyFooter';
 import type { FeatherIconName } from '@/types/feather-icons';
+
+const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
@@ -123,6 +125,7 @@ export default function AccountScreen() {
         <MenuButton icon="file-text" label="Terms & Conditions" onPress={() => router.push('/terms')} />
         <MenuButton icon="shield" label="Privacy Policy" onPress={() => router.push('/privacy')} />
         <MenuButton icon="refresh-ccw" label="Refund Policy" onPress={() => router.push('/refund')} />
+        <MenuButton icon="mail" label="Contact Us" onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=MyLocalTrade%20Enquiry`)} />
 
         <Pressable style={styles.logoutButton} onPress={handleLogout}>
           <Feather name="log-out" size={18} color={Colors.light.error} />

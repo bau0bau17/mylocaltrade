@@ -1,7 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
+
+const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
 
 export default function TermsScreen() {
   const insets = useSafeAreaInsets();
@@ -81,7 +84,7 @@ export default function TermsScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>8. Complaints & Dispute Resolution</Text>
         <Text style={styles.paragraph}>
-          If you have a complaint, please contact us first at support@mylocaltrade.co.uk. We aim to resolve all complaints within 14 working days. If we cannot resolve your complaint, you may be able to use the EU Online Dispute Resolution platform or seek advice from Citizens Advice.
+          If you have a complaint, please contact us using the Contact Us button below. We aim to resolve all complaints within 14 working days. If we cannot resolve your complaint, you may be able to use the EU Online Dispute Resolution platform or seek advice from Citizens Advice.
         </Text>
       </View>
 
@@ -93,11 +96,16 @@ export default function TermsScreen() {
             Registered in England and Wales{'\n'}
             Company No: 15830141{'\n'}
             VAT No: GB 123 4567 89{'\n'}
-            Registered Office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ{'\n'}
-            Email: support@mylocaltrade.co.uk{'\n'}
-            Tel: 020 1234 5678
+            71-75 Shelton Street, Covent Garden, London, WC2H 9JQ
           </Text>
         </View>
+        <Pressable
+          style={styles.contactBtn}
+          onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=MyLocalTrade%20Terms%20Enquiry`)}
+        >
+          <Feather name="mail" size={16} color={Colors.light.primary} />
+          <Text style={styles.contactBtnText}>Contact Us</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -141,5 +149,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.textSecondary,
     lineHeight: 22,
+  },
+  contactBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.light.primaryMuted,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginTop: 12,
+  },
+  contactBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.primary,
   },
 });

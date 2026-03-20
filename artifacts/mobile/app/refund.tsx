@@ -1,7 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
+
+const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
 
 export default function RefundScreen() {
   const insets = useSafeAreaInsets();
@@ -29,7 +32,7 @@ export default function RefundScreen() {
           Under the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013, you have the right to cancel your subscription within 14 days of purchase without giving any reason. This 14-day cooling-off period begins from the day after you subscribe.
         </Text>
         <Text style={styles.paragraph}>
-          To exercise your right to cancel, you must inform us of your decision by a clear statement (e.g. email to support@mylocaltrade.co.uk or letter to our registered address). You may use the following wording: "I hereby give notice that I cancel my subscription to MyLocalTrade."
+          To exercise your right to cancel, you must inform us of your decision by a clear statement (e.g. via the Contact Us button below or letter to our registered address). You may use the following wording: "I hereby give notice that I cancel my subscription to MyLocalTrade."
         </Text>
       </View>
 
@@ -75,11 +78,16 @@ export default function RefundScreen() {
             Registered in England and Wales{'\n'}
             Company No: 15830141{'\n'}
             VAT No: GB 123 4567 89{'\n'}
-            71-75 Shelton Street, Covent Garden, London, WC2H 9JQ{'\n'}
-            Email: support@mylocaltrade.co.uk{'\n'}
-            Tel: 020 1234 5678
+            71-75 Shelton Street, Covent Garden, London, WC2H 9JQ
           </Text>
         </View>
+        <Pressable
+          style={styles.contactBtn}
+          onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=MyLocalTrade%20Refund%20Request`)}
+        >
+          <Feather name="mail" size={16} color={Colors.light.primary} />
+          <Text style={styles.contactBtnText}>Contact Us</Text>
+        </Pressable>
       </View>
 
       <View style={styles.legalNote}>
@@ -129,6 +137,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.textSecondary,
     lineHeight: 22,
+  },
+  contactBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.light.primaryMuted,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginTop: 12,
+  },
+  contactBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.primary,
   },
   legalNote: {
     padding: 14,

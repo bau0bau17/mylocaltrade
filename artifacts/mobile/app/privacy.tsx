@@ -1,7 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
+
+const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
 
 export default function PrivacyScreen() {
   const insets = useSafeAreaInsets();
@@ -102,7 +105,7 @@ export default function PrivacyScreen() {
           - Binding corporate rules of the receiving organisation
         </Text>
         <Text style={styles.paragraph}>
-          You may request further details about the safeguards we apply to international transfers by contacting us at support@mylocaltrade.co.uk.
+          You may request further details about the safeguards we apply to international transfers by using the Contact Us button below.
         </Text>
       </View>
 
@@ -123,14 +126,19 @@ export default function PrivacyScreen() {
             Data Controller: Service Provider LTD{'\n'}
             Registered in England and Wales{'\n'}
             Company No: 15830141{'\n'}
-            71-75 Shelton Street, Covent Garden, London, WC2H 9JQ{'\n'}
-            Email: support@mylocaltrade.co.uk{'\n'}
-            Tel: 020 1234 5678{'\n\n'}
+            71-75 Shelton Street, Covent Garden, London, WC2H 9JQ{'\n\n'}
             Supervisory Authority:{'\n'}
             Information Commissioner's Office (ICO){'\n'}
             ico.org.uk
           </Text>
         </View>
+        <Pressable
+          style={styles.contactBtn}
+          onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=MyLocalTrade%20Data%20Rights%20Request`)}
+        >
+          <Feather name="mail" size={16} color={Colors.light.primary} />
+          <Text style={styles.contactBtnText}>Contact Us</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -180,5 +188,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.textSecondary,
     lineHeight: 22,
+  },
+  contactBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.light.primaryMuted,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginTop: 12,
+  },
+  contactBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.primary,
   },
 });
