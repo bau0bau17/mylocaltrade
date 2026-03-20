@@ -34,8 +34,9 @@ export default function RegisterCustomerScreen() {
     try {
       await registerCustomer(formData);
       router.replace('/(tabs)/account');
-    } catch (error: any) {
-      Alert.alert('Registration Failed', error.message || 'Could not create account');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Could not create account';
+      Alert.alert('Registration Failed', message);
     } finally {
       setIsLoading(false);
     }

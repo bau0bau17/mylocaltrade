@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import type { FeatherIconName } from '@/types/feather-icons';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
@@ -90,6 +91,8 @@ export default function AccountScreen() {
           <>
             <Text style={styles.sectionTitle}>Trader Dashboard</Text>
             <MenuButton icon="user" label="Edit Profile" onPress={() => router.push('/trader-dashboard/edit-profile')} />
+            <MenuButton icon="tool" label="My Services" onPress={() => router.push('/trader-dashboard/services')} />
+            <MenuButton icon="image" label="Gallery" onPress={() => router.push('/trader-dashboard/gallery')} />
             <MenuButton icon="message-square" label="My Leads" onPress={() => router.push('/trader-dashboard/leads')} />
             <MenuButton icon="credit-card" label="Billing & Plan" onPress={() => router.push('/trader-dashboard/billing')} />
           </>
@@ -116,10 +119,10 @@ export default function AccountScreen() {
   );
 }
 
-function MenuButton({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+function MenuButton({ icon, label, onPress }: { icon: FeatherIconName; label: string; onPress: () => void }) {
   return (
     <Pressable style={styles.menuItem} onPress={onPress}>
-      <Feather name={icon as any} size={20} color={Colors.light.textSecondary} />
+      <Feather name={icon} size={20} color={Colors.light.textSecondary} />
       <Text style={styles.menuLabel}>{label}</Text>
       <Feather name="chevron-right" size={20} color={Colors.light.border} />
     </Pressable>

@@ -6,11 +6,14 @@ import { useGetSubscriptionPlans, useCreateCheckoutSession } from '@workspace/ap
 import { PlanCard } from '@/components/PlanCard';
 import type { CreateCheckoutRequestPlanId } from '@workspace/api-client-react';
 import * as WebBrowser from 'expo-web-browser';
+import { useAuth } from '@/contexts/AuthContext';
+import { getApiUrl } from '@/lib/api-url';
 
 export default function PricingScreen() {
   const insets = useSafeAreaInsets();
   const { data: plansData, isLoading: isLoadingPlans } = useGetSubscriptionPlans();
   const { mutateAsync: createCheckout } = useCreateCheckoutSession();
+  const { token } = useAuth();
   
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
@@ -20,11 +23,29 @@ export default function PricingScreen() {
       const response = await createCheckout({ 
         data: { planId: planId as CreateCheckoutRequestPlanId } 
       });
-      if (response.url) {
-        await WebBrowser.openBrowserAsync(response.url);
+
+      const responseData = response as { url: string; sessionId: string; demoActivationUrl?: string };
+      if (responseData.url === 'DEMO_MODE' && responseData.demoActivationUrl) {
+        const baseUrl = getApiUrl();
+        const activateRes = await fetch(`${baseUrl}${responseData.demoActivationUrl}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const activateData = await activateRes.json();
+        if (activateData.success) {
+          Alert.alert('Success', `Your ${planId} plan has been activated! (Demo Mode)`);
+        } else {
+          Alert.alert('Error', activateData.error || 'Activation failed');
+        }
+      } else if (responseData.url && responseData.url !== 'DEMO_MODE') {
+        await WebBrowser.openBrowserAsync(responseData.url);
       }
-    } catch (error: any) {
-      Alert.alert('Checkout Failed', error.message || 'Could not start checkout process');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Could not start checkout process';
+      Alert.alert('Checkout Failed', message);
     } finally {
       setSelectedPlanId(null);
     }

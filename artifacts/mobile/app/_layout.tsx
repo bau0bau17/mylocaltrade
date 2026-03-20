@@ -39,6 +39,8 @@ function RootLayoutNav() {
       <Stack.Screen name="trader-dashboard/edit-profile" options={{ title: "Edit Profile" }} />
       <Stack.Screen name="trader-dashboard/leads" options={{ title: "My Leads" }} />
       <Stack.Screen name="trader-dashboard/billing" options={{ title: "Billing & Plan" }} />
+      <Stack.Screen name="trader-dashboard/services" options={{ title: "My Services" }} />
+      <Stack.Screen name="trader-dashboard/gallery" options={{ title: "Gallery" }} />
       <Stack.Screen name="saved-traders" options={{ title: "Saved Traders" }} />
       <Stack.Screen name="my-enquiries" options={{ title: "My Enquiries" }} />
       <Stack.Screen name="about" options={{ title: "About Us" }} />
