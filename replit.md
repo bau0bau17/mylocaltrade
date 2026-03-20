@@ -4,6 +4,8 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
+**MyLocalTrade.co.uk** — A UK local trades marketplace mobile app connecting customers with tradespeople. Features a customer-facing discovery experience, trader profiles with subscription tier badges (Basic £10, Premium £20, Elite £30/month), Stripe checkout integration (demo mode when no STRIPE_SECRET_KEY), and a complete backend API.
+
 ## Stack
 
 - **Monorepo tool**: pnpm workspaces
@@ -11,6 +13,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
+- **Mobile**: Expo (React Native) with Expo Router
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
@@ -21,76 +24,109 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server
+│   └── mobile/             # Expo React Native mobile app
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
 │   ├── api-zod/            # Generated Zod schemas from OpenAPI
 │   └── db/                 # Drizzle ORM schema + DB connection
 ├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
+│   └── src/                # Individual .ts scripts
+├── pnpm-workspace.yaml     # pnpm workspace
+├── tsconfig.base.json      # Shared TS options
 ├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+└── package.json            # Root package
 ```
 
 ## TypeScript & Composite Projects
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
-
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. Always typecheck from root: `pnpm run typecheck`.
 
 ## Root Scripts
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages
+- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly`
 
 ## Packages
 
 ### `artifacts/api-server` (`@workspace/api-server`)
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+Express 5 API server with full REST API for MyLocalTrade.
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- Routes mounted at `/api`:
+  - `GET /api/healthz` — health check
+  - `POST /api/auth/register/customer` — customer registration
+  - `POST /api/auth/register/trader` — trader registration
+  - `POST /api/auth/login` — login (returns JWT)
+  - `GET /api/auth/me` — current user (auth required)
+  - `GET /api/traders` — list traders (with search, category, location filters)
+  - `GET /api/traders/featured` — featured traders
+  - `GET /api/traders/:id` — single trader profile
+  - `GET /api/profile` — trader's own profile (auth)
+  - `PUT /api/profile` — update trader profile (auth)
+  - `GET /api/subscriptions/plans` — subscription plans
+  - `POST /api/subscriptions/checkout` — create checkout session (auth, demo mode fallback)
+  - `GET /api/subscriptions/status` — subscription status (auth)
+  - `POST /api/subscriptions/webhook` — Stripe webhook
+  - `GET /api/saved-traders` — saved traders (auth)
+  - `POST /api/saved-traders/:traderId` — save trader (auth)
+  - `DELETE /api/saved-traders/:traderId` — unsave trader (auth)
+  - `POST /api/enquiries` — create enquiry (auth)
+  - `GET /api/enquiries` — list enquiries (auth)
+  - `GET /api/categories` — trade categories
+- Auth: JWT-based (`src/lib/auth.ts`), middleware via `authMiddleware`
 - Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+- Demo mode: When `STRIPE_SECRET_KEY` is not set, checkout auto-activates subscription
+
+### `artifacts/mobile` (`@workspace/mobile`)
+
+Expo React Native mobile app for MyLocalTrade.
+
+- 4 bottom tabs: Home, Search, Traders, Account
+- Stack screens: trader profile, auth (login/register), pricing, enquiry, trader dashboard, static pages
+- Uses NativeTabs with liquid glass on iOS 26+, classic Tabs with BlurView fallback
+- Auth: JWT stored in AsyncStorage, managed via AuthContext
+- API: Uses generated React Query hooks from `@workspace/api-client-react`
+- Base URL configured via `lib/api-url.ts` (reads `EXPO_PUBLIC_DEV_DOMAIN`)
+- Design: Professional blue/white UK marketplace palette (primary #1A56DB, secondary #047857)
 
 ### `lib/db` (`@workspace/db`)
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
+Database layer using Drizzle ORM with PostgreSQL.
 
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
+- Tables: `users`, `trader_profiles`, `saved_traders`, `enquiries`
+- Users have `role` (customer/trader), traders have profiles with plan/subscription fields
+- JSON columns for arrays (additionalServices, serviceAreas, galleryUrls, socialLinks)
+- Push schema: `pnpm --filter @workspace/db run push`
 
 ### `lib/api-spec` (`@workspace/api-spec`)
 
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
+OpenAPI 3.1 spec (`openapi.yaml`) and Orval config. Run codegen: `pnpm --filter @workspace/api-spec run codegen`
 
 ### `lib/api-zod` (`@workspace/api-zod`)
 
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
+Generated Zod schemas from OpenAPI spec. Used by api-server for validation.
 
 ### `lib/api-client-react` (`@workspace/api-client-react`)
 
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
+Generated React Query hooks and fetch client. Exports `setBaseUrl()` and `setAuthTokenGetter()` for configuration.
 
 ### `scripts` (`@workspace/scripts`)
 
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+Utility scripts. Run via `pnpm --filter @workspace/scripts run <script>`.
+
+## Business Details (Placeholder)
+
+- Company: Service Provider LTD
+- Email: support@mylocaltrade.co.uk
+- Company No: 12345678
+- Address: 123 Business Street, London, EC1A 1BB
+
+## Subscription Tiers
+
+- Basic: £10/month — standard listing, 3 gallery images
+- Premium: £20/month — enhanced profile, 10 images, priority search, premium badge
+- Elite: £30/month — featured placement, unlimited images, top visibility, star badge
