@@ -24,7 +24,9 @@ export default function TraderProfileScreen() {
   if (error || !trader) {
     return (
       <View style={styles.centerContainer}>
-        <Feather name="alert-circle" size={48} color={Colors.light.error} style={{ marginBottom: 16 }} />
+        <View style={styles.errorIconWrap}>
+          <Feather name="alert-circle" size={32} color={Colors.light.error} />
+        </View>
         <Text style={styles.errorText}>Could not load trader profile.</Text>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>Go Back</Text>
@@ -39,50 +41,61 @@ export default function TraderProfileScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerCover}>
+        <View style={[styles.headerCover, { paddingTop: insets.top + 12 }]}>
+          <Pressable style={styles.backNav} onPress={() => router.back()}>
+            <Feather name="arrow-left" size={20} color={Colors.light.text} />
+          </Pressable>
           <View style={styles.avatarContainer}>
             <Text style={styles.avatarText}>{trader.businessName.charAt(0)}</Text>
+          </View>
+          <Text style={styles.businessName}>{trader.businessName}</Text>
+          <View style={styles.badges}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{trader.mainCategory}</Text>
+            </View>
+            {trader.plan === 'elite' && (
+              <View style={[styles.planBadge, { backgroundColor: Colors.light.eliteMuted }]}>
+                <Feather name="zap" size={10} color={Colors.light.elite} />
+                <Text style={[styles.planTextColored, { color: Colors.light.elite }]}>Elite</Text>
+              </View>
+            )}
+            {trader.plan === 'premium' && (
+              <View style={[styles.planBadge, { backgroundColor: Colors.light.primaryMuted }]}>
+                <Text style={[styles.planTextColored, { color: Colors.light.primary }]}>Premium</Text>
+              </View>
+            )}
           </View>
         </View>
 
         <View style={styles.content}>
-          <View style={styles.titleSection}>
-            <Text style={styles.businessName}>{trader.businessName}</Text>
-            <View style={styles.badges}>
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryText}>{trader.mainCategory}</Text>
-              </View>
-              {trader.plan === 'elite' && (
-                <View style={[styles.planBadge, { backgroundColor: Colors.light.elite }]}>
-                  <Feather name="star" size={12} color="#FFF" />
-                  <Text style={styles.planText}>Elite Trader</Text>
-                </View>
-              )}
-            </View>
-          </View>
-
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Feather name="star" size={20} color={Colors.light.featured} />
+              <View style={[styles.statIconWrap, { backgroundColor: Colors.light.featuredMuted }]}>
+                <Feather name="star" size={16} color={Colors.light.featured} />
+              </View>
               <Text style={styles.statValue}>{trader.rating || 'New'}</Text>
               <Text style={styles.statLabel}>{trader.reviewCount} Reviews</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Feather name="map-pin" size={20} color={Colors.light.textSecondary} />
+              <View style={[styles.statIconWrap, { backgroundColor: Colors.light.primaryMuted }]}>
+                <Feather name="map-pin" size={16} color={Colors.light.primary} />
+              </View>
               <Text style={styles.statValue}>{trader.town}</Text>
               <Text style={styles.statLabel}>Location</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Feather name="check-circle" size={20} color={Colors.light.secondary} />
+              <View style={[styles.statIconWrap, { backgroundColor: Colors.light.secondaryMuted }]}>
+                <Feather name="check-circle" size={16} color={Colors.light.secondary} />
+              </View>
               <Text style={styles.statValue}>Verified</Text>
               <Text style={styles.statLabel}>Business</Text>
             </View>
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>About Us</Text>
+            <Text style={styles.sectionTitle}>About</Text>
             <Text style={styles.description}>
               {trader.businessDescription || `${trader.businessName} is a professional ${trader.mainCategory.toLowerCase()} operating in ${trader.town} and surrounding areas.`}
             </Text>
@@ -92,12 +105,16 @@ export default function TraderProfileScreen() {
             <Text style={styles.sectionTitle}>Services</Text>
             <View style={styles.servicesList}>
               <View style={styles.serviceItem}>
-                <Feather name="check" size={16} color={Colors.light.primary} />
+                <View style={styles.serviceCheck}>
+                  <Feather name="check" size={12} color={Colors.light.primary} />
+                </View>
                 <Text style={styles.serviceText}>{trader.mainCategory}</Text>
               </View>
               {trader.additionalServices?.map((service, idx) => (
                 <View key={idx} style={styles.serviceItem}>
-                  <Feather name="check" size={16} color={Colors.light.primary} />
+                  <View style={styles.serviceCheck}>
+                    <Feather name="check" size={12} color={Colors.light.primary} />
+                  </View>
                   <Text style={styles.serviceText}>{service}</Text>
                 </View>
               ))}
@@ -105,31 +122,38 @@ export default function TraderProfileScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Contact Information</Text>
+            <Text style={styles.sectionTitle}>Contact</Text>
             <View style={styles.contactCard}>
               <View style={styles.contactRow}>
-                <Feather name="user" size={18} color={Colors.light.textSecondary} />
+                <View style={styles.contactIconWrap}>
+                  <Feather name="user" size={14} color={Colors.light.textSecondary} />
+                </View>
                 <Text style={styles.contactText}>{trader.contactName}</Text>
               </View>
               <Pressable style={styles.contactRow} onPress={() => Linking.openURL(`tel:${trader.phone}`)}>
-                <Feather name="phone" size={18} color={Colors.light.primary} />
+                <View style={styles.contactIconWrap}>
+                  <Feather name="phone" size={14} color={Colors.light.primary} />
+                </View>
                 <Text style={[styles.contactText, { color: Colors.light.primary }]}>{trader.phone}</Text>
               </Pressable>
               {trader.website && (
                 <Pressable style={styles.contactRow} onPress={() => Linking.openURL(trader.website!)}>
-                  <Feather name="globe" size={18} color={Colors.light.primary} />
+                  <View style={styles.contactIconWrap}>
+                    <Feather name="globe" size={14} color={Colors.light.primary} />
+                  </View>
                   <Text style={[styles.contactText, { color: Colors.light.primary }]}>{trader.website}</Text>
                 </Pressable>
               )}
               {trader.businessAddress && (
                 <View style={styles.contactRow}>
-                  <Feather name="map" size={18} color={Colors.light.textSecondary} />
+                  <View style={styles.contactIconWrap}>
+                    <Feather name="map" size={14} color={Colors.light.textSecondary} />
+                  </View>
                   <Text style={styles.contactText}>{trader.businessAddress}</Text>
                 </View>
               )}
             </View>
           </View>
-
         </View>
       </ScrollView>
 
@@ -138,7 +162,7 @@ export default function TraderProfileScreen() {
           style={styles.contactButton}
           onPress={() => router.push(`/enquiry/${trader.id}`)}
         >
-          <Feather name="message-square" size={20} color="#FFF" style={{ marginRight: 8 }} />
+          <Feather name="message-square" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
           <Text style={styles.contactButtonText}>Request a Quote</Text>
         </Pressable>
       </View>
@@ -156,98 +180,114 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+    backgroundColor: Colors.light.background,
+  },
+  errorIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Colors.light.errorMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   errorText: {
-    fontSize: 16,
-    color: Colors.light.text,
+    fontSize: 15,
+    color: Colors.light.textSecondary,
     marginBottom: 24,
   },
   backButton: {
     paddingHorizontal: 24,
     paddingVertical: 12,
     backgroundColor: Colors.light.card,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.light.border,
   },
   backButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.light.text,
   },
   headerCover: {
-    height: 120,
-    backgroundColor: Colors.light.primary,
-    position: 'relative',
+    backgroundColor: Colors.light.surface,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
   },
-  avatarContainer: {
-    position: 'absolute',
-    bottom: -40,
-    left: 20,
-    width: 80,
-    height: 80,
-    borderRadius: 16,
-    backgroundColor: '#FFF',
+  backNav: {
+    alignSelf: 'flex-start',
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: Colors.light.card,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: Colors.light.background,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  avatarContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '700',
     color: Colors.light.primary,
   },
-  content: {
-    padding: 20,
-    paddingTop: 52,
-  },
-  titleSection: {
-    marginBottom: 24,
-  },
   businessName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 10,
+    textAlign: 'center',
   },
   badges: {
     flexDirection: 'row',
     gap: 8,
   },
   categoryBadge: {
-    backgroundColor: '#E0E7FF',
+    backgroundColor: Colors.light.primaryMuted,
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   categoryText: {
-    fontSize: 14,
-    color: '#4338CA',
-    fontWeight: '500',
+    fontSize: 12,
+    color: Colors.light.primary,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   planBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 5,
+    borderRadius: 8,
     gap: 4,
   },
-  planText: {
-    fontSize: 14,
-    color: '#FFF',
-    fontWeight: '500',
+  planTextColored: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  content: {
+    padding: 20,
   },
   statsRow: {
     flexDirection: 'row',
     backgroundColor: Colors.light.card,
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 16,
     marginBottom: 24,
     borderWidth: 1,
@@ -257,64 +297,89 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
+  statIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
   statDivider: {
     width: 1,
     backgroundColor: Colors.light.border,
     marginVertical: 4,
   },
   statValue: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: Colors.light.text,
-    marginTop: 8,
     marginBottom: 2,
   },
   statLabel: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
+    fontSize: 11,
+    color: Colors.light.textMuted,
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.light.text,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
     marginBottom: 12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   description: {
-    fontSize: 15,
-    lineHeight: 24,
-    color: Colors.light.text,
+    fontSize: 14,
+    lineHeight: 22,
+    color: Colors.light.textSecondary,
   },
   servicesList: {
-    gap: 12,
+    gap: 8,
   },
   serviceItem: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  serviceCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
   serviceText: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.light.text,
-    marginLeft: 12,
   },
   contactCard: {
     backgroundColor: Colors.light.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    gap: 16,
+    gap: 12,
   },
   contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  contactIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: Colors.light.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   contactText: {
-    fontSize: 15,
-    color: Colors.light.text,
-    marginLeft: 12,
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    marginLeft: 10,
     flex: 1,
   },
   bottomBar: {
@@ -322,23 +387,24 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: Colors.light.card,
+    backgroundColor: Colors.light.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 14,
   },
   contactButton: {
     backgroundColor: Colors.light.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 54,
-    borderRadius: 12,
+    height: 52,
+    borderRadius: 16,
   },
   contactButtonText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '600',
+    color: Colors.light.white,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

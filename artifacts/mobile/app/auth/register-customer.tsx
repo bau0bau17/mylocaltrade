@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,6 +54,9 @@ export default function RegisterCustomerScreen() {
       bottomOffset={60}
     >
       <View style={styles.header}>
+        <View style={styles.logoWrap}>
+          <Feather name="user-plus" size={28} color={Colors.light.primary} />
+        </View>
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Sign up to find and contact traders</Text>
       </View>
@@ -60,47 +64,63 @@ export default function RegisterCustomerScreen() {
       <View style={styles.form}>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Full Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="John Doe"
-            value={formData.fullName}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, fullName: text }))}
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="user" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="John Doe"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.fullName}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, fullName: text }))}
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email Address *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="you@example.com"
-            value={formData.email}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="mail" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="you@example.com"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.email}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="07700 900000"
-            value={formData.phone}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
-            keyboardType="phone-pad"
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="phone" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="07700 900000"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.phone}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
+              keyboardType="phone-pad"
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Password * (Min 8 chars)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Create a secure password"
-            value={formData.password}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
-            secureTextEntry
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="lock" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="Create a secure password"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.password}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
+              secureTextEntry
+            />
+          </View>
         </View>
 
         <Pressable 
@@ -109,7 +129,7 @@ export default function RegisterCustomerScreen() {
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={Colors.light.white} />
           ) : (
             <Text style={styles.buttonText}>Register</Text>
           )}
@@ -132,54 +152,77 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
+    alignItems: 'center',
     marginBottom: 32,
   },
+  logoWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.light.textSecondary,
   },
   form: {
-    gap: 20,
+    gap: 16,
   },
   inputGroup: {
     gap: 8,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.text,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginLeft: 4,
   },
-  input: {
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    height: 48,
-    fontSize: 16,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 52,
+    gap: 10,
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontSize: 15,
     color: Colors.light.text,
   },
   button: {
     backgroundColor: Colors.light.primary,
-    height: 48,
-    borderRadius: 8,
+    height: 52,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: 8,
   },
   buttonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   buttonText: {
-    color: '#FFF',
+    color: Colors.light.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   footer: {
     flexDirection: 'row',
@@ -193,6 +236,6 @@ const styles = StyleSheet.create({
   footerLink: {
     color: Colors.light.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

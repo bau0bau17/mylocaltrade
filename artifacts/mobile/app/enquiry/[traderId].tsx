@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useCreateEnquiry, useGetTrader } from '@workspace/api-client-react';
@@ -54,6 +55,9 @@ export default function EnquiryScreen() {
       bottomOffset={60}
     >
       <View style={styles.header}>
+        <View style={styles.headerIconWrap}>
+          <Feather name="message-square" size={24} color={Colors.light.primary} />
+        </View>
         <Text style={styles.title}>Contact {trader?.businessName || 'Trader'}</Text>
         <Text style={styles.subtitle}>Send a message to discuss your requirements and request a quote.</Text>
       </View>
@@ -61,46 +65,61 @@ export default function EnquiryScreen() {
       <View style={styles.form}>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Service Required *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Boiler repair, Leaking pipe"
-            value={formData.serviceRequired}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, serviceRequired: text }))}
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="tool" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Boiler repair, Leaking pipe"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.serviceRequired}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, serviceRequired: text }))}
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Message *</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Describe the job in detail..."
-            value={formData.message}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, message: text }))}
-            multiline
-            numberOfLines={5}
-            textAlignVertical="top"
-          />
+          <View style={[styles.inputWrap, styles.textAreaWrap]}>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Describe the job in detail..."
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.message}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, message: text }))}
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Preferred Date (Optional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Next Tuesday, ASAP"
-            value={formData.preferredDate}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, preferredDate: text }))}
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="calendar" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Next Tuesday, ASAP"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.preferredDate}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, preferredDate: text }))}
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Your Phone Number (Optional)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="For quicker contact"
-            value={formData.phone}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
-            keyboardType="phone-pad"
-          />
+          <Text style={styles.label}>Your Phone (Optional)</Text>
+          <View style={styles.inputWrap}>
+            <Feather name="phone" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="For quicker contact"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.phone}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
+              keyboardType="phone-pad"
+            />
+          </View>
         </View>
 
         <Pressable 
@@ -109,9 +128,12 @@ export default function EnquiryScreen() {
           disabled={isPending}
         >
           {isPending ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={Colors.light.white} />
           ) : (
-            <Text style={styles.buttonText}>Send Enquiry</Text>
+            <>
+              <Feather name="send" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
+              <Text style={styles.buttonText}>Send Enquiry</Text>
+            </>
           )}
         </Pressable>
       </View>
@@ -125,58 +147,88 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
-    marginBottom: 24,
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  headerIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 6,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.light.textSecondary,
-    lineHeight: 22,
+    lineHeight: 20,
+    textAlign: 'center',
   },
   form: {
     gap: 16,
   },
   inputGroup: {
-    gap: 8,
+    gap: 6,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.light.text,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginLeft: 4,
   },
-  input: {
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    height: 48,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 52,
+    gap: 10,
+  },
+  textAreaWrap: {
+    height: 120,
+    alignItems: 'flex-start',
+    paddingTop: 14,
+  },
+  input: {
+    flex: 1,
+    height: '100%',
     fontSize: 15,
     color: Colors.light.text,
   },
   textArea: {
-    height: 120,
-    paddingTop: 12,
+    textAlignVertical: 'top',
   },
   button: {
     backgroundColor: Colors.light.primary,
     height: 52,
-    borderRadius: 8,
+    borderRadius: 14,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
+    marginTop: 8,
   },
   buttonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   buttonText: {
-    color: '#FFF',
+    color: Colors.light.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

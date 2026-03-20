@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useAuth } from '@/contexts/AuthContext';
@@ -44,6 +45,9 @@ export default function LoginScreen() {
       bottomOffset={60}
     >
       <View style={styles.header}>
+        <View style={styles.logoWrap}>
+          <Feather name="unlock" size={28} color={Colors.light.primary} />
+        </View>
         <Text style={styles.title}>Welcome Back</Text>
         <Text style={styles.subtitle}>Sign in to your account</Text>
       </View>
@@ -51,26 +55,34 @@ export default function LoginScreen() {
       <View style={styles.form}>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email Address</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="you@example.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="mail" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="you@example.com"
+              placeholderTextColor={Colors.light.textMuted}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="lock" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your password"
+              placeholderTextColor={Colors.light.textMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </View>
         </View>
 
         <Pressable 
@@ -79,7 +91,7 @@ export default function LoginScreen() {
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={Colors.light.white} />
           ) : (
             <Text style={styles.buttonText}>Log In</Text>
           )}
@@ -102,54 +114,77 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
-    marginBottom: 32,
+    alignItems: 'center',
+    marginBottom: 36,
+  },
+  logoWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.light.textSecondary,
   },
   form: {
-    gap: 20,
+    gap: 18,
   },
   inputGroup: {
     gap: 8,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.text,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginLeft: 4,
   },
-  input: {
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    height: 48,
-    fontSize: 16,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 52,
+    gap: 10,
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontSize: 15,
     color: Colors.light.text,
   },
   button: {
     backgroundColor: Colors.light.primary,
-    height: 48,
-    borderRadius: 8,
+    height: 52,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: 8,
   },
   buttonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   buttonText: {
-    color: '#FFF',
+    color: Colors.light.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   footer: {
     flexDirection: 'row',
@@ -163,6 +198,6 @@ const styles = StyleSheet.create({
   footerLink: {
     color: Colors.light.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

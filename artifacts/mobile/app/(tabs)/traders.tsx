@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { TraderCard } from '@/components/TraderCard';
 import { useListTraders } from '@workspace/api-client-react';
@@ -27,6 +28,7 @@ export default function TradersScreen() {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Traders</Text>
+        <Text style={styles.subtitle}>{data?.total || 0} available</Text>
       </View>
       
       <View style={styles.filterBar}>
@@ -67,12 +69,19 @@ export default function TradersScreen() {
           contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 84 + 20 }}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
+            <RefreshControl 
+              refreshing={isRefreshing} 
+              onRefresh={handleRefresh}
+              tintColor={Colors.light.primary}
+            />
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
+              <View style={styles.emptyIconWrap}>
+                <Feather name="users" size={28} color={Colors.light.textMuted} />
+              </View>
               <Text style={styles.emptyTitle}>No traders found</Text>
-              <Text style={styles.emptySubtitle}>Try changing your category filter.</Text>
+              <Text style={styles.emptySubtitle}>Try a different category</Text>
             </View>
           }
         />
@@ -87,20 +96,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
-    padding: 16,
-    paddingBottom: 8,
-    backgroundColor: Colors.light.card,
+    padding: 20,
+    paddingBottom: 12,
+    backgroundColor: Colors.light.surface,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.light.text,
+    letterSpacing: 0.3,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
   },
   filterBar: {
-    backgroundColor: Colors.light.card,
+    backgroundColor: Colors.light.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
-    paddingBottom: 12,
+    paddingBottom: 14,
   },
   filterContent: {
     paddingHorizontal: 16,
@@ -109,23 +124,22 @@ const styles = StyleSheet.create({
   filterPill: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    backgroundColor: Colors.light.card,
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: Colors.light.border,
   },
   filterPillActive: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: Colors.light.primaryMuted,
     borderColor: Colors.light.primary,
   },
   filterText: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.light.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   filterTextActive: {
     color: Colors.light.primary,
-    fontWeight: '600',
   },
   centerContainer: {
     flex: 1,
@@ -133,17 +147,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyState: {
-    padding: 32,
+    padding: 40,
     alignItems: 'center',
   },
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: Colors.light.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.light.textSecondary,
   },
 });

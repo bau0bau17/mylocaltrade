@@ -166,7 +166,7 @@ export default function EditProfileScreen() {
           disabled={isPending}
         >
           {isPending ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={Colors.light.white} />
           ) : (
             <Text style={styles.buttonText}>Save Changes</Text>
           )}
@@ -185,63 +185,71 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.light.background,
   },
   header: {
     marginBottom: 24,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.light.text,
+    letterSpacing: 0.3,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-    marginBottom: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
+    marginBottom: 4,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   form: {
-    gap: 16,
+    gap: 14,
   },
   row: {
     flexDirection: 'row',
   },
   inputGroup: {
-    gap: 8,
+    gap: 6,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.text,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginLeft: 4,
   },
   input: {
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 8,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    height: 48,
+    height: 50,
     fontSize: 15,
     color: Colors.light.text,
   },
   textArea: {
     height: 100,
-    paddingTop: 12,
+    paddingTop: 14,
   },
   button: {
     backgroundColor: Colors.light.primary,
     height: 52,
-    borderRadius: 8,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 24,
   },
   buttonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   buttonText: {
-    color: '#FFF',
+    color: Colors.light.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

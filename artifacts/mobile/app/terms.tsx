@@ -53,12 +53,14 @@ export default function TermsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.heading}>Contact</Text>
-        <Text style={styles.paragraph}>
-          Service Provider LTD{'\n'}
-          123 Business Street, London, EC1A 1BB{'\n'}
-          Company No: 12345678{'\n'}
-          Email: support@mylocaltrade.co.uk
-        </Text>
+        <View style={styles.contactCard}>
+          <Text style={styles.contactText}>
+            Service Provider LTD{'\n'}
+            123 Business Street, London, EC1A 1BB{'\n'}
+            Company No: 12345678{'\n'}
+            Email: support@mylocaltrade.co.uk
+          </Text>
+        </View>
       </View>
     </ScrollView>
   );
@@ -70,24 +72,37 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.light.text,
     marginBottom: 24,
+    letterSpacing: 0.3,
   },
   section: {
     marginBottom: 24,
   },
   heading: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 12,
   },
   paragraph: {
-    fontSize: 15,
+    fontSize: 14,
     color: Colors.light.textSecondary,
-    lineHeight: 24,
-    marginBottom: 12,
+    lineHeight: 22,
+    marginBottom: 10,
+  },
+  contactCard: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  contactText: {
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    lineHeight: 22,
   },
 });

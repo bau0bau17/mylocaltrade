@@ -73,13 +73,14 @@ export default function ServicesScreen() {
           <TextInput
             style={styles.input}
             placeholder="e.g. Boiler Repair, Emergency Callout"
+            placeholderTextColor={Colors.light.textMuted}
             value={newService}
             onChangeText={setNewService}
             onSubmitEditing={addService}
             returnKeyType="done"
           />
           <Pressable style={styles.addButton} onPress={addService}>
-            <Feather name="plus" size={20} color="#FFF" />
+            <Feather name="plus" size={20} color={Colors.light.white} />
           </Pressable>
         </View>
 
@@ -108,7 +109,7 @@ export default function ServicesScreen() {
           disabled={isSaving}
         >
           {isSaving ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={Colors.light.white} />
           ) : (
             <Text style={styles.saveButtonText}>Save Services</Text>
           )}
@@ -131,11 +132,13 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.light.text,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
     marginBottom: 8,
     marginTop: 16,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   description: {
     fontSize: 14,
@@ -146,10 +149,12 @@ const styles = StyleSheet.create({
   mainCategory: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: Colors.light.primaryMuted,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   mainCategoryText: {
     fontSize: 16,
@@ -166,16 +171,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 8,
+    borderRadius: 14,
     paddingHorizontal: 16,
     height: 48,
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.light.text,
   },
   addButton: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 14,
     backgroundColor: Colors.light.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -209,8 +214,8 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     backgroundColor: Colors.light.primary,
-    height: 48,
-    borderRadius: 8,
+    height: 52,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 24,
@@ -219,8 +224,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   saveButtonText: {
-    color: '#FFF',
+    color: Colors.light.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

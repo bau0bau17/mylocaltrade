@@ -10,14 +10,21 @@ interface PlanCardProps {
   isLoading?: boolean;
 }
 
+const PLAN_ACCENTS: Record<string, { border: string; bg: string; accent: string }> = {
+  basic: { border: Colors.light.border, bg: Colors.light.card, accent: Colors.light.textSecondary },
+  premium: { border: Colors.light.primary, bg: Colors.light.primaryMuted, accent: Colors.light.primary },
+  elite: { border: Colors.light.elite, bg: Colors.light.eliteMuted, accent: Colors.light.elite },
+};
+
 export function PlanCard({ plan, onSelect, isLoading }: PlanCardProps) {
-  const isPremiumOrElite = plan.id === 'premium' || plan.id === 'elite';
+  const accent = PLAN_ACCENTS[plan.id] || PLAN_ACCENTS.basic;
 
   return (
-    <View style={[styles.card, isPremiumOrElite && styles.cardPopular]}>
+    <View style={[styles.card, { borderColor: accent.border }]}>
       {plan.isPopular && (
-        <View style={styles.popularBadge}>
-          <Text style={styles.popularText}>Most Popular</Text>
+        <View style={[styles.popularBadge, { backgroundColor: accent.accent }]}>
+          <Feather name="trending-up" size={10} color={Colors.light.white} />
+          <Text style={styles.popularText}>Popular</Text>
         </View>
       )}
       <Text style={styles.name}>{plan.name}</Text>
@@ -30,23 +37,23 @@ export function PlanCard({ plan, onSelect, isLoading }: PlanCardProps) {
       <View style={styles.featuresList}>
         {plan.features.map((feature: string, idx: number) => (
           <View key={idx} style={styles.featureItem}>
-            <Feather name="check" size={16} color={Colors.light.secondary} />
+            <View style={[styles.checkWrap, { backgroundColor: accent.bg }]}>
+              <Feather name="check" size={12} color={accent.accent} />
+            </View>
             <Text style={styles.featureText}>{feature}</Text>
           </View>
         ))}
       </View>
       
       <Pressable 
-        style={[styles.button, isPremiumOrElite ? styles.buttonPrimary : styles.buttonSecondary]} 
+        style={[styles.button, { backgroundColor: accent.accent }]} 
         onPress={() => onSelect(plan.id)}
         disabled={isLoading}
       >
         {isLoading ? (
-          <ActivityIndicator color={isPremiumOrElite ? '#FFF' : Colors.light.primary} />
+          <ActivityIndicator color={Colors.light.white} />
         ) : (
-          <Text style={[styles.buttonText, isPremiumOrElite && styles.buttonTextPrimary]}>
-            Select Plan
-          </Text>
+          <Text style={styles.buttonText}>Select Plan</Text>
         )}
       </Pressable>
     </View>
@@ -56,44 +63,39 @@ export function PlanCard({ plan, onSelect, isLoading }: PlanCardProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.light.card,
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 24,
-    marginBottom: 24,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.light.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
     position: 'relative',
-  },
-  cardPopular: {
-    borderColor: Colors.light.primary,
-    borderWidth: 2,
-    shadowOpacity: 0.1,
   },
   popularBadge: {
     position: 'absolute',
-    top: -12,
+    top: -10,
     alignSelf: 'center',
-    backgroundColor: Colors.light.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 20,
     zIndex: 1,
   },
   popularText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
+    color: Colors.light.white,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   name: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 12,
+    color: Colors.light.textSecondary,
+    marginBottom: 8,
     textAlign: 'center',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   priceContainer: {
     flexDirection: 'row',
@@ -102,53 +104,53 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   currency: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   price: {
-    fontSize: 36,
+    fontSize: 40,
     fontWeight: '700',
     color: Colors.light.text,
+    lineHeight: 44,
   },
   interval: {
-    fontSize: 16,
-    color: Colors.light.textSecondary,
-    marginBottom: 4,
+    fontSize: 14,
+    color: Colors.light.textMuted,
+    marginBottom: 6,
   },
   featuresList: {
     marginBottom: 24,
+    gap: 10,
   },
   featureItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+  },
+  checkWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   featureText: {
-    fontSize: 14,
-    color: Colors.light.text,
-    marginLeft: 8,
+    fontSize: 13,
+    color: Colors.light.textSecondary,
     flex: 1,
   },
   button: {
     paddingVertical: 14,
-    borderRadius: 8,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonPrimary: {
-    backgroundColor: Colors.light.primary,
-  },
-  buttonSecondary: {
-    backgroundColor: '#EFF6FF',
-  },
   buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.primary,
-  },
-  buttonTextPrimary: {
-    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.light.white,
+    letterSpacing: 0.3,
   },
 });
