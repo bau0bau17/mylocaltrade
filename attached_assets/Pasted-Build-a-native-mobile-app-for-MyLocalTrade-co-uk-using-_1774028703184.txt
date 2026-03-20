@@ -1,0 +1,188 @@
+Build a native mobile app for MyLocalTrade.co.uk using React Native and Expo in Replit.
+
+Important:
+Use my existing platform idea ListMyRide.co.uk as the reference for platform structure, feature logic, monetisation model, and user flow, but fully adapt it from a vehicle marketplace into a UK local trades marketplace mobile app.
+
+Company:
+Service Provider LTD
+
+Country:
+United Kingdom
+
+Currency:
+GBP
+
+Core concept:
+MyLocalTrade is a UK marketplace mobile app that connects customers with local tradespeople and service providers such as plumbers, electricians, roofers, cleaners, painters, builders, locksmiths, removals, handymen, and heating/gas engineers.
+
+Main objective:
+Create a production-ready mobile app for iPhone and Android with a modern, trusted, scalable design and future-ready architecture.
+
+Core instruction:
+Keep the same business logic as ListMyRide.co.uk:
+- account-based platform
+- paid business subscriptions
+- public listings
+- featured/promoted visibility
+- dashboard structure
+- strong search and filtering
+- scalable architecture
+- future AI assistant support
+
+But replace all car-specific functionality with trader/service-specific functionality.
+
+App type:
+Native mobile app using React Native + Expo
+
+Main user types:
+1. Customer
+2. Trader
+
+Customer features:
+- Sign up for free
+- Log in
+- Browse trader listings
+- Search by category
+- Search by town/city/postcode
+- Filter by featured traders
+- Filter by rating
+- View trader profiles
+- Save favourite traders
+- Contact traders
+- Future-ready review and quote request structure
+
+Trader features:
+- Sign up
+- Select subscription plan
+- Enter business details
+- Pay via Stripe
+- Get account activated only after successful payment
+- Access trader dashboard
+- Manage profile
+- Manage services
+- Upload logo and gallery images
+- View leads/enquiries
+- Manage billing/subscription
+- Upgrade or downgrade plan later
+
+Subscription plans:
+- Basic Plan: £10/month
+- Premium Plan: £20/month
+- Elite Plan: £30/month
+
+Subscription logic:
+- Basic = limited visibility
+- Premium = increased visibility and more benefits
+- Elite = featured placement and top visibility
+
+Stripe requirements:
+- Prepare Stripe integration for subscriptions
+- Monthly recurring billing in GBP
+- Redirect trader to Stripe Checkout after selecting a plan
+- Trader account activates only after successful payment
+- Store selected plan, Stripe customer ID, and Stripe subscription ID
+- Prepare webhook handling for:
+  - checkout.session.completed
+  - customer.subscription.created
+  - customer.subscription.updated
+  - customer.subscription.deleted
+- Prepare support for future upgrades/downgrades
+- Prepare for VAT support later if needed
+
+Main app screens:
+- Welcome / Home screen
+- Search screen
+- Categories screen
+- Featured traders screen
+- Trader profile screen
+- Customer sign up screen
+- Trader sign up screen
+- Login screen
+- Trader pricing screen
+- Customer dashboard
+- Trader dashboard
+- Edit trader profile
+- Saved traders
+- Contact / Enquiry screen
+- About
+- Privacy Policy
+- Terms and Conditions
+- Refund / Cancellation Policy
+
+Search and discovery:
+- Search by service category
+- Search by location
+- Category screens
+- Location-based screens
+- Featured trader badges
+- Subscription badges
+- Rating placeholders
+- SEO/web-ready structure for future web sync
+
+Trader profile fields:
+- Business name
+- Contact name
+- Email
+- Phone number
+- Password
+- Main category
+- Additional services
+- Business address
+- Town/City
+- Postcode
+- Service areas covered
+- Business description
+- Website
+- Opening hours
+- Logo/profile image
+- Gallery images
+- Social media links
+
+UI/UX design:
+- Professional UK marketplace style
+- Clean blue/white premium interface
+- Trust-focused design similar in quality to ListMyRide
+- Card-based trader listings
+- Clear CTA buttons
+- Mobile-first design
+- Native-feeling navigation
+- Elegant icons
+- Modern typography
+- Smooth responsive interactions
+- Clean tab navigation or bottom navigation where appropriate
+
+Architecture requirements:
+- Use reusable components
+- Use scalable folder structure
+- Prepare backend/API structure for future expansion
+- Prepare admin-ready architecture
+- Prepare review system later
+- Prepare messaging later
+- Prepare bookings or quote requests later
+- Prepare AI-powered assistant later
+
+Technical requirements:
+- React Native + Expo
+- Clean component structure
+- Environment variables support
+- Secure configuration pattern
+- Use Replit Secrets for API keys
+- Prepare a backend-friendly structure for Stripe and authentication
+
+Important content requirements:
+- Keep all app text in English
+- Use UK spelling
+- Include trust-building language
+- Include placeholders for support email, company number, and registered address
+
+Output required:
+- Full mobile app structure
+- All main screens
+- Navigation structure
+- Reusable UI components
+- Trader dashboard structure
+- Customer account structure
+- Stripe subscription flow placeholders/integration points
+- Environment variables list
+- Setup instructions for running in Replit with Expo
+- Production-ready architecture
