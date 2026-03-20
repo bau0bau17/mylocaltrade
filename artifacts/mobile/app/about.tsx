@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
+
+const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
 
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
@@ -118,27 +120,19 @@ export default function AboutScreen() {
 
         <View style={styles.infoDivider} />
 
-        <View style={styles.infoRow}>
-          <Feather name="mail" size={14} color={Colors.light.primary} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Email</Text>
-            <Text style={[styles.infoText, { color: Colors.light.primary }]}>support@mylocaltrade.co.uk</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Feather name="phone" size={14} color={Colors.light.primary} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Telephone</Text>
-            <Text style={[styles.infoText, { color: Colors.light.primary }]}>020 1234 5678</Text>
-          </View>
-        </View>
+        <Pressable
+          style={styles.contactBtn}
+          onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=MyLocalTrade%20Enquiry`)}
+        >
+          <Feather name="mail" size={16} color={Colors.light.primary} />
+          <Text style={styles.contactBtnText}>Contact Us</Text>
+        </Pressable>
       </View>
 
       <View style={styles.legalNote}>
         <Feather name="info" size={14} color={Colors.light.textMuted} />
         <Text style={styles.legalNoteText}>
-          This app is operated by Service Provider LTD, a company registered in England and Wales (Company No. 15830141). All prices shown include VAT where applicable. By using this app you agree to our Terms & Conditions and Privacy Policy.
+          This app is operated by Service Provider LTD, a company registered in England and Wales (Company No. 15830141). All prices shown include VAT where applicable. By using this app you agree to our Terms & Conditions and Privacy Policy. For any enquiries, use the Contact Us button above.
         </Text>
       </View>
     </ScrollView>
@@ -281,5 +275,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.textMuted,
     lineHeight: 18,
+  },
+  contactBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.light.primaryMuted,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  contactBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.primary,
   },
 });
