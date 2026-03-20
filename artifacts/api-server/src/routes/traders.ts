@@ -110,7 +110,7 @@ router.get("/traders/:id", async (req, res) => {
       .where(eq(traderProfilesTable.id, id))
       .limit(1);
 
-    if (!trader) {
+    if (!trader || !trader.isActive) {
       res.status(404).json({ error: "Trader not found" });
       return;
     }

@@ -53,6 +53,19 @@ export default function PrivacyScreen() {
           We use administrative, technical, and physical security measures to help protect your personal information. While we have taken reasonable steps to secure the personal information you provide to us, please be aware that no security measures are perfect or impenetrable.
         </Text>
       </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>Contact Us</Text>
+        <Text style={styles.paragraph}>
+          If you have questions about this Privacy Policy, please contact us:
+        </Text>
+        <Text style={styles.paragraph}>
+          Service Provider LTD{'\n'}
+          123 Business Street, London, EC1A 1BB{'\n'}
+          Company No: 12345678{'\n'}
+          Email: support@mylocaltrade.co.uk
+        </Text>
+      </View>
     </ScrollView>
   );
 }

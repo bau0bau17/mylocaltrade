@@ -9,7 +9,7 @@ import type { AuthenticatedRequest } from "../lib/types";
 
 const router: IRouter = Router();
 
-const IS_DEMO_MODE = !process.env.STRIPE_SECRET_KEY;
+const IS_DEMO_MODE = !process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== "production";
 
 const PLANS = [
   {
@@ -214,11 +214,6 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
   try {
     if (!IS_DEMO_MODE) {
       res.status(403).json({ error: "Demo activation is not available in production" });
-      return;
-    }
-
-    if (process.env.NODE_ENV === "production") {
-      res.status(403).json({ error: "Demo activation is disabled in production" });
       return;
     }
 
