@@ -25,7 +25,7 @@ export default function TermsScreen() {
           These terms and conditions ("Terms") govern your use of the MyLocalTrade mobile application ("App") operated by Service Provider LTD ("Company", "we", "us"), a company registered in England and Wales under Company No. 15830141.
         </Text>
         <Text style={styles.paragraph}>
-          Our registered office is at 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ. Our VAT registration number is GB 123 4567 89.
+          Our registered office is at 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ.
         </Text>
       </View>
 
@@ -53,7 +53,7 @@ export default function TermsScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>4. Trader Subscriptions</Text>
         <Text style={styles.paragraph}>
-          Tradespeople may subscribe to paid features. Subscriptions are billed on a recurring monthly basis as selected during purchase. All prices include VAT where applicable. Prices are subject to change with 30 days' notice. Your right to cancel is set out in our Refund Policy.
+          Tradespeople may subscribe to paid features. Subscriptions are billed on a recurring monthly basis as selected during purchase. Prices are subject to change with 30 days' notice. Your right to cancel is set out in our Refund Policy.
         </Text>
       </View>
 
@@ -95,7 +95,6 @@ export default function TermsScreen() {
             Service Provider LTD{'\n'}
             Registered in England and Wales{'\n'}
             Company No: 15830141{'\n'}
-            VAT No: GB 123 4567 89{'\n'}
             71-75 Shelton Street, Covent Garden, London, WC2H 9JQ
           </Text>
         </View>

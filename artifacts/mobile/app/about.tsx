@@ -110,14 +110,6 @@ export default function AboutScreen() {
           </View>
         </View>
 
-        <View style={styles.infoRow}>
-          <Feather name="percent" size={14} color={Colors.light.textMuted} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>VAT Registration</Text>
-            <Text style={styles.infoText}>GB 123 4567 89</Text>
-          </View>
-        </View>
-
         <View style={styles.infoDivider} />
 
         <Pressable
@@ -132,7 +124,7 @@ export default function AboutScreen() {
       <View style={styles.legalNote}>
         <Feather name="info" size={14} color={Colors.light.textMuted} />
         <Text style={styles.legalNoteText}>
-          This app is operated by Service Provider LTD, a company registered in England and Wales (Company No. 15830141). All prices shown include VAT where applicable. By using this app you agree to our Terms & Conditions and Privacy Policy. For any enquiries, use the Contact Us button above.
+          This app is operated by Service Provider LTD, a company registered in England and Wales (Company No. 15830141). By using this app you agree to our Terms & Conditions and Privacy Policy. For any enquiries, use the Contact Us button above.
         </Text>
       </View>
     </ScrollView>
