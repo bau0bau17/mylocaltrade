@@ -77,7 +77,6 @@ export default function RefundScreen() {
             Service Provider LTD{'\n'}
             Registered in England and Wales{'\n'}
             Company No: 15830141{'\n'}
-            VAT No: GB 123 4567 89{'\n'}
             71-75 Shelton Street, Covent Garden, London, WC2H 9JQ
           </Text>
         </View>
