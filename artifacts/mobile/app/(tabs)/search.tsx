@@ -70,10 +70,11 @@ export default function SearchScreen() {
         
         <View style={styles.searchForm}>
           <View style={styles.inputContainer}>
-            <Feather name="search" size={20} color={Colors.light.textSecondary} />
+            <Feather name="search" size={18} color={Colors.light.textMuted} />
             <TextInput
               style={styles.input}
               placeholder="What service do you need?"
+              placeholderTextColor={Colors.light.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
               onSubmitEditing={handleSearch}
@@ -81,16 +82,17 @@ export default function SearchScreen() {
             />
             {searchQuery.length > 0 && (
               <Pressable onPress={() => setSearchQuery('')}>
-                <Feather name="x-circle" size={16} color={Colors.light.textSecondary} />
+                <Feather name="x-circle" size={16} color={Colors.light.textMuted} />
               </Pressable>
             )}
           </View>
           
           <View style={styles.inputContainer}>
-            <Feather name="map-pin" size={20} color={Colors.light.textSecondary} />
+            <Feather name="map-pin" size={18} color={Colors.light.textMuted} />
             <TextInput
               style={styles.input}
               placeholder="Town or Postcode"
+              placeholderTextColor={Colors.light.textMuted}
               value={locationQuery}
               onChangeText={setLocationQuery}
               onSubmitEditing={handleSearch}
@@ -99,6 +101,7 @@ export default function SearchScreen() {
           </View>
 
           <Pressable style={styles.searchButton} onPress={handleSearch}>
+            <Feather name="search" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
             <Text style={styles.searchButtonText}>Find Traders</Text>
           </Pressable>
         </View>
@@ -114,13 +117,18 @@ export default function SearchScreen() {
                 style={styles.recentItem}
                 onPress={() => applyRecentSearch(search)}
               >
-                <Feather name="clock" size={16} color={Colors.light.textSecondary} />
+                <View style={styles.recentIconWrap}>
+                  <Feather name="clock" size={14} color={Colors.light.textMuted} />
+                </View>
                 <Text style={styles.recentText}>{search}</Text>
-                <Feather name="arrow-up-left" size={16} color={Colors.light.textSecondary} />
+                <Feather name="arrow-up-left" size={14} color={Colors.light.textMuted} />
               </Pressable>
             ))
           ) : (
-            <Text style={styles.emptyText}>No recent searches</Text>
+            <View style={styles.emptyRecent}>
+              <Feather name="search" size={32} color={Colors.light.textMuted} style={{ marginBottom: 8 }} />
+              <Text style={styles.emptyText}>No recent searches</Text>
+            </View>
           )}
         </View>
       ) : (
@@ -143,9 +151,11 @@ export default function SearchScreen() {
             />
           ) : (
             <View style={styles.emptyState}>
-              <Feather name="search" size={48} color={Colors.light.textSecondary} style={{ marginBottom: 16 }} />
+              <View style={styles.emptyIconWrap}>
+                <Feather name="search" size={32} color={Colors.light.textMuted} />
+              </View>
               <Text style={styles.emptyTitle}>No traders found</Text>
-              <Text style={styles.emptySubtitle}>Try adjusting your search terms or location to find more results.</Text>
+              <Text style={styles.emptySubtitle}>Try adjusting your search or location</Text>
             </View>
           )}
         </View>
@@ -160,58 +170,62 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
-    padding: 16,
-    backgroundColor: Colors.light.card,
+    padding: 20,
+    backgroundColor: Colors.light.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.light.text,
     marginBottom: 16,
+    letterSpacing: 0.3,
   },
   searchForm: {
-    gap: 12,
+    gap: 10,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.light.background,
+    backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    paddingHorizontal: 14,
     height: 48,
   },
   input: {
     flex: 1,
     height: '100%',
-    marginLeft: 8,
-    fontSize: 16,
+    marginLeft: 10,
+    fontSize: 15,
     color: Colors.light.text,
   },
   searchButton: {
     backgroundColor: Colors.light.primary,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 14,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
   },
   searchButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
+    color: Colors.light.white,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   recentSection: {
-    padding: 16,
+    padding: 20,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.light.text,
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
     marginBottom: 16,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   recentItem: {
     flexDirection: 'row',
@@ -220,26 +234,39 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
+  recentIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.light.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   recentText: {
     flex: 1,
     marginLeft: 12,
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.light.text,
   },
+  emptyRecent: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
   emptyText: {
-    fontSize: 14,
-    color: Colors.light.textSecondary,
-    fontStyle: 'italic',
+    fontSize: 13,
+    color: Colors.light.textMuted,
   },
   resultsContainer: {
     flex: 1,
   },
   resultsCount: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.textSecondary,
-    paddingHorizontal: 16,
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.textMuted,
+    paddingHorizontal: 20,
     paddingTop: 16,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   centerContainer: {
     flex: 1,
@@ -252,16 +279,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 32,
   },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Colors.light.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   emptySubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.light.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
   }
 });

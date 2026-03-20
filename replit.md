@@ -92,7 +92,7 @@ Expo React Native mobile app for MyLocalTrade.
 - Auth: JWT stored in AsyncStorage, managed via AuthContext
 - API: Uses generated React Query hooks from `@workspace/api-client-react`
 - Base URL configured via `lib/api-url.ts` (reads `EXPO_PUBLIC_DEV_DOMAIN`)
-- Design: Professional blue/white UK marketplace palette (primary #1A56DB, secondary #047857)
+- Design: Futuristic dark theme — background `#0B1120`, surface `#111827`, card `#141B2D`, primary cyan `#00B4D8`, secondary mint `#06D6A0`, elite purple `#A855F7`, featured amber `#F59E0B`. All screens use `Colors.light.*` tokens — no hardcoded colors. Consistent 14–18px border radius, uppercase label tracking, muted icon backgrounds, `placeholderTextColor` on all TextInputs.
 
 ### `lib/db` (`@workspace/db`)
 

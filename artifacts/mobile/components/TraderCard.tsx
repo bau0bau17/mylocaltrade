@@ -5,47 +5,47 @@ import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import type { TraderProfile } from '@workspace/api-client-react';
 
+const PLAN_STYLES = {
+  elite: { bg: Colors.light.eliteMuted, color: Colors.light.elite, label: 'Elite' },
+  premium: { bg: Colors.light.primaryMuted, color: Colors.light.primary, label: 'Premium' },
+  basic: { bg: Colors.light.border, color: Colors.light.textSecondary, label: 'Basic' },
+};
+
 export function TraderCard({ trader }: { trader: TraderProfile }) {
   const router = useRouter();
+  const planStyle = PLAN_STYLES[trader.plan as keyof typeof PLAN_STYLES];
 
   return (
     <Pressable style={styles.card} onPress={() => router.push(`/trader/${trader.id}`)}>
       <View style={styles.header}>
         <View style={styles.avatarPlaceholder}>
-          <Feather name="image" size={24} color={Colors.light.textSecondary} />
+          <Text style={styles.avatarLetter}>{trader.businessName.charAt(0)}</Text>
         </View>
         <View style={styles.headerInfo}>
-          <Text style={styles.businessName}>{trader.businessName}</Text>
+          <Text style={styles.businessName} numberOfLines={1}>{trader.businessName}</Text>
           <View style={styles.badgeRow}>
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{trader.mainCategory}</Text>
             </View>
-            {trader.plan === 'elite' && (
-              <View style={[styles.planBadge, { backgroundColor: Colors.light.elite }]}>
-                <Feather name="star" size={12} color="#FFF" />
-                <Text style={styles.planText}>Elite</Text>
-              </View>
-            )}
-            {trader.plan === 'premium' && (
-              <View style={[styles.planBadge, { backgroundColor: '#9333EA' }]}>
-                <Text style={styles.planText}>Premium</Text>
-              </View>
-            )}
-            {trader.plan === 'basic' && (
-              <View style={[styles.planBadge, { backgroundColor: Colors.light.primary }]}>
-                <Text style={styles.planText}>Basic</Text>
+            {planStyle && (
+              <View style={[styles.planBadge, { backgroundColor: planStyle.bg }]}>
+                {trader.plan === 'elite' && <Feather name="zap" size={10} color={planStyle.color} />}
+                <Text style={[styles.planText, { color: planStyle.color }]}>{planStyle.label}</Text>
               </View>
             )}
           </View>
         </View>
       </View>
-      <View style={styles.detailsRow}>
-        <Feather name="map-pin" size={14} color={Colors.light.textSecondary} />
-        <Text style={styles.detailsText}>{trader.town}, {trader.postcode}</Text>
-      </View>
-      <View style={styles.detailsRow}>
-        <Feather name="star" size={14} color={Colors.light.featured} />
-        <Text style={styles.detailsText}>{trader.rating || 'New'} ({trader.reviewCount} reviews)</Text>
+      <View style={styles.footer}>
+        <View style={styles.footerItem}>
+          <Feather name="map-pin" size={12} color={Colors.light.textMuted} />
+          <Text style={styles.footerText}>{trader.town}</Text>
+        </View>
+        <View style={styles.footerItem}>
+          <Feather name="star" size={12} color={Colors.light.featured} />
+          <Text style={styles.footerText}>{trader.rating || 'New'} ({trader.reviewCount})</Text>
+        </View>
+        <Feather name="chevron-right" size={16} color={Colors.light.textMuted} />
       </View>
     </Pressable>
   );
@@ -54,78 +54,85 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.light.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
   },
   header: {
     flexDirection: 'row',
     marginBottom: 12,
   },
   avatarPlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+  },
+  avatarLetter: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.primary,
   },
   headerInfo: {
     flex: 1,
     justifyContent: 'center',
   },
   businessName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   categoryBadge: {
-    backgroundColor: '#E0E7FF',
+    backgroundColor: Colors.light.primaryMuted,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   categoryText: {
-    fontSize: 12,
-    color: '#4338CA',
-    fontWeight: '500',
+    fontSize: 11,
+    color: Colors.light.primary,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   planBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    gap: 4,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 3,
   },
   planText: {
-    fontSize: 12,
-    color: '#FFF',
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
-  detailsRow: {
+  footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
   },
-  detailsText: {
-    fontSize: 14,
+  footerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 16,
+    gap: 4,
+  },
+  footerText: {
+    fontSize: 12,
     color: Colors.light.textSecondary,
-    marginLeft: 6,
   },
 });

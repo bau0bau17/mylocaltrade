@@ -5,8 +5,7 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Platform, StyleSheet, View } from "react-native";
 
 import Colors from "@/constants/colors";
 
@@ -34,11 +33,9 @@ function NativeTabLayout() {
 }
 
 function ClassicTabLayout() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
-  const theme = isDark ? Colors.dark : Colors.light;
+  const theme = Colors.light;
 
   return (
     <Tabs
@@ -48,24 +45,24 @@ function ClassicTabLayout() {
         headerShown: true,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : isDark ? "#0F172A" : "#FFFFFF",
-          borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: isDark ? "#334155" : "#E5E7EB",
+          backgroundColor: isIOS ? "transparent" : theme.surface,
+          borderTopWidth: 1,
+          borderTopColor: theme.border,
           elevation: 0,
           ...(isWeb ? { height: 84 } : {}),
         },
         tabBarBackground: () =>
           isIOS ? (
             <BlurView
-              intensity={100}
-              tint={isDark ? "dark" : "light"}
+              intensity={80}
+              tint="dark"
               style={StyleSheet.absoluteFill}
             />
           ) : isWeb ? (
             <View
               style={[
                 StyleSheet.absoluteFill,
-                { backgroundColor: isDark ? "#0F172A" : "#FFFFFF" },
+                { backgroundColor: theme.surface },
               ]}
             />
           ) : null,
@@ -101,7 +98,7 @@ function ClassicTabLayout() {
         name="traders"
         options={{
           title: "Traders",
-          headerShown: true,
+          headerShown: false,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="briefcase" tintColor={color} size={24} />

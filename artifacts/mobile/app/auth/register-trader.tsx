@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,7 +41,7 @@ export default function RegisterTraderScreen() {
     setIsLoading(true);
     try {
       await registerTrader(formData);
-      router.replace('/pricing'); // Traders usually pick a plan after signup
+      router.replace('/pricing');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Could not create account';
       Alert.alert('Registration Failed', message);
@@ -60,6 +61,9 @@ export default function RegisterTraderScreen() {
       bottomOffset={60}
     >
       <View style={styles.header}>
+        <View style={styles.logoWrap}>
+          <Feather name="briefcase" size={28} color={Colors.light.secondary} />
+        </View>
         <Text style={styles.title}>Join as a Trader</Text>
         <Text style={styles.subtitle}>Grow your business with MyLocalTrade</Text>
       </View>
@@ -69,90 +73,121 @@ export default function RegisterTraderScreen() {
         
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Business Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Smith Plumbing Ltd"
-            value={formData.businessName}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, businessName: text }))}
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="briefcase" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Smith Plumbing Ltd"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.businessName}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, businessName: text }))}
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Main Category *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Plumber, Electrician"
-            value={formData.mainCategory}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, mainCategory: text }))}
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="tag" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Plumber, Electrician"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.mainCategory}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, mainCategory: text }))}
+            />
+          </View>
         </View>
 
         <View style={styles.row}>
           <View style={[styles.inputGroup, { flex: 2 }]}>
             <Text style={styles.label}>Town/City *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="London"
-              value={formData.town}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, town: text }))}
-            />
+            <View style={styles.inputWrap}>
+              <Feather name="map-pin" size={16} color={Colors.light.textMuted} />
+              <TextInput
+                style={styles.input}
+                placeholder="London"
+                placeholderTextColor={Colors.light.textMuted}
+                value={formData.town}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, town: text }))}
+              />
+            </View>
           </View>
-          <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
+          <View style={[styles.inputGroup, { flex: 1, marginLeft: 10 }]}>
             <Text style={styles.label}>Postcode *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="EC1A 1BB"
-              value={formData.postcode}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, postcode: text }))}
-              autoCapitalize="characters"
-            />
+            <View style={styles.inputWrap}>
+              <TextInput
+                style={[styles.input, { marginLeft: 0 }]}
+                placeholder="EC1A 1BB"
+                placeholderTextColor={Colors.light.textMuted}
+                value={formData.postcode}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, postcode: text }))}
+                autoCapitalize="characters"
+              />
+            </View>
           </View>
         </View>
 
-        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Contact & Login Details</Text>
+        <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Contact & Login</Text>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Your Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="John Smith"
-            value={formData.contactName}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, contactName: text }))}
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="user" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="John Smith"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.contactName}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, contactName: text }))}
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email Address *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="you@business.com"
-            value={formData.email}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="mail" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="you@business.com"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.email}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Phone Number *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="07700 900000"
-            value={formData.phone}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
-            keyboardType="phone-pad"
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="phone" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="07700 900000"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.phone}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
+              keyboardType="phone-pad"
+            />
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Password * (Min 8 chars)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Create a secure password"
-            value={formData.password}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
-            secureTextEntry
-          />
+          <View style={styles.inputWrap}>
+            <Feather name="lock" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="Create a secure password"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.password}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
+              secureTextEntry
+            />
+          </View>
         </View>
 
         <Pressable 
@@ -161,7 +196,7 @@ export default function RegisterTraderScreen() {
           disabled={isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={Colors.light.white} />
           ) : (
             <Text style={styles.buttonText}>Register Business</Text>
           )}
@@ -184,63 +219,88 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
-    marginBottom: 32,
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  logoWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Colors.light.secondaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.light.textSecondary,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.light.text,
-    marginBottom: 8,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
+    marginBottom: 4,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   form: {
-    gap: 16,
+    gap: 14,
   },
   row: {
     flexDirection: 'row',
   },
   inputGroup: {
-    gap: 8,
+    gap: 6,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.light.text,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginLeft: 4,
   },
-  input: {
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    height: 48,
-    fontSize: 16,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 50,
+    gap: 10,
+  },
+  input: {
+    flex: 1,
+    height: '100%',
+    fontSize: 15,
     color: Colors.light.text,
   },
   button: {
     backgroundColor: Colors.light.secondary,
-    height: 48,
-    borderRadius: 8,
+    height: 52,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
+    marginTop: 8,
   },
   buttonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   buttonText: {
-    color: '#FFF',
+    color: Colors.light.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   footer: {
     flexDirection: 'row',
@@ -254,6 +314,6 @@ const styles = StyleSheet.create({
   footerLink: {
     color: Colors.light.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

@@ -81,6 +81,7 @@ export default function GalleryScreen() {
           <TextInput
             style={styles.input}
             placeholder="https://example.com/image.jpg"
+            placeholderTextColor={Colors.light.textMuted}
             value={newUrl}
             onChangeText={setNewUrl}
             onSubmitEditing={addImage}
@@ -89,7 +90,7 @@ export default function GalleryScreen() {
             keyboardType="url"
           />
           <Pressable style={styles.addButton} onPress={addImage}>
-            <Feather name="plus" size={20} color="#FFF" />
+            <Feather name="plus" size={20} color={Colors.light.white} />
           </Pressable>
         </View>
 
@@ -107,7 +108,7 @@ export default function GalleryScreen() {
               <View key={idx} style={styles.imageCard}>
                 <Image source={{ uri: url }} style={styles.image} resizeMode="cover" />
                 <Pressable style={styles.removeButton} onPress={() => removeImage(idx)}>
-                  <Feather name="x" size={16} color="#FFF" />
+                  <Feather name="x" size={16} color={Colors.light.white} />
                 </Pressable>
               </View>
             ))}
@@ -120,7 +121,7 @@ export default function GalleryScreen() {
           disabled={isSaving}
         >
           {isSaving ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color={Colors.light.white} />
           ) : (
             <Text style={styles.saveButtonText}>Save Gallery</Text>
           )}
@@ -149,9 +150,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: Colors.light.text,
+    letterSpacing: 0.3,
   },
   counter: {
     fontSize: 14,
@@ -175,7 +177,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.card,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    borderRadius: 8,
+    borderRadius: 14,
     paddingHorizontal: 16,
     height: 48,
     fontSize: 15,
@@ -184,7 +186,7 @@ const styles = StyleSheet.create({
   addButton: {
     width: 48,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 14,
     backgroundColor: Colors.light.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -233,8 +235,8 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     backgroundColor: Colors.light.primary,
-    height: 48,
-    borderRadius: 8,
+    height: 52,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 24,
@@ -243,8 +245,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   saveButtonText: {
-    color: '#FFF',
+    color: Colors.light.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

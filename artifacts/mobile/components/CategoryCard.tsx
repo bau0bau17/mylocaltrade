@@ -14,7 +14,7 @@ export function CategoryCard({ name, icon }: { name: string; icon: FeatherIconNa
       onPress={() => router.push({ pathname: '/(tabs)/search', params: { category: name } })}
     >
       <View style={styles.iconContainer}>
-        <Feather name={icon} size={24} color={Colors.light.primary} />
+        <Feather name={icon} size={20} color={Colors.light.primary} />
       </View>
       <Text style={styles.name} numberOfLines={1}>{name}</Text>
     </Pressable>
@@ -23,34 +23,28 @@ export function CategoryCard({ name, icon }: { name: string; icon: FeatherIconNa
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 12,
-    padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    flex: 1,
-    margin: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    margin: 2,
   },
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#EFF6FF',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   name: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.light.text,
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
 });

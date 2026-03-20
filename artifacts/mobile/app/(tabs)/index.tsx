@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -30,16 +30,26 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-        <Text style={styles.appName}>MyLocalTrade</Text>
-        <Text style={styles.headerSubtitle}>Find Trusted Local Tradespeople</Text>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.appName}>MyLocalTrade</Text>
+            <Text style={styles.headerSubtitle}>Find Trusted Tradespeople</Text>
+          </View>
+          <View style={styles.headerIcon}>
+            <Feather name="grid" size={20} color={Colors.light.primary} />
+          </View>
+        </View>
         
         <Pressable 
           style={styles.searchBar}
           onPress={() => router.push('/(tabs)/search')}
         >
-          <Feather name="search" size={20} color={Colors.light.textSecondary} />
+          <View style={styles.searchIconWrap}>
+            <Feather name="search" size={18} color={Colors.light.primary} />
+          </View>
           <Text style={styles.searchText}>What service do you need?</Text>
+          <Feather name="sliders" size={16} color={Colors.light.textMuted} />
         </Pressable>
       </View>
 
@@ -49,18 +59,31 @@ export default function HomeScreen() {
       >
         <View style={styles.trustSection}>
           <View style={styles.trustItem}>
-            <Feather name="check-circle" size={24} color={Colors.light.secondary} />
-            <Text style={styles.trustText}>1000+ Verified Traders</Text>
+            <View style={[styles.trustIconWrap, { backgroundColor: Colors.light.secondaryMuted }]}>
+              <Feather name="check-circle" size={18} color={Colors.light.secondary} />
+            </View>
+            <Text style={styles.trustText}>1000+ Verified</Text>
           </View>
+          <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
-            <Feather name="shield" size={24} color={Colors.light.secondary} />
-            <Text style={styles.trustText}>Trusted by UK Homeowners</Text>
+            <View style={[styles.trustIconWrap, { backgroundColor: Colors.light.primaryMuted }]}>
+              <Feather name="shield" size={18} color={Colors.light.primary} />
+            </View>
+            <Text style={styles.trustText}>UK Trusted</Text>
+          </View>
+          <View style={styles.trustDivider} />
+          <View style={styles.trustItem}>
+            <View style={[styles.trustIconWrap, { backgroundColor: Colors.light.featuredMuted }]}>
+              <Feather name="star" size={18} color={Colors.light.featured} />
+            </View>
+            <Text style={styles.trustText}>Top Rated</Text>
           </View>
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Categories</Text>
+            <Text style={styles.sectionCount}>{CATEGORIES.length}</Text>
           </View>
           <View style={styles.categoriesGrid}>
             {CATEGORIES.map((cat, index) => (
@@ -74,14 +97,16 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Featured Traders</Text>
-            <Pressable onPress={() => router.push('/(tabs)/traders')}>
+            <Pressable onPress={() => router.push('/(tabs)/traders')} style={styles.seeAllBtn}>
               <Text style={styles.seeAll}>See All</Text>
+              <Feather name="arrow-right" size={14} color={Colors.light.primary} />
             </Pressable>
           </View>
 
           {isLoadingFeatured ? (
             <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Loading featured traders...</Text>
+              <View style={styles.loadingDot} />
+              <Text style={styles.loadingText}>Loading traders...</Text>
             </View>
           ) : featuredData?.traders && featuredData.traders.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
@@ -93,8 +118,8 @@ export default function HomeScreen() {
             </ScrollView>
           ) : (
             <View style={styles.emptyContainer}>
-              <Feather name="briefcase" size={32} color={Colors.light.textSecondary} style={{ marginBottom: 8 }} />
-              <Text style={styles.emptyText}>No featured traders found.</Text>
+              <Feather name="briefcase" size={28} color={Colors.light.textMuted} style={{ marginBottom: 8 }} />
+              <Text style={styles.emptyText}>No featured traders yet</Text>
             </View>
           )}
         </View>
@@ -110,49 +135,70 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
-    backgroundColor: Colors.light.primary,
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    backgroundColor: Colors.light.surface,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   appName: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#FFF',
-    marginBottom: 4,
+    color: Colors.light.text,
+    letterSpacing: 0.5,
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: '#E0E7FF',
-    marginBottom: 20,
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+    letterSpacing: 0.3,
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchBar: {
-    backgroundColor: '#FFF',
+    backgroundColor: Colors.light.card,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  searchIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   searchText: {
-    marginLeft: 12,
-    fontSize: 16,
-    color: Colors.light.textSecondary,
+    flex: 1,
+    fontSize: 14,
+    color: Colors.light.textMuted,
   },
   scrollContent: {
     padding: 16,
   },
   trustSection: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'center',
     backgroundColor: Colors.light.card,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 24,
     borderWidth: 1,
@@ -160,32 +206,55 @@ const styles = StyleSheet.create({
   },
   trustItem: {
     alignItems: 'center',
-    gap: 8,
     flex: 1,
+    gap: 8,
+  },
+  trustDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: Colors.light.border,
+  },
+  trustIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   trustText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.light.text,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
     textAlign: 'center',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 28,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: Colors.light.text,
+    letterSpacing: 0.3,
+  },
+  sectionCount: {
+    display: 'none',
+  },
+  seeAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   seeAll: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     color: Colors.light.primary,
   },
   categoriesGrid: {
@@ -194,33 +263,41 @@ const styles = StyleSheet.create({
     marginHorizontal: -4,
   },
   categoryWrapper: {
-    width: '50%',
+    width: '20%',
   },
   horizontalScroll: {
     paddingRight: 16,
   },
   featuredCardWrapper: {
-    width: 280,
-    marginRight: 16,
+    width: 260,
+    marginRight: 12,
   },
   loadingContainer: {
-    padding: 24,
+    padding: 32,
     alignItems: 'center',
+    gap: 12,
+  },
+  loadingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.light.primary,
   },
   loadingText: {
     color: Colors.light.textSecondary,
+    fontSize: 13,
   },
   emptyContainer: {
     padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.light.card,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.light.border,
   },
   emptyText: {
     color: Colors.light.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
   }
 });

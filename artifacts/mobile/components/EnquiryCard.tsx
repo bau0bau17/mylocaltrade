@@ -8,9 +8,9 @@ export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
   
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending': return '#F59E0B'; // Amber
-      case 'responded': return '#10B981'; // Green
-      case 'closed': return '#6B7280'; // Gray
+      case 'pending': return Colors.light.featured;
+      case 'responded': return Colors.light.secondary;
+      case 'closed': return Colors.light.textMuted;
       default: return Colors.light.primary;
     }
   };
@@ -56,16 +56,11 @@ export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.light.card,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   header: {
     flexDirection: 'row',
@@ -89,13 +84,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   statusBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 8,
   },
   statusText: {
     fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
   divider: {
     height: 1,

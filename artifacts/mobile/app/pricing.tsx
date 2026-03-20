@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useGetSubscriptionPlans, useCreateCheckoutSession } from '@workspace/api-client-react';
 import { PlanCard } from '@/components/PlanCard';
@@ -72,6 +73,9 @@ export default function PricingScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
+        <View style={styles.headerIconWrap}>
+          <Feather name="trending-up" size={24} color={Colors.light.primary} />
+        </View>
         <Text style={styles.title}>Choose Your Plan</Text>
         <Text style={styles.subtitle}>
           Select the right plan to grow your trade business and reach more local customers.
@@ -90,14 +94,14 @@ export default function PricingScreen() {
       </View>
 
       <View style={styles.faqSection}>
-        <Text style={styles.faqTitle}>Frequently Asked Questions</Text>
+        <Text style={styles.faqTitle}>FAQ</Text>
         <View style={styles.faqItem}>
           <Text style={styles.faqQuestion}>Can I cancel anytime?</Text>
-          <Text style={styles.faqAnswer}>Yes, all our plans are billed monthly and you can cancel your subscription at any time without penalty.</Text>
+          <Text style={styles.faqAnswer}>Yes, all plans are monthly with no penalty for cancellation.</Text>
         </View>
         <View style={styles.faqItem}>
           <Text style={styles.faqQuestion}>How do verified reviews work?</Text>
-          <Text style={styles.faqAnswer}>Only customers who have hired you through MyLocalTrade can leave a verified review on your profile.</Text>
+          <Text style={styles.faqAnswer}>Only customers who hire through MyLocalTrade can leave verified reviews.</Text>
         </View>
       </View>
     </ScrollView>
@@ -113,53 +117,72 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: Colors.light.background,
   },
   content: {
     paddingHorizontal: 16,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
+  },
+  headerIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 12,
+    marginBottom: 8,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.light.textSecondary,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
     paddingHorizontal: 16,
   },
   plansContainer: {
     marginBottom: 32,
   },
   faqSection: {
-    marginTop: 16,
     paddingHorizontal: 8,
   },
   faqTitle: {
-    fontSize: 20,
+    fontSize: 11,
     fontWeight: '700',
-    color: Colors.light.text,
+    color: Colors.light.textMuted,
     marginBottom: 16,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   faqItem: {
-    marginBottom: 20,
+    marginBottom: 16,
+    backgroundColor: Colors.light.card,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   faqQuestion: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   faqAnswer: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.light.textSecondary,
-    lineHeight: 22,
+    lineHeight: 20,
   },
 });

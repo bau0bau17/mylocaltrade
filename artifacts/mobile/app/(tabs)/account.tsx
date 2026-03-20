@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -23,7 +23,9 @@ export default function AccountScreen() {
           <Text style={styles.title}>Account</Text>
         </View>
         <View style={styles.unauthContent}>
-          <Feather name="shield" size={64} color={Colors.light.primary} style={styles.unauthIcon} />
+          <View style={styles.unauthIconWrap}>
+            <Feather name="shield" size={40} color={Colors.light.primary} />
+          </View>
           <Text style={styles.unauthTitle}>Join MyLocalTrade</Text>
           <Text style={styles.unauthSubtitle}>
             Connect with verified local tradespeople or grow your trade business.
@@ -31,7 +33,7 @@ export default function AccountScreen() {
 
           <View style={styles.authButtons}>
             <Pressable 
-              style={[styles.button, styles.primaryButton]} 
+              style={styles.primaryButton} 
               onPress={() => router.push('/auth/login')}
             >
               <Text style={styles.primaryButtonText}>Log In</Text>
@@ -44,16 +46,18 @@ export default function AccountScreen() {
             </View>
 
             <Pressable 
-              style={[styles.button, styles.secondaryButton]} 
+              style={styles.secondaryButton} 
               onPress={() => router.push('/auth/register-customer')}
             >
+              <Feather name="user-plus" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
               <Text style={styles.secondaryButtonText}>Register as Customer</Text>
             </Pressable>
 
             <Pressable 
-              style={[styles.button, styles.outlineButton]} 
+              style={styles.outlineButton} 
               onPress={() => router.push('/auth/register-trader')}
             >
+              <Feather name="briefcase" size={18} color={Colors.light.primary} style={{ marginRight: 8 }} />
               <Text style={styles.outlineButtonText}>Join as a Trader</Text>
             </Pressable>
           </View>
@@ -80,8 +84,15 @@ export default function AccountScreen() {
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>{user?.fullName}</Text>
           <Text style={styles.profileEmail}>{user?.email}</Text>
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>{isTrader ? 'Trader' : 'Customer'}</Text>
+          <View style={[styles.roleBadge, isTrader && styles.traderBadge]}>
+            <Feather 
+              name={isTrader ? 'briefcase' : 'user'} 
+              size={10} 
+              color={isTrader ? Colors.light.featured : Colors.light.primary} 
+            />
+            <Text style={[styles.roleText, isTrader && styles.traderRoleText]}>
+              {isTrader ? 'Trader' : 'Customer'}
+            </Text>
           </View>
         </View>
       </View>
@@ -89,16 +100,16 @@ export default function AccountScreen() {
       <View style={styles.menuSection}>
         {isTrader ? (
           <>
-            <Text style={styles.sectionTitle}>Trader Dashboard</Text>
+            <Text style={styles.sectionTitle}>Dashboard</Text>
             <MenuButton icon="user" label="Edit Profile" onPress={() => router.push('/trader-dashboard/edit-profile')} />
             <MenuButton icon="tool" label="My Services" onPress={() => router.push('/trader-dashboard/services')} />
             <MenuButton icon="image" label="Gallery" onPress={() => router.push('/trader-dashboard/gallery')} />
             <MenuButton icon="message-square" label="My Leads" onPress={() => router.push('/trader-dashboard/leads')} />
-            <MenuButton icon="credit-card" label="Billing & Plan" onPress={() => router.push('/trader-dashboard/billing')} />
+            <MenuButton icon="credit-card" label="Billing & Plan" onPress={() => router.push('/trader-dashboard/billing')} accent />
           </>
         ) : (
           <>
-            <Text style={styles.sectionTitle}>Customer Menu</Text>
+            <Text style={styles.sectionTitle}>My Activity</Text>
             <MenuButton icon="bookmark" label="Saved Traders" onPress={() => router.push('/saved-traders')} />
             <MenuButton icon="message-circle" label="My Enquiries" onPress={() => router.push('/my-enquiries')} />
           </>
@@ -111,7 +122,7 @@ export default function AccountScreen() {
         <MenuButton icon="refresh-ccw" label="Refund Policy" onPress={() => router.push('/refund')} />
 
         <Pressable style={styles.logoutButton} onPress={handleLogout}>
-          <Feather name="log-out" size={20} color={Colors.light.error} />
+          <Feather name="log-out" size={18} color={Colors.light.error} />
           <Text style={styles.logoutText}>Log Out</Text>
         </Pressable>
       </View>
@@ -119,12 +130,14 @@ export default function AccountScreen() {
   );
 }
 
-function MenuButton({ icon, label, onPress }: { icon: FeatherIconName; label: string; onPress: () => void }) {
+function MenuButton({ icon, label, onPress, accent }: { icon: FeatherIconName; label: string; onPress: () => void; accent?: boolean }) {
   return (
-    <Pressable style={styles.menuItem} onPress={onPress}>
-      <Feather name={icon} size={20} color={Colors.light.textSecondary} />
+    <Pressable style={[styles.menuItem, accent && styles.menuItemAccent]} onPress={onPress}>
+      <View style={[styles.menuIconWrap, accent && styles.menuIconAccent]}>
+        <Feather name={icon} size={16} color={accent ? Colors.light.primary : Colors.light.textSecondary} />
+      </View>
       <Text style={styles.menuLabel}>{label}</Text>
-      <Feather name="chevron-right" size={20} color={Colors.light.border} />
+      <Feather name="chevron-right" size={16} color={Colors.light.textMuted} />
     </Pressable>
   );
 }
@@ -135,13 +148,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
-    padding: 16,
-    paddingBottom: 8,
+    padding: 20,
+    paddingBottom: 12,
   },
   title: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.light.text,
+    letterSpacing: 0.3,
   },
   unauthContent: {
     flex: 1,
@@ -149,52 +163,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  unauthIcon: {
+  unauthIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   unauthTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   unauthSubtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: Colors.light.textSecondary,
     textAlign: 'center',
     marginBottom: 32,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   authButtons: {
     width: '100%',
-    gap: 16,
-  },
-  button: {
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
   },
   primaryButton: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.light.primary,
   },
   primaryButtonText: {
-    color: '#FFF',
+    color: Colors.light.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   secondaryButton: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.light.secondary,
   },
   secondaryButtonText: {
-    color: '#FFF',
+    color: Colors.light.white,
     fontSize: 16,
     fontWeight: '600',
   },
   outlineButton: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'transparent',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: Colors.light.primary,
   },
   outlineButtonText: {
@@ -205,7 +237,7 @@ const styles = StyleSheet.create({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 8,
+    marginVertical: 4,
   },
   dividerLine: {
     flex: 1,
@@ -213,36 +245,37 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.border,
   },
   dividerText: {
-    color: Colors.light.textSecondary,
+    color: Colors.light.textMuted,
     paddingHorizontal: 16,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
     backgroundColor: Colors.light.card,
     marginHorizontal: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#E0E7FF',
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: Colors.light.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   avatarText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.light.primary,
   },
@@ -250,52 +283,80 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: Colors.light.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   profileEmail: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.light.textSecondary,
     marginBottom: 8,
   },
   roleBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.light.primaryMuted,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
+  },
+  traderBadge: {
+    backgroundColor: Colors.light.featuredMuted,
   },
   roleText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: Colors.light.primary,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  traderRoleText: {
+    color: Colors.light.featured,
   },
   menuSection: {
     paddingHorizontal: 16,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
     marginTop: 16,
     marginBottom: 8,
-    marginLeft: 8,
+    marginLeft: 4,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.light.card,
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: Colors.light.border,
   },
+  menuItemAccent: {
+    borderColor: Colors.light.primary,
+    backgroundColor: Colors.light.primaryMuted,
+  },
+  menuIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.light.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuIconAccent: {
+    backgroundColor: Colors.light.card,
+  },
   menuLabel: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.light.text,
     marginLeft: 12,
     fontWeight: '500',
@@ -304,17 +365,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
+    padding: 14,
     marginTop: 24,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 12,
+    backgroundColor: Colors.light.errorMuted,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: Colors.light.errorMuted,
+    gap: 8,
   },
   logoutText: {
     color: Colors.light.error,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    marginLeft: 8,
   },
 });
