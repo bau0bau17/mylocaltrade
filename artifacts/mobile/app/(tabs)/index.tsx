@@ -7,6 +7,7 @@ import Colors from '@/constants/colors';
 import { useGetFeaturedTraders } from '@workspace/api-client-react';
 import { CategoryCard } from '@/components/CategoryCard';
 import { TraderCard } from '@/components/TraderCard';
+import { CompanyFooter } from '@/components/CompanyFooter';
 import type { FeatherIconName } from '@/types/feather-icons';
 
 const CATEGORIES: { name: string; icon: FeatherIconName }[] = [
@@ -124,6 +125,7 @@ export default function HomeScreen() {
           )}
         </View>
 
+        <CompanyFooter />
       </ScrollView>
     </View>
   );
