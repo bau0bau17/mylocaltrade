@@ -3,13 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: MyLocalTrade API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: traders
+    description: Trader listing operations
+  - name: profile
+    description: Trader profile management
+  - name: subscriptions
+    description: Subscription and billing
+  - name: saved
+    description: Saved traders
+  - name: enquiries
+    description: Enquiries and leads
+  - name: categories
+    description: Trade categories
 paths:
   /healthz:
     get:
@@ -24,7 +38,464 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register/customer:
+    post:
+      operationId: registerCustomer
+      tags: [auth]
+      summary: Register a new customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterCustomerRequest"
+      responses:
+        "201":
+          description: Customer registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/register/trader:
+    post:
+      operationId: registerTrader
+      tags: [auth]
+      summary: Register a new trader
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterTraderRequest"
+      responses:
+        "201":
+          description: Trader registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /traders:
+    get:
+      operationId: listTraders
+      tags: [traders]
+      summary: List traders with optional search/filter
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: location
+          in: query
+          schema:
+            type: string
+        - name: featured
+          in: query
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of traders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderListResponse"
+
+  /traders/featured:
+    get:
+      operationId: getFeaturedTraders
+      tags: [traders]
+      summary: Get featured traders
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Featured traders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderListResponse"
+
+  /traders/{id}:
+    get:
+      operationId: getTrader
+      tags: [traders]
+      summary: Get trader by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trader details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderProfile"
+        "404":
+          description: Trader not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /profile:
+    get:
+      operationId: getTraderProfile
+      tags: [profile]
+      summary: Get own trader profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Trader profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderProfile"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateTraderProfile
+      tags: [profile]
+      summary: Update trader profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTraderProfileRequest"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderProfile"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /subscriptions/plans:
+    get:
+      operationId: getSubscriptionPlans
+      tags: [subscriptions]
+      summary: Get available subscription plans
+      responses:
+        "200":
+          description: Subscription plans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPlansResponse"
+
+  /subscriptions/checkout:
+    post:
+      operationId: createCheckoutSession
+      tags: [subscriptions]
+      summary: Create Stripe checkout session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckoutRequest"
+      responses:
+        "200":
+          description: Checkout session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutSessionResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /subscriptions/status:
+    get:
+      operationId: getSubscriptionStatus
+      tags: [subscriptions]
+      summary: Get current subscription status
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Subscription status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionStatus"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /webhooks/stripe:
+    post:
+      operationId: handleStripeWebhook
+      tags: [subscriptions]
+      summary: Handle Stripe webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /saved-traders:
+    get:
+      operationId: getSavedTraders
+      tags: [saved]
+      summary: Get saved traders
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Saved traders
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderListResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /saved-traders/{traderId}:
+    post:
+      operationId: saveTrader
+      tags: [saved]
+      summary: Save a trader
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trader saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: unsaveTrader
+      tags: [saved]
+      summary: Remove saved trader
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: traderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trader removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /enquiries:
+    post:
+      operationId: createEnquiry
+      tags: [enquiries]
+      summary: Send an enquiry to a trader
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEnquiryRequest"
+      responses:
+        "201":
+          description: Enquiry sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Enquiry"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      operationId: getEnquiries
+      tags: [enquiries]
+      summary: Get enquiries (trader sees received, customer sees sent)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Enquiries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnquiryListResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /categories:
+    get:
+      operationId: getCategories
+      tags: [categories]
+      summary: Get all trade categories
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoriesResponse"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +505,458 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+
+    RegisterCustomerRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        fullName:
+          type: string
+        phone:
+          type: string
+      required:
+        - email
+        - password
+        - fullName
+
+    RegisterTraderRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        contactName:
+          type: string
+        businessName:
+          type: string
+        phone:
+          type: string
+        mainCategory:
+          type: string
+        town:
+          type: string
+        postcode:
+          type: string
+      required:
+        - email
+        - password
+        - contactName
+        - businessName
+        - phone
+        - mainCategory
+        - town
+        - postcode
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserProfile"
+      required:
+        - token
+        - user
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        fullName:
+          type: string
+        role:
+          type: string
+          enum: [customer, trader]
+        isActive:
+          type: boolean
+        plan:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - fullName
+        - role
+        - isActive
+
+    TraderProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        businessName:
+          type: string
+        contactName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        mainCategory:
+          type: string
+        additionalServices:
+          type: array
+          items:
+            type: string
+        businessAddress:
+          type: string
+          nullable: true
+        town:
+          type: string
+        postcode:
+          type: string
+        serviceAreas:
+          type: array
+          items:
+            type: string
+        businessDescription:
+          type: string
+          nullable: true
+        website:
+          type: string
+          nullable: true
+        openingHours:
+          type: string
+          nullable: true
+        logoUrl:
+          type: string
+          nullable: true
+        galleryUrls:
+          type: array
+          items:
+            type: string
+        socialLinks:
+          type: object
+          nullable: true
+          properties:
+            facebook:
+              type: string
+            twitter:
+              type: string
+            instagram:
+              type: string
+            linkedin:
+              type: string
+        plan:
+          type: string
+          enum: [basic, premium, elite]
+          nullable: true
+        isFeatured:
+          type: boolean
+        isActive:
+          type: boolean
+        rating:
+          type: number
+          nullable: true
+        reviewCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - businessName
+        - contactName
+        - email
+        - phone
+        - mainCategory
+        - town
+        - postcode
+        - isFeatured
+        - isActive
+        - reviewCount
+
+    UpdateTraderProfileRequest:
+      type: object
+      properties:
+        businessName:
+          type: string
+        contactName:
+          type: string
+        phone:
+          type: string
+        mainCategory:
+          type: string
+        additionalServices:
+          type: array
+          items:
+            type: string
+        businessAddress:
+          type: string
+        town:
+          type: string
+        postcode:
+          type: string
+        serviceAreas:
+          type: array
+          items:
+            type: string
+        businessDescription:
+          type: string
+        website:
+          type: string
+        openingHours:
+          type: string
+        logoUrl:
+          type: string
+        galleryUrls:
+          type: array
+          items:
+            type: string
+        socialLinks:
+          type: object
+          properties:
+            facebook:
+              type: string
+            twitter:
+              type: string
+            instagram:
+              type: string
+            linkedin:
+              type: string
+
+    TraderListResponse:
+      type: object
+      properties:
+        traders:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraderProfile"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - traders
+        - total
+        - page
+        - limit
+
+    SubscriptionPlan:
+      type: object
+      properties:
+        id:
+          type: string
+          enum: [basic, premium, elite]
+        name:
+          type: string
+        price:
+          type: number
+        currency:
+          type: string
+        interval:
+          type: string
+        features:
+          type: array
+          items:
+            type: string
+        isPopular:
+          type: boolean
+      required:
+        - id
+        - name
+        - price
+        - currency
+        - interval
+        - features
+        - isPopular
+
+    SubscriptionPlansResponse:
+      type: object
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriptionPlan"
+      required:
+        - plans
+
+    CreateCheckoutRequest:
+      type: object
+      properties:
+        planId:
+          type: string
+          enum: [basic, premium, elite]
+      required:
+        - planId
+
+    CheckoutSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        url:
+          type: string
+      required:
+        - sessionId
+        - url
+
+    SubscriptionStatus:
+      type: object
+      properties:
+        plan:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active, inactive, past_due, cancelled]
+        currentPeriodEnd:
+          type: string
+          format: date-time
+          nullable: true
+        cancelAtPeriodEnd:
+          type: boolean
+      required:
+        - status
+        - cancelAtPeriodEnd
+
+    CreateEnquiryRequest:
+      type: object
+      properties:
+        traderId:
+          type: integer
+        message:
+          type: string
+        serviceRequired:
+          type: string
+        preferredDate:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+      required:
+        - traderId
+        - message
+        - serviceRequired
+
+    Enquiry:
+      type: object
+      properties:
+        id:
+          type: integer
+        traderId:
+          type: integer
+        customerId:
+          type: integer
+        customerName:
+          type: string
+        customerEmail:
+          type: string
+        traderBusinessName:
+          type: string
+        message:
+          type: string
+        serviceRequired:
+          type: string
+        preferredDate:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, responded, closed]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - traderId
+        - customerId
+        - customerName
+        - customerEmail
+        - traderBusinessName
+        - message
+        - serviceRequired
+        - status
+        - createdAt
+
+    EnquiryListResponse:
+      type: object
+      properties:
+        enquiries:
+          type: array
+          items:
+            $ref: "#/components/schemas/Enquiry"
+        total:
+          type: integer
+      required:
+        - enquiries
+        - total
+
+    CategoriesResponse:
+      type: object
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+      required:
+        - categories
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        icon:
+          type: string
+        traderCount:
+          type: integer
+      required:
+        - id
+        - name
+        - icon
+        - traderCount
