@@ -1,15 +1,27 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { UserProfile, LoginRequest, RegisterCustomerRequest, RegisterTraderRequest } from '@workspace/api-client-react';
-import { login as apiLogin, registerCustomer as apiRegisterCustomer, registerTrader as apiRegisterTrader } from '@workspace/api-client-react';
+import { login as apiLogin } from '@workspace/api-client-react';
+import { getApiUrl } from '@/lib/api-url';
+
+export class EmailNotVerifiedError extends Error {
+  readonly code = 'EMAIL_NOT_VERIFIED';
+  readonly email: string;
+  constructor(email: string) {
+    super('Please verify your email address before logging in.');
+    this.name = 'EmailNotVerifiedError';
+    this.email = email;
+  }
+}
 
 interface AuthContextType {
   user: UserProfile | null;
   token: string | null;
   isLoading: boolean;
   login: (data: LoginRequest) => Promise<void>;
-  registerCustomer: (data: RegisterCustomerRequest) => Promise<void>;
-  registerTrader: (data: RegisterTraderRequest) => Promise<void>;
+  registerCustomer: (data: RegisterCustomerRequest) => Promise<{ email: string }>;
+  registerTrader: (data: RegisterTraderRequest) => Promise<{ email: string }>;
+  resendVerification: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   isTrader: boolean;
@@ -31,7 +43,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const storedToken = await AsyncStorage.getItem('auth_token');
       const storedUser = await AsyncStorage.getItem('auth_user');
-      
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
@@ -44,27 +55,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (data: LoginRequest) => {
-    const response = await apiLogin(data);
-    await AsyncStorage.setItem('auth_token', response.token);
-    await AsyncStorage.setItem('auth_user', JSON.stringify(response.user));
-    setToken(response.token);
-    setUser(response.user);
+    try {
+      const response = await apiLogin(data);
+      await AsyncStorage.setItem('auth_token', response.token);
+      await AsyncStorage.setItem('auth_user', JSON.stringify(response.user));
+      setToken(response.token);
+      setUser(response.user);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 403) {
+        const apiErr = err as { data?: { code?: string; email?: string } };
+        if (apiErr.data?.code === 'EMAIL_NOT_VERIFIED') {
+          throw new EmailNotVerifiedError(apiErr.data?.email ?? data.email);
+        }
+      }
+      throw err;
+    }
   };
 
-  const registerCustomer = async (data: RegisterCustomerRequest) => {
-    const response = await apiRegisterCustomer(data);
-    await AsyncStorage.setItem('auth_token', response.token);
-    await AsyncStorage.setItem('auth_user', JSON.stringify(response.user));
-    setToken(response.token);
-    setUser(response.user);
+  const registerCustomer = async (data: RegisterCustomerRequest): Promise<{ email: string }> => {
+    const base = getApiUrl();
+    const res = await fetch(`${base}/api/auth/register/customer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Registration failed');
+    return { email: json.email as string };
   };
 
-  const registerTrader = async (data: RegisterTraderRequest) => {
-    const response = await apiRegisterTrader(data);
-    await AsyncStorage.setItem('auth_token', response.token);
-    await AsyncStorage.setItem('auth_user', JSON.stringify(response.user));
-    setToken(response.token);
-    setUser(response.user);
+  const registerTrader = async (data: RegisterTraderRequest): Promise<{ email: string }> => {
+    const base = getApiUrl();
+    const res = await fetch(`${base}/api/auth/register/trader`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Registration failed');
+    return { email: json.email as string };
+  };
+
+  const resendVerification = async (email: string): Promise<void> => {
+    const base = getApiUrl();
+    const res = await fetch(`${base}/api/auth/resend-verification`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Failed to resend email');
   };
 
   const logout = async () => {
@@ -83,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         registerCustomer,
         registerTrader,
+        resendVerification,
         logout,
         isAuthenticated: !!user,
         isTrader: user?.role === 'trader',

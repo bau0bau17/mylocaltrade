@@ -10,6 +10,8 @@ export const usersTable = pgTable("users", {
   phone: varchar("phone", { length: 50 }),
   role: varchar("role", { length: 20 }).notNull().default("customer"),
   isActive: boolean("is_active").notNull().default(true),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  emailVerificationToken: text("email_verification_token"),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   plan: varchar("plan", { length: 20 }),

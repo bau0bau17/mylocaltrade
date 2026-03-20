@@ -33,8 +33,8 @@ export default function RegisterCustomerScreen() {
     
     setIsLoading(true);
     try {
-      await registerCustomer(formData);
-      router.replace('/(tabs)/account');
+      const { email } = await registerCustomer(formData);
+      router.replace({ pathname: '/auth/verify-email', params: { email } });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Could not create account';
       Alert.alert('Registration Failed', message);

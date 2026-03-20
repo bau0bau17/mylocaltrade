@@ -9,6 +9,7 @@ import {
   LoginBody,
 } from "@workspace/api-zod";
 import { generateToken, authMiddleware } from "../lib/auth";
+import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
 
 const router: IRouter = Router();
@@ -24,28 +25,24 @@ router.post("/auth/register/customer", async (req, res) => {
     }
 
     const passwordHash = await bcryptjs.hash(body.password, 12);
+    const verificationToken = generateVerificationToken();
+
     const [user] = await db.insert(usersTable).values({
       email: body.email,
       passwordHash,
       fullName: body.fullName,
       phone: body.phone || null,
       role: "customer",
-      isActive: true,
+      isActive: false,
+      emailVerified: false,
+      emailVerificationToken: verificationToken,
     }).returning();
 
-    const token = generateToken(user.id, user.role);
+    await sendVerificationEmail(user.email, user.fullName, verificationToken);
 
     res.status(201).json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        isActive: user.isActive,
-        plan: user.plan,
-        createdAt: user.createdAt.toISOString(),
-      },
+      message: "Account created. Please check your email to verify your address before logging in.",
+      email: user.email,
     });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "ZodError") {
@@ -68,6 +65,7 @@ router.post("/auth/register/trader", async (req, res) => {
     }
 
     const passwordHash = await bcryptjs.hash(body.password, 12);
+    const verificationToken = generateVerificationToken();
 
     const result = await db.transaction(async (tx) => {
       const [user] = await tx.insert(usersTable).values({
@@ -77,6 +75,8 @@ router.post("/auth/register/trader", async (req, res) => {
         phone: body.phone,
         role: "trader",
         isActive: false,
+        emailVerified: false,
+        emailVerificationToken: verificationToken,
       }).returning();
 
       await tx.insert(traderProfilesTable).values({
@@ -94,20 +94,11 @@ router.post("/auth/register/trader", async (req, res) => {
       return user;
     });
 
-    const user = result;
-    const token = generateToken(user.id, user.role);
+    await sendVerificationEmail(result.email, result.fullName, verificationToken);
 
     res.status(201).json({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        isActive: user.isActive,
-        plan: user.plan,
-        createdAt: user.createdAt.toISOString(),
-      },
+      message: "Account created. Please check your email to verify your address before logging in.",
+      email: result.email,
     });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "ZodError") {
@@ -135,6 +126,15 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
+    if (!user.emailVerified) {
+      res.status(403).json({
+        error: "Please verify your email address before logging in.",
+        code: "EMAIL_NOT_VERIFIED",
+        email: user.email,
+      });
+      return;
+    }
+
     const token = generateToken(user.id, user.role);
 
     res.json({
@@ -156,6 +156,78 @@ router.post("/auth/login", async (req, res) => {
     }
     req.log.error({ err: error }, "Login failed");
     res.status(500).json({ error: "Login failed" });
+  }
+});
+
+router.get("/auth/verify-email", async (req, res) => {
+  const { token } = req.query as { token?: string };
+
+  if (!token) {
+    res.status(400).send(verifyPage("Invalid Link", "No verification token provided.", false));
+    return;
+  }
+
+  try {
+    const [user] = await db.select().from(usersTable)
+      .where(eq(usersTable.emailVerificationToken, token))
+      .limit(1);
+
+    if (!user) {
+      res.status(404).send(verifyPage("Link Expired", "This verification link is invalid or has already been used.", false));
+      return;
+    }
+
+    if (user.emailVerified) {
+      res.send(verifyPage("Already Verified", "Your email is already verified. You can log in to the app.", true));
+      return;
+    }
+
+    await db.update(usersTable)
+      .set({
+        emailVerified: true,
+        emailVerificationToken: null,
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, user.id));
+
+    res.send(verifyPage("Email Verified!", "Your email has been verified. You can now log in to MyLocalTrade.", true));
+  } catch (error) {
+    req.log.error({ err: error }, "Email verification failed");
+    res.status(500).send(verifyPage("Error", "Something went wrong. Please try again.", false));
+  }
+});
+
+router.post("/auth/resend-verification", async (req, res) => {
+  try {
+    const { email } = req.body as { email?: string };
+    if (!email) {
+      res.status(400).json({ error: "Email is required" });
+      return;
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    if (!user) {
+      res.json({ message: "If an account exists, a verification email has been sent." });
+      return;
+    }
+
+    if (user.emailVerified) {
+      res.json({ message: "Your email is already verified. You can log in." });
+      return;
+    }
+
+    const newToken = generateVerificationToken();
+    await db.update(usersTable)
+      .set({ emailVerificationToken: newToken, updatedAt: new Date() })
+      .where(eq(usersTable.id, user.id));
+
+    await sendVerificationEmail(user.email, user.fullName, newToken);
+
+    res.json({ message: "Verification email sent. Please check your inbox." });
+  } catch (error) {
+    req.log.error({ err: error }, "Resend verification failed");
+    res.status(500).json({ error: "Failed to resend verification email" });
   }
 });
 
@@ -182,5 +254,28 @@ router.get("/auth/me", authMiddleware, async (req, res) => {
     res.status(500).json({ error: "Failed to get user" });
   }
 });
+
+function verifyPage(title: string, message: string, success: boolean): string {
+  const icon = success ? "✅" : "❌";
+  const color = success ? "#06D6A0" : "#EF4444";
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${title} — MyLocalTrade</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;">
+  <div style="max-width: 420px; width: 100%; background: #111827; border-radius: 16px; padding: 48px 40px; text-align: center; border: 1px solid #1F2937;">
+    <div style="font-size: 48px; margin-bottom: 16px;">${icon}</div>
+    <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 12px;">${title}</h1>
+    <p style="color: #9CA3AF; font-size: 16px; line-height: 1.6; margin: 0 0 32px;">${message}</p>
+    ${success ? `<p style="color: ${color}; font-size: 15px; font-weight: 600; margin: 0;">Open the MyLocalTrade app and log in.</p>` : `<p style="color: #6B7280; font-size: 14px; margin: 0;">Please request a new verification email from the app.</p>`}
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 32px 0 16px;">
+    <p style="color: #374151; font-size: 12px; margin: 0;">MyLocalTrade · Service Provider LTD</p>
+  </div>
+</body>
+</html>`;
+}
 
 export default router;
