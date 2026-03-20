@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { CompanyFooter } from '@/components/CompanyFooter';
 import type { FeatherIconName } from '@/types/feather-icons';
 
 export default function AccountScreen() {
@@ -18,7 +19,7 @@ export default function AccountScreen() {
 
   if (!isAuthenticated) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScrollView style={[styles.container, { paddingTop: insets.top }]} contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 20 }}>
         <View style={styles.header}>
           <Text style={styles.title}>Account</Text>
         </View>
@@ -62,7 +63,9 @@ export default function AccountScreen() {
             </Pressable>
           </View>
         </View>
-      </View>
+
+        <CompanyFooter />
+      </ScrollView>
     );
   }
 
@@ -126,6 +129,8 @@ export default function AccountScreen() {
           <Text style={styles.logoutText}>Log Out</Text>
         </Pressable>
       </View>
+
+      <CompanyFooter />
     </ScrollView>
   );
 }
