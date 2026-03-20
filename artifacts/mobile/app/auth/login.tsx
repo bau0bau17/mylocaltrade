@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, EmailNotVerifiedError } from '@/contexts/AuthContext';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -15,6 +15,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -22,11 +23,16 @@ export default function LoginScreen() {
       return;
     }
     
+    setUnverifiedEmail(null);
     setIsLoading(true);
     try {
       await login({ email, password });
       router.replace('/(tabs)/account');
     } catch (error: unknown) {
+      if (error instanceof EmailNotVerifiedError) {
+        setUnverifiedEmail(error.email);
+        return;
+      }
       const message = error instanceof Error ? error.message : 'Invalid credentials';
       Alert.alert('Login Failed', message);
     } finally {
@@ -96,6 +102,24 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>Log In</Text>
           )}
         </Pressable>
+
+        {unverifiedEmail && (
+          <View style={styles.verifyBanner}>
+            <Feather name="alert-circle" size={16} color={Colors.light.featured} />
+            <View style={styles.verifyBannerText}>
+              <Text style={styles.verifyBannerTitle}>Email not verified</Text>
+              <Text style={styles.verifyBannerBody}>
+                Please check your inbox and click the verification link.
+              </Text>
+            </View>
+            <Pressable
+              style={styles.verifyBannerBtn}
+              onPress={() => router.push({ pathname: '/auth/verify-email', params: { email: unverifiedEmail } })}
+            >
+              <Text style={styles.verifyBannerBtnText}>View</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
@@ -199,5 +223,42 @@ const styles = StyleSheet.create({
     color: Colors.light.primary,
     fontSize: 14,
     fontWeight: '700',
+  },
+  verifyBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#2A1F0A',
+    borderWidth: 1,
+    borderColor: Colors.light.featured,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 4,
+  },
+  verifyBannerText: {
+    flex: 1,
+    gap: 2,
+  },
+  verifyBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.featured,
+  },
+  verifyBannerBody: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    lineHeight: 18,
+  },
+  verifyBannerBtn: {
+    backgroundColor: Colors.light.featured,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
+  verifyBannerBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.background,
   },
 });

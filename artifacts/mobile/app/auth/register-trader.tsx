@@ -40,8 +40,8 @@ export default function RegisterTraderScreen() {
     
     setIsLoading(true);
     try {
-      await registerTrader(formData);
-      router.replace('/pricing');
+      const { email } = await registerTrader(formData);
+      router.replace({ pathname: '/auth/verify-email', params: { email } });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Could not create account';
       Alert.alert('Registration Failed', message);
