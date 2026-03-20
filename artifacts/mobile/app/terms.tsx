@@ -19,35 +19,69 @@ export default function TermsScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          Please read these terms and conditions carefully before using the MyLocalTrade mobile application.
+          These terms and conditions ("Terms") govern your use of the MyLocalTrade mobile application ("App") operated by Service Provider LTD ("Company", "we", "us"), a company registered in England and Wales under Company No. 12345678.
+        </Text>
+        <Text style={styles.paragraph}>
+          Our registered office is at 123 Business Street, London, EC1A 1BB. Our VAT registration number is GB 123 4567 89.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>1. Acceptance of Terms</Text>
         <Text style={styles.paragraph}>
-          By accessing and using this app, you accept and agree to be bound by the terms and provision of this agreement.
+          By accessing and using this App, you accept and agree to be bound by these Terms. If you do not agree to these Terms, you must not use the App.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>2. Role of MyLocalTrade</Text>
         <Text style={styles.paragraph}>
-          MyLocalTrade is a platform connecting consumers with tradespeople. We do not provide trade services ourselves, nor do we employ the tradespeople listed on the app. We are not responsible for the quality, safety, or legality of the services provided by tradespeople.
+          MyLocalTrade is a platform connecting consumers with tradespeople. We do not provide trade services ourselves, nor do we employ the tradespeople listed on the App. We are not responsible for the quality, safety, or legality of the services provided by tradespeople. All contracts for work are formed directly between you and the tradesperson.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>3. User Accounts</Text>
         <Text style={styles.paragraph}>
-          You must be at least 18 years of age to use this app. You are responsible for maintaining the confidentiality of your account and password and for restricting access to your device.
+          You must be at least 18 years of age to use this App. You are responsible for maintaining the confidentiality of your account and password, and for restricting access to your device. You accept responsibility for all activities that occur under your account.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>4. Trader Subscriptions</Text>
         <Text style={styles.paragraph}>
-          Tradespeople may subscribe to premium features. Subscriptions are billed on a recurring basis as selected during purchase. Prices are subject to change with notice.
+          Tradespeople may subscribe to paid features. Subscriptions are billed on a recurring monthly basis as selected during purchase. All prices include VAT where applicable. Prices are subject to change with 30 days' notice. Your right to cancel is set out in our Refund Policy.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>5. Consumer Rights</Text>
+        <Text style={styles.paragraph}>
+          Nothing in these Terms affects your statutory rights under the Consumer Rights Act 2015 or the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013. You have the right to cancel a digital subscription within 14 days of purchase.
+        </Text>
+        <Text style={styles.paragraph}>
+          If you request that we begin providing the digital service immediately during the 14-day cooling-off period, you acknowledge that your right to cancel will end once the service has been fully performed. If you cancel before the service is fully performed, you may be required to pay a proportionate amount for the service provided up to the point of cancellation.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>6. Limitation of Liability</Text>
+        <Text style={styles.paragraph}>
+          To the fullest extent permitted by law, we shall not be liable for any indirect, incidental, or consequential damages arising from your use of this App. Nothing in these Terms limits our liability for death or personal injury caused by our negligence, fraud, or any matter for which it would be unlawful to exclude or limit liability.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>7. Governing Law</Text>
+        <Text style={styles.paragraph}>
+          These Terms are governed by and construed in accordance with the laws of England and Wales. Any disputes shall be subject to the exclusive jurisdiction of the courts of England and Wales.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>8. Complaints & Dispute Resolution</Text>
+        <Text style={styles.paragraph}>
+          If you have a complaint, please contact us first at support@mylocaltrade.co.uk. We aim to resolve all complaints within 14 working days. If we cannot resolve your complaint, you may be able to use the EU Online Dispute Resolution platform or seek advice from Citizens Advice.
         </Text>
       </View>
 
@@ -56,9 +90,12 @@ export default function TermsScreen() {
         <View style={styles.contactCard}>
           <Text style={styles.contactText}>
             Service Provider LTD{'\n'}
-            123 Business Street, London, EC1A 1BB{'\n'}
+            Registered in England and Wales{'\n'}
             Company No: 12345678{'\n'}
-            Email: support@mylocaltrade.co.uk
+            VAT No: GB 123 4567 89{'\n'}
+            Registered Office: 123 Business Street, London, EC1A 1BB{'\n'}
+            Email: support@mylocaltrade.co.uk{'\n'}
+            Tel: 020 1234 5678
           </Text>
         </View>
       </View>
