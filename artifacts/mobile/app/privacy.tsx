@@ -129,6 +129,8 @@ export default function PrivacyScreen() {
             71-75 Shelton Street, Covent Garden, London, WC2H 9JQ{'\n\n'}
             Supervisory Authority:{'\n'}
             Information Commissioner's Office (ICO){'\n'}
+            ICO Registration Ref: ZB724124{'\n'}
+            Registered: 22.07.2024 — Valid until: 21.07.2026{'\n'}
             ico.org.uk
           </Text>
         </View>
