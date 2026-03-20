@@ -79,26 +79,20 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeSecretKey) {
+      const demoSessionId = "demo_session_" + Date.now();
+      const demoCustomerId = "demo_cus_" + userId;
+
       await db.transaction(async (tx) => {
         await tx
           .update(usersTable)
-          .set({ plan: planId, isActive: true })
+          .set({ stripeCustomerId: demoCustomerId, stripeSubscriptionId: demoSessionId })
           .where(eq(usersTable.id, userId));
-
-        await tx
-          .update(traderProfilesTable)
-          .set({
-            plan: planId,
-            isActive: true,
-            isFeatured: planId === "elite",
-            updatedAt: new Date(),
-          })
-          .where(eq(traderProfilesTable.userId, userId));
       });
 
       res.json({
-        sessionId: "demo_session_" + Date.now(),
-        url: "DEMO_MODE_ACTIVATED",
+        sessionId: demoSessionId,
+        url: "DEMO_MODE",
+        demoActivationUrl: `/api/subscriptions/demo-activate?sessionId=${demoSessionId}&planId=${planId}`,
       });
       return;
     }
@@ -208,22 +202,77 @@ async function deactivateSubscription(customerId: string) {
   });
 }
 
+router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (req, res) => {
+  try {
+    if (process.env.STRIPE_SECRET_KEY) {
+      res.status(403).json({ error: "Demo activation is disabled when Stripe is configured" });
+      return;
+    }
+
+    const { userId } = req as AuthenticatedRequest;
+    const planId = req.query.planId as string;
+    const sessionId = req.query.sessionId as string;
+
+    if (!planId || !["basic", "premium", "elite"].includes(planId)) {
+      res.status(400).json({ error: "Invalid plan" });
+      return;
+    }
+
+    if (!sessionId) {
+      res.status(400).json({ error: "Missing session ID" });
+      return;
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!user || user.stripeSubscriptionId !== sessionId) {
+      res.status(400).json({ error: "Invalid session for this user" });
+      return;
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(usersTable)
+        .set({ plan: planId, isActive: true })
+        .where(eq(usersTable.id, userId));
+
+      await tx
+        .update(traderProfilesTable)
+        .set({
+          plan: planId,
+          isActive: true,
+          isFeatured: planId === "elite",
+          updatedAt: new Date(),
+        })
+        .where(eq(traderProfilesTable.userId, userId));
+    });
+
+    res.json({ success: true, plan: planId, status: "active" });
+  } catch (error) {
+    req.log.error({ err: error }, "Demo activation failed");
+    res.status(500).json({ error: "Demo activation failed" });
+  }
+});
+
 router.post("/webhooks/stripe", async (req, res) => {
   try {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-    if (webhookSecret) {
-      const signature = req.headers["stripe-signature"];
-      if (!signature || typeof signature !== "string") {
-        res.status(400).json({ error: "Missing Stripe signature" });
-        return;
-      }
+    if (!webhookSecret) {
+      req.log.warn("STRIPE_WEBHOOK_SECRET not set, rejecting webhook");
+      res.status(403).json({ error: "Webhook endpoint not configured" });
+      return;
+    }
 
-      const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
-      if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
-        res.status(400).json({ error: "Invalid webhook signature" });
-        return;
-      }
+    const signature = req.headers["stripe-signature"];
+    if (!signature || typeof signature !== "string") {
+      res.status(400).json({ error: "Missing Stripe signature" });
+      return;
+    }
+
+    const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
+      res.status(400).json({ error: "Invalid webhook signature" });
+      return;
     }
 
     const event = typeof req.body === "string" ? JSON.parse(req.body) : req.body;

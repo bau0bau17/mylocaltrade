@@ -79,14 +79,15 @@ Express 5 API server with full REST API for MyLocalTrade.
   - `GET /api/categories` — trade categories
 - Auth: JWT-based (`src/lib/auth.ts`), middleware via `authMiddleware`
 - Depends on: `@workspace/db`, `@workspace/api-zod`
-- Demo mode: When `STRIPE_SECRET_KEY` is not set, checkout auto-activates subscription
+- Demo mode: When `STRIPE_SECRET_KEY` is not set, checkout returns a demo session; activation requires a separate POST to `/api/subscriptions/demo-activate`
+  - `POST /api/subscriptions/demo-activate` — demo-only activation (auth, trader-only, blocked when Stripe is configured)
 
 ### `artifacts/mobile` (`@workspace/mobile`)
 
 Expo React Native mobile app for MyLocalTrade.
 
 - 4 bottom tabs: Home, Search, Traders, Account
-- Stack screens: trader profile, auth (login/register), pricing, enquiry, trader dashboard, static pages
+- Stack screens: trader profile, auth (login/register), pricing, enquiry, trader dashboard (edit-profile/services/gallery/leads/billing), saved-traders, my-enquiries, static pages
 - Uses NativeTabs with liquid glass on iOS 26+, classic Tabs with BlurView fallback
 - Auth: JWT stored in AsyncStorage, managed via AuthContext
 - API: Uses generated React Query hooks from `@workspace/api-client-react`
@@ -97,7 +98,7 @@ Expo React Native mobile app for MyLocalTrade.
 
 Database layer using Drizzle ORM with PostgreSQL.
 
-- Tables: `users`, `trader_profiles`, `saved_traders`, `enquiries`
+- Tables: `users`, `trader_profiles`, `saved_traders`, `enquiries`, `subscriptions`
 - Users have `role` (customer/trader), traders have profiles with plan/subscription fields
 - JSON columns for arrays (additionalServices, serviceAreas, galleryUrls, socialLinks)
 - Push schema: `pnpm --filter @workspace/db run push`

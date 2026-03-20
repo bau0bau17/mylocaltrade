@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
+import type { FeatherIconName } from '@/types/feather-icons';
 
-export function CategoryCard({ name, icon }: { name: string; icon: string }) {
+export function CategoryCard({ name, icon }: { name: string; icon: FeatherIconName }) {
   const router = useRouter();
 
   return (
@@ -13,7 +14,7 @@ export function CategoryCard({ name, icon }: { name: string; icon: string }) {
       onPress={() => router.push({ pathname: '/(tabs)/search', params: { category: name } })}
     >
       <View style={styles.iconContainer}>
-        <Feather name={icon as any} size={24} color={Colors.light.primary} />
+        <Feather name={icon} size={24} color={Colors.light.primary} />
       </View>
       <Text style={styles.name} numberOfLines={1}>{name}</Text>
     </Pressable>

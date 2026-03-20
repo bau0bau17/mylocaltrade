@@ -37,8 +37,9 @@ export default function EnquiryScreen() {
       Alert.alert('Success', 'Your enquiry has been sent to the trader.', [
         { text: 'OK', onPress: () => router.back() }
       ]);
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Could not send enquiry');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Could not send enquiry';
+      Alert.alert('Error', message);
     }
   };
 

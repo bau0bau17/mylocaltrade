@@ -7,8 +7,9 @@ import Colors from '@/constants/colors';
 import { useGetFeaturedTraders } from '@workspace/api-client-react';
 import { CategoryCard } from '@/components/CategoryCard';
 import { TraderCard } from '@/components/TraderCard';
+import type { FeatherIconName } from '@/types/feather-icons';
 
-const CATEGORIES = [
+const CATEGORIES: { name: string; icon: FeatherIconName }[] = [
   { name: 'Plumber', icon: 'droplet' },
   { name: 'Electrician', icon: 'zap' },
   { name: 'Roofer', icon: 'home' },

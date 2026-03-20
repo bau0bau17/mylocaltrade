@@ -24,8 +24,8 @@ export default function RegisterTraderScreen() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleRegister = async () => {
-    const requiredFields = ['businessName', 'contactName', 'email', 'password', 'phone', 'mainCategory', 'town', 'postcode'];
-    const isMissing = requiredFields.some(field => !(formData as any)[field]);
+    const requiredFields: (keyof typeof formData)[] = ['businessName', 'contactName', 'email', 'password', 'phone', 'mainCategory', 'town', 'postcode'];
+    const isMissing = requiredFields.some(field => !formData[field]);
     
     if (isMissing) {
       Alert.alert('Error', 'Please fill in all required fields');
@@ -41,8 +41,9 @@ export default function RegisterTraderScreen() {
     try {
       await registerTrader(formData);
       router.replace('/pricing'); // Traders usually pick a plan after signup
-    } catch (error: any) {
-      Alert.alert('Registration Failed', error.message || 'Could not create account');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Could not create account';
+      Alert.alert('Registration Failed', message);
     } finally {
       setIsLoading(false);
     }
