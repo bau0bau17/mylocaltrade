@@ -43,6 +43,17 @@ export default function RefundScreen() {
           MyLocalTrade is not responsible for issuing refunds for services provided by tradespeople to consumers. Any disputes regarding trade work, payments, or refunds for physical work must be resolved directly between the consumer and the tradesperson.
         </Text>
       </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>Contact</Text>
+        <Text style={styles.paragraph}>
+          For refund enquiries, contact us:{'\n'}
+          Service Provider LTD{'\n'}
+          123 Business Street, London, EC1A 1BB{'\n'}
+          Company No: 12345678{'\n'}
+          Email: support@mylocaltrade.co.uk
+        </Text>
+      </View>
     </ScrollView>
   );
 }

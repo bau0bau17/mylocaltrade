@@ -50,6 +50,16 @@ export default function TermsScreen() {
           Tradespeople may subscribe to premium features. Subscriptions are billed on a recurring basis as selected during purchase. Prices are subject to change with notice.
         </Text>
       </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>Contact</Text>
+        <Text style={styles.paragraph}>
+          Service Provider LTD{'\n'}
+          123 Business Street, London, EC1A 1BB{'\n'}
+          Company No: 12345678{'\n'}
+          Email: support@mylocaltrade.co.uk
+        </Text>
+      </View>
     </ScrollView>
   );
 }
