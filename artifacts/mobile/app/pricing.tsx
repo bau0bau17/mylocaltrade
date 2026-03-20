@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useGetSubscriptionPlans, useCreateCheckoutSession } from '@workspace/api-client-react';
 import { PlanCard } from '@/components/PlanCard';
-import { CreateCheckoutRequestPlanId } from '@workspace/api-client-react/src/generated/api.schemas';
+import type { CreateCheckoutRequestPlanId } from '@workspace/api-client-react';
 import * as WebBrowser from 'expo-web-browser';
 
 export default function PricingScreen() {

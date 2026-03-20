@@ -2,14 +2,21 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { enquiriesTable, usersTable, traderProfilesTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { authMiddleware, customerOnly } from "../lib/auth";
+import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
+import type { AuthenticatedRequest } from "../lib/types";
 
 const router: IRouter = Router();
 
-router.post("/enquiries", authMiddleware, customerOnly, async (req, res) => {
+router.post("/enquiries", authMiddleware, async (req, res) => {
   try {
-    const userId = (req as any).userId;
+    const { userId, userRole } = req as AuthenticatedRequest;
+
+    if (userRole !== "customer") {
+      res.status(403).json({ error: "Only customers can submit enquiries" });
+      return;
+    }
+
     const { traderId, message, serviceRequired, preferredDate, phone } = CreateEnquiryBody.parse(req.body);
 
     const [trader] = await db
@@ -56,7 +63,11 @@ router.post("/enquiries", authMiddleware, customerOnly, async (req, res) => {
       status: enquiry.status,
       createdAt: enquiry.createdAt.toISOString(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "ZodError") {
+      res.status(400).json({ error: "Invalid enquiry data" });
+      return;
+    }
     req.log.error({ err: error }, "Create enquiry failed");
     res.status(500).json({ error: "Failed to create enquiry" });
   }
@@ -64,8 +75,7 @@ router.post("/enquiries", authMiddleware, customerOnly, async (req, res) => {
 
 router.get("/enquiries", authMiddleware, async (req, res) => {
   try {
-    const userId = (req as any).userId;
-    const userRole = (req as any).userRole;
+    const { userId, userRole } = req as AuthenticatedRequest;
 
     let enquiries;
 
@@ -122,7 +132,7 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
     }));
 
     res.json({ enquiries: formatted, total: formatted.length });
-  } catch (error: any) {
+  } catch (error) {
     req.log.error({ err: error }, "Get enquiries failed");
     res.status(500).json({ error: "Failed to get enquiries" });
   }

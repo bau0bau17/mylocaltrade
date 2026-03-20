@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
-import { Enquiry } from '@workspace/api-client-react/src/generated/api.schemas';
+import type { Enquiry } from '@workspace/api-client-react';
 
 export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
   

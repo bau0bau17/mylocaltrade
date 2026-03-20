@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
-import { SubscriptionPlan } from '@workspace/api-client-react/src/generated/api.schemas';
+import type { SubscriptionPlan } from '@workspace/api-client-react';
 
 interface PlanCardProps {
   plan: SubscriptionPlan;
@@ -28,7 +28,7 @@ export function PlanCard({ plan, onSelect, isLoading }: PlanCardProps) {
       </View>
       
       <View style={styles.featuresList}>
-        {plan.features.map((feature, idx) => (
+        {plan.features.map((feature: string, idx: number) => (
           <View key={idx} style={styles.featureItem}>
             <Feather name="check" size={16} color={Colors.light.secondary} />
             <Text style={styles.featureText}>{feature}</Text>

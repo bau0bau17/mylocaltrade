@@ -39,7 +39,7 @@ router.get("/categories", async (_req, res) => {
     }));
 
     res.json({ categories });
-  } catch (error: any) {
+  } catch (error) {
     res.json({
       categories: CATEGORIES.map(cat => ({ ...cat, traderCount: 0 })),
     });

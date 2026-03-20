@@ -9,6 +9,7 @@ import {
   LoginBody,
 } from "@workspace/api-zod";
 import { generateToken, authMiddleware } from "../lib/auth";
+import type { AuthenticatedRequest } from "../lib/types";
 
 const router: IRouter = Router();
 
@@ -46,9 +47,9 @@ router.post("/auth/register/customer", async (req, res) => {
         createdAt: user.createdAt.toISOString(),
       },
     });
-  } catch (error: any) {
-    if (error?.name === "ZodError") {
-      res.status(400).json({ error: "Invalid input", details: error.issues });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "ZodError") {
+      res.status(400).json({ error: "Invalid input" });
       return;
     }
     req.log.error({ err: error }, "Customer registration failed");
@@ -108,9 +109,9 @@ router.post("/auth/register/trader", async (req, res) => {
         createdAt: user.createdAt.toISOString(),
       },
     });
-  } catch (error: any) {
-    if (error?.name === "ZodError") {
-      res.status(400).json({ error: "Invalid input", details: error.issues });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "ZodError") {
+      res.status(400).json({ error: "Invalid input" });
       return;
     }
     req.log.error({ err: error }, "Trader registration failed");
@@ -148,9 +149,9 @@ router.post("/auth/login", async (req, res) => {
         createdAt: user.createdAt.toISOString(),
       },
     });
-  } catch (error: any) {
-    if (error?.name === "ZodError") {
-      res.status(400).json({ error: "Invalid input", details: error.issues });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "ZodError") {
+      res.status(400).json({ error: "Invalid input" });
       return;
     }
     req.log.error({ err: error }, "Login failed");
@@ -160,7 +161,7 @@ router.post("/auth/login", async (req, res) => {
 
 router.get("/auth/me", authMiddleware, async (req, res) => {
   try {
-    const userId = (req as any).userId;
+    const { userId } = req as AuthenticatedRequest;
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
     if (!user) {
       res.status(404).json({ error: "User not found" });
@@ -176,7 +177,7 @@ router.get("/auth/me", authMiddleware, async (req, res) => {
       plan: user.plan,
       createdAt: user.createdAt.toISOString(),
     });
-  } catch (error: any) {
+  } catch (error) {
     req.log.error({ err: error }, "Get user failed");
     res.status(500).json({ error: "Failed to get user" });
   }
