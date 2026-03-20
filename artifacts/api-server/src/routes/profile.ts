@@ -4,12 +4,13 @@ import { traderProfilesTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { UpdateTraderProfileBody } from "@workspace/api-zod";
+import type { AuthenticatedRequest } from "../lib/types";
 
 const router: IRouter = Router();
 
 router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
   try {
-    const userId = (req as any).userId;
+    const { userId } = req as AuthenticatedRequest;
 
     const [trader] = await db
       .select()
@@ -48,7 +49,7 @@ router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
       reviewCount: trader.reviewCount,
       createdAt: trader.createdAt.toISOString(),
     });
-  } catch (error: any) {
+  } catch (error) {
     req.log.error({ err: error }, "Get profile failed");
     res.status(500).json({ error: "Failed to get profile" });
   }
@@ -56,21 +57,22 @@ router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
 
 router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
   try {
-    const userId = (req as any).userId;
+    const { userId } = req as AuthenticatedRequest;
     const body = UpdateTraderProfileBody.parse(req.body);
 
-    const updateData: Record<string, any> = { updatedAt: new Date() };
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
     const allowedFields = [
       "businessName", "contactName", "phone", "mainCategory",
       "additionalServices", "businessAddress", "town", "postcode",
       "serviceAreas", "businessDescription", "website", "openingHours",
       "logoUrl", "galleryUrls", "socialLinks",
-    ];
+    ] as const;
 
     for (const field of allowedFields) {
-      if ((body as any)[field] !== undefined) {
-        updateData[field] = (body as any)[field];
+      const value = (body as Record<string, unknown>)[field];
+      if (value !== undefined) {
+        updateData[field] = value;
       }
     }
 
@@ -111,7 +113,11 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       reviewCount: updated.reviewCount,
       createdAt: updated.createdAt.toISOString(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "ZodError") {
+      res.status(400).json({ error: "Invalid profile data" });
+      return;
+    }
     req.log.error({ err: error }, "Update profile failed");
     res.status(500).json({ error: "Failed to update profile" });
   }

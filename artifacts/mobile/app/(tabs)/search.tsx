@@ -6,7 +6,7 @@ import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import { TraderCard } from '@/components/TraderCard';
-import { useListTraders } from '@workspace/api-client-react';
+import { useListTraders, getListTradersQueryKey } from '@workspace/api-client-react';
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
@@ -43,13 +43,12 @@ export default function SearchScreen() {
     }
   };
 
-  const { data, isLoading } = useListTraders({
-    search: searchQuery,
-    location: locationQuery,
-  }, {
+  const searchParams = { search: searchQuery, location: locationQuery };
+  const { data, isLoading } = useListTraders(searchParams, {
     query: {
+      queryKey: getListTradersQueryKey(searchParams),
       enabled: hasSearched,
-    }
+    },
   });
 
   const handleSearch = () => {

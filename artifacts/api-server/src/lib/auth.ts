@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
+import type { AuthenticatedRequest } from "./types";
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -31,8 +32,8 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   try {
     const token = authHeader.substring(7);
     const decoded = verifyToken(token);
-    (req as any).userId = decoded.userId;
-    (req as any).userRole = decoded.role;
+    (req as AuthenticatedRequest).userId = decoded.userId;
+    (req as AuthenticatedRequest).userRole = decoded.role as "customer" | "trader";
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });
@@ -40,7 +41,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 }
 
 export function traderOnly(req: Request, res: Response, next: NextFunction): void {
-  if ((req as any).userRole !== "trader") {
+  if ((req as AuthenticatedRequest).userRole !== "trader") {
     res.status(403).json({ error: "This action is only available for trader accounts" });
     return;
   }
@@ -48,7 +49,7 @@ export function traderOnly(req: Request, res: Response, next: NextFunction): voi
 }
 
 export function customerOnly(req: Request, res: Response, next: NextFunction): void {
-  if ((req as any).userRole !== "customer") {
+  if ((req as AuthenticatedRequest).userRole !== "customer") {
     res.status(403).json({ error: "This action is only available for customer accounts" });
     return;
   }
@@ -61,8 +62,8 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
     try {
       const token = authHeader.substring(7);
       const decoded = verifyToken(token);
-      (req as any).userId = decoded.userId;
-      (req as any).userRole = decoded.role;
+      (req as AuthenticatedRequest).userId = decoded.userId;
+      (req as AuthenticatedRequest).userRole = decoded.role as "customer" | "trader";
     } catch {
       // ignore
     }

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { traderProfilesTable } from "@workspace/db/schema";
+import type { TraderProfile } from "@workspace/db/schema";
 import { eq, and, ilike, or, desc, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -8,8 +9,8 @@ const router: IRouter = Router();
 router.get("/traders", async (req, res) => {
   try {
     const { category, location, featured, search, page = "1", limit = "20" } = req.query;
-    const pageNum = Math.max(1, parseInt(page as string) || 1);
-    const limitNum = Math.min(50, Math.max(1, parseInt(limit as string) || 20));
+    const pageNum = Math.max(1, parseInt(String(page)) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(String(limit)) || 20));
     const offset = (pageNum - 1) * limitNum;
 
     const conditions = [eq(traderProfilesTable.isActive, true)];
@@ -65,7 +66,7 @@ router.get("/traders", async (req, res) => {
       page: pageNum,
       limit: limitNum,
     });
-  } catch (error: any) {
+  } catch (error) {
     req.log.error({ err: error }, "List traders failed");
     res.status(500).json({ error: "Failed to list traders" });
   }
@@ -73,7 +74,7 @@ router.get("/traders", async (req, res) => {
 
 router.get("/traders/featured", async (req, res) => {
   try {
-    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit as string) || 10));
+    const limit = Math.min(20, Math.max(1, parseInt(String(req.query.limit)) || 10));
 
     const traders = await db
       .select()
@@ -88,7 +89,7 @@ router.get("/traders/featured", async (req, res) => {
       page: 1,
       limit,
     });
-  } catch (error: any) {
+  } catch (error) {
     req.log.error({ err: error }, "Get featured traders failed");
     res.status(500).json({ error: "Failed to get featured traders" });
   }
@@ -96,7 +97,8 @@ router.get("/traders/featured", async (req, res) => {
 
 router.get("/traders/:id", async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const id = parseInt(idParam);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid trader ID" });
       return;
@@ -114,13 +116,13 @@ router.get("/traders/:id", async (req, res) => {
     }
 
     res.json(formatTrader(trader));
-  } catch (error: any) {
+  } catch (error) {
     req.log.error({ err: error }, "Get trader failed");
     res.status(500).json({ error: "Failed to get trader" });
   }
 });
 
-function formatTrader(t: any) {
+function formatTrader(t: TraderProfile) {
   return {
     id: t.id,
     userId: t.userId,

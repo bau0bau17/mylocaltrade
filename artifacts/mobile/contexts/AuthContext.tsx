@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserProfile, LoginRequest, RegisterCustomerRequest, RegisterTraderRequest } from '@workspace/api-client-react/src/generated/api.schemas';
+import type { UserProfile, LoginRequest, RegisterCustomerRequest, RegisterTraderRequest } from '@workspace/api-client-react';
 import { login as apiLogin, registerCustomer as apiRegisterCustomer, registerTrader as apiRegisterTrader } from '@workspace/api-client-react';
 
 interface AuthContextType {

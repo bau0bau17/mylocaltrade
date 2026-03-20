@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
-import { TraderProfile } from '@workspace/api-client-react/src/generated/api.schemas';
+import type { TraderProfile } from '@workspace/api-client-react';
 
 export function TraderCard({ trader }: { trader: TraderProfile }) {
   const router = useRouter();

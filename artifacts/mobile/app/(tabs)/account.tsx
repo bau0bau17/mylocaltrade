@@ -96,8 +96,8 @@ export default function AccountScreen() {
         ) : (
           <>
             <Text style={styles.sectionTitle}>Customer Menu</Text>
-            <MenuButton icon="bookmark" label="Saved Traders" onPress={() => {}} />
-            <MenuButton icon="message-circle" label="My Enquiries" onPress={() => {}} />
+            <MenuButton icon="bookmark" label="Saved Traders" onPress={() => router.push('/saved-traders')} />
+            <MenuButton icon="message-circle" label="My Enquiries" onPress={() => router.push('/my-enquiries')} />
           </>
         )}
 
