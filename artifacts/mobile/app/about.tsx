@@ -88,7 +88,7 @@ export default function AboutScreen() {
           <Feather name="hash" size={14} color={Colors.light.textMuted} />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Company Number</Text>
-            <Text style={styles.infoText}>12345678</Text>
+            <Text style={styles.infoText}>15830141</Text>
           </View>
         </View>
 
@@ -104,7 +104,7 @@ export default function AboutScreen() {
           <Feather name="map-pin" size={14} color={Colors.light.textMuted} />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Registered Office</Text>
-            <Text style={styles.infoText}>123 Business Street{'\n'}London, EC1A 1BB{'\n'}United Kingdom</Text>
+            <Text style={styles.infoText}>71-75 Shelton Street{'\n'}Covent Garden, London{'\n'}WC2H 9JQ, United Kingdom</Text>
           </View>
         </View>
 
@@ -138,7 +138,7 @@ export default function AboutScreen() {
       <View style={styles.legalNote}>
         <Feather name="info" size={14} color={Colors.light.textMuted} />
         <Text style={styles.legalNoteText}>
-          This app is operated by Service Provider LTD, a company registered in England and Wales (Company No. 12345678). All prices shown include VAT where applicable. By using this app you agree to our Terms & Conditions and Privacy Policy.
+          This app is operated by Service Provider LTD, a company registered in England and Wales (Company No. 15830141). All prices shown include VAT where applicable. By using this app you agree to our Terms & Conditions and Privacy Policy.
         </Text>
       </View>
     </ScrollView>

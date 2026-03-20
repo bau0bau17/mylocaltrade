@@ -39,10 +39,10 @@ export function CompanyFooter() {
         Registered in England and Wales
       </Text>
       <Text style={styles.companyDetail}>
-        Company No: 12345678
+        Company No: 15830141
       </Text>
       <Text style={styles.companyDetail}>
-        Registered Office: 123 Business Street, London, EC1A 1BB
+        Registered Office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ
       </Text>
       <Text style={styles.companyDetail}>
         VAT No: GB 123 4567 89

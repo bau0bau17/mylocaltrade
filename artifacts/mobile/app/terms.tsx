@@ -19,10 +19,10 @@ export default function TermsScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          These terms and conditions ("Terms") govern your use of the MyLocalTrade mobile application ("App") operated by Service Provider LTD ("Company", "we", "us"), a company registered in England and Wales under Company No. 12345678.
+          These terms and conditions ("Terms") govern your use of the MyLocalTrade mobile application ("App") operated by Service Provider LTD ("Company", "we", "us"), a company registered in England and Wales under Company No. 15830141.
         </Text>
         <Text style={styles.paragraph}>
-          Our registered office is at 123 Business Street, London, EC1A 1BB. Our VAT registration number is GB 123 4567 89.
+          Our registered office is at 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ. Our VAT registration number is GB 123 4567 89.
         </Text>
       </View>
 
@@ -91,9 +91,9 @@ export default function TermsScreen() {
           <Text style={styles.contactText}>
             Service Provider LTD{'\n'}
             Registered in England and Wales{'\n'}
-            Company No: 12345678{'\n'}
+            Company No: 15830141{'\n'}
             VAT No: GB 123 4567 89{'\n'}
-            Registered Office: 123 Business Street, London, EC1A 1BB{'\n'}
+            Registered Office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ{'\n'}
             Email: support@mylocaltrade.co.uk{'\n'}
             Tel: 020 1234 5678
           </Text>
