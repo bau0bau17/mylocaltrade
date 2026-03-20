@@ -19,7 +19,7 @@ export default function RefundScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          This policy is issued by Service Provider LTD (trading as "MyLocalTrade"), a company registered in England and Wales (Company No. 12345678), and outlines the terms regarding refunds and cancellations for trader subscriptions on the MyLocalTrade platform.
+          This policy is issued by Service Provider LTD (trading as "MyLocalTrade"), a company registered in England and Wales (Company No. 15830141), and outlines the terms regarding refunds and cancellations for trader subscriptions on the MyLocalTrade platform.
         </Text>
       </View>
 
@@ -73,9 +73,9 @@ export default function RefundScreen() {
           <Text style={styles.contactText}>
             Service Provider LTD{'\n'}
             Registered in England and Wales{'\n'}
-            Company No: 12345678{'\n'}
+            Company No: 15830141{'\n'}
             VAT No: GB 123 4567 89{'\n'}
-            123 Business Street, London, EC1A 1BB{'\n'}
+            71-75 Shelton Street, Covent Garden, London, WC2H 9JQ{'\n'}
             Email: support@mylocaltrade.co.uk{'\n'}
             Tel: 020 1234 5678
           </Text>

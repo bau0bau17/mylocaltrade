@@ -20,7 +20,7 @@ export default function PrivacyScreen() {
       <View style={styles.section}>
         <Text style={styles.lastUpdated}>Last Updated: March 2026</Text>
         <Text style={styles.paragraph}>
-          This Privacy Policy explains how Service Provider LTD (trading as "MyLocalTrade"), a company registered in England and Wales (Company No. 12345678, registered office: 123 Business Street, London, EC1A 1BB), collects, uses, discloses, and safeguards your personal data when you use our mobile application.
+          This Privacy Policy explains how Service Provider LTD (trading as "MyLocalTrade"), a company registered in England and Wales (Company No. 15830141, registered office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ), collects, uses, discloses, and safeguards your personal data when you use our mobile application.
         </Text>
         <Text style={styles.paragraph}>
           We are the data controller for the purposes of the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.
@@ -122,8 +122,8 @@ export default function PrivacyScreen() {
           <Text style={styles.contactText}>
             Data Controller: Service Provider LTD{'\n'}
             Registered in England and Wales{'\n'}
-            Company No: 12345678{'\n'}
-            123 Business Street, London, EC1A 1BB{'\n'}
+            Company No: 15830141{'\n'}
+            71-75 Shelton Street, Covent Garden, London, WC2H 9JQ{'\n'}
             Email: support@mylocaltrade.co.uk{'\n'}
             Tel: 020 1234 5678{'\n\n'}
             Supervisory Authority:{'\n'}
