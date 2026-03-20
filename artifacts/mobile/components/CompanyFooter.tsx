@@ -32,13 +32,22 @@ export function CompanyFooter() {
       <View style={styles.companyRow}>
         <Feather name="briefcase" size={12} color={Colors.light.textMuted} />
         <Text style={styles.companyText}>
-          Operated by Service Provider LTD
+          Service Provider LTD
         </Text>
       </View>
       <Text style={styles.companyDetail}>
-        Company No: 12345678 · 123 Business Street, London, EC1A 1BB
+        Registered in England and Wales
       </Text>
       <Text style={styles.companyDetail}>
+        Company No: 12345678
+      </Text>
+      <Text style={styles.companyDetail}>
+        Registered Office: 123 Business Street, London, EC1A 1BB
+      </Text>
+      <Text style={styles.companyDetail}>
+        VAT No: GB 123 4567 89
+      </Text>
+      <Text style={[styles.companyDetail, { marginTop: 6 }]}>
         support@mylocaltrade.co.uk
       </Text>
 

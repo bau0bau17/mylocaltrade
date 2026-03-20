@@ -66,13 +66,80 @@ export default function AboutScreen() {
       </View>
 
       <View style={styles.companyInfo}>
-        <Text style={styles.companyHeading}>Company Details</Text>
-        <Text style={styles.infoText}>Service Provider LTD</Text>
-        <Text style={styles.infoText}>Company Number: 12345678</Text>
-        <Text style={styles.infoText}>Registered Address:</Text>
-        <Text style={styles.infoText}>123 Business Street</Text>
-        <Text style={styles.infoText}>London, EC1A 1BB</Text>
-        <Text style={[styles.infoText, { marginTop: 8, color: Colors.light.primary }]}>support@mylocaltrade.co.uk</Text>
+        <Text style={styles.companyHeading}>Company Information</Text>
+
+        <View style={styles.infoRow}>
+          <Feather name="briefcase" size={14} color={Colors.light.textMuted} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Trading Name</Text>
+            <Text style={styles.infoText}>MyLocalTrade</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="file-text" size={14} color={Colors.light.textMuted} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Legal Entity</Text>
+            <Text style={styles.infoText}>Service Provider LTD</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="hash" size={14} color={Colors.light.textMuted} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Company Number</Text>
+            <Text style={styles.infoText}>12345678</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="globe" size={14} color={Colors.light.textMuted} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Place of Registration</Text>
+            <Text style={styles.infoText}>England and Wales</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="map-pin" size={14} color={Colors.light.textMuted} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Registered Office</Text>
+            <Text style={styles.infoText}>123 Business Street{'\n'}London, EC1A 1BB{'\n'}United Kingdom</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="percent" size={14} color={Colors.light.textMuted} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>VAT Registration</Text>
+            <Text style={styles.infoText}>GB 123 4567 89</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoDivider} />
+
+        <View style={styles.infoRow}>
+          <Feather name="mail" size={14} color={Colors.light.primary} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Email</Text>
+            <Text style={[styles.infoText, { color: Colors.light.primary }]}>support@mylocaltrade.co.uk</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="phone" size={14} color={Colors.light.primary} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Telephone</Text>
+            <Text style={[styles.infoText, { color: Colors.light.primary }]}>020 1234 5678</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.legalNote}>
+        <Feather name="info" size={14} color={Colors.light.textMuted} />
+        <Text style={styles.legalNoteText}>
+          This app is operated by Service Provider LTD, a company registered in England and Wales (Company No. 12345678). All prices shown include VAT where applicable. By using this app you agree to our Terms & Conditions and Privacy Policy.
+        </Text>
       </View>
     </ScrollView>
   );
@@ -166,13 +233,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: Colors.light.textMuted,
-    marginBottom: 12,
+    marginBottom: 16,
     letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+    gap: 12,
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.light.textMuted,
+    marginBottom: 2,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   infoText: {
     fontSize: 14,
-    color: Colors.light.textSecondary,
-    marginBottom: 4,
-  }
+    color: Colors.light.text,
+    lineHeight: 20,
+  },
+  infoDivider: {
+    height: 1,
+    backgroundColor: Colors.light.border,
+    marginVertical: 6,
+    marginBottom: 14,
+  },
+  legalNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 16,
+    padding: 14,
+    backgroundColor: Colors.light.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  legalNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.light.textMuted,
+    lineHeight: 18,
+  },
 });
