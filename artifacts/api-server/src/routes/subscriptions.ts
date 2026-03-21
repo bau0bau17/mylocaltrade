@@ -305,16 +305,34 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
   }
 });
 
+const WEBHOOK_TOLERANCE_SECONDS = 300;
+
 function verifyWebhookSignature(payload: Buffer, signature: string, secret: string): boolean {
-  const timestamp = signature.split(",").find((s) => s.startsWith("t="))?.slice(2);
-  const v1Sig = signature.split(",").find((s) => s.startsWith("v1="))?.slice(3);
+  const parts = signature.split(",");
+  const timestamp = parts.find((s) => s.startsWith("t="))?.slice(2);
+  const v1Sig = parts.find((s) => s.startsWith("v1="))?.slice(3);
   if (!timestamp || !v1Sig) return false;
+
+  const ts = parseInt(timestamp, 10);
+  if (isNaN(ts)) return false;
+  const ageSeconds = Math.floor(Date.now() / 1000) - ts;
+  if (ageSeconds > WEBHOOK_TOLERANCE_SECONDS || ageSeconds < -WEBHOOK_TOLERANCE_SECONDS) {
+    return false;
+  }
 
   const signedPayload = `${timestamp}.${payload.toString("utf8")}`;
   const expectedSig = crypto.createHmac("sha256", secret).update(signedPayload).digest("hex");
+  const expectedBuf = Buffer.from(expectedSig, "hex");
 
-  if (expectedSig.length !== v1Sig.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(v1Sig, "hex"), Buffer.from(expectedSig, "hex"));
+  let v1Buf: Buffer;
+  try {
+    v1Buf = Buffer.from(v1Sig, "hex");
+  } catch {
+    return false;
+  }
+
+  if (v1Buf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(v1Buf, expectedBuf);
 }
 
 async function activateSubscription(customerId: string, planId: string | null, subscriptionId: string | null) {
