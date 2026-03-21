@@ -15,7 +15,7 @@ function getJwtSecret(): string {
 const JWT_SECRET = getJwtSecret();
 
 export function generateToken(userId: number, role: string): string {
-  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "30d" });
+  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "7d" });
 }
 
 export function verifyToken(token: string): { userId: number; role: string } {

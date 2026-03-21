@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import crypto from "crypto";
 
 const FROM_NAME = "MyLocalTrade";
 const FROM_EMAIL = process.env.SMTP_FROM || "noreply@mylocaltrade.co.uk";
@@ -87,10 +88,5 @@ export async function sendVerificationEmail(
 }
 
 export function generateVerificationToken(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let token = "";
-  for (let i = 0; i < 64; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return token;
+  return crypto.randomBytes(32).toString("hex");
 }
