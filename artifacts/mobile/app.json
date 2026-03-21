@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "MyLocalTrade",
-    "slug": "mobile",
+    "name": "My Local Trade",
+    "slug": "mylocaltrade",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "mylocaltrade",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -14,9 +14,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.mylocaltrade.app"
     },
-    "android": {},
+    "android": {
+      "package": "com.mylocaltrade.app"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
