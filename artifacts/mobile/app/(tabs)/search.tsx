@@ -7,11 +7,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import { TraderCard } from '@/components/TraderCard';
 import { useListTraders, getListTradersQueryKey } from '@workspace/api-client-react';
+import { useLocation } from '@/hooks/useLocation';
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
-  
+  const location = useLocation();
+
   const [searchQuery, setSearchQuery] = useState(params.category as string || '');
   const [locationQuery, setLocationQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -20,6 +22,15 @@ export default function SearchScreen() {
   useEffect(() => {
     loadRecentSearches();
   }, []);
+
+  useEffect(() => {
+    if (!location.isLoading && locationQuery === '' && !location.permissionDenied) {
+      const autoLocation = location.city || location.postalCode || '';
+      if (autoLocation) {
+        setLocationQuery(autoLocation);
+      }
+    }
+  }, [location.isLoading, location.city, location.postalCode, location.permissionDenied]);
 
   const loadRecentSearches = async () => {
     try {
@@ -63,17 +74,24 @@ export default function SearchScreen() {
     setHasSearched(true);
   };
 
+  const locationIcon = location.permissionDenied ? 'map-pin' : location.isLoading ? 'loader' : 'map-pin';
+  const locationPlaceholder = location.isLoading
+    ? 'Detecting location...'
+    : location.permissionDenied
+    ? 'Town or Postcode'
+    : `Near ${location.label}`;
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Search</Text>
-        
+
         <View style={styles.searchForm}>
           <View style={styles.inputContainer}>
             <Feather name="search" size={18} color={Colors.light.textMuted} />
             <TextInput
               style={styles.input}
-              placeholder="What service do you need?"
+              placeholder="Search plumber, electrician, roofer..."
               placeholderTextColor={Colors.light.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -81,23 +99,37 @@ export default function SearchScreen() {
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
-              <Pressable onPress={() => setSearchQuery('')}>
+              <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
                 <Feather name="x-circle" size={16} color={Colors.light.textMuted} />
               </Pressable>
             )}
           </View>
-          
+
           <View style={styles.inputContainer}>
-            <Feather name="map-pin" size={18} color={Colors.light.textMuted} />
+            <Feather
+              name={locationIcon as any}
+              size={18}
+              color={location.isLoading ? Colors.light.primary : Colors.light.secondary}
+            />
             <TextInput
               style={styles.input}
-              placeholder="Town or Postcode"
-              placeholderTextColor={Colors.light.textMuted}
+              placeholder={locationPlaceholder}
+              placeholderTextColor={location.isLoading ? Colors.light.primary : Colors.light.textMuted}
               value={locationQuery}
               onChangeText={setLocationQuery}
               onSubmitEditing={handleSearch}
               returnKeyType="search"
             />
+            {locationQuery.length > 0 && (
+              <Pressable onPress={() => setLocationQuery('')} hitSlop={8}>
+                <Feather name="x-circle" size={16} color={Colors.light.textMuted} />
+              </Pressable>
+            )}
+            {location.permissionDenied && (
+              <Pressable onPress={location.refresh} hitSlop={8}>
+                <Feather name="crosshair" size={16} color={Colors.light.primary} />
+              </Pressable>
+            )}
           </View>
 
           <Pressable style={styles.searchButton} onPress={handleSearch}>
@@ -112,8 +144,8 @@ export default function SearchScreen() {
           <Text style={styles.sectionTitle}>Recent Searches</Text>
           {recentSearches.length > 0 ? (
             recentSearches.map((search, idx) => (
-              <Pressable 
-                key={idx} 
+              <Pressable
+                key={idx}
                 style={styles.recentItem}
                 onPress={() => applyRecentSearch(search)}
               >
@@ -128,6 +160,9 @@ export default function SearchScreen() {
             <View style={styles.emptyRecent}>
               <Feather name="search" size={32} color={Colors.light.textMuted} style={{ marginBottom: 8 }} />
               <Text style={styles.emptyText}>No recent searches</Text>
+              {!location.isLoading && !location.permissionDenied && location.city && (
+                <Text style={styles.emptySubText}>Searching near {location.city}</Text>
+              )}
             </View>
           )}
         </View>
@@ -135,8 +170,9 @@ export default function SearchScreen() {
         <View style={styles.resultsContainer}>
           <Text style={styles.resultsCount}>
             {isLoading ? 'Searching...' : `${data?.total || 0} results found`}
+            {!isLoading && locationQuery ? ` near ${locationQuery}` : ''}
           </Text>
-          
+
           {isLoading ? (
             <View style={styles.centerContainer}>
               <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -194,11 +230,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     height: 48,
+    gap: 10,
   },
   input: {
     flex: 1,
     height: '100%',
-    marginLeft: 10,
     fontSize: 15,
     color: Colors.light.text,
   },
@@ -251,10 +287,16 @@ const styles = StyleSheet.create({
   emptyRecent: {
     alignItems: 'center',
     paddingVertical: 40,
+    gap: 8,
   },
   emptyText: {
     fontSize: 13,
     color: Colors.light.textMuted,
+  },
+  emptySubText: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    letterSpacing: 0.2,
   },
   resultsContainer: {
     flex: 1,
@@ -300,5 +342,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.light.textSecondary,
     textAlign: 'center',
-  }
+  },
 });

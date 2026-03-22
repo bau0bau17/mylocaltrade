@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { useGetFeaturedTraders } from '@workspace/api-client-react';
 import { CategoryCard } from '@/components/CategoryCard';
 import { TraderCard } from '@/components/TraderCard';
 import { CompanyFooter } from '@/components/CompanyFooter';
+import { useLocation } from '@/hooks/useLocation';
 import type { FeatherIconName } from '@/types/feather-icons';
 
 const CATEGORIES: { name: string; icon: FeatherIconName }[] = [
@@ -26,8 +27,17 @@ const CATEGORIES: { name: string; icon: FeatherIconName }[] = [
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const location = useLocation();
 
   const { data: featuredData, isLoading: isLoadingFeatured } = useGetFeaturedTraders({ limit: 5 });
+
+  const handleLocationPress = () => {
+    if (location.permissionDenied) {
+      location.refresh();
+    } else {
+      router.push('/(tabs)/search');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -45,13 +55,31 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.locationBar}>
-          <Feather name="map-pin" size={13} color={Colors.light.secondary} />
-          <Text style={styles.locationText}>Near you · Enter postcode to refine</Text>
-          <Pressable style={styles.locationChange} onPress={() => router.push('/(tabs)/search')}>
-            <Text style={styles.locationChangeText}>Change</Text>
-          </Pressable>
-        </View>
+        <Pressable style={styles.locationBar} onPress={handleLocationPress}>
+          {location.isLoading ? (
+            <ActivityIndicator size="small" color={Colors.light.secondary} style={{ marginRight: 4 }} />
+          ) : (
+            <Feather
+              name={location.permissionDenied ? 'map-pin-off' as any : 'map-pin'}
+              size={13}
+              color={location.permissionDenied ? Colors.light.textMuted : Colors.light.secondary}
+            />
+          )}
+          <Text style={[styles.locationText, location.permissionDenied && styles.locationTextMuted]}>
+            {location.isLoading ? 'Detecting your location...' : location.label}
+          </Text>
+          {!location.isLoading && (
+            <Pressable
+              style={styles.locationChange}
+              onPress={location.permissionDenied ? location.refresh : () => router.push('/(tabs)/search')}
+              hitSlop={8}
+            >
+              <Text style={styles.locationChangeText}>
+                {location.permissionDenied ? 'Enable' : 'Change'}
+              </Text>
+            </Pressable>
+          )}
+        </Pressable>
 
         <Pressable
           style={styles.searchBar}
@@ -116,7 +144,12 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Featured Traders</Text>
+            <Text style={styles.sectionTitle}>
+              Featured Traders
+              {location.city && !location.isLoading && (
+                <Text style={styles.sectionLocation}> in {location.city}</Text>
+              )}
+            </Text>
             <Pressable onPress={() => router.push('/(tabs)/traders')} style={styles.seeAllBtn}>
               <Text style={styles.seeAll}>See all</Text>
               <Feather name="arrow-right" size={13} color={Colors.light.primary} />
@@ -125,7 +158,7 @@ export default function HomeScreen() {
 
           {isLoadingFeatured ? (
             <View style={styles.loadingContainer}>
-              <View style={styles.loadingPulse} />
+              <ActivityIndicator size="small" color={Colors.light.primary} />
               <Text style={styles.loadingText}>Loading traders...</Text>
             </View>
           ) : featuredData?.traders && featuredData.traders.length > 0 ? (
@@ -142,7 +175,11 @@ export default function HomeScreen() {
                 <Feather name="award" size={28} color={Colors.light.featured} />
               </View>
               <Text style={styles.emptyTitle}>Featured traders coming soon</Text>
-              <Text style={styles.emptySubtext}>Be the first to get featured in your area</Text>
+              <Text style={styles.emptySubtext}>
+                {location.city
+                  ? `Be the first featured trader in ${location.city}`
+                  : 'Be the first to get featured in your area'}
+              </Text>
               <Pressable style={styles.emptyCtaBtn} onPress={() => router.push('/subscription')}>
                 <Text style={styles.emptyCtaText}>Get featured · from £20/month</Text>
               </Pressable>
@@ -243,6 +280,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.textSecondary,
     letterSpacing: 0.2,
+  },
+  locationTextMuted: {
+    color: Colors.light.textMuted,
   },
   locationChange: {
     paddingHorizontal: 8,
@@ -349,11 +389,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.text,
     letterSpacing: 0.3,
+    flexShrink: 1,
+  },
+  sectionLocation: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Colors.light.textSecondary,
   },
   seeAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    marginLeft: 8,
   },
   seeAll: {
     fontSize: 13,
@@ -384,13 +431,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.light.border,
-  },
-  loadingPulse: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.light.primary,
-    opacity: 0.7,
   },
   loadingText: {
     color: Colors.light.textSecondary,
