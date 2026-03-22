@@ -17,20 +17,17 @@ export function CompanyFooter() {
     <View style={styles.container}>
       <View style={styles.divider} />
 
-      <View style={styles.linksRow}>
-        <Pressable onPress={() => router.push('/about')} hitSlop={6}>
+      <View style={styles.linksGrid}>
+        <Pressable onPress={() => router.push('/about')} style={styles.linkItem} hitSlop={6}>
           <Text style={styles.linkText}>About</Text>
         </Pressable>
-        <View style={styles.dot} />
-        <Pressable onPress={() => router.push('/terms')} hitSlop={6}>
+        <Pressable onPress={() => router.push('/terms')} style={styles.linkItem} hitSlop={6}>
           <Text style={styles.linkText}>Terms</Text>
         </Pressable>
-        <View style={styles.dot} />
-        <Pressable onPress={() => router.push('/privacy')} hitSlop={6}>
+        <Pressable onPress={() => router.push('/privacy')} style={styles.linkItem} hitSlop={6}>
           <Text style={styles.linkText}>Privacy</Text>
         </Pressable>
-        <View style={styles.dot} />
-        <Pressable onPress={() => router.push('/refund')} hitSlop={6}>
+        <Pressable onPress={() => router.push('/refund')} style={styles.linkItem} hitSlop={6}>
           <Text style={styles.linkText}>Refunds</Text>
         </Pressable>
       </View>
@@ -40,21 +37,14 @@ export function CompanyFooter() {
         <Text style={styles.contactButtonText}>Contact Us</Text>
       </Pressable>
 
-      <View style={styles.companyRow}>
-        <Feather name="briefcase" size={12} color={Colors.light.textMuted} />
-        <Text style={styles.companyText}>
-          Service Provider LTD
-        </Text>
+      <View style={styles.companyBlock}>
+        <View style={styles.companyNameRow}>
+          <Feather name="briefcase" size={11} color={Colors.light.textMuted} />
+          <Text style={styles.companyName}>Service Provider LTD</Text>
+        </View>
+        <Text style={styles.companyDetail}>Registered in England and Wales · No: 15830141</Text>
+        <Text style={styles.companyDetail}>71-75 Shelton Street, Covent Garden, London, WC2H 9JQ</Text>
       </View>
-      <Text style={styles.companyDetail}>
-        Registered in England and Wales
-      </Text>
-      <Text style={styles.companyDetail}>
-        Company No: 15830141
-      </Text>
-      <Text style={styles.companyDetail}>
-        71-75 Shelton Street, Covent Garden, London, WC2H 9JQ
-      </Text>
 
       <Text style={styles.copyright}>
         © {new Date().getFullYear()} MyLocalTrade. All rights reserved.
@@ -66,74 +56,83 @@ export function CompanyFooter() {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 12,
     paddingHorizontal: 20,
   },
   divider: {
-    width: 40,
+    width: 36,
     height: 2,
     borderRadius: 1,
     backgroundColor: Colors.light.border,
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  linksRow: {
+  linksGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 4,
+    gap: 8,
+    marginBottom: 16,
+  },
+  linkItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: Colors.light.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   linkText: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.light.primary,
     fontWeight: '600',
-  },
-  dot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: Colors.light.textMuted,
-    marginHorizontal: 4,
+    letterSpacing: 0.2,
   },
   contactButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
     backgroundColor: Colors.light.primaryMuted,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.light.border,
-    marginBottom: 14,
+    borderColor: `${Colors.light.primary}33`,
+    marginBottom: 20,
   },
   contactButtonText: {
     fontSize: 13,
     fontWeight: '700',
     color: Colors.light.primary,
+    letterSpacing: 0.3,
   },
-  companyRow: {
+  companyBlock: {
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: 12,
+  },
+  companyNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+    gap: 5,
+    marginBottom: 2,
   },
-  companyText: {
+  companyName: {
     fontSize: 12,
     color: Colors.light.textSecondary,
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
   companyDetail: {
     fontSize: 11,
     color: Colors.light.textMuted,
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: 17,
   },
   copyright: {
     fontSize: 11,
     color: Colors.light.textMuted,
-    marginTop: 10,
+    marginTop: 2,
+    letterSpacing: 0.2,
   },
 });
