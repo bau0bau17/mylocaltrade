@@ -15,10 +15,17 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.mylocaltrade.app"
+      "bundleIdentifier": "com.mylocaltrade.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "MyLocalTrade uses your location to show tradespeople near you."
+      }
     },
     "android": {
-      "package": "com.mylocaltrade.app"
+      "package": "com.mylocaltrade.app",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -31,7 +38,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-location"
     ],
     "experiments": {
       "typedRoutes": true,
