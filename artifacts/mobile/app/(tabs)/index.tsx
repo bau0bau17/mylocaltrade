@@ -41,7 +41,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
         <View style={styles.headerTop}>
           <View style={styles.headerBrand}>
             <View style={styles.brandDot} />
