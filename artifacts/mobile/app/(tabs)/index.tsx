@@ -180,14 +180,14 @@ export default function HomeScreen() {
                   ? `Be the first featured trader in ${location.city}`
                   : 'Be the first to get featured in your area'}
               </Text>
-              <Pressable style={styles.emptyCtaBtn} onPress={() => router.push('/subscription')}>
+              <Pressable style={styles.emptyCtaBtn} onPress={() => router.push('/pricing')}>
                 <Text style={styles.emptyCtaText}>Get featured · from £20/month</Text>
               </Pressable>
             </View>
           )}
         </View>
 
-        <Pressable style={styles.traderCtaBanner} onPress={() => router.push('/subscription')}>
+        <Pressable style={styles.traderCtaBanner} onPress={() => router.push('/pricing')}>
           <View style={styles.traderCtaLeft}>
             <View style={styles.traderCtaBadge}>
               <Text style={styles.traderCtaBadgeText}>FOR TRADERS</Text>
