@@ -20,13 +20,13 @@ function NativeTabLayout() {
         <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
         <Label>Browse</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="saved">
+        <Icon sf={{ default: "bookmark", selected: "bookmark.fill" }} />
+        <Label>Saved</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="account">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
         <Label>Account</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="search" role="search">
-        <Icon sf="magnifyingglass" />
-        <Label>Search</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -42,7 +42,7 @@ function ClassicTabLayout() {
       screenOptions={{
         tabBarActiveTintColor: theme.tabActive,
         tabBarInactiveTintColor: theme.tabInactive,
-        headerShown: true,
+        headerShown: false,
         tabBarStyle: {
           position: "absolute",
           backgroundColor: isIOS ? "transparent" : theme.surface,
@@ -82,19 +82,6 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="search"
-        options={{
-          title: "Search",
-          headerShown: false,
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="magnifyingglass" tintColor={color} size={24} />
-            ) : (
-              <Feather name="search" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
         name="traders"
         options={{
           title: "Browse",
@@ -104,6 +91,19 @@ function ClassicTabLayout() {
               <SymbolView name="briefcase" tintColor={color} size={24} />
             ) : (
               <Feather name="briefcase" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="saved"
+        options={{
+          title: "Saved",
+          headerShown: false,
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="bookmark" tintColor={color} size={24} />
+            ) : (
+              <Feather name="bookmark" size={22} color={color} />
             ),
         }}
       />
@@ -118,6 +118,12 @@ function ClassicTabLayout() {
             ) : (
               <Feather name="user" size={22} color={color} />
             ),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

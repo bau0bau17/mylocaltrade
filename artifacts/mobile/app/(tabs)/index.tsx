@@ -7,7 +7,7 @@ import Colors from '@/constants/colors';
 import { useGetFeaturedTraders } from '@workspace/api-client-react';
 import { CategoryCard } from '@/components/CategoryCard';
 import { TraderCard } from '@/components/TraderCard';
-import { CompanyFooter } from '@/components/CompanyFooter';
+import { HomeFooter } from '@/components/HomeFooter';
 import { useLocation } from '@/hooks/useLocation';
 import type { FeatherIconName } from '@/types/feather-icons';
 
@@ -200,7 +200,7 @@ export default function HomeScreen() {
           </View>
         </Pressable>
 
-        <CompanyFooter />
+        <HomeFooter />
       </ScrollView>
     </View>
   );
