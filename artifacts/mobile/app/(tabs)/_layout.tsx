@@ -18,7 +18,7 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="traders">
         <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
-        <Label>Traders</Label>
+        <Label>Browse</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="account">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
@@ -97,7 +97,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="traders"
         options={{
-          title: "Traders",
+          title: "Browse",
           headerShown: false,
           tabBarIcon: ({ color }) =>
             isIOS ? (

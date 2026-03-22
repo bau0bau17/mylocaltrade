@@ -9,14 +9,14 @@ export function CategoryCard({ name, icon }: { name: string; icon: FeatherIconNa
   const router = useRouter();
 
   return (
-    <Pressable 
-      style={styles.card} 
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
       onPress={() => router.push({ pathname: '/(tabs)/search', params: { category: name } })}
     >
       <View style={styles.iconContainer}>
         <Feather name={icon} size={20} color={Colors.light.primary} />
       </View>
-      <Text style={styles.name} numberOfLines={1}>{name}</Text>
+      <Text style={styles.name} numberOfLines={2}>{name}</Text>
     </Pressable>
   );
 }
@@ -29,22 +29,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     margin: 2,
   },
+  cardPressed: {
+    opacity: 0.7,
+  },
   iconContainer: {
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
     borderRadius: 14,
-    backgroundColor: Colors.light.primaryMuted,
+    backgroundColor: Colors.light.card,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 7,
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: Colors.light.borderLight,
   },
   name: {
     fontSize: 10,
     fontWeight: '600',
     color: Colors.light.textSecondary,
     textAlign: 'center',
-    letterSpacing: 0.2,
+    letterSpacing: 0.1,
+    lineHeight: 13,
   },
 });

@@ -11,16 +11,16 @@ import { CompanyFooter } from '@/components/CompanyFooter';
 import type { FeatherIconName } from '@/types/feather-icons';
 
 const CATEGORIES: { name: string; icon: FeatherIconName }[] = [
-  { name: 'Plumber', icon: 'droplet' },
-  { name: 'Electrician', icon: 'zap' },
-  { name: 'Roofer', icon: 'home' },
-  { name: 'Cleaner', icon: 'sun' },
-  { name: 'Painter', icon: 'edit-2' },
-  { name: 'Builder', icon: 'tool' },
+  { name: 'Plumbing', icon: 'droplet' },
+  { name: 'Electrical', icon: 'zap' },
+  { name: 'Roofing', icon: 'home' },
+  { name: 'Cleaning', icon: 'sun' },
+  { name: 'Painting', icon: 'edit-2' },
+  { name: 'Building', icon: 'tool' },
   { name: 'Locksmith', icon: 'key' },
   { name: 'Removals', icon: 'truck' },
   { name: 'Handyman', icon: 'settings' },
-  { name: 'Heating', icon: 'thermometer' },
+  { name: 'Heating & Gas', icon: 'thermometer' },
 ];
 
 export default function HomeScreen() {
@@ -31,60 +31,79 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
         <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.appName}>MyLocalTrade</Text>
-            <Text style={styles.headerSubtitle}>Find Trusted Tradespeople</Text>
+          <View style={styles.headerBrand}>
+            <View style={styles.brandDot} />
+            <View>
+              <Text style={styles.appName}>MyLocalTrade</Text>
+              <Text style={styles.headerSubtitle}>Find trusted local tradespeople across the UK</Text>
+            </View>
           </View>
-          <View style={styles.headerIcon}>
-            <Feather name="grid" size={20} color={Colors.light.primary} />
-          </View>
+          <Pressable style={styles.headerIcon} onPress={() => router.push('/(tabs)/account')}>
+            <Feather name="user" size={18} color={Colors.light.primary} />
+          </Pressable>
         </View>
-        
-        <Pressable 
+
+        <View style={styles.locationBar}>
+          <Feather name="map-pin" size={13} color={Colors.light.secondary} />
+          <Text style={styles.locationText}>Near you · Enter postcode to refine</Text>
+          <Pressable style={styles.locationChange} onPress={() => router.push('/(tabs)/search')}>
+            <Text style={styles.locationChangeText}>Change</Text>
+          </Pressable>
+        </View>
+
+        <Pressable
           style={styles.searchBar}
           onPress={() => router.push('/(tabs)/search')}
         >
           <View style={styles.searchIconWrap}>
-            <Feather name="search" size={18} color={Colors.light.primary} />
+            <Feather name="search" size={17} color={Colors.light.primary} />
           </View>
-          <Text style={styles.searchText}>What service do you need?</Text>
-          <Feather name="sliders" size={16} color={Colors.light.textMuted} />
+          <Text style={styles.searchText}>Search plumber, electrician, roofer...</Text>
+          <View style={styles.filterBtn}>
+            <Feather name="sliders" size={15} color={Colors.light.primary} />
+          </View>
         </Pressable>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 84 + 20 }]}
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.trustSection}>
           <View style={styles.trustItem}>
             <View style={[styles.trustIconWrap, { backgroundColor: Colors.light.secondaryMuted }]}>
-              <Feather name="check-circle" size={18} color={Colors.light.secondary} />
+              <Feather name="check-circle" size={17} color={Colors.light.secondary} />
             </View>
-            <Text style={styles.trustText}>1000+ Verified</Text>
+            <Text style={styles.trustLabel}>Verified</Text>
+            <Text style={styles.trustSub}>Traders</Text>
           </View>
           <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
             <View style={[styles.trustIconWrap, { backgroundColor: Colors.light.primaryMuted }]}>
-              <Feather name="shield" size={18} color={Colors.light.primary} />
+              <Feather name="shield" size={17} color={Colors.light.primary} />
             </View>
-            <Text style={styles.trustText}>UK Trusted</Text>
+            <Text style={styles.trustLabel}>UK</Text>
+            <Text style={styles.trustSub}>Trusted</Text>
           </View>
           <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
             <View style={[styles.trustIconWrap, { backgroundColor: Colors.light.featuredMuted }]}>
-              <Feather name="star" size={18} color={Colors.light.featured} />
+              <Feather name="star" size={17} color={Colors.light.featured} />
             </View>
-            <Text style={styles.trustText}>Top Rated</Text>
+            <Text style={styles.trustLabel}>Top</Text>
+            <Text style={styles.trustSub}>Rated</Text>
           </View>
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Categories</Text>
-            <Text style={styles.sectionCount}>{CATEGORIES.length}</Text>
+            <Pressable onPress={() => router.push('/(tabs)/search')} style={styles.seeAllBtn}>
+              <Text style={styles.seeAll}>Browse all</Text>
+              <Feather name="arrow-right" size={13} color={Colors.light.primary} />
+            </Pressable>
           </View>
           <View style={styles.categoriesGrid}>
             {CATEGORIES.map((cat, index) => (
@@ -99,14 +118,14 @@ export default function HomeScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Featured Traders</Text>
             <Pressable onPress={() => router.push('/(tabs)/traders')} style={styles.seeAllBtn}>
-              <Text style={styles.seeAll}>See All</Text>
-              <Feather name="arrow-right" size={14} color={Colors.light.primary} />
+              <Text style={styles.seeAll}>See all</Text>
+              <Feather name="arrow-right" size={13} color={Colors.light.primary} />
             </Pressable>
           </View>
 
           {isLoadingFeatured ? (
             <View style={styles.loadingContainer}>
-              <View style={styles.loadingDot} />
+              <View style={styles.loadingPulse} />
               <Text style={styles.loadingText}>Loading traders...</Text>
             </View>
           ) : featuredData?.traders && featuredData.traders.length > 0 ? (
@@ -119,11 +138,30 @@ export default function HomeScreen() {
             </ScrollView>
           ) : (
             <View style={styles.emptyContainer}>
-              <Feather name="briefcase" size={28} color={Colors.light.textMuted} style={{ marginBottom: 8 }} />
-              <Text style={styles.emptyText}>No featured traders yet</Text>
+              <View style={styles.emptyIconWrap}>
+                <Feather name="award" size={28} color={Colors.light.featured} />
+              </View>
+              <Text style={styles.emptyTitle}>Featured traders coming soon</Text>
+              <Text style={styles.emptySubtext}>Be the first to get featured in your area</Text>
+              <Pressable style={styles.emptyCtaBtn} onPress={() => router.push('/subscription')}>
+                <Text style={styles.emptyCtaText}>Get featured · from £20/month</Text>
+              </Pressable>
             </View>
           )}
         </View>
+
+        <Pressable style={styles.traderCtaBanner} onPress={() => router.push('/subscription')}>
+          <View style={styles.traderCtaLeft}>
+            <View style={styles.traderCtaBadge}>
+              <Text style={styles.traderCtaBadgeText}>FOR TRADERS</Text>
+            </View>
+            <Text style={styles.traderCtaTitle}>List your business</Text>
+            <Text style={styles.traderCtaSub}>Join MyLocalTrade from £10/month</Text>
+          </View>
+          <View style={styles.traderCtaArrow}>
+            <Feather name="arrow-right" size={18} color={Colors.light.primary} />
+          </View>
+        </Pressable>
 
         <CompanyFooter />
       </ScrollView>
@@ -139,7 +177,7 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: Colors.light.surface,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 18,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
@@ -147,37 +185,86 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  headerBrand: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    flex: 1,
+  },
+  brandDot: {
+    width: 4,
+    height: 36,
+    borderRadius: 2,
+    backgroundColor: Colors.light.primary,
+    marginTop: 2,
   },
   appName: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: Colors.light.text,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    lineHeight: 28,
   },
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.light.textSecondary,
     marginTop: 2,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+    lineHeight: 16,
+    flexShrink: 1,
   },
   headerIcon: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: 12,
     backgroundColor: Colors.light.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginLeft: 12,
+  },
+  locationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.light.card,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  locationText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    letterSpacing: 0.2,
+  },
+  locationChange: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: Colors.light.primaryMuted,
+    borderRadius: 6,
+  },
+  locationChangeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.primary,
+    letterSpacing: 0.3,
   },
   searchBar: {
     backgroundColor: Colors.light.card,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: Colors.light.borderLight,
   },
   searchIconWrap: {
     width: 32,
@@ -190,8 +277,19 @@ const styles = StyleSheet.create({
   },
   searchText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.light.textMuted,
+    letterSpacing: 0.1,
+  },
+  filterBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: `${Colors.light.primary}33`,
   },
   scrollContent: {
     padding: 16,
@@ -201,7 +299,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.light.card,
     borderRadius: 16,
-    padding: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
     marginBottom: 24,
     borderWidth: 1,
     borderColor: Colors.light.border,
@@ -209,25 +308,30 @@ const styles = StyleSheet.create({
   trustItem: {
     alignItems: 'center',
     flex: 1,
-    gap: 8,
+    gap: 5,
   },
   trustDivider: {
     width: 1,
-    height: 32,
+    height: 40,
     backgroundColor: Colors.light.border,
   },
   trustIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  trustText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
+  trustLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.text,
+    letterSpacing: 0.2,
+  },
+  trustSub: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: Colors.light.textMuted,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
@@ -246,9 +350,6 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     letterSpacing: 0.3,
   },
-  sectionCount: {
-    display: 'none',
-  },
   seeAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -263,6 +364,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -4,
+    rowGap: 4,
   },
   categoryWrapper: {
     width: '20%',
@@ -275,15 +377,20 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   loadingContainer: {
-    padding: 32,
+    padding: 36,
     alignItems: 'center',
     gap: 12,
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
-  loadingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  loadingPulse: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: Colors.light.primary,
+    opacity: 0.7,
   },
   loadingText: {
     color: Colors.light.textSecondary,
@@ -297,9 +404,91 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.light.border,
+    gap: 8,
   },
-  emptyText: {
-    color: Colors.light.textSecondary,
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: Colors.light.featuredMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.light.text,
+    textAlign: 'center',
+  },
+  emptySubtext: {
     fontSize: 13,
-  }
+    color: Colors.light.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  emptyCtaBtn: {
+    marginTop: 8,
+    backgroundColor: Colors.light.primaryMuted,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: `${Colors.light.primary}44`,
+  },
+  emptyCtaText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.primary,
+  },
+  traderCtaBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 28,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.light.primary,
+  },
+  traderCtaLeft: {
+    flex: 1,
+    gap: 4,
+  },
+  traderCtaBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.light.primaryMuted,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 2,
+  },
+  traderCtaBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.light.primary,
+    letterSpacing: 1,
+  },
+  traderCtaTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.text,
+    letterSpacing: 0.2,
+  },
+  traderCtaSub: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+  },
+  traderCtaArrow: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
 });

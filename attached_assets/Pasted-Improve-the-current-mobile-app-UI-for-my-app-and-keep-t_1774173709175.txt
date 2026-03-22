@@ -1,0 +1,120 @@
+Improve the current mobile app UI for my app and keep the branding name exactly as:
+
+MyLocalTrade
+
+Important branding rule:
+Use “MyLocalTrade” everywhere in the app.
+Do not change it to “My Local Trade”.
+
+Main improvements required:
+
+1. Header / top area
+- Add more top spacing so the title does not sit too close to the iPhone Dynamic Island / notch
+- Make the header feel more balanced and premium
+- Keep the title as: MyLocalTrade
+- Improve subtitle readability
+- Suggested subtitle:
+  Find trusted local tradespeople across the UK
+
+2. Search bar
+- Improve the styling and readability of the search bar
+- Replace the placeholder text:
+  What service do you need?
+  with:
+  Search plumber, electrician, roofer...
+- Make the filter icon more visible
+- Add stronger location context such as postcode, town, or current area if possible
+
+3. Trust badges section
+- Improve spacing, alignment, and realism
+- Replace generic text with stronger trust-focused labels such as:
+  Verified Traders
+  UK Trusted
+  Top Rated
+- Make this section feel more credible and polished
+
+4. Categories section
+- Improve spacing between category items
+- Improve label readability
+- Make the category naming consistent and service-based
+
+Use these category labels:
+- Plumbing
+- Electrical
+- Roofing
+- Cleaning
+- Painting
+- Building
+- Locksmith
+- Removals
+- Handyman
+- Heating & Gas
+
+5. Featured Traders section
+- Improve the empty state so the page does not feel unfinished
+- Replace “No featured traders yet” with:
+  Featured traders coming soon
+  or
+  Be the first featured trader
+- If possible, display 2 or 3 demo featured trader cards instead of a large empty box
+
+6. Footer / legal links
+- Improve spacing between the footer area and bottom navigation
+- Keep these links:
+  About
+  Terms
+  Privacy
+  Refunds
+  Contact
+- Make the legal section cleaner and more app-like
+
+7. Contact button
+- Move the Contact Us button slightly higher so it does not feel cramped near the bottom navigation
+- Improve the styling so it matches the premium dark theme
+
+8. Bottom navigation
+- Improve the contrast of inactive icons and labels so they are easier to read
+- Keep the active tab highlighted clearly
+- Consider renaming “Traders” to either:
+  Browse
+  or
+  Services
+- Keep navigation modern and clean
+
+9. Terminology consistency
+- Use consistent wording across the app
+- Prefer:
+  Traders
+  Featured Traders
+  Categories
+- Keep naming consistent on all screens
+
+10. Local marketplace feel
+- Add stronger local UK marketplace context to the home screen
+- Examples:
+  Near you
+  In Milton Keynes
+  Enter postcode
+- Make the app feel clearly location-based
+
+11. Visual polish
+- Keep the dark premium style
+- Improve spacing, typography, shadows, and card styling
+- Add a more premium hero section if possible
+- Keep the cyan/blue accent color
+- Make the UI look more polished, trustworthy, and app-store ready
+
+12. Business conversion
+- Add a subtle CTA for traders such as:
+  Join MyLocalTrade
+  or
+  List your business from £10/month
+- Keep it natural and not too aggressive
+
+General rules:
+- Keep the current dark theme
+- Keep the mobile-first native app style
+- Keep all text in English
+- Use UK spelling
+- Make the design feel premium, clean, and scalable
+- Do not change the core app structure, only improve the UI and wording
