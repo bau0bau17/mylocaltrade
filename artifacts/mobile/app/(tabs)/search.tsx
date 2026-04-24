@@ -82,7 +82,7 @@ export default function SearchScreen() {
     : `Near ${location.label}`;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Search</Text>
 

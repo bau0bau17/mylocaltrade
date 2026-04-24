@@ -21,7 +21,7 @@ export default function AccountScreen() {
   if (!isAuthenticated) {
     return (
       <ScrollView
-        style={[styles.container, { paddingTop: insets.top }]}
+        style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}
         contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
@@ -71,7 +71,7 @@ export default function AccountScreen() {
 
   return (
     <ScrollView
-      style={[styles.container, { paddingTop: insets.top }]}
+      style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}
       contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
       showsVerticalScrollIndicator={false}
     >
