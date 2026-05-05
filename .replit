@@ -24,3 +24,11 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+SMTP_HOST = "smtp.office365.com"
+SMTP_PORT = "587"
+SMTP_FROM = "support@mylocaltrade.co.uk"
+SMTP_USER = "support@mylocaltrade.co.uk"
