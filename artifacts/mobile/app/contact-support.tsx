@@ -82,11 +82,9 @@ export default function ContactSupportScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.infoBox}>
-            <Feather name="info" size={14} color={Colors.light.primary} />
+            <Feather name="clock" size={14} color={Colors.light.primary} />
             <Text style={styles.infoText}>
-              Your message will be sent to{' '}
-              <Text style={styles.infoEmail}>support@mylocaltrade.co.uk</Text>.
-              We aim to respond within 1 business day.
+              We aim to answer within 48 hours (working days).
             </Text>
           </View>
 
@@ -222,10 +220,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.light.textSecondary,
     lineHeight: 19,
-  },
-  infoEmail: {
-    color: Colors.light.primary,
-    fontWeight: '600',
   },
   form: {
     gap: 16,
