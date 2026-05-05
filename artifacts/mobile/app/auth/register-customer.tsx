@@ -125,8 +125,8 @@ export default function RegisterCustomerScreen() {
               value={formData.password}
               onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
               secureTextEntry
+              allowFontScaling={false}
             />
-            <View style={styles.iconSlot} />
           </View>
         </View>
 
@@ -150,16 +150,8 @@ export default function RegisterCustomerScreen() {
               value={formData.confirmPassword}
               onChangeText={(text) => setFormData(prev => ({ ...prev, confirmPassword: text }))}
               secureTextEntry
+              allowFontScaling={false}
             />
-            <View style={styles.iconSlot}>
-              {formData.confirmPassword.length > 0 && (
-                <Feather
-                  name={formData.password === formData.confirmPassword ? 'check-circle' : 'x-circle'}
-                  size={16}
-                  color={formData.password === formData.confirmPassword ? Colors.light.secondary : Colors.light.error}
-                />
-              )}
-            </View>
           </View>
           {formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword && (
             <Text style={styles.errorText}>Passwords do not match</Text>
@@ -252,11 +244,6 @@ const styles = StyleSheet.create({
     height: '100%',
     fontSize: 15,
     color: Colors.light.text,
-  },
-  iconSlot: {
-    width: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   errorText: {
     fontSize: 12,
