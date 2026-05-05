@@ -264,7 +264,7 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
         .set({
           plan: planId,
           isActive: true,
-          isFeatured: planId === "elite",
+          isFeatured: planId === "premium" || planId === "elite",
           updatedAt: new Date(),
         })
         .where(eq(traderProfilesTable.userId, userId));
@@ -359,7 +359,7 @@ async function activateSubscription(customerId: string, planId: string | null, s
       .set({
         plan: planId,
         isActive: true,
-        isFeatured: planId === "elite",
+        isFeatured: planId === "premium" || planId === "elite",
         updatedAt: new Date(),
       })
       .where(eq(traderProfilesTable.userId, user.id));
