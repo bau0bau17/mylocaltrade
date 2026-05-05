@@ -87,6 +87,55 @@ export async function sendVerificationEmail(
   }
 }
 
+export async function sendContactEmail(opts: {
+  fromName: string;
+  fromEmail: string;
+  subject: string;
+  message: string;
+}): Promise<void> {
+  const SUPPORT_EMAIL = "support@mylocaltrade.co.uk";
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Contact Support</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0 0 6px;">MyLocalTrade</h1>
+      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">New support message received</p>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 100px;">From</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${opts.fromName} &lt;${opts.fromEmail}&gt;</td></tr>
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Subject</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${opts.subject}</td></tr>
+    </table>
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
+    <p style="color: #E5E7EB; font-size: 15px; line-height: 1.7; white-space: pre-wrap; margin: 0;">${opts.message}</p>
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 24px 0 16px;">
+    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
+      Sent via MyLocalTrade app · Service Provider LTD
+    </p>
+  </div>
+</body>
+</html>`;
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: SUPPORT_EMAIL,
+      replyTo: `"${opts.fromName}" <${opts.fromEmail}>`,
+      subject: `[Support] ${opts.subject}`,
+      html,
+    });
+    console.log(`[email] Contact email sent to ${SUPPORT_EMAIL} from ${opts.fromEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — contact message from ${opts.fromEmail}: ${opts.message}`);
+  }
+}
+
 export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }

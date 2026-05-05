@@ -7,6 +7,7 @@ import subscriptionsRouter from "./subscriptions";
 import savedTradersRouter from "./saved-traders";
 import enquiriesRouter from "./enquiries";
 import categoriesRouter from "./categories";
+import contactRouter from "./contact";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(subscriptionsRouter);
 router.use(savedTradersRouter);
 router.use(enquiriesRouter);
 router.use(categoriesRouter);
+router.use(contactRouter);
 
 export default router;
