@@ -1,19 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import type { FeatherIconName } from '@/types/feather-icons';
 
-const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
+const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
 
 export default function LegalSupportScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const handleContact = () => {
-    Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=MyLocalTrade%20Support%20Enquiry`);
+    router.push('/contact-support');
   };
 
   return (
