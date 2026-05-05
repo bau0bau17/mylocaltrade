@@ -30,5 +30,5 @@ timeoutMs = 20000
 [userenv.shared]
 SMTP_HOST = "smtp.office365.com"
 SMTP_PORT = "587"
-SMTP_FROM = "support@mylocaltrade.co.uk"
-SMTP_USER = "support@mylocaltrade.co.uk"
+SMTP_FROM = "noreply@mylocaltrade.co.uk"
+SMTP_USER = "noreply@mylocaltrade.co.uk"
