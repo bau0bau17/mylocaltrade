@@ -38,7 +38,9 @@ router.post("/auth/register/customer", async (req, res) => {
       emailVerificationToken: verificationToken,
     }).returning();
 
-    await sendVerificationEmail(user.email, user.fullName, verificationToken);
+    sendVerificationEmail(user.email, user.fullName, verificationToken).catch((err) =>
+      req.log.error({ err }, "Failed to send verification email")
+    );
 
     res.status(201).json({
       message: "Account created. Please check your email to verify your address before logging in.",
@@ -94,7 +96,9 @@ router.post("/auth/register/trader", async (req, res) => {
       return user;
     });
 
-    await sendVerificationEmail(result.email, result.fullName, verificationToken);
+    sendVerificationEmail(result.email, result.fullName, verificationToken).catch((err) =>
+      req.log.error({ err }, "Failed to send verification email")
+    );
 
     res.status(201).json({
       message: "Account created. Please check your email to verify your address before logging in.",
@@ -222,7 +226,9 @@ router.post("/auth/resend-verification", async (req, res) => {
       .set({ emailVerificationToken: newToken, updatedAt: new Date() })
       .where(eq(usersTable.id, user.id));
 
-    await sendVerificationEmail(user.email, user.fullName, newToken);
+    sendVerificationEmail(user.email, user.fullName, newToken).catch((err) =>
+      req.log.error({ err }, "Failed to send verification email")
+    );
 
     res.json({ message: "Verification email sent. Please check your inbox." });
   } catch (error) {
