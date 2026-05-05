@@ -126,6 +126,7 @@ export async function sendContactEmail(opts: {
     await transporter.sendMail({
       from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
       to: SUPPORT_EMAIL,
+      cc: opts.fromEmail,
       replyTo: `"${opts.fromName}" <${opts.fromEmail}>`,
       subject: `[Support] ${opts.subject}`,
       html,
