@@ -25,7 +25,7 @@ export default function TradersScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}>
       <View style={styles.header}>
         <Text style={styles.title}>Traders</Text>
         <Text style={styles.subtitle}>{data?.total || 0} available</Text>
