@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import crypto from "crypto";
 
 const FROM_NAME = "MyLocalTrade";
-const FROM_EMAIL = process.env.SMTP_FROM || "noreply@mylocaltrade.co.uk";
+const FROM_EMAIL = process.env.SMTP_FROM ?? "noreply@mylocaltrade.co.uk";
 
 function createTransport() {
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
