@@ -126,6 +126,8 @@ export default function RegisterCustomerScreen() {
               onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
               secureTextEntry
               allowFontScaling={false}
+              textContentType="newPassword"
+              autoComplete="new-password"
             />
           </View>
         </View>
@@ -151,6 +153,8 @@ export default function RegisterCustomerScreen() {
               onChangeText={(text) => setFormData(prev => ({ ...prev, confirmPassword: text }))}
               secureTextEntry
               allowFontScaling={false}
+              textContentType="newPassword"
+              autoComplete="new-password"
             />
           </View>
           {formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword && (
