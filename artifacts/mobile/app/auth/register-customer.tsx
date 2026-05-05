@@ -127,7 +127,6 @@ export default function RegisterCustomerScreen() {
               secureTextEntry
               allowFontScaling={false}
               textContentType="newPassword"
-              autoComplete="new-password"
             />
           </View>
         </View>
@@ -154,7 +153,6 @@ export default function RegisterCustomerScreen() {
               secureTextEntry
               allowFontScaling={false}
               textContentType="newPassword"
-              autoComplete="new-password"
             />
           </View>
           {formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword && (
