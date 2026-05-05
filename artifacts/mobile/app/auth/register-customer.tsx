@@ -78,6 +78,8 @@ export default function RegisterCustomerScreen() {
               placeholderTextColor={Colors.light.textMuted}
               value={formData.fullName}
               onChangeText={(text) => setFormData(prev => ({ ...prev, fullName: text }))}
+              textContentType="name"
+              autoComplete="name"
             />
           </View>
         </View>
@@ -95,6 +97,8 @@ export default function RegisterCustomerScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              textContentType="emailAddress"
+              autoComplete="email"
             />
           </View>
         </View>
