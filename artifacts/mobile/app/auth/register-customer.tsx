@@ -16,6 +16,7 @@ export default function RegisterCustomerScreen() {
     fullName: '',
     email: '',
     password: '',
+    confirmPassword: '',
     phone: '',
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +29,11 @@ export default function RegisterCustomerScreen() {
 
     if (formData.password.length < 8) {
       Alert.alert('Error', 'Password must be at least 8 characters');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match. Please check and try again.');
       return;
     }
     
@@ -94,7 +100,7 @@ export default function RegisterCustomerScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Phone Number</Text>
+          <Text style={styles.label}>Phone Number (Optional)</Text>
           <View style={styles.inputWrap}>
             <Feather name="phone" size={16} color={Colors.light.textMuted} />
             <TextInput
@@ -121,6 +127,40 @@ export default function RegisterCustomerScreen() {
               secureTextEntry
             />
           </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Confirm Password *</Text>
+          <View style={[
+            styles.inputWrap,
+            formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword
+              ? styles.inputWrapError
+              : null,
+          ]}>
+            <Feather name="lock" size={16} color={
+              formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword
+                ? Colors.light.error
+                : Colors.light.textMuted
+            } />
+            <TextInput
+              style={styles.input}
+              placeholder="Re-enter your password"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.confirmPassword}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, confirmPassword: text }))}
+              secureTextEntry
+            />
+            {formData.confirmPassword.length > 0 && (
+              <Feather
+                name={formData.password === formData.confirmPassword ? 'check-circle' : 'x-circle'}
+                size={16}
+                color={formData.password === formData.confirmPassword ? Colors.light.secondary : Colors.light.error}
+              />
+            )}
+          </View>
+          {formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword && (
+            <Text style={styles.errorText}>Passwords do not match</Text>
+          )}
         </View>
 
         <Pressable 
@@ -201,11 +241,20 @@ const styles = StyleSheet.create({
     height: 52,
     gap: 10,
   },
+  inputWrapError: {
+    borderColor: Colors.light.error,
+  },
   input: {
     flex: 1,
     height: '100%',
     fontSize: 15,
     color: Colors.light.text,
+  },
+  errorText: {
+    fontSize: 12,
+    color: Colors.light.error,
+    marginLeft: 4,
+    marginTop: -4,
   },
   button: {
     backgroundColor: Colors.light.primary,
