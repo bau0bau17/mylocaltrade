@@ -58,7 +58,6 @@ export default function LegalSupportScreen() {
           <MenuRow
             icon="mail"
             label="Contact Support"
-            sub={CONTACT_EMAIL}
             onPress={handleContact}
             accent
           />
