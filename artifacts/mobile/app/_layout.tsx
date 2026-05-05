@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -29,9 +30,10 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back", headerTintColor: Colors.light.primary, headerStyle: { backgroundColor: Colors.light.background }, headerTitleStyle: { color: Colors.light.text } }}>
+    <Stack screenOptions={{ headerBackTitle: "Back", headerTintColor: Colors.light.primary, headerStyle: { backgroundColor: Colors.light.background }, headerTitleStyle: { color: Colors.light.text }, headerStatusBarHeight: Platform.OS === 'web' ? 50 : undefined }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="trader/[id]" options={{ title: "Trader Profile" }} />
+      <Stack.Screen name="legal-support" options={{ headerShown: false }} />
+      <Stack.Screen name="trader/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="auth/login" options={{ title: "Log In", presentation: "modal" }} />
       <Stack.Screen name="auth/register-customer" options={{ title: "Register", presentation: "modal" }} />
       <Stack.Screen name="auth/register-trader" options={{ title: "Join as Trader", presentation: "modal" }} />

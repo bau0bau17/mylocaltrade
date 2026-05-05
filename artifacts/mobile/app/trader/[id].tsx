@@ -41,7 +41,7 @@ export default function TraderProfileScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.headerCover, { paddingTop: insets.top + 12 }]}>
+        <View style={[styles.headerCover, { paddingTop: Math.max(insets.top, 50) + 12 }]}>
           <Pressable style={styles.backNav} onPress={() => router.back()}>
             <Feather name="arrow-left" size={20} color={Colors.light.text} />
           </Pressable>
