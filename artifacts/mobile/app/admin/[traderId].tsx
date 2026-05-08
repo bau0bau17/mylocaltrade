@@ -224,6 +224,7 @@ export default function AdminTraderDetail() {
 
   const { profile, user, documents, documentsEvaluation, auditLog } = data;
   const status = profile.verificationStatus;
+  const verifiedWithoutDocs = status === 'VERIFIED' && !documentsEvaluation.complete;
   const canApprove = ['UNDER_REVIEW', 'PENDING_DOCUMENTS', 'REJECTED', 'SUSPENDED'].includes(status);
   const canReject = ['UNDER_REVIEW', 'PENDING_DOCUMENTS', 'VERIFIED'].includes(status);
   const canRequestInfo = ['UNDER_REVIEW', 'PENDING_DOCUMENTS'].includes(status);
@@ -252,6 +253,14 @@ export default function AdminTraderDetail() {
             <Text style={styles.cardTitle}>Status</Text>
             <StatusPill status={status} />
           </View>
+          {verifiedWithoutDocs && (
+            <View style={styles.inconsistencyBox}>
+              <Feather name="alert-triangle" size={14} color={Colors.light.error} />
+              <Text style={styles.inconsistencyText}>
+                Data inconsistency: this trader is marked VERIFIED but required documents are missing. Use Reject or Suspend to bring the record back in line.
+              </Text>
+            </View>
+          )}
           {profile.adminNotes && (
             <View style={styles.notesBox}>
               <Text style={styles.notesLabel}>Admin notes</Text>
@@ -582,6 +591,8 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
   notesBox: { borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 10, backgroundColor: Colors.light.surface },
+  inconsistencyBox: { marginTop: 10, flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderWidth: 1, borderColor: Colors.light.error, borderRadius: 10, padding: 10, backgroundColor: 'rgba(239, 68, 68, 0.08)' },
+  inconsistencyText: { flex: 1, fontSize: 12, lineHeight: 17, color: Colors.light.error, fontWeight: '600' },
   notesLabel: { fontSize: 10, fontWeight: '700', color: Colors.light.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
   notesText: { fontSize: 12, color: Colors.light.text, lineHeight: 17 },
 
