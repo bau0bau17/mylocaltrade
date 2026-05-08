@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
     "@types/nodemailer": "^7.0.11",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
@@ -18,12 +19,14 @@
     "drizzle-orm": "catalog:",
     "express": "^5",
     "express-rate-limit": "^8.3.1",
+    "google-auth-library": "^10.6.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.3",
     "pino": "^9",
     "pino-http": "^10",
-    "stripe": "^20.4.1"
+    "stripe": "^20.4.1",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

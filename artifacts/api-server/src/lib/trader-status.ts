@@ -1,5 +1,64 @@
 import { db } from "@workspace/db";
-import { traderAuditLogTable, type TraderAuditAction, type TraderProfile, type User } from "@workspace/db/schema";
+import { traderAuditLogTable, type TraderAuditAction, type TraderProfile, type User, type TraderDocument, type TraderDocumentType } from "@workspace/db/schema";
+
+export const REQUIRED_DOCUMENT_TYPES: TraderDocumentType[] = ["ID_DOCUMENT", "INSURANCE"];
+
+export const DOCUMENT_TYPE_LABELS: Record<TraderDocumentType, string> = {
+  ID_DOCUMENT: "Photo ID",
+  PROOF_OF_ADDRESS: "Proof of address",
+  INSURANCE: "Public liability insurance",
+  QUALIFICATION: "Trade qualification",
+  OTHER: "Other supporting document",
+};
+
+export const DOCUMENT_TYPE_HINTS: Record<TraderDocumentType, string> = {
+  ID_DOCUMENT: "Passport, driving licence or other government-issued photo ID.",
+  PROOF_OF_ADDRESS: "Utility bill, bank statement or council tax letter from the last 3 months.",
+  INSURANCE: "Current public liability insurance certificate.",
+  QUALIFICATION: "Trade certificate, City & Guilds, NVQ or equivalent.",
+  OTHER: "Anything else that supports your application.",
+};
+
+export interface DocumentTypeStatus {
+  type: TraderDocumentType;
+  label: string;
+  required: boolean;
+  hint: string;
+  satisfied: boolean;
+  hasUpload: boolean;
+  count: number;
+  latestStatus?: string;
+  rejectionReason?: string;
+}
+
+export interface DocumentsEvaluation {
+  complete: boolean;
+  byType: DocumentTypeStatus[];
+}
+
+export function evaluateDocumentsComplete(documents: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt">[]): DocumentsEvaluation {
+  const allTypes: TraderDocumentType[] = ["ID_DOCUMENT", "INSURANCE", "PROOF_OF_ADDRESS", "QUALIFICATION"];
+  const byType: DocumentTypeStatus[] = allTypes.map((type) => {
+    const docs = documents.filter((d) => d.type === type);
+    const sorted = [...docs].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const latest = sorted[0];
+    const required = REQUIRED_DOCUMENT_TYPES.includes(type);
+    const acceptable = docs.some((d) => d.status === "PENDING_REVIEW" || d.status === "APPROVED");
+    return {
+      type,
+      label: DOCUMENT_TYPE_LABELS[type],
+      required,
+      hint: DOCUMENT_TYPE_HINTS[type],
+      satisfied: required ? acceptable : true,
+      hasUpload: docs.length > 0,
+      count: docs.length,
+      latestStatus: latest?.status,
+      rejectionReason: latest?.status === "REJECTED" ? latest.rejectionReason ?? undefined : undefined,
+    };
+  });
+  const complete = REQUIRED_DOCUMENT_TYPES.every((req) => byType.find((b) => b.type === req)?.satisfied);
+  return { complete, byType };
+}
 
 export const TRADER_STATUS = {
   PENDING_EMAIL_VERIFICATION: "PENDING_EMAIL_VERIFICATION",
@@ -174,8 +233,12 @@ export function buildOnboardingChecklist(
     {
       key: "documents",
       label: "Verification documents uploaded",
-      state: !businessDone ? "locked" : docsDone ? "completed" : "pending",
-      comingSoon: businessDone && !docsDone, // Phase 4
+      state: !businessDone ? "locked" : docsDone ? "completed" : "action_required",
+      description: !businessDone
+        ? "Complete your business profile first."
+        : docsDone
+          ? undefined
+          : "Upload your photo ID and current public liability insurance.",
     },
     {
       key: "review",
