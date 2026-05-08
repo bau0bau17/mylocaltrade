@@ -25,7 +25,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       .where(eq(traderProfilesTable.id, traderId))
       .limit(1);
 
-    if (!trader) {
+    if (!trader || !trader.isActive || trader.verificationStatus !== "VERIFIED") {
       res.status(404).json({ error: "Trader not found" });
       return;
     }

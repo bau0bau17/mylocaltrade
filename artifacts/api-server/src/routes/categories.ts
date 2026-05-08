@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { traderProfilesTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -28,7 +28,10 @@ router.get("/categories", async (_req, res) => {
         count: sql<number>`count(*)::int`,
       })
       .from(traderProfilesTable)
-      .where(eq(traderProfilesTable.isActive, true))
+      .where(and(
+        eq(traderProfilesTable.isActive, true),
+        eq(traderProfilesTable.verificationStatus, "VERIFIED"),
+      ))
       .groupBy(traderProfilesTable.mainCategory);
 
     const countMap = new Map(counts.map(c => [c.category.toLowerCase(), c.count]));

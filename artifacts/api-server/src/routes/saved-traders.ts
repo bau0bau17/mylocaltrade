@@ -19,7 +19,9 @@ router.get("/saved-traders", authMiddleware, customerOnly, async (req, res) => {
       .innerJoin(traderProfilesTable, eq(savedTradersTable.traderId, traderProfilesTable.id))
       .where(eq(savedTradersTable.userId, userId));
 
-    const traders = saved.map(({ trader: t }) => ({
+    const traders = saved
+      .filter(({ trader: t }) => t.isActive && t.verificationStatus === "VERIFIED")
+      .map(({ trader: t }) => ({
       id: t.id,
       userId: t.userId,
       businessName: t.businessName,

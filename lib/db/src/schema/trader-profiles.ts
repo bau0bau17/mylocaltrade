@@ -3,6 +3,19 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 
+export const TRADER_VERIFICATION_STATUSES = [
+  "PENDING_EMAIL_VERIFICATION",
+  "PENDING_PHONE_VERIFICATION",
+  "PROFILE_INCOMPLETE",
+  "PENDING_DOCUMENTS",
+  "UNDER_REVIEW",
+  "VERIFIED",
+  "REJECTED",
+  "SUSPENDED",
+  "EXPIRED_DOCUMENTS",
+] as const;
+export type TraderVerificationStatus = (typeof TRADER_VERIFICATION_STATUSES)[number];
+
 export const traderProfilesTable = pgTable("trader_profiles", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => usersTable.id).unique(),
@@ -27,6 +40,22 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   isActive: boolean("is_active").notNull().default(false),
   rating: real("rating"),
   reviewCount: integer("review_count").notNull().default(0),
+
+  // --- Verification state machine (Phase 1+) ---
+  verificationStatus: varchar("verification_status", { length: 40 })
+    .notNull()
+    .default("PENDING_EMAIL_VERIFICATION"),
+  phoneVerified: boolean("phone_verified").notNull().default(false),
+  businessProfileCompleted: boolean("business_profile_completed").notNull().default(false),
+  documentsSubmitted: boolean("documents_submitted").notNull().default(false),
+  submittedForReviewAt: timestamp("submitted_for_review_at"),
+  verifiedAt: timestamp("verified_at"),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  adminNotes: text("admin_notes"),
+  termsAcceptedAt: timestamp("terms_accepted_at"),
+  privacyAcceptedAt: timestamp("privacy_accepted_at"),
+
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
