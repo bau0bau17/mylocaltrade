@@ -175,23 +175,80 @@ export default function ConversationThreadScreen() {
     );
   };
 
-  const onToggleMute = () => {
-    if (!conv) return;
-    const next = !conv.muted;
+  const applyMute = (mutedUntil: string | null, label: string) => {
     muteMutation.mutate(
-      { id: conversationId, data: { muted: next } },
+      { id: conversationId, data: { muted: true, mutedUntil } },
       {
         onSuccess: () =>
           Alert.alert(
-            next ? "Notifications muted" : "Notifications unmuted",
-            next
-              ? "You won't receive push notifications for this conversation. Emails are unchanged."
-              : "Push notifications for this conversation are back on.",
+            "Notifications muted",
+            `Push notifications are off ${label}. Emails are unchanged.`,
           ),
         onError: () => Alert.alert("Error", "Could not update mute setting."),
       },
     );
   };
+
+  const onUnmute = () => {
+    muteMutation.mutate(
+      { id: conversationId, data: { muted: false, mutedUntil: null } },
+      {
+        onSuccess: () =>
+          Alert.alert(
+            "Notifications unmuted",
+            "Push notifications for this conversation are back on.",
+          ),
+        onError: () => Alert.alert("Error", "Could not update mute setting."),
+      },
+    );
+  };
+
+  const onShowMuteOptions = () => {
+    if (!conv) return;
+    if (conv.muted) {
+      onUnmute();
+      return;
+    }
+    const now = new Date();
+    const oneHour = new Date(now.getTime() + 60 * 60 * 1000);
+    const eightHours = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    // "Until tomorrow" = 8am local time on the next calendar day.
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(8, 0, 0, 0);
+    Alert.alert("Mute notifications", "Choose how long to silence this chat.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "For 1 hour",
+        onPress: () => applyMute(oneHour.toISOString(), "for the next hour"),
+      },
+      {
+        text: "For 8 hours",
+        onPress: () => applyMute(eightHours.toISOString(), "for the next 8 hours"),
+      },
+      {
+        text: "Until tomorrow",
+        onPress: () => applyMute(tomorrow.toISOString(), "until tomorrow morning"),
+      },
+      {
+        text: "Until I turn it back on",
+        onPress: () => applyMute(null, "until you turn them back on"),
+      },
+    ]);
+  };
+
+  const mutedRemainingLabel = useMemo(() => {
+    if (!conv?.muted || !conv.mutedUntil) return null;
+    const untilMs = new Date(conv.mutedUntil).getTime();
+    const remainingMs = untilMs - Date.now();
+    if (remainingMs <= 0) return null;
+    const totalMinutes = Math.round(remainingMs / 60000);
+    if (totalMinutes < 60) return `${totalMinutes}m left`;
+    const hours = Math.round(totalMinutes / 60);
+    if (hours < 24) return `${hours}h left`;
+    const days = Math.round(hours / 24);
+    return `${days}d left`;
+  }, [conv?.muted, conv?.mutedUntil]);
 
   const onReport = () => {
     Alert.prompt?.(
@@ -279,7 +336,9 @@ export default function ConversationThreadScreen() {
             {conv.muted ? (
               <View style={[styles.statusPill, styles.mutedPill]}>
                 <Feather name="bell-off" size={10} color={Colors.light.textSecondary} />
-                <Text style={[styles.statusPillText, styles.mutedPillText]}>Muted</Text>
+                <Text style={[styles.statusPillText, styles.mutedPillText]}>
+                  {mutedRemainingLabel ? `Muted · ${mutedRemainingLabel}` : "Muted"}
+                </Text>
               </View>
             ) : null}
           </View>
@@ -291,7 +350,7 @@ export default function ConversationThreadScreen() {
               { text: "Cancel", style: "cancel" },
               {
                 text: conv.muted ? "Unmute notifications" : "Mute notifications",
-                onPress: onToggleMute,
+                onPress: onShowMuteOptions,
               },
               ...(!closed
                 ? [{ text: "Close conversation", onPress: onClose, style: "destructive" as const }]

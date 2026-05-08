@@ -2107,6 +2107,13 @@ components:
           type: integer
         muted:
           type: boolean
+        mutedUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            ISO timestamp when the current mute auto-expires. Null when the
+            conversation is unmuted or muted indefinitely.
         lastMessageAt:
           type: string
           format: date-time
@@ -2232,6 +2239,15 @@ components:
       properties:
         muted:
           type: boolean
+        mutedUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Optional ISO timestamp when the mute should automatically expire.
+            Ignored when `muted` is false. When `muted` is true and this is
+            null/omitted, the conversation is muted indefinitely until the
+            user manually unmutes it.
       required: [muted]
 
     MuteConversationResponse:
@@ -2241,6 +2257,10 @@ components:
           type: boolean
         muted:
           type: boolean
+        mutedUntil:
+          type: string
+          format: date-time
+          nullable: true
       required: [ok, muted]
 
     ReportConversationRequest:

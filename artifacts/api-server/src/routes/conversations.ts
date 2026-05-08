@@ -33,7 +33,24 @@ const TraderStatusBody = z.object({
 
 const MuteBody = z.object({
   muted: z.boolean(),
+  mutedUntil: z
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .optional(),
 });
+
+// A conversation is "effectively muted" for a given side when `mutedAt` is
+// set AND either `mutedUntil` is null (indefinite) or still in the future.
+function isMuted(
+  mutedAt: Date | null,
+  mutedUntil: Date | null,
+  now: Date = new Date(),
+): boolean {
+  if (mutedAt == null) return false;
+  if (mutedUntil == null) return true;
+  return mutedUntil.getTime() > now.getTime();
+}
 
 type ConversationRow = typeof conversationsTable.$inferSelect;
 type MessageRow = typeof messagesTable.$inferSelect;
@@ -49,10 +66,13 @@ function serializeConversation(
     viewerRole: "customer" | "trader";
   },
 ) {
-  const muted =
+  const mutedAt =
+    extras.viewerRole === "customer" ? c.customerMutedAt : c.traderMutedAt;
+  const mutedUntil =
     extras.viewerRole === "customer"
-      ? c.customerMutedAt != null
-      : c.traderMutedAt != null;
+      ? c.customerMutedUntil
+      : c.traderMutedUntil;
+  const muted = isMuted(mutedAt, mutedUntil);
   return {
     id: c.id,
     customerId: extras.customerId ?? c.customerId,
@@ -67,6 +87,7 @@ function serializeConversation(
     traderStatus: c.traderStatus,
     unreadCount: extras.unreadCount,
     muted,
+    mutedUntil: muted && mutedUntil ? mutedUntil.toISOString() : null,
     lastMessageAt: c.lastMessageAt.toISOString(),
     lastMessagePreview: c.lastMessagePreview,
     closedAt: c.closedAt?.toISOString() ?? null,
@@ -392,9 +413,28 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
             conversationId: id,
           });
         }
-        const recipientMuted = isCustomer
-          ? conv.traderMutedAt != null
-          : conv.customerMutedAt != null;
+        // Recipient mute check honours per-side timed mutes. If a timed mute
+        // has expired by the time we fan out, opportunistically clear the
+        // stored timestamps so the "Muted" UI indicator flips off on the
+        // recipient's next conversation refresh.
+        const now = new Date();
+        const recipientMutedAt = isCustomer ? conv.traderMutedAt : conv.customerMutedAt;
+        const recipientMutedUntil = isCustomer ? conv.traderMutedUntil : conv.customerMutedUntil;
+        const recipientMuted = isMuted(recipientMutedAt, recipientMutedUntil, now);
+        if (
+          recipientMutedAt != null &&
+          recipientMutedUntil != null &&
+          recipientMutedUntil.getTime() <= now.getTime()
+        ) {
+          await db
+            .update(conversationsTable)
+            .set(
+              isCustomer
+                ? { traderMutedAt: null, traderMutedUntil: null }
+                : { customerMutedAt: null, customerMutedUntil: null },
+            )
+            .where(eq(conversationsTable.id, id));
+        }
         if (!recipientMuted) {
           try {
             await sendPushToUser(recipientUserId, {
@@ -554,16 +594,32 @@ router.patch("/conversations/:id/mute", authMiddleware, async (req, res) => {
       return;
     }
 
-    const at = body.muted ? new Date() : null;
+    const now = new Date();
+    const at = body.muted ? now : null;
+    // mutedUntil is only meaningful when muting; clamp invalid (past) values
+    // to null so we never store an "already-expired" timed mute.
+    let until: Date | null = null;
+    if (body.muted && body.mutedUntil) {
+      const parsed = new Date(body.mutedUntil);
+      if (Number.isFinite(parsed.getTime()) && parsed.getTime() > now.getTime()) {
+        until = parsed;
+      }
+    }
     await db
       .update(conversationsTable)
       .set({
-        ...(isCustomer ? { customerMutedAt: at } : { traderMutedAt: at }),
-        updatedAt: new Date(),
+        ...(isCustomer
+          ? { customerMutedAt: at, customerMutedUntil: until }
+          : { traderMutedAt: at, traderMutedUntil: until }),
+        updatedAt: now,
       })
       .where(eq(conversationsTable.id, id));
 
-    res.json({ ok: true, muted: body.muted });
+    res.json({
+      ok: true,
+      muted: body.muted,
+      mutedUntil: until ? until.toISOString() : null,
+    });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "Invalid mute request", details: error.issues });

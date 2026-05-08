@@ -415,6 +415,10 @@ export interface ConversationSummary {
   traderStatus: ConversationSummaryTraderStatus;
   unreadCount: number;
   muted: boolean;
+  /** ISO timestamp when the current mute auto-expires. Null when the
+conversation is unmuted or muted indefinitely.
+ */
+  mutedUntil?: string | null;
   lastMessageAt: string;
   lastMessagePreview?: string | null;
   closedAt?: string | null;
@@ -498,11 +502,18 @@ export interface UpdateTraderStatusResponse {
 
 export interface MuteConversationRequest {
   muted: boolean;
+  /** Optional ISO timestamp when the mute should automatically expire.
+Ignored when `muted` is false. When `muted` is true and this is
+null/omitted, the conversation is muted indefinitely until the
+user manually unmutes it.
+ */
+  mutedUntil?: string | null;
 }
 
 export interface MuteConversationResponse {
   ok: boolean;
   muted: boolean;
+  mutedUntil?: string | null;
 }
 
 export interface ReportConversationRequest {

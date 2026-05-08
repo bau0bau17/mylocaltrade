@@ -986,6 +986,12 @@ export const GetConversationsResponse = zod.object({
       traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
       unreadCount: zod.number(),
       muted: zod.boolean(),
+      mutedUntil: zod
+        .date()
+        .nullish()
+        .describe(
+          "ISO timestamp when the current mute auto-expires. Null when the\nconversation is unmuted or muted indefinitely.\n",
+        ),
       lastMessageAt: zod.date(),
       lastMessagePreview: zod.string().nullish(),
       closedAt: zod.date().nullish(),
@@ -1024,6 +1030,12 @@ export const GetConversationResponse = zod.object({
     traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
     unreadCount: zod.number(),
     muted: zod.boolean(),
+    mutedUntil: zod
+      .date()
+      .nullish()
+      .describe(
+        "ISO timestamp when the current mute auto-expires. Null when the\nconversation is unmuted or muted indefinitely.\n",
+      ),
     lastMessageAt: zod.date(),
     lastMessagePreview: zod.string().nullish(),
     closedAt: zod.date().nullish(),
@@ -1095,11 +1107,18 @@ export const MuteConversationParams = zod.object({
 
 export const MuteConversationBody = zod.object({
   muted: zod.boolean(),
+  mutedUntil: zod
+    .date()
+    .nullish()
+    .describe(
+      "Optional ISO timestamp when the mute should automatically expire.\nIgnored when `muted` is false. When `muted` is true and this is\nnull\/omitted, the conversation is muted indefinitely until the\nuser manually unmutes it.\n",
+    ),
 });
 
 export const MuteConversationResponse = zod.object({
   ok: zod.boolean(),
   muted: zod.boolean(),
+  mutedUntil: zod.date().nullish(),
 });
 
 /**

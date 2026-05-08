@@ -8,4 +8,10 @@
 
 export interface MuteConversationRequest {
   muted: boolean;
+  /** Optional ISO timestamp when the mute should automatically expire.
+Ignored when `muted` is false. When `muted` is true and this is
+null/omitted, the conversation is muted indefinitely until the
+user manually unmutes it.
+ */
+  mutedUntil?: Date | null;
 }
