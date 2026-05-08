@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -97,9 +97,12 @@ export default function AccountScreen() {
         </View>
 
         <View style={styles.unauthContent}>
-          <View style={styles.unauthIconWrap}>
-            <Feather name="shield" size={40} color={Colors.light.primary} />
-          </View>
+          <Image
+            source={require('@/assets/images/icon.png')}
+            style={styles.unauthIcon}
+            resizeMode="contain"
+          />
+
           <Text style={styles.unauthTitle}>Join MyLocalTrade</Text>
           <Text style={styles.unauthSubtitle}>
             Connect with verified local tradespeople or grow your trade business.
@@ -384,6 +387,12 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: Colors.light.border,
+  },
+  unauthIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 22,
+    marginBottom: 24,
   },
   unauthTitle: {
     fontSize: 22,
