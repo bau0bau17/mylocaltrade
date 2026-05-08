@@ -40,13 +40,15 @@ export function BottomNav() {
   })();
 
   const isWeb = Platform.OS === 'web';
-  // Match the native Tabs bar height exactly: web uses a fixed 84px,
-  // native uses 49pt (iOS) / 56dp (Android) above the bottom safe area.
-  const baseHeight = isWeb ? 84 : isIOS ? 49 : 56;
-  const bottomPad = isWeb ? 0 : insets.bottom;
+  // Match react-navigation bottom-tabs default: items get a 49pt (iOS) /
+  // 56dp (Android) row above the bottom safe area inset. On web our native
+  // Tabs uses a fixed total of 84 (which already bakes in safe-area pad).
+  const baseHeight = isIOS ? 49 : 56;
+  const bottomPad = insets.bottom;
+  const totalHeight = isWeb ? 84 : baseHeight + bottomPad;
 
   return (
-    <View style={[styles.wrap, { paddingBottom: bottomPad, height: baseHeight + bottomPad }]}>
+    <View style={[styles.wrap, { paddingBottom: isWeb ? 0 : bottomPad, height: totalHeight }]}>
       {isIOS ? (
         <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
       ) : (
@@ -65,7 +67,7 @@ export function BottomNav() {
               accessibilityRole="button"
               accessibilityLabel={tab.label}
             >
-              <Feather name={tab.icon} size={22} color={color} />
+              <Feather name={tab.icon} size={24} color={color} />
               <Text style={[styles.label, { color }]}>{tab.label}</Text>
             </Pressable>
           );
@@ -77,10 +79,7 @@ export function BottomNav() {
 
 const styles = StyleSheet.create({
   wrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    width: '100%',
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
   },
@@ -92,14 +91,15 @@ const styles = StyleSheet.create({
   },
   item: {
     flex: 1,
+    flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 12,
-    gap: 4,
+    justifyContent: 'center',
+    paddingVertical: 5,
   },
   label: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.2,
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 3,
+    textAlign: 'center',
   },
 });

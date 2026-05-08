@@ -34,6 +34,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "bookmark", selected: "bookmark.fill" }} />
         <Label>Saved</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="legal-support" hidden>
+        <Icon sf={{ default: "questionmark.circle", selected: "questionmark.circle.fill" }} />
+        <Label>Legal & Support</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -129,6 +133,14 @@ function ClassicTabLayout() {
       {/* Saved is reachable from the account screen / /saved-traders route. */}
       <Tabs.Screen
         name="saved"
+        options={{
+          href: null,
+        }}
+      />
+      {/* Legal & Support lives inside the tabs group so it inherits the same
+          bottom tab bar as the primary tabs, but it is not itself a tab. */}
+      <Tabs.Screen
+        name="legal-support"
         options={{
           href: null,
         }}
