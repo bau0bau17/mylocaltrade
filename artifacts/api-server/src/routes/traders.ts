@@ -1,10 +1,15 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { traderProfilesTable } from "@workspace/db/schema";
+import { traderProfilesTable, usersTable } from "@workspace/db/schema";
 import type { TraderProfile } from "@workspace/db/schema";
-import { eq, and, ilike, or, desc, sql } from "drizzle-orm";
+import { eq, and, ilike, or, desc, sql, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
+
+// Statuses that should appear in customer-facing search results.
+// VERIFIED traders are fully approved; UNDER_REVIEW and PENDING_DOCUMENTS
+// are visible but flagged so customers can see where they are in the process.
+const VISIBLE_STATUSES = ["VERIFIED", "UNDER_REVIEW", "PENDING_DOCUMENTS"] as const;
 
 router.get("/traders", async (req, res) => {
   try {
@@ -15,7 +20,8 @@ router.get("/traders", async (req, res) => {
 
     const conditions = [
       eq(traderProfilesTable.isActive, true),
-      eq(traderProfilesTable.verificationStatus, "VERIFIED"),
+      inArray(traderProfilesTable.verificationStatus, VISIBLE_STATUSES as unknown as string[]),
+      eq(traderProfilesTable.businessProfileCompleted, true),
     ];
 
     if (category && typeof category === "string") {
@@ -49,10 +55,19 @@ router.get("/traders", async (req, res) => {
     const where = conditions.length > 1 ? and(...conditions) : conditions[0];
 
     const traders = await db
-      .select()
+      .select({
+        profile: traderProfilesTable,
+        emailVerified: usersTable.emailVerified,
+      })
       .from(traderProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(where)
-      .orderBy(desc(traderProfilesTable.isFeatured), desc(traderProfilesTable.createdAt))
+      .orderBy(
+        // Verified traders first, then featured, then newest.
+        sql`case when ${traderProfilesTable.verificationStatus} = 'VERIFIED' then 0 else 1 end`,
+        desc(traderProfilesTable.isFeatured),
+        desc(traderProfilesTable.createdAt),
+      )
       .limit(limitNum)
       .offset(offset);
 
@@ -64,7 +79,7 @@ router.get("/traders", async (req, res) => {
     const total = countResult?.count || 0;
 
     res.json({
-      traders: traders.map(formatTrader),
+      traders: traders.map((r) => formatTrader(r.profile, r.emailVerified)),
       total,
       page: pageNum,
       limit: limitNum,
@@ -80,8 +95,12 @@ router.get("/traders/featured", async (req, res) => {
     const limit = Math.min(20, Math.max(1, parseInt(String(req.query.limit)) || 10));
 
     const traders = await db
-      .select()
+      .select({
+        profile: traderProfilesTable,
+        emailVerified: usersTable.emailVerified,
+      })
       .from(traderProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(and(
         eq(traderProfilesTable.isActive, true),
         eq(traderProfilesTable.verificationStatus, "VERIFIED"),
@@ -91,7 +110,7 @@ router.get("/traders/featured", async (req, res) => {
       .limit(limit);
 
     res.json({
-      traders: traders.map(formatTrader),
+      traders: traders.map((r) => formatTrader(r.profile, r.emailVerified)),
       total: traders.length,
       page: 1,
       limit,
@@ -111,25 +130,33 @@ router.get("/traders/:id", async (req, res) => {
       return;
     }
 
-    const [trader] = await db
-      .select()
+    const [row] = await db
+      .select({
+        profile: traderProfilesTable,
+        emailVerified: usersTable.emailVerified,
+      })
       .from(traderProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(eq(traderProfilesTable.id, id))
       .limit(1);
 
-    if (!trader || !trader.isActive || trader.verificationStatus !== "VERIFIED") {
+    if (
+      !row ||
+      !row.profile.isActive ||
+      !(VISIBLE_STATUSES as readonly string[]).includes(row.profile.verificationStatus)
+    ) {
       res.status(404).json({ error: "Trader not found" });
       return;
     }
 
-    res.json(formatTrader(trader));
+    res.json(formatTrader(row.profile, row.emailVerified));
   } catch (error) {
     req.log.error({ err: error }, "Get trader failed");
     res.status(500).json({ error: "Failed to get trader" });
   }
 });
 
-function formatTrader(t: TraderProfile) {
+function formatTrader(t: TraderProfile, emailVerified: boolean) {
   return {
     id: t.id,
     userId: t.userId,
@@ -153,6 +180,11 @@ function formatTrader(t: TraderProfile) {
     isFeatured: t.isFeatured,
     isActive: t.isActive,
     isVerified: t.verificationStatus === "VERIFIED",
+    verificationStatus: t.verificationStatus,
+    emailVerified,
+    phoneVerified: t.phoneVerified,
+    businessProfileCompleted: t.businessProfileCompleted,
+    documentsSubmitted: t.documentsSubmitted,
     verifiedAt: t.verifiedAt ? t.verifiedAt.toISOString() : null,
     rating: t.rating,
     reviewCount: t.reviewCount,

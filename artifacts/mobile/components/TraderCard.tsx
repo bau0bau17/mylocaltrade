@@ -42,6 +42,21 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
           </View>
         </View>
       </View>
+      <View style={styles.checkRow}>
+        <Check label="Email" state={trader.emailVerified ? 'ok' : 'missing'} />
+        <Check label="Phone" state={trader.phoneVerified ? 'ok' : 'missing'} />
+        <Check label="Profile" state={trader.businessProfileCompleted ? 'ok' : 'missing'} />
+        <Check
+          label="Docs"
+          state={
+            trader.verificationStatus === 'VERIFIED'
+              ? 'ok'
+              : trader.documentsSubmitted
+              ? 'pending'
+              : 'missing'
+          }
+        />
+      </View>
       <View style={styles.footer}>
         <View style={styles.footerItem}>
           <Feather name="map-pin" size={12} color={Colors.light.textMuted} />
@@ -54,6 +69,21 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
         <Feather name="chevron-right" size={16} color={Colors.light.textMuted} />
       </View>
     </Pressable>
+  );
+}
+
+function Check({ label, state }: { label: string; state: 'ok' | 'pending' | 'missing' }) {
+  const cfg =
+    state === 'ok'
+      ? { icon: 'check' as const, color: Colors.light.success, bg: 'rgba(16, 185, 129, 0.10)' }
+      : state === 'pending'
+      ? { icon: 'clock' as const, color: '#B45309', bg: 'rgba(245, 158, 11, 0.14)' }
+      : { icon: 'x' as const, color: Colors.light.textMuted, bg: 'rgba(107, 114, 128, 0.10)' };
+  return (
+    <View style={[styles.checkChip, { backgroundColor: cfg.bg }]}>
+      <Feather name={cfg.icon} size={10} color={cfg.color} />
+      <Text style={[styles.checkText, { color: cfg.color }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -137,6 +167,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: Colors.light.success,
+    letterSpacing: 0.2,
+  },
+  checkRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  checkChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  checkText: {
+    fontSize: 11,
+    fontWeight: '700',
     letterSpacing: 0.2,
   },
   footer: {

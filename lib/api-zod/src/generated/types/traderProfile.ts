@@ -31,6 +31,11 @@ export interface TraderProfile {
   isFeatured: boolean;
   isActive: boolean;
   isVerified: boolean;
+  verificationStatus: string;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  businessProfileCompleted: boolean;
+  documentsSubmitted: boolean;
   verifiedAt?: Date | null;
   rating?: number | null;
   reviewCount: number;

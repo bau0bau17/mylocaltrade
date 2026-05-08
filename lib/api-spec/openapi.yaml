@@ -1915,6 +1915,16 @@ components:
           type: boolean
         isVerified:
           type: boolean
+        verificationStatus:
+          type: string
+        emailVerified:
+          type: boolean
+        phoneVerified:
+          type: boolean
+        businessProfileCompleted:
+          type: boolean
+        documentsSubmitted:
+          type: boolean
         verifiedAt:
           type: string
           format: date-time
@@ -1940,6 +1950,11 @@ components:
         - isFeatured
         - isActive
         - isVerified
+        - verificationStatus
+        - emailVerified
+        - phoneVerified
+        - businessProfileCompleted
+        - documentsSubmitted
         - reviewCount
 
     UpdateTraderProfileRequest:
