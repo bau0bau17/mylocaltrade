@@ -95,6 +95,7 @@ export async function sendContactEmail(opts: {
 }): Promise<void> {
   const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
   const CONTACT_FROM_EMAIL = "noreply@mylocaltrade.co.uk";
+  const replyByDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toUTCString();
   const html = `
 <!DOCTYPE html>
 <html>
@@ -104,19 +105,23 @@ export async function sendContactEmail(opts: {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
   <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
-    <div style="text-align: center; margin-bottom: 32px;">
+    <div style="background: #F59E0B; color: #111827; padding: 12px 16px; border-radius: 10px; margin-bottom: 24px; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">
+      🚩 CONTACT SUPPORT — REPLY WITHIN 48 HOURS
+    </div>
+    <div style="text-align: center; margin-bottom: 24px;">
       <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0 0 6px;">MyLocalTrade</h1>
-      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">New support message received</p>
+      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">New support message received via in-app form</p>
     </div>
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 100px;">From</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${opts.fromName} &lt;${opts.fromEmail}&gt;</td></tr>
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 110px;">From</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${opts.fromName} &lt;${opts.fromEmail}&gt;</td></tr>
       <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Subject</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${opts.subject}</td></tr>
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Reply by</td><td style="padding: 8px 0; color: #F59E0B; font-size: 13px; font-weight: 600;">${replyByDate}</td></tr>
     </table>
     <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
     <p style="color: #E5E7EB; font-size: 15px; line-height: 1.7; white-space: pre-wrap; margin: 0;">${opts.message}</p>
     <hr style="border: none; border-top: 1px solid #1F2937; margin: 24px 0 16px;">
     <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      Sent via MyLocalTrade app · Service Provider LTD
+      Sent via MyLocalTrade app · Service Provider LTD · 48h SLA
     </p>
   </div>
 </body>
@@ -125,12 +130,20 @@ export async function sendContactEmail(opts: {
   const transporter = createTransport();
   if (transporter) {
     await transporter.sendMail({
-      from: `"${FROM_NAME}" <${CONTACT_FROM_EMAIL}>`,
+      from: `"MyLocalTrade Contact Form" <${CONTACT_FROM_EMAIL}>`,
       to: SUPPORT_EMAIL,
       cc: opts.fromEmail,
       replyTo: `"${opts.fromName}" <${opts.fromEmail}>`,
-      subject: `[Support] ${opts.subject}`,
+      subject: `[CONTACT - Reply within 48h] ${opts.subject}`,
       html,
+      priority: "high",
+      headers: {
+        "X-Priority": "1",
+        "X-MSMail-Priority": "High",
+        Importance: "High",
+        "X-MyLocalTrade-Type": "contact-support",
+        "X-MyLocalTrade-SLA": "48h",
+      },
     });
     console.log(`[email] Contact email sent to ${SUPPORT_EMAIL} from ${CONTACT_FROM_EMAIL}`);
   } else {
