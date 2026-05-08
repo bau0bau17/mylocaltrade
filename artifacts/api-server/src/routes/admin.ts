@@ -1446,4 +1446,36 @@ router.post("/admin/conversation-reports/:id/resolve", authMiddleware, adminOnly
   }
 });
 
+// POST /api/admin/traders/:userId/ai-verification/run — manually re-run AI cross-check
+router.post("/admin/traders/:userId/ai-verification/run", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const userId = Number.parseInt(String(req.params.userId), 10);
+    if (!Number.isFinite(userId)) {
+      res.status(400).json({ error: "Invalid user id" });
+      return;
+    }
+    const profile = await getTraderProfile(userId);
+    if (!profile) {
+      res.status(404).json({ error: "Trader not found" });
+      return;
+    }
+    const { userId: adminId } = req as AuthenticatedRequest;
+    const { runAiVerification } = await import("../lib/trader-ai-verification");
+    const result = await runAiVerification(
+      {
+        userId: profile.userId,
+        businessName: profile.businessName,
+        businessAddress: profile.businessAddress,
+        town: profile.town,
+        postcode: profile.postcode,
+      },
+      { source: "ADMIN_MANUAL", performedBy: adminId },
+    );
+    res.json({ result });
+  } catch (error) {
+    req.log.error({ err: error }, "Run AI verification failed");
+    res.status(500).json({ error: "Failed to run AI verification" });
+  }
+});
+
 export default router;

@@ -7,6 +7,7 @@ import { authMiddleware, traderOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { TRADER_STATUS, evaluateDocumentsComplete, logAudit } from "../lib/trader-status";
+import { triggerAiVerification } from "../lib/trader-ai-verification";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -122,6 +123,14 @@ async function reconcileDocumentsState(userId: number) {
       .where(eq(traderProfilesTable.userId, userId));
     if (stateChange.verificationStatus === TRADER_STATUS.UNDER_REVIEW) {
       await logAudit({ userId, action: "TRADER_SUBMITTED_FOR_REVIEW" });
+      // Fire-and-forget AI cross-check against Companies House.
+      triggerAiVerification({
+        userId: profile.userId,
+        businessName: profile.businessName,
+        businessAddress: profile.businessAddress,
+        town: profile.town,
+        postcode: profile.postcode,
+      });
     }
     if (stateChange.verificationStatus === TRADER_STATUS.EXPIRED_DOCUMENTS) {
       await logAudit({ userId, action: "DOCUMENT_EXPIRED" });

@@ -73,6 +73,26 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   // one-click unsubscribe link in the reminder email itself.
   leadReminderEmailEnabled: boolean("lead_reminder_email_enabled").notNull().default(true),
 
+  // --- AI verification (Companies House cross-check) ---
+  // Verdict produced by the AI cross-check between trader-supplied business
+  // info and Companies House public records. Null = not yet checked.
+  aiVerificationStatus: varchar("ai_verification_status", { length: 30 }),
+  aiVerificationData: json("ai_verification_data").$type<{
+    verdict: "MATCH" | "PARTIAL_MATCH" | "NO_MATCH" | "NOT_FOUND" | "ERROR";
+    reasoning: string;
+    submitted: { businessName: string; address: string; postcode: string };
+    companiesHouse: {
+      companyNumber?: string;
+      companyName?: string;
+      address?: string;
+      postcode?: string;
+      status?: string;
+      sicCodes?: string[];
+    } | null;
+    error?: string;
+  }>(),
+  aiVerificationCheckedAt: timestamp("ai_verification_checked_at"),
+
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
