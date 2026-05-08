@@ -1,0 +1,93 @@
+Great, thank you. Before publishing, please do one final messaging smoke-test checklist.
+
+Please confirm the following:
+
+1. Customer–Trader Messaging Permissions
+
+* Customer can only see their own conversations
+* Trader can only see conversations linked to their own trader profile
+* Another trader cannot access the conversation by guessing the ID
+* Another customer cannot access the conversation by guessing the ID
+* Admin cannot view message bodies unless there is an active OPEN report or the conversation status is REPORTED
+* Admin access to reported messages is logged with ADMIN_VIEWED_CONVERSATION
+
+2. Conversation lifecycle
+
+Please confirm these statuses work correctly:
+
+* OPEN
+* AWAITING_TRADER_REPLY
+* AWAITING_CUSTOMER_REPLY
+* CLOSED
+* BLOCKED
+* REPORTED
+
+Please confirm resolving a report does not incorrectly reopen CLOSED or BLOCKED conversations.
+
+3. Enquiry to conversation flow
+
+Please confirm:
+
+* Customer submits enquiry
+* Conversation is created
+* First message is created
+* Trader can see it in Messages/Enquiries
+* Trader can reply
+* Customer can reply
+* Both sides can see conversation history
+* If message creation fails, the enquiry/conversation does not get left in a broken partial state
+
+4. Review eligibility
+
+Please confirm:
+
+* Customer can only review after a valid enquiry/conversation interaction
+* Duplicate reviews for the same enquiry/conversation are blocked
+* Reviews are still subject to moderation before public display
+
+5. Notifications
+
+If real-time push notifications are not ready, that is acceptable for launch.
+
+But please confirm at least:
+
+* Email notification is sent when trader receives a new enquiry/message
+* Email notification is sent when customer receives a trader reply, if implemented
+* No notification is sent to the sender themselves
+
+6. UI checks
+
+Please confirm:
+
+* Customer has a Messages or My Enquiries page
+* Trader has a Messages or Enquiries page
+* Conversation list shows latest message/date/status
+* Conversation detail page works on mobile
+* Empty state is clear
+* Error/loading states are handled
+
+7. Contact-bypass content
+
+Do not block phone numbers/emails/links yet unless it is already implemented safely.
+
+For launch, please only add a warning or prepare this as post-launch.
+
+Reason: customers and traders may need to exchange practical job details, and strict blocking could frustrate users or break legitimate messages.
+
+Post-launch we can add:
+
+* warning before sharing phone/email
+* abuse detection
+* suspicious link warning
+* optional platform-safe messaging policy
+
+8. Final confirmation
+
+After checking the above, please tell me:
+
+* Messaging is safe for MVP launch: yes/no
+* Any known limitations
+* Any launch blockers
+* Any post-launch recommendations
+
+Do not add new large features now. Just verify the messaging flow is safe and stable for MVP.
