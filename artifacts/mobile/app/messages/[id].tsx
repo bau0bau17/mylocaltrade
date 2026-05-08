@@ -25,6 +25,7 @@ import {
   useReportConversation,
   getGetConversationQueryKey,
   getGetConversationsQueryKey,
+  getGetConversationsUnreadCountQueryKey,
 } from "@workspace/api-client-react";
 
 const TRADER_STATUSES = ["NEW", "CONTACTED", "QUOTED", "COMPLETED"] as const;
@@ -51,6 +52,7 @@ export default function ConversationThreadScreen() {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
         qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetConversationsUnreadCountQueryKey() });
       },
     },
   });
@@ -93,6 +95,14 @@ export default function ConversationThreadScreen() {
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 50);
     }
   }, [messages.length]);
+
+  // The GET conversation endpoint marks unread messages as read server-side,
+  // so once we've loaded the thread refresh the global unread badge.
+  useEffect(() => {
+    if (data) {
+      qc.invalidateQueries({ queryKey: getGetConversationsUnreadCountQueryKey() });
+    }
+  }, [data, qc]);
 
   const onSend = () => {
     const body = text.trim();

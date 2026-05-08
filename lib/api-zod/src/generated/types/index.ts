@@ -92,6 +92,7 @@ export * from "./traderProfile";
 export * from "./traderProfilePlan";
 export * from "./traderProfileSocialLinks";
 export * from "./traderReviewsResponse";
+export * from "./unreadCountResponse";
 export * from "./updateTraderProfileRequest";
 export * from "./updateTraderProfileRequestSocialLinks";
 export * from "./updateTraderStatusRequest";

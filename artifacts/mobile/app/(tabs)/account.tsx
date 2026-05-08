@@ -6,11 +6,22 @@ import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import type { FeatherIconName } from '@/types/feather-icons';
+import {
+  useGetConversationsUnreadCount,
+  getGetConversationsUnreadCountQueryKey,
+} from '@workspace/api-client-react';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, isAuthenticated, isTrader, isAdmin, logout } = useAuth();
+  const { data: unreadData } = useGetConversationsUnreadCount({
+    query: {
+      queryKey: getGetConversationsUnreadCountQueryKey(),
+      enabled: isAuthenticated && !isAdmin,
+    },
+  });
+  const unreadCount = unreadData?.unreadCount ?? 0;
 
   const handleLogout = async () => {
     await logout();
@@ -122,7 +133,7 @@ export default function AccountScreen() {
             <View style={styles.separator} />
             <MenuRow icon="message-square" label="My Leads" onPress={() => router.push('/trader-dashboard/leads')} />
             <View style={styles.separator} />
-            <MenuRow icon="message-circle" label="Messages" sub="Chat with customers" onPress={() => router.push('/messages')} accent />
+            <MenuRow icon="message-circle" label="Messages" sub="Chat with customers" onPress={() => router.push('/messages')} accent badge={unreadCount} />
             <View style={styles.separator} />
             <MenuRow icon="credit-card" label="Billing & Plan" onPress={() => router.push('/trader-dashboard/billing')} accent />
           </View>
@@ -135,7 +146,7 @@ export default function AccountScreen() {
             <View style={styles.separator} />
             <MenuRow icon="message-circle" label="My Enquiries" onPress={() => router.push('/my-enquiries')} />
             <View style={styles.separator} />
-            <MenuRow icon="send" label="Messages" sub="Chat with traders" onPress={() => router.push('/messages')} accent />
+            <MenuRow icon="send" label="Messages" sub="Chat with traders" onPress={() => router.push('/messages')} accent badge={unreadCount} />
           </View>
         </>
       )}
@@ -171,13 +182,16 @@ function MenuRow({
   sub,
   onPress,
   accent,
+  badge,
 }: {
   icon: FeatherIconName;
   label: string;
   sub?: string;
   onPress: () => void;
   accent?: boolean;
+  badge?: number;
 }) {
+  const showBadge = typeof badge === 'number' && badge > 0;
   return (
     <Pressable style={styles.menuRow} onPress={onPress}>
       <View style={[styles.menuIconWrap, accent && styles.menuIconAccent]}>
@@ -187,6 +201,11 @@ function MenuRow({
         <Text style={[styles.menuLabel, accent && styles.menuLabelAccent]}>{label}</Text>
         {sub ? <Text style={styles.menuSub} numberOfLines={1}>{sub}</Text> : null}
       </View>
+      {showBadge ? (
+        <View style={styles.menuBadge}>
+          <Text style={styles.menuBadgeText}>{badge > 99 ? '99+' : badge}</Text>
+        </View>
+      ) : null}
       <Feather name="chevron-right" size={16} color={Colors.light.textMuted} />
     </Pressable>
   );
@@ -429,6 +448,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.textMuted,
     marginTop: 1,
+  },
+  menuBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 7,
+    backgroundColor: Colors.light.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  menuBadgeText: {
+    color: Colors.light.white,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   logoutWrap: {
     marginHorizontal: 16,

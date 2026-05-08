@@ -955,6 +955,13 @@ export const GetCategoriesResponse = zod.object({
 });
 
 /**
+ * @summary Total unread message count across my conversations
+ */
+export const GetConversationsUnreadCountResponse = zod.object({
+  unreadCount: zod.number(),
+});
+
+/**
  * @summary List my conversations (customer or trader)
  */
 export const GetConversationsResponse = zod.object({

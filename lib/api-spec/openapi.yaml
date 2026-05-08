@@ -1043,6 +1043,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/CategoriesResponse"
 
+  /conversations/unread-count:
+    get:
+      operationId: getConversationsUnreadCount
+      tags: [conversations]
+      summary: Total unread message count across my conversations
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Unread total
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCountResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /conversations:
     get:
       operationId: getConversations
@@ -2010,6 +2031,13 @@ components:
         - unreadCount
         - lastMessageAt
         - createdAt
+
+    UnreadCountResponse:
+      type: object
+      properties:
+        unreadCount:
+          type: integer
+      required: [unreadCount]
 
     ConversationListResponse:
       type: object

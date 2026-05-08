@@ -395,6 +395,10 @@ export interface ConversationSummary {
   createdAt: string;
 }
 
+export interface UnreadCountResponse {
+  unreadCount: number;
+}
+
 export interface ConversationListResponse {
   conversations: ConversationSummary[];
   total: number;

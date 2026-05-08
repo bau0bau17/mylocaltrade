@@ -89,6 +89,43 @@ async function getActorContext(userId: number, userRole: string) {
   return { role: userRole as "customer" | "admin", traderProfileId: null };
 }
 
+// GET /api/conversations/unread-count — total unread across my conversations
+router.get("/conversations/unread-count", authMiddleware, async (req, res) => {
+  try {
+    const { userId, userRole } = req as AuthenticatedRequest;
+    const actor = await getActorContext(userId, userRole);
+
+    if (actor.role === "admin") {
+      res.json({ unreadCount: 0 });
+      return;
+    }
+
+    if (actor.role === "trader" && !actor.traderProfileId) {
+      res.json({ unreadCount: 0 });
+      return;
+    }
+
+    const column =
+      actor.role === "customer"
+        ? conversationsTable.customerUnreadCount
+        : conversationsTable.traderUnreadCount;
+    const where =
+      actor.role === "customer"
+        ? eq(conversationsTable.customerId, userId)
+        : eq(conversationsTable.traderProfileId, actor.traderProfileId!);
+
+    const [row] = await db
+      .select({ total: sql<number>`COALESCE(SUM(${column}), 0)::int` })
+      .from(conversationsTable)
+      .where(where);
+
+    res.json({ unreadCount: row?.total ?? 0 });
+  } catch (error) {
+    req.log.error({ err: error }, "Get unread count failed");
+    res.status(500).json({ error: "Failed to get unread count" });
+  }
+});
+
 // GET /api/conversations — list mine
 router.get("/conversations", authMiddleware, async (req, res) => {
   try {
