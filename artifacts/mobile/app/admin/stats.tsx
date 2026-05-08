@@ -239,10 +239,6 @@ export default function AdminStatsScreen() {
               <StatCard title="Active Subs" value={data.subscriptions.active} icon="credit-card" />
             </View>
 
-            <Text style={styles.footnote}>
-              Auto-refreshes every {Math.round(REFETCH_INTERVAL_MS / 1000)}s. Data is served live
-              from the cloud — no internet means no dashboard.
-            </Text>
           </>
         ) : null}
       </ScrollView>
@@ -438,11 +434,4 @@ const styles = StyleSheet.create({
   },
   retryText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
-  footnote: {
-    fontSize: 11,
-    color: Colors.light.textMuted,
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 16,
-  },
 });
