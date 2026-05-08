@@ -22,10 +22,10 @@ export default function TermsScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          These terms and conditions ("Terms") govern your use of the MyLocalTrade mobile application ("App") operated by MyLocalTrade ("Company", "we", "us"), a company registered in England and Wales.
+          These terms and conditions ("Terms") govern your use of the MyLocalTrade mobile application ("App"), operated by Service Provider LTD ("Company", "we", "us"), a company registered in England and Wales under company number 15830141, trading as MyLocalTrade.
         </Text>
         <Text style={styles.paragraph}>
-          Full company details (legal entity, company number and registered office address) will be published before launch.
+          Registered office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom.
         </Text>
       </View>
 
