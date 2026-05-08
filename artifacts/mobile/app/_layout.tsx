@@ -17,7 +17,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "@/lib/api-url";
@@ -31,12 +31,17 @@ const queryClient = new QueryClient();
 
 function useNotificationDeepLinks() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const navigatedFromInitialRef = useRef(false);
 
   useEffect(() => {
     // expo-notifications has no native module on web — every API throws
     // "is not available on web". Skip deep-link wiring entirely there.
     if (Platform.OS === "web") return;
+    // Admins don't have customer/trader chats or leads — never deep-link them
+    // into those surfaces (they'd hit the role-block screens).
+    if (isAdmin) return;
 
     const handle = (data: unknown) => {
       if (!data || typeof data !== "object") return;
@@ -70,7 +75,7 @@ function useNotificationDeepLinks() {
       handle(response.notification.request.content.data);
     });
     return () => sub.remove();
-  }, [router]);
+  }, [router, isAdmin]);
 }
 
 function RootLayoutNav() {

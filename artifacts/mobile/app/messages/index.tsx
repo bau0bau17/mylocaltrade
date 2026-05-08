@@ -53,7 +53,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default function MessagesIndexScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { isAuthenticated, isTrader } = useAuth();
+  const { isAuthenticated, isTrader, isAdmin } = useAuth();
 
   if (!isAuthenticated) {
     return (
@@ -61,6 +61,20 @@ export default function MessagesIndexScreen() {
         <Text style={styles.emptyTitle}>Log in to view your messages</Text>
         <Pressable style={styles.cta} onPress={() => router.push("/auth/login")}>
           <Text style={styles.ctaText}>Log In</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (isAdmin) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.emptyTitle}>Not available for admins</Text>
+        <Text style={styles.emptySub}>
+          Admin accounts don't have customer or trader conversations. Use a customer account to message traders.
+        </Text>
+        <Pressable style={styles.cta} onPress={() => router.push('/admin')}>
+          <Text style={styles.ctaText}>Go to Admin Panel</Text>
         </Pressable>
       </View>
     );

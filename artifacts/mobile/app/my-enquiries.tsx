@@ -4,13 +4,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
-import { useGetEnquiries } from '@workspace/api-client-react';
+import { useGetEnquiries, getGetEnquiriesQueryKey } from '@workspace/api-client-react';
 import { EnquiryCard } from '@/components/EnquiryCard';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function MyEnquiriesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { data, isLoading } = useGetEnquiries();
+  const { isAdmin } = useAuth();
+  const { data, isLoading } = useGetEnquiries({
+    query: { enabled: !isAdmin, queryKey: getGetEnquiriesQueryKey() },
+  });
+
+  if (isAdmin) {
+    return (
+      <View style={[styles.centered, { padding: 32 }]}>
+        <Text style={styles.emptyTitle}>Not available for admins</Text>
+        <Text style={styles.emptySubtitle}>
+          Admin accounts don't send enquiries. Use a customer account for this.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
