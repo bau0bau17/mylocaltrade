@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -20,30 +20,43 @@ export default function RegisterCustomerScreen() {
     phone: '',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleRegister = async () => {
-    if (!formData.fullName || !formData.email || !formData.password) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    setErrorMsg('');
+
+    if (!formData.fullName.trim() || !formData.email.trim() || !formData.password) {
+      setErrorMsg('Please fill in all required fields.');
       return;
     }
 
     if (formData.password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters');
+      setErrorMsg('Password must be at least 8 characters.');
+      return;
+    }
+
+    if (!formData.confirmPassword) {
+      setErrorMsg('Please re-enter your password in the Confirm Password field.');
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match. Please check and try again.');
+      setErrorMsg('Passwords do not match. Please check both fields.');
       return;
     }
-    
+
     setIsLoading(true);
     try {
-      const { email } = await registerCustomer(formData);
+      const { email } = await registerCustomer({
+        fullName: formData.fullName.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        phone: formData.phone.trim() || undefined,
+      });
       router.replace({ pathname: '/auth/verify-email', params: { email } });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Could not create account';
-      Alert.alert('Registration Failed', message);
+      const message = error instanceof Error ? error.message : 'Could not create account. Please try again.';
+      setErrorMsg(message);
     } finally {
       setIsLoading(false);
     }
@@ -164,6 +177,13 @@ export default function RegisterCustomerScreen() {
           )}
         </View>
 
+        {!!errorMsg && (
+          <View style={styles.errorBanner}>
+            <Feather name="alert-circle" size={14} color={Colors.light.error} />
+            <Text style={styles.errorBannerText}>{errorMsg}</Text>
+          </View>
+        )}
+
         <Pressable 
           style={[styles.button, isLoading && styles.buttonDisabled]} 
           onPress={handleRegister}
@@ -256,6 +276,22 @@ const styles = StyleSheet.create({
     color: Colors.light.error,
     marginLeft: 4,
     marginTop: -4,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.light.error,
+    fontWeight: '500',
   },
   button: {
     backgroundColor: Colors.light.primary,

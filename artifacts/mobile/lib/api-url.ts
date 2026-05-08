@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 
 export function getApiUrl(): string {
   if (Platform.OS === "web") {
-    return "/api-server";
+    return "";
   }
   const domain = process.env.EXPO_PUBLIC_API_URL;
   if (domain) {
@@ -10,7 +10,7 @@ export function getApiUrl(): string {
   }
   const devDomain = process.env.EXPO_PUBLIC_DEV_DOMAIN;
   if (devDomain) {
-    return `https://${devDomain}/api-server`;
+    return `https://${devDomain}`;
   }
-  return "/api-server";
+  return "";
 }
