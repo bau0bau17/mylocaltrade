@@ -6,3 +6,4 @@ export * from "./subscriptions";
 export * from "./contact-messages";
 export * from "./trader-audit-log";
 export * from "./trader-documents";
+export * from "./reviews";

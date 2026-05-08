@@ -440,10 +440,20 @@ export const CreateCheckoutSessionBody = zod.object({
   planId: zod.enum(["basic", "premium", "elite"]),
 });
 
-export const CreateCheckoutSessionResponse = zod.object({
-  sessionId: zod.string(),
-  url: zod.string(),
-});
+export const CreateCheckoutSessionResponse = zod
+  .object({
+    sessionId: zod.string(),
+    url: zod.string(),
+    demoActivationUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Present only in demo mode. Relative path to POST to in order to activate the subscription.",
+      ),
+  })
+  .describe(
+    'Response from creating a Stripe checkout session.\n\nIn demo mode (no STRIPE_SECRET_KEY configured), `url` is the literal\nsentinel `\"DEMO_MODE\"` and `demoActivationUrl` is set to a relative\nbackend path the client can POST to in order to activate the\nsubscription instantly without going through Stripe. In real mode\n`demoActivationUrl` is omitted and `url` is the live Stripe-hosted\ncheckout URL the client should open.\n',
+  );
 
 /**
  * @summary Get current subscription status
@@ -453,6 +463,336 @@ export const GetSubscriptionStatusResponse = zod.object({
   status: zod.enum(["active", "inactive", "past_due", "cancelled"]),
   currentPeriodEnd: zod.date().nullish(),
   cancelAtPeriodEnd: zod.boolean(),
+});
+
+/**
+ * Used only when the API is running without `STRIPE_SECRET_KEY`. The
+client receives a `demoActivationUrl` from `createCheckoutSession`
+and POSTs to this endpoint to flip the pending subscription into
+the `active` state immediately.
+
+ * @summary Activate subscription in demo mode (no Stripe)
+ */
+export const DemoActivateSubscriptionQueryParams = zod.object({
+  sessionId: zod.coerce.string(),
+  planId: zod.enum(["basic", "premium", "elite"]),
+});
+
+export const DemoActivateSubscriptionResponse = zod.object({
+  success: zod.boolean(),
+  plan: zod.string().optional(),
+  status: zod.string().optional(),
+  error: zod.string().optional(),
+});
+
+/**
+ * @summary Schedule cancellation at period end
+ */
+export const CancelSubscriptionResponse = zod.object({
+  success: zod.boolean(),
+  cancelAtPeriodEnd: zod.boolean().optional(),
+  currentPeriodEnd: zod.date().nullish(),
+  alreadyScheduled: zod.boolean().optional(),
+});
+
+/**
+ * @summary Undo a scheduled cancellation
+ */
+export const ResumeSubscriptionResponse = zod.object({
+  success: zod.boolean(),
+  cancelAtPeriodEnd: zod.boolean().optional(),
+  currentPeriodEnd: zod.date().nullish(),
+  alreadyScheduled: zod.boolean().optional(),
+});
+
+/**
+ * @summary List the current trader's verification documents
+ */
+export const GetTraderDocumentsResponse = zod.object({
+  documents: zod.array(
+    zod.object({
+      id: zod.number(),
+      type: zod.enum([
+        "ID_DOCUMENT",
+        "PROOF_OF_ADDRESS",
+        "INSURANCE",
+        "QUALIFICATION",
+        "OTHER",
+      ]),
+      originalFilename: zod.string(),
+      mimeType: zod.string(),
+      sizeBytes: zod.number(),
+      status: zod.enum(["PENDING_REVIEW", "APPROVED", "REJECTED", "EXPIRED"]),
+      rejectionReason: zod.string().nullish(),
+      expiresAt: zod.date().nullish(),
+      reviewedAt: zod.date().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+  evaluation: zod.object({
+    complete: zod.boolean(),
+    hasExpiredRequired: zod.boolean(),
+    hasExpiringSoonRequired: zod.boolean(),
+    byType: zod.array(
+      zod.object({
+        type: zod.enum([
+          "ID_DOCUMENT",
+          "PROOF_OF_ADDRESS",
+          "INSURANCE",
+          "QUALIFICATION",
+          "OTHER",
+        ]),
+        label: zod.string(),
+        required: zod.boolean(),
+        hint: zod.string().optional(),
+        satisfied: zod.boolean(),
+        hasUpload: zod.boolean(),
+        count: zod.number(),
+        latestStatus: zod.string().optional(),
+        rejectionReason: zod.string().optional(),
+        expiresAt: zod.date().nullish(),
+        expired: zod.boolean().optional(),
+        expiringSoon: zod.boolean().optional(),
+      }),
+    ),
+  }),
+  maxUploadBytes: zod.number(),
+  allowedMimeTypes: zod.array(zod.string()),
+});
+
+/**
+ * @summary Register a successfully uploaded document
+ */
+export const RegisterTraderDocumentBody = zod.object({
+  type: zod.enum([
+    "ID_DOCUMENT",
+    "PROOF_OF_ADDRESS",
+    "INSURANCE",
+    "QUALIFICATION",
+    "OTHER",
+  ]),
+  objectPath: zod.string(),
+  originalFilename: zod.string(),
+  mimeType: zod.string(),
+  sizeBytes: zod.number(),
+  expiresAt: zod.date().nullish(),
+});
+
+/**
+ * @summary Request a presigned PUT URL for uploading a document
+ */
+export const GetTraderDocumentUploadUrlBody = zod.object({
+  type: zod.enum([
+    "ID_DOCUMENT",
+    "PROOF_OF_ADDRESS",
+    "INSURANCE",
+    "QUALIFICATION",
+    "OTHER",
+  ]),
+  filename: zod.string(),
+  mimeType: zod.string(),
+  sizeBytes: zod.number(),
+});
+
+export const GetTraderDocumentUploadUrlResponse = zod.object({
+  uploadURL: zod.string(),
+  objectPath: zod.string(),
+  method: zod.string(),
+  expectedHeaders: zod.record(zod.string(), zod.string()).optional(),
+});
+
+/**
+ * @summary Delete a pending or rejected trader document
+ */
+export const DeleteTraderDocumentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteTraderDocumentResponse = zod.object({
+  ok: zod.boolean(),
+  evaluation: zod.object({
+    complete: zod.boolean(),
+    hasExpiredRequired: zod.boolean(),
+    hasExpiringSoonRequired: zod.boolean(),
+    byType: zod.array(
+      zod.object({
+        type: zod.enum([
+          "ID_DOCUMENT",
+          "PROOF_OF_ADDRESS",
+          "INSURANCE",
+          "QUALIFICATION",
+          "OTHER",
+        ]),
+        label: zod.string(),
+        required: zod.boolean(),
+        hint: zod.string().optional(),
+        satisfied: zod.boolean(),
+        hasUpload: zod.boolean(),
+        count: zod.number(),
+        latestStatus: zod.string().optional(),
+        rejectionReason: zod.string().optional(),
+        expiresAt: zod.date().nullish(),
+        expired: zod.boolean().optional(),
+        expiringSoon: zod.boolean().optional(),
+      }),
+    ),
+  }),
+});
+
+/**
+ * @summary Submit a review for a trader (customer must have a non-pending enquiry)
+ */
+export const createReviewBodyRatingMax = 5;
+
+export const createReviewBodyTextMin = 10;
+export const createReviewBodyTextMax = 2000;
+
+export const CreateReviewBody = zod.object({
+  traderId: zod.number(),
+  enquiryId: zod.number(),
+  rating: zod.number().min(1).max(createReviewBodyRatingMax),
+  text: zod.string().min(createReviewBodyTextMin).max(createReviewBodyTextMax),
+});
+
+/**
+ * @summary List of customer's enquiries that are eligible for a new review
+ */
+export const GetEligibleEnquiriesForReviewResponse = zod.object({
+  enquiries: zod.array(
+    zod.object({
+      enquiryId: zod.number(),
+      traderId: zod.number(),
+      traderBusinessName: zod.string(),
+      serviceRequired: zod.string(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Public list of approved reviews for a trader
+ */
+export const GetTraderReviewsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const getTraderReviewsResponseReviewsItemRatingMax = 5;
+
+export const GetTraderReviewsResponse = zod.object({
+  reviews: zod.array(
+    zod.object({
+      id: zod.number(),
+      traderId: zod.number(),
+      customerId: zod.number(),
+      customerName: zod.string(),
+      enquiryId: zod.number().nullish(),
+      rating: zod
+        .number()
+        .min(1)
+        .max(getTraderReviewsResponseReviewsItemRatingMax),
+      text: zod.string(),
+      status: zod.enum(["PENDING", "APPROVED", "REJECTED", "FLAGGED"]),
+      traderReply: zod.string().nullish(),
+      traderReplyAt: zod.date().nullish(),
+      moderatedAt: zod.date().nullish(),
+      moderationNotes: zod.string().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+  averageRating: zod.number().nullish(),
+  totalCount: zod.number(),
+});
+
+/**
+ * @summary Reviews left for the authenticated trader (any status)
+ */
+export const getMyTraderReviewsResponseReviewsItemRatingMax = 5;
+
+export const GetMyTraderReviewsResponse = zod.object({
+  reviews: zod.array(
+    zod.object({
+      id: zod.number(),
+      traderId: zod.number(),
+      customerId: zod.number(),
+      customerName: zod.string(),
+      enquiryId: zod.number().nullish(),
+      rating: zod
+        .number()
+        .min(1)
+        .max(getMyTraderReviewsResponseReviewsItemRatingMax),
+      text: zod.string(),
+      status: zod.enum(["PENDING", "APPROVED", "REJECTED", "FLAGGED"]),
+      traderReply: zod.string().nullish(),
+      traderReplyAt: zod.date().nullish(),
+      moderatedAt: zod.date().nullish(),
+      moderationNotes: zod.string().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+  averageRating: zod.number().nullish(),
+  totalCount: zod.number(),
+});
+
+/**
+ * @summary Admin moderation queue
+ */
+export const AdminListReviewsQueryParams = zod.object({
+  status: zod.enum(["PENDING", "APPROVED", "REJECTED", "FLAGGED"]).optional(),
+});
+
+export const adminListReviewsResponseReviewsItemRatingMax = 5;
+
+export const AdminListReviewsResponse = zod.object({
+  reviews: zod.array(
+    zod.object({
+      id: zod.number(),
+      traderId: zod.number(),
+      customerId: zod.number(),
+      customerName: zod.string(),
+      enquiryId: zod.number().nullish(),
+      rating: zod
+        .number()
+        .min(1)
+        .max(adminListReviewsResponseReviewsItemRatingMax),
+      text: zod.string(),
+      status: zod.enum(["PENDING", "APPROVED", "REJECTED", "FLAGGED"]),
+      traderReply: zod.string().nullish(),
+      traderReplyAt: zod.date().nullish(),
+      moderatedAt: zod.date().nullish(),
+      moderationNotes: zod.string().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Approve / reject / flag a review
+ */
+export const AdminModerateReviewParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AdminModerateReviewBody = zod.object({
+  action: zod.enum(["approve", "reject", "flag"]),
+  notes: zod.string().optional(),
+});
+
+export const adminModerateReviewResponseRatingMax = 5;
+
+export const AdminModerateReviewResponse = zod.object({
+  id: zod.number(),
+  traderId: zod.number(),
+  customerId: zod.number(),
+  customerName: zod.string(),
+  enquiryId: zod.number().nullish(),
+  rating: zod.number().min(1).max(adminModerateReviewResponseRatingMax),
+  text: zod.string(),
+  status: zod.enum(["PENDING", "APPROVED", "REJECTED", "FLAGGED"]),
+  traderReply: zod.string().nullish(),
+  traderReplyAt: zod.date().nullish(),
+  moderatedAt: zod.date().nullish(),
+  moderationNotes: zod.string().nullish(),
+  createdAt: zod.date(),
 });
 
 /**

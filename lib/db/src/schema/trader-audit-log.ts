@@ -24,6 +24,10 @@ export const TRADER_AUDIT_ACTIONS = [
   "SUBSCRIPTION_CANCELLED",
   "PROFILE_WENT_LIVE",
   "PROFILE_HIDDEN",
+  "REVIEW_SUBMITTED",
+  "REVIEW_APPROVED",
+  "REVIEW_REJECTED",
+  "REVIEW_FLAGGED",
 ] as const;
 export type TraderAuditAction = (typeof TRADER_AUDIT_ACTIONS)[number];
 

@@ -6,7 +6,17 @@ import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { getApiUrl } from '@/lib/api-url';
+import {
+  useGetTraderDocuments,
+  useGetTraderDocumentUploadUrl,
+  useRegisterTraderDocument,
+  useDeleteTraderDocument,
+} from '@workspace/api-client-react';
+import type {
+  TraderDocument,
+  DocumentTypeStatus,
+  RequestUploadUrlRequestType,
+} from '@workspace/api-client-react';
 
 const DOCUMENT_TYPES = [
   { type: 'ID_DOCUMENT', label: 'Photo ID', required: true, icon: 'user', hint: 'Passport or driving licence (front).' },
@@ -17,37 +27,6 @@ const DOCUMENT_TYPES = [
 
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
 const MAX_BYTES = 10 * 1024 * 1024;
-
-interface DocItem {
-  id: number;
-  type: string;
-  originalFilename: string;
-  mimeType: string;
-  sizeBytes: number;
-  status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
-  rejectionReason: string | null;
-  expiresAt: string | null;
-  createdAt: string;
-}
-
-interface DocsEvaluation {
-  complete: boolean;
-  hasExpiredRequired: boolean;
-  hasExpiringSoonRequired: boolean;
-  byType: Array<{
-    type: string;
-    label: string;
-    required: boolean;
-    satisfied: boolean;
-    hasUpload: boolean;
-    count: number;
-    latestStatus?: string;
-    rejectionReason?: string;
-    expiresAt?: string | null;
-    expired?: boolean;
-    expiringSoon?: boolean;
-  }>;
-}
 
 const TRACK_EXPIRY: Record<string, boolean> = {
   INSURANCE: true,
@@ -70,35 +49,30 @@ export default function DocumentsScreen() {
   const router = useRouter();
   const { token, isTrader } = useAuth();
 
-  const [docs, setDocs] = useState<DocItem[]>([]);
-  const [evaluation, setEvaluation] = useState<DocsEvaluation | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const {
+    data: docsData,
+    isLoading,
+    refetch,
+    isRefetching,
+  } = useGetTraderDocuments({
+    query: {
+      queryKey: ['/api/trader/documents'],
+      enabled: Boolean(isTrader && token),
+    },
+  });
+
+  const { mutateAsync: getUploadUrl } = useGetTraderDocumentUploadUrl();
+  const { mutateAsync: registerDocument } = useRegisterTraderDocument();
+  const { mutateAsync: deleteDocument } = useDeleteTraderDocument();
+
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expiryInputs, setExpiryInputs] = useState<Record<string, string>>({});
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${getApiUrl()}/api/trader/documents`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to load documents');
-      setDocs(json.documents);
-      setEvaluation(json.evaluation);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load documents');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [token]);
+  const docs: TraderDocument[] = docsData?.documents ?? [];
+  const evaluation = docsData?.evaluation;
 
-  useEffect(() => { load(); }, [load]);
-
-  const handlePick = async (docType: string) => {
+  const handlePick = useCallback(async (docType: string) => {
     if (uploadingType) return;
     setError(null);
 
@@ -120,7 +94,7 @@ export default function DocumentsScreen() {
         copyToCacheDirectory: true,
         multiple: false,
       });
-    } catch (e) {
+    } catch {
       setError('Could not open file picker.');
       return;
     }
@@ -144,44 +118,42 @@ export default function DocumentsScreen() {
 
     setUploadingType(docType);
     try {
-      // 1. Get presigned URL
-      const urlRes = await fetch(`${getApiUrl()}/api/trader/documents/upload-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: docType, filename: asset.name, mimeType, sizeBytes }),
+      // 1. Get presigned URL via generated client.
+      const urlResp = await getUploadUrl({
+        data: {
+          type: docType as RequestUploadUrlRequestType,
+          filename: asset.name,
+          mimeType,
+          sizeBytes,
+        },
       });
-      const urlJson = await urlRes.json();
-      if (!urlRes.ok) throw new Error(urlJson.error || 'Failed to get upload URL');
 
-      // 2. Upload file directly to GCS
+      // 2. Upload file directly to GCS — this stays a raw fetch because the
+      // upload target is an external presigned URL, not part of our API.
       const fileResp = await fetch(asset.uri);
       const blob = await fileResp.blob();
-      const putRes = await fetch(urlJson.uploadURL, {
+      const putRes = await fetch(urlResp.uploadURL, {
         method: 'PUT',
         headers: { 'Content-Type': mimeType },
         body: blob,
       });
       if (!putRes.ok) throw new Error('Upload to storage failed');
 
-      // 3. Register the uploaded object using the path the server told us about.
-      const regRes = await fetch(`${getApiUrl()}/api/trader/documents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          type: docType,
-          objectPath: urlJson.objectPath,
+      // 3. Register the uploaded object via generated client.
+      const regResp = await registerDocument({
+        data: {
+          type: docType as RequestUploadUrlRequestType,
+          objectPath: urlResp.objectPath,
           originalFilename: asset.name,
           mimeType,
           sizeBytes,
           ...(expiryIso ? { expiresAt: expiryIso } : {}),
-        }),
+        },
       });
-      const regJson = await regRes.json();
-      if (!regRes.ok) throw new Error(regJson.error || 'Failed to save document');
 
-      await load();
+      await refetch();
       setExpiryInputs((prev) => ({ ...prev, [docType]: '' }));
-      if (regJson.evaluation?.complete) {
+      if (regResp.evaluation?.complete) {
         Alert.alert(
           'Documents submitted',
           'Your account is now under review. We\'ll notify you once an admin has checked your documents.',
@@ -192,9 +164,9 @@ export default function DocumentsScreen() {
     } finally {
       setUploadingType(null);
     }
-  };
+  }, [uploadingType, expiryInputs, getUploadUrl, registerDocument, refetch]);
 
-  const handleDelete = (doc: DocItem) => {
+  const handleDelete = (doc: TraderDocument) => {
     Alert.alert(
       'Remove document',
       `Remove "${doc.originalFilename}"? You can upload a replacement afterwards.`,
@@ -203,13 +175,8 @@ export default function DocumentsScreen() {
         {
           text: 'Remove', style: 'destructive', onPress: async () => {
             try {
-              const res = await fetch(`${getApiUrl()}/api/trader/documents/${doc.id}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              const json = await res.json().catch(() => ({}));
-              if (!res.ok) throw new Error(json.error || 'Failed to remove');
-              await load();
+              await deleteDocument({ id: doc.id });
+              await refetch();
             } catch (e) {
               setError(e instanceof Error ? e.message : 'Failed to remove');
             }
@@ -227,7 +194,7 @@ export default function DocumentsScreen() {
       </View>
     );
   }
-  if (loading) {
+  if (isLoading) {
     return (
       <View style={[styles.container, styles.center, { paddingTop: insets.top + 40 }]}>
         <ActivityIndicator color={Colors.light.primary} />
@@ -235,8 +202,8 @@ export default function DocumentsScreen() {
     );
   }
 
-  const requiredCount = evaluation?.byType.filter(b => b.required && b.satisfied).length ?? 0;
-  const requiredTotal = evaluation?.byType.filter(b => b.required).length ?? 2;
+  const requiredCount = evaluation?.byType.filter((b: DocumentTypeStatus) => b.required && b.satisfied).length ?? 0;
+  const requiredTotal = evaluation?.byType.filter((b: DocumentTypeStatus) => b.required).length ?? 2;
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
@@ -251,7 +218,7 @@ export default function DocumentsScreen() {
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 24, paddingHorizontal: 20 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={Colors.light.primary} />}
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={Colors.light.primary} />}
       >
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
@@ -283,8 +250,8 @@ export default function DocumentsScreen() {
         )}
 
         {DOCUMENT_TYPES.map((dt) => {
-          const evalRow = evaluation?.byType.find(b => b.type === dt.type);
-          const myDocs = docs.filter(d => d.type === dt.type);
+          const evalRow = evaluation?.byType.find((b: DocumentTypeStatus) => b.type === dt.type);
+          const myDocs = docs.filter((d) => d.type === dt.type);
           const isUploading = uploadingType === dt.type;
           return (
             <View key={dt.type} style={styles.card}>
@@ -310,7 +277,7 @@ export default function DocumentsScreen() {
 
               {myDocs.length > 0 && (
                 <View style={styles.docList}>
-                  {myDocs.map(d => {
+                  {myDocs.map((d) => {
                     const expiryDate = d.expiresAt ? new Date(d.expiresAt) : null;
                     const expired = expiryDate ? expiryDate.getTime() <= Date.now() : d.status === 'EXPIRED';
                     const daysToExpiry = expiryDate ? Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
@@ -402,8 +369,8 @@ export default function DocumentsScreen() {
   );
 }
 
-function StatusPill({ status }: { status: DocItem['status'] }) {
-  const map: Record<DocItem['status'], { label: string; bg: string; fg: string }> = {
+function StatusPill({ status }: { status: TraderDocument['status'] }) {
+  const map: Record<TraderDocument['status'], { label: string; bg: string; fg: string }> = {
     PENDING_REVIEW: { label: 'Pending review', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
     APPROVED: { label: 'Approved', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
     REJECTED: { label: 'Rejected', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },

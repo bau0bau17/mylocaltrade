@@ -265,9 +265,36 @@ export interface CreateCheckoutRequest {
   planId: CreateCheckoutRequestPlanId;
 }
 
+/**
+ * Response from creating a Stripe checkout session.
+
+In demo mode (no STRIPE_SECRET_KEY configured), `url` is the literal
+sentinel `"DEMO_MODE"` and `demoActivationUrl` is set to a relative
+backend path the client can POST to in order to activate the
+subscription instantly without going through Stripe. In real mode
+`demoActivationUrl` is omitted and `url` is the live Stripe-hosted
+checkout URL the client should open.
+
+ */
 export interface CheckoutSessionResponse {
   sessionId: string;
   url: string;
+  /** Present only in demo mode. Relative path to POST to in order to activate the subscription. */
+  demoActivationUrl?: string | null;
+}
+
+export interface DemoActivateResponse {
+  success: boolean;
+  plan?: string;
+  status?: string;
+  error?: string;
+}
+
+export interface SubscriptionMutationResponse {
+  success: boolean;
+  cancelAtPeriodEnd?: boolean;
+  currentPeriodEnd?: string | null;
+  alreadyScheduled?: boolean;
 }
 
 export type SubscriptionStatusStatus =
@@ -334,6 +361,217 @@ export interface CategoriesResponse {
   categories: Category[];
 }
 
+export type TraderDocumentType =
+  (typeof TraderDocumentType)[keyof typeof TraderDocumentType];
+
+export const TraderDocumentType = {
+  ID_DOCUMENT: "ID_DOCUMENT",
+  PROOF_OF_ADDRESS: "PROOF_OF_ADDRESS",
+  INSURANCE: "INSURANCE",
+  QUALIFICATION: "QUALIFICATION",
+  OTHER: "OTHER",
+} as const;
+
+export type TraderDocumentStatus =
+  (typeof TraderDocumentStatus)[keyof typeof TraderDocumentStatus];
+
+export const TraderDocumentStatus = {
+  PENDING_REVIEW: "PENDING_REVIEW",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  EXPIRED: "EXPIRED",
+} as const;
+
+export interface TraderDocument {
+  id: number;
+  type: TraderDocumentType;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  status: TraderDocumentStatus;
+  rejectionReason?: string | null;
+  expiresAt?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+export type DocumentTypeStatusType =
+  (typeof DocumentTypeStatusType)[keyof typeof DocumentTypeStatusType];
+
+export const DocumentTypeStatusType = {
+  ID_DOCUMENT: "ID_DOCUMENT",
+  PROOF_OF_ADDRESS: "PROOF_OF_ADDRESS",
+  INSURANCE: "INSURANCE",
+  QUALIFICATION: "QUALIFICATION",
+  OTHER: "OTHER",
+} as const;
+
+export interface DocumentTypeStatus {
+  type: DocumentTypeStatusType;
+  label: string;
+  required: boolean;
+  hint?: string;
+  satisfied: boolean;
+  hasUpload: boolean;
+  count: number;
+  latestStatus?: string;
+  rejectionReason?: string;
+  expiresAt?: string | null;
+  expired?: boolean;
+  expiringSoon?: boolean;
+}
+
+export interface DocumentsEvaluation {
+  complete: boolean;
+  hasExpiredRequired: boolean;
+  hasExpiringSoonRequired: boolean;
+  byType: DocumentTypeStatus[];
+}
+
+export interface TraderDocumentsResponse {
+  documents: TraderDocument[];
+  evaluation: DocumentsEvaluation;
+  maxUploadBytes: number;
+  allowedMimeTypes: string[];
+}
+
+export type RequestUploadUrlRequestType =
+  (typeof RequestUploadUrlRequestType)[keyof typeof RequestUploadUrlRequestType];
+
+export const RequestUploadUrlRequestType = {
+  ID_DOCUMENT: "ID_DOCUMENT",
+  PROOF_OF_ADDRESS: "PROOF_OF_ADDRESS",
+  INSURANCE: "INSURANCE",
+  QUALIFICATION: "QUALIFICATION",
+  OTHER: "OTHER",
+} as const;
+
+export interface RequestUploadUrlRequest {
+  type: RequestUploadUrlRequestType;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+export type UploadUrlResponseExpectedHeaders = { [key: string]: string };
+
+export interface UploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+  method: string;
+  expectedHeaders?: UploadUrlResponseExpectedHeaders;
+}
+
+export type RegisterTraderDocumentRequestType =
+  (typeof RegisterTraderDocumentRequestType)[keyof typeof RegisterTraderDocumentRequestType];
+
+export const RegisterTraderDocumentRequestType = {
+  ID_DOCUMENT: "ID_DOCUMENT",
+  PROOF_OF_ADDRESS: "PROOF_OF_ADDRESS",
+  INSURANCE: "INSURANCE",
+  QUALIFICATION: "QUALIFICATION",
+  OTHER: "OTHER",
+} as const;
+
+export interface RegisterTraderDocumentRequest {
+  type: RegisterTraderDocumentRequestType;
+  objectPath: string;
+  originalFilename: string;
+  mimeType: string;
+  sizeBytes: number;
+  expiresAt?: string | null;
+}
+
+export interface RegisterTraderDocumentResponse {
+  document: TraderDocument;
+  evaluation: DocumentsEvaluation;
+}
+
+export interface DeleteTraderDocumentResponse {
+  ok: boolean;
+  evaluation: DocumentsEvaluation;
+}
+
+export type ReviewStatus = (typeof ReviewStatus)[keyof typeof ReviewStatus];
+
+export const ReviewStatus = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  FLAGGED: "FLAGGED",
+} as const;
+
+export interface Review {
+  id: number;
+  traderId: number;
+  customerId: number;
+  customerName: string;
+  enquiryId?: number | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  rating: number;
+  text: string;
+  status: ReviewStatus;
+  traderReply?: string | null;
+  traderReplyAt?: string | null;
+  moderatedAt?: string | null;
+  moderationNotes?: string | null;
+  createdAt: string;
+}
+
+export interface CreateReviewRequest {
+  traderId: number;
+  enquiryId: number;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  rating: number;
+  /**
+   * @minLength 10
+   * @maxLength 2000
+   */
+  text: string;
+}
+
+export interface EligibleEnquiry {
+  enquiryId: number;
+  traderId: number;
+  traderBusinessName: string;
+  serviceRequired: string;
+  createdAt: string;
+}
+
+export interface EligibleEnquiriesResponse {
+  enquiries: EligibleEnquiry[];
+}
+
+export interface TraderReviewsResponse {
+  reviews: Review[];
+  averageRating?: number | null;
+  totalCount: number;
+}
+
+export interface AdminReviewsResponse {
+  reviews: Review[];
+}
+
+export type ModerateReviewRequestAction =
+  (typeof ModerateReviewRequestAction)[keyof typeof ModerateReviewRequestAction];
+
+export const ModerateReviewRequestAction = {
+  approve: "approve",
+  reject: "reject",
+  flag: "flag",
+} as const;
+
+export interface ModerateReviewRequest {
+  action: ModerateReviewRequestAction;
+  notes?: string;
+}
+
 export type ListTradersParams = {
   category?: string;
   location?: string;
@@ -346,5 +584,33 @@ export type ListTradersParams = {
 export type GetFeaturedTradersParams = {
   limit?: number;
 };
+
+export type DemoActivateSubscriptionParams = {
+  sessionId: string;
+  planId: DemoActivateSubscriptionPlanId;
+};
+
+export type DemoActivateSubscriptionPlanId =
+  (typeof DemoActivateSubscriptionPlanId)[keyof typeof DemoActivateSubscriptionPlanId];
+
+export const DemoActivateSubscriptionPlanId = {
+  basic: "basic",
+  premium: "premium",
+  elite: "elite",
+} as const;
+
+export type AdminListReviewsParams = {
+  status?: AdminListReviewsStatus;
+};
+
+export type AdminListReviewsStatus =
+  (typeof AdminListReviewsStatus)[keyof typeof AdminListReviewsStatus];
+
+export const AdminListReviewsStatus = {
+  PENDING: "PENDING",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  FLAGGED: "FLAGGED",
+} as const;
 
 export type HandleStripeWebhookBody = { [key: string]: unknown };

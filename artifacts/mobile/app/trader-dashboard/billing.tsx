@@ -1,19 +1,14 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
-import { useAuth } from '@/contexts/AuthContext';
-import { getApiUrl } from '@/lib/api-url';
-
-interface SubStatus {
-  plan: string | null;
-  status: string | null;
-  currentPeriodStart: string | null;
-  currentPeriodEnd: string | null;
-  cancelAtPeriodEnd: boolean;
-}
+import {
+  useGetSubscriptionStatus,
+  useCancelSubscription,
+  useResumeSubscription,
+} from '@workspace/api-client-react';
 
 const PLAN_LABEL: Record<string, string> = {
   basic: 'Basic',
@@ -24,25 +19,15 @@ const PLAN_LABEL: Record<string, string> = {
 export default function BillingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { token } = useAuth();
-  const apiUrl = getApiUrl();
 
-  const [status, setStatus] = useState<SubStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
+  const { data: status, isLoading, refetch, isRefetching } = useGetSubscriptionStatus({
+    query: { queryKey: ['/api/subscriptions/status'] },
+  });
+  const { mutateAsync: cancelSub, isPending: cancelling } = useCancelSubscription();
+  const { mutateAsync: resumeSub, isPending: resuming } = useResumeSubscription();
+  const busy = cancelling || resuming;
 
-  const load = useCallback(async () => {
-    try {
-      const r = await fetch(`${apiUrl}/api/subscriptions/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (r.ok) setStatus(await r.json());
-    } finally {
-      setLoading(false);
-    }
-  }, [apiUrl, token]);
-
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { refetch(); }, [refetch]));
 
   const cancel = () => {
     if (!status || status.cancelAtPeriodEnd) return;
@@ -55,19 +40,11 @@ export default function BillingScreen() {
           text: 'Cancel plan',
           style: 'destructive',
           onPress: async () => {
-            setBusy(true);
             try {
-              const r = await fetch(`${apiUrl}/api/subscriptions/cancel`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              const json = await r.json();
-              if (!r.ok) throw new Error(json.error || 'Cancel failed');
-              await load();
+              await cancelSub();
+              await refetch();
             } catch (e) {
               Alert.alert('Could not cancel', e instanceof Error ? e.message : 'Try again.');
-            } finally {
-              setBusy(false);
             }
           },
         },
@@ -76,23 +53,15 @@ export default function BillingScreen() {
   };
 
   const resume = async () => {
-    setBusy(true);
     try {
-      const r = await fetch(`${apiUrl}/api/subscriptions/resume`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await r.json();
-      if (!r.ok) throw new Error(json.error || 'Resume failed');
-      await load();
+      await resumeSub();
+      await refetch();
     } catch (e) {
       Alert.alert('Could not resume', e instanceof Error ? e.message : 'Try again.');
-    } finally {
-      setBusy(false);
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View style={s.center}><ActivityIndicator size="large" color={Colors.light.primary} /></View>
     );
@@ -108,7 +77,7 @@ export default function BillingScreen() {
     <ScrollView
       style={s.container}
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32, paddingHorizontal: 20 }}
-      refreshControl={<RefreshControl refreshing={false} onRefresh={load} />}
+      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} />}
     >
       <Text style={s.title}>Billing & Plan</Text>
 
