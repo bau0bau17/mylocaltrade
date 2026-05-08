@@ -1,7 +1,6 @@
 import { db } from "@workspace/db";
 import { conversationsTable } from "@workspace/db/schema";
-import { and, isNotNull, lte, or, sql } from "drizzle-orm";
-import { logger } from "./logger";
+import { and, isNotNull, lte } from "drizzle-orm";
 
 /**
  * Null out timed mute columns whose `*_muted_until` has elapsed. Indefinite
