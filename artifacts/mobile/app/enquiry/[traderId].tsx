@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useCreateEnquiry, useGetTrader } from '@workspace/api-client-react';
+import { detectContactInfo, contactViolationMessage } from '@/lib/content-filter';
 
 export default function EnquiryScreen() {
   const { traderId } = useLocalSearchParams();
@@ -22,9 +23,21 @@ export default function EnquiryScreen() {
     phone: '',
   });
 
+  const messageViolation = useMemo(
+    () => detectContactInfo(formData.message),
+    [formData.message],
+  );
+  const messageViolationText = messageViolation
+    ? contactViolationMessage(messageViolation)
+    : null;
+
   const handleSubmit = async () => {
     if (!formData.serviceRequired || !formData.message) {
       Alert.alert('Error', 'Please fill in the required fields (Service and Message)');
+      return;
+    }
+    if (messageViolation) {
+      Alert.alert('Message blocked', contactViolationMessage(messageViolation));
       return;
     }
 
@@ -79,7 +92,13 @@ export default function EnquiryScreen() {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Message *</Text>
-          <View style={[styles.inputWrap, styles.textAreaWrap]}>
+          <View
+            style={[
+              styles.inputWrap,
+              styles.textAreaWrap,
+              messageViolationText ? styles.inputWrapBlocked : null,
+            ]}
+          >
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Describe the job in detail..."
@@ -91,6 +110,12 @@ export default function EnquiryScreen() {
               textAlignVertical="top"
             />
           </View>
+          {messageViolationText ? (
+            <View style={styles.violationBanner}>
+              <Feather name="alert-triangle" size={14} color={Colors.light.error} />
+              <Text style={styles.violationText}>{messageViolationText}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.inputGroup}>
@@ -122,10 +147,10 @@ export default function EnquiryScreen() {
           </View>
         </View>
 
-        <Pressable 
-          style={[styles.button, isPending && styles.buttonDisabled]} 
+        <Pressable
+          style={[styles.button, (isPending || !!messageViolation) && styles.buttonDisabled]}
           onPress={handleSubmit}
-          disabled={isPending}
+          disabled={isPending || !!messageViolation}
         >
           {isPending ? (
             <ActivityIndicator color={Colors.light.white} />
@@ -203,6 +228,24 @@ const styles = StyleSheet.create({
     height: 120,
     alignItems: 'flex-start',
     paddingTop: 14,
+  },
+  inputWrapBlocked: {
+    borderColor: Colors.light.error,
+  },
+  violationBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 10,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  violationText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.light.error,
+    lineHeight: 16,
   },
   input: {
     flex: 1,

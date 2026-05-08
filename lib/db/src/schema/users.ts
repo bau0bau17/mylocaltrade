@@ -16,6 +16,7 @@ export const usersTable = pgTable("users", {
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   plan: varchar("plan", { length: 20 }),
+  pushNotificationsEnabled: boolean("push_notifications_enabled").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

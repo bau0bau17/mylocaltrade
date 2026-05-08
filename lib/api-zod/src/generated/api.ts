@@ -98,6 +98,12 @@ export const LoginResponse = zod.object({
     role: zod.enum(["customer", "trader", "admin"]),
     isActive: zod.boolean(),
     plan: zod.string().nullish(),
+    pushNotificationsEnabled: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Global toggle for push notifications across all conversations",
+      ),
     createdAt: zod.date().optional(),
   }),
 });
@@ -157,7 +163,23 @@ export const GetMeResponse = zod.object({
   role: zod.enum(["customer", "trader", "admin"]),
   isActive: zod.boolean(),
   plan: zod.string().nullish(),
+  pushNotificationsEnabled: zod
+    .boolean()
+    .optional()
+    .describe("Global toggle for push notifications across all conversations"),
   createdAt: zod.date().optional(),
+});
+
+/**
+ * @summary Update the current user's global notification preferences
+ */
+export const UpdateNotificationSettingsBody = zod.object({
+  pushNotificationsEnabled: zod.boolean(),
+});
+
+export const UpdateNotificationSettingsResponse = zod.object({
+  ok: zod.boolean(),
+  pushNotificationsEnabled: zod.boolean(),
 });
 
 /**
@@ -907,6 +929,13 @@ export const UnsaveTraderResponse = zod.object({
 });
 
 /**
+ * @summary Number of leads the trader hasn't opened yet
+ */
+export const GetNewLeadCountResponse = zod.object({
+  newCount: zod.number(),
+});
+
+/**
  * @summary Send an enquiry to a trader
  */
 export const CreateEnquiryBody = zod.object({
@@ -934,6 +963,8 @@ export const GetEnquiriesResponse = zod.object({
       preferredDate: zod.string().nullish(),
       phone: zod.string().nullish(),
       status: zod.enum(["pending", "responded", "closed"]),
+      conversationId: zod.number().nullish(),
+      viewedByTrader: zod.boolean().optional(),
       createdAt: zod.date(),
     }),
   ),
@@ -952,6 +983,13 @@ export const GetCategoriesResponse = zod.object({
       traderCount: zod.number(),
     }),
   ),
+});
+
+/**
+ * @summary Total unread message count across my conversations
+ */
+export const GetConversationsUnreadCountResponse = zod.object({
+  unreadCount: zod.number(),
 });
 
 /**
@@ -978,6 +1016,13 @@ export const GetConversationsResponse = zod.object({
       ]),
       traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
       unreadCount: zod.number(),
+      muted: zod.boolean(),
+      mutedUntil: zod
+        .date()
+        .nullish()
+        .describe(
+          "ISO timestamp when the current mute auto-expires. Null when the\nconversation is unmuted or muted indefinitely.\n",
+        ),
       lastMessageAt: zod.date(),
       lastMessagePreview: zod.string().nullish(),
       closedAt: zod.date().nullish(),
@@ -1015,6 +1060,13 @@ export const GetConversationResponse = zod.object({
     ]),
     traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
     unreadCount: zod.number(),
+    muted: zod.boolean(),
+    mutedUntil: zod
+      .date()
+      .nullish()
+      .describe(
+        "ISO timestamp when the current mute auto-expires. Null when the\nconversation is unmuted or muted indefinitely.\n",
+      ),
     lastMessageAt: zod.date(),
     lastMessagePreview: zod.string().nullish(),
     closedAt: zod.date().nullish(),
@@ -1078,6 +1130,29 @@ export const UpdateConversationTraderStatusResponse = zod.object({
 });
 
 /**
+ * @summary Mute or unmute push notifications for this conversation (per user)
+ */
+export const MuteConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const MuteConversationBody = zod.object({
+  muted: zod.boolean(),
+  mutedUntil: zod
+    .date()
+    .nullish()
+    .describe(
+      "Optional ISO timestamp when the mute should automatically expire.\nIgnored when `muted` is false. When `muted` is true and this is\nnull\/omitted, the conversation is muted indefinitely until the\nuser manually unmutes it.\n",
+    ),
+});
+
+export const MuteConversationResponse = zod.object({
+  ok: zod.boolean(),
+  muted: zod.boolean(),
+  mutedUntil: zod.date().nullish(),
+});
+
+/**
  * @summary Report a conversation for moderation
  */
 export const ReportConversationParams = zod.object({
@@ -1092,6 +1167,37 @@ export const ReportConversationBody = zod.object({
     .string()
     .min(reportConversationBodyReasonMin)
     .max(reportConversationBodyReasonMax),
+});
+
+/**
+ * @summary Register or refresh an Expo push token for the current user
+ */
+export const registerPushTokenBodyTokenMin = 8;
+export const registerPushTokenBodyTokenMax = 255;
+
+export const RegisterPushTokenBody = zod.object({
+  token: zod
+    .string()
+    .min(registerPushTokenBodyTokenMin)
+    .max(registerPushTokenBodyTokenMax),
+  platform: zod.enum(["ios", "android", "web"]).optional(),
+});
+
+/**
+ * @summary Unregister a push token for the current user
+ */
+export const unregisterPushTokenBodyTokenMin = 8;
+export const unregisterPushTokenBodyTokenMax = 255;
+
+export const UnregisterPushTokenBody = zod.object({
+  token: zod
+    .string()
+    .min(unregisterPushTokenBodyTokenMin)
+    .max(unregisterPushTokenBodyTokenMax),
+});
+
+export const UnregisterPushTokenResponse = zod.object({
+  ok: zod.boolean(),
 });
 
 /**

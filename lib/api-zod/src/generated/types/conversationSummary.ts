@@ -21,6 +21,11 @@ export interface ConversationSummary {
   status: ConversationSummaryStatus;
   traderStatus: ConversationSummaryTraderStatus;
   unreadCount: number;
+  muted: boolean;
+  /** ISO timestamp when the current mute auto-expires. Null when the
+conversation is unmuted or muted indefinitely.
+ */
+  mutedUntil?: Date | null;
   lastMessageAt: Date;
   lastMessagePreview?: string | null;
   closedAt?: Date | null;

@@ -13,6 +13,9 @@ import { and, eq, desc, sql } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewMessageEmail } from "../lib/email";
+import { sendPushToUser } from "../lib/push-notifications";
+import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
+import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
 
 const router: IRouter = Router();
 
@@ -28,6 +31,27 @@ const TraderStatusBody = z.object({
   traderStatus: z.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
 });
 
+const MuteBody = z.object({
+  muted: z.boolean(),
+  mutedUntil: z
+    .string()
+    .datetime({ offset: true })
+    .nullable()
+    .optional(),
+});
+
+// A conversation is "effectively muted" for a given side when `mutedAt` is
+// set AND either `mutedUntil` is null (indefinite) or still in the future.
+function isMuted(
+  mutedAt: Date | null,
+  mutedUntil: Date | null,
+  now: Date = new Date(),
+): boolean {
+  if (mutedAt == null) return false;
+  if (mutedUntil == null) return true;
+  return mutedUntil.getTime() > now.getTime();
+}
+
 type ConversationRow = typeof conversationsTable.$inferSelect;
 type MessageRow = typeof messagesTable.$inferSelect;
 
@@ -39,8 +63,16 @@ function serializeConversation(
     traderBusinessName?: string | null;
     traderVerified?: boolean;
     unreadCount: number;
+    viewerRole: "customer" | "trader";
   },
 ) {
+  const mutedAt =
+    extras.viewerRole === "customer" ? c.customerMutedAt : c.traderMutedAt;
+  const mutedUntil =
+    extras.viewerRole === "customer"
+      ? c.customerMutedUntil
+      : c.traderMutedUntil;
+  const muted = isMuted(mutedAt, mutedUntil);
   return {
     id: c.id,
     customerId: extras.customerId ?? c.customerId,
@@ -54,6 +86,8 @@ function serializeConversation(
     status: c.status,
     traderStatus: c.traderStatus,
     unreadCount: extras.unreadCount,
+    muted,
+    mutedUntil: muted && mutedUntil ? mutedUntil.toISOString() : null,
     lastMessageAt: c.lastMessageAt.toISOString(),
     lastMessagePreview: c.lastMessagePreview,
     closedAt: c.closedAt?.toISOString() ?? null,
@@ -88,6 +122,43 @@ async function getActorContext(userId: number, userRole: string) {
   }
   return { role: userRole as "customer" | "admin", traderProfileId: null };
 }
+
+// GET /api/conversations/unread-count — total unread across my conversations
+router.get("/conversations/unread-count", authMiddleware, async (req, res) => {
+  try {
+    const { userId, userRole } = req as AuthenticatedRequest;
+    const actor = await getActorContext(userId, userRole);
+
+    if (actor.role === "admin") {
+      res.json({ unreadCount: 0 });
+      return;
+    }
+
+    if (actor.role === "trader" && !actor.traderProfileId) {
+      res.json({ unreadCount: 0 });
+      return;
+    }
+
+    const column =
+      actor.role === "customer"
+        ? conversationsTable.customerUnreadCount
+        : conversationsTable.traderUnreadCount;
+    const where =
+      actor.role === "customer"
+        ? eq(conversationsTable.customerId, userId)
+        : eq(conversationsTable.traderProfileId, actor.traderProfileId!);
+
+    const [row] = await db
+      .select({ total: sql<number>`COALESCE(SUM(${column}), 0)::int` })
+      .from(conversationsTable)
+      .where(where);
+
+    res.json({ unreadCount: row?.total ?? 0 });
+  } catch (error) {
+    req.log.error({ err: error }, "Get unread count failed");
+    res.status(500).json({ error: "Failed to get unread count" });
+  }
+});
 
 // GET /api/conversations — list mine
 router.get("/conversations", authMiddleware, async (req, res) => {
@@ -130,6 +201,7 @@ router.get("/conversations", authMiddleware, async (req, res) => {
         traderBusinessName,
         traderVerified: traderVerificationStatus === "VERIFIED",
         unreadCount: actor.role === "customer" ? conv.customerUnreadCount : conv.traderUnreadCount,
+        viewerRole: actor.role === "customer" ? "customer" : "trader",
       }),
     );
 
@@ -203,6 +275,17 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         .where(eq(conversationsTable.id, id));
     }
 
+    // Phase 19: stamp the first time the trader opens this lead so the
+    // dashboard "new leads" badge can clear. Once set, never overwritten —
+    // later customer messages bump traderUnreadCount but don't make the lead
+    // "new" again.
+    if (isTrader && row.conv.traderViewedAt == null) {
+      await db
+        .update(conversationsTable)
+        .set({ traderViewedAt: new Date() })
+        .where(eq(conversationsTable.id, id));
+    }
+
     res.json({
       conversation: serializeConversation(row.conv, {
         customerName: row.customerName,
@@ -210,6 +293,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         traderBusinessName: row.traderBusinessName,
         traderVerified: row.traderVerificationStatus === "VERIFIED",
         unreadCount: 0,
+        viewerRole: isCustomer ? "customer" : "trader",
       }),
       messages: messages.map(serializeMessage),
     });
@@ -229,6 +313,7 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
     }
     const body = SendMessageBody.parse(req.body);
     const { userId, userRole } = req as AuthenticatedRequest;
+    const violation = detectContactInfo(body.body);
     const actor = await getActorContext(userId, userRole);
 
     const [conv] = await db
@@ -249,6 +334,25 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
     }
     if (conv.status === "CLOSED" || conv.status === "BLOCKED") {
       res.status(409).json({ error: "This conversation is closed" });
+      return;
+    }
+
+    // Attempt logging happens AFTER existence + participant authorization, so
+    // a non-participant cannot pollute the moderation queue by hitting random
+    // conversation ids with blocked content.
+    if (violation) {
+      void recordContactBlockAttempt({
+        userId,
+        conversationId: id,
+        violationKind: violation,
+        source: "conversation_message",
+        snippet: body.body,
+      });
+      res.status(400).json({
+        error: contactViolationMessage(violation),
+        code: "CONTACT_INFO_BLOCKED",
+        violation,
+      });
       return;
     }
 
@@ -319,6 +423,43 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
             preview,
             conversationId: id,
           });
+        }
+        // Recipient mute check honours per-side timed mutes. If a timed mute
+        // has expired by the time we fan out, opportunistically clear the
+        // stored timestamps so the "Muted" UI indicator flips off on the
+        // recipient's next conversation refresh.
+        const now = new Date();
+        const recipientMutedAt = isCustomer ? conv.traderMutedAt : conv.customerMutedAt;
+        const recipientMutedUntil = isCustomer ? conv.traderMutedUntil : conv.customerMutedUntil;
+        const recipientMuted = isMuted(recipientMutedAt, recipientMutedUntil, now);
+        if (
+          recipientMutedAt != null &&
+          recipientMutedUntil != null &&
+          recipientMutedUntil.getTime() <= now.getTime()
+        ) {
+          await db
+            .update(conversationsTable)
+            .set(
+              isCustomer
+                ? { traderMutedAt: null, traderMutedUntil: null }
+                : { customerMutedAt: null, customerMutedUntil: null },
+            )
+            .where(eq(conversationsTable.id, id));
+        }
+        if (!recipientMuted) {
+          try {
+            await sendPushToUser(recipientUserId, {
+              title: senderName,
+              body: preview,
+              data: {
+                type: "new_message",
+                conversationId: id,
+                messageId: created.id,
+              },
+            });
+          } catch (pushErr) {
+            req.log.warn({ err: pushErr, conversationId: id }, "Failed to send new-message push");
+          }
         }
       } catch (notifyErr) {
         req.log.warn({ err: notifyErr, conversationId: id }, "Failed to send new-message email");
@@ -433,6 +574,70 @@ router.patch("/conversations/:id/trader-status", authMiddleware, async (req, res
     }
     req.log.error({ err: error }, "Update trader status failed");
     res.status(500).json({ error: "Failed to update trader status" });
+  }
+});
+
+// PATCH /api/conversations/:id/mute — toggle per-user push mute
+router.patch("/conversations/:id/mute", authMiddleware, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid conversation id" });
+      return;
+    }
+    const body = MuteBody.parse(req.body);
+    const { userId, userRole } = req as AuthenticatedRequest;
+    const actor = await getActorContext(userId, userRole);
+
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, id))
+      .limit(1);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    const isCustomer = actor.role === "customer" && conv.customerId === userId;
+    const isTrader = actor.role === "trader" && actor.traderProfileId === conv.traderProfileId;
+    if (!isCustomer && !isTrader) {
+      res.status(403).json({ error: "You do not have access to this conversation" });
+      return;
+    }
+
+    const now = new Date();
+    const at = body.muted ? now : null;
+    // mutedUntil is only meaningful when muting; clamp invalid (past) values
+    // to null so we never store an "already-expired" timed mute.
+    let until: Date | null = null;
+    if (body.muted && body.mutedUntil) {
+      const parsed = new Date(body.mutedUntil);
+      if (Number.isFinite(parsed.getTime()) && parsed.getTime() > now.getTime()) {
+        until = parsed;
+      }
+    }
+    await db
+      .update(conversationsTable)
+      .set({
+        ...(isCustomer
+          ? { customerMutedAt: at, customerMutedUntil: until }
+          : { traderMutedAt: at, traderMutedUntil: until }),
+        updatedAt: now,
+      })
+      .where(eq(conversationsTable.id, id));
+
+    res.json({
+      ok: true,
+      muted: body.muted,
+      mutedUntil: until ? until.toISOString() : null,
+    });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid mute request", details: error.issues });
+      return;
+    }
+    req.log.error({ err: error }, "Mute conversation failed");
+    res.status(500).json({ error: "Failed to update mute setting" });
   }
 });
 

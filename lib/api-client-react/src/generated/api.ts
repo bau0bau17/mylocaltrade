@@ -45,9 +45,13 @@ import type {
   LoginRequest,
   MessageResponse,
   ModerateReviewRequest,
+  MuteConversationRequest,
+  MuteConversationResponse,
+  NewLeadCountResponse,
   OkResponse,
   RegisterCustomerRequest,
   RegisterPendingResponse,
+  RegisterPushTokenRequest,
   RegisterTraderDocumentRequest,
   RegisterTraderDocumentResponse,
   RegisterTraderRequest,
@@ -69,6 +73,10 @@ import type {
   TraderOnboardingStatus,
   TraderProfile,
   TraderReviewsResponse,
+  UnreadCountResponse,
+  UnregisterPushTokenRequest,
+  UpdateNotificationSettingsRequest,
+  UpdateNotificationSettingsResponse,
   UpdateTraderProfileRequest,
   UpdateTraderStatusRequest,
   UpdateTraderStatusResponse,
@@ -664,6 +672,96 @@ export function useGetMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update the current user's global notification preferences
+ */
+export const getUpdateNotificationSettingsUrl = () => {
+  return `/api/auth/me/notification-settings`;
+};
+
+export const updateNotificationSettings = async (
+  updateNotificationSettingsRequest: UpdateNotificationSettingsRequest,
+  options?: RequestInit,
+): Promise<UpdateNotificationSettingsResponse> => {
+  return customFetch<UpdateNotificationSettingsResponse>(
+    getUpdateNotificationSettingsUrl(),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateNotificationSettingsRequest),
+    },
+  );
+};
+
+export const getUpdateNotificationSettingsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNotificationSettings>>,
+    TError,
+    { data: BodyType<UpdateNotificationSettingsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateNotificationSettings>>,
+  TError,
+  { data: BodyType<UpdateNotificationSettingsRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateNotificationSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateNotificationSettings>>,
+    { data: BodyType<UpdateNotificationSettingsRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateNotificationSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateNotificationSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateNotificationSettings>>
+>;
+export type UpdateNotificationSettingsMutationBody =
+  BodyType<UpdateNotificationSettingsRequest>;
+export type UpdateNotificationSettingsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update the current user's global notification preferences
+ */
+export const useUpdateNotificationSettings = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNotificationSettings>>,
+    TError,
+    { data: BodyType<UpdateNotificationSettingsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateNotificationSettings>>,
+  TError,
+  { data: BodyType<UpdateNotificationSettingsRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateNotificationSettingsMutationOptions(options));
+};
 
 /**
  * @summary List traders with optional search/filter
@@ -2875,6 +2973,81 @@ export const useUnsaveTrader = <
 };
 
 /**
+ * @summary Number of leads the trader hasn't opened yet
+ */
+export const getGetNewLeadCountUrl = () => {
+  return `/api/enquiries/new-count`;
+};
+
+export const getNewLeadCount = async (
+  options?: RequestInit,
+): Promise<NewLeadCountResponse> => {
+  return customFetch<NewLeadCountResponse>(getGetNewLeadCountUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetNewLeadCountQueryKey = () => {
+  return [`/api/enquiries/new-count`] as const;
+};
+
+export const getGetNewLeadCountQueryOptions = <
+  TData = Awaited<ReturnType<typeof getNewLeadCount>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNewLeadCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetNewLeadCountQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getNewLeadCount>>> = ({
+    signal,
+  }) => getNewLeadCount({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getNewLeadCount>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetNewLeadCountQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getNewLeadCount>>
+>;
+export type GetNewLeadCountQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Number of leads the trader hasn't opened yet
+ */
+
+export function useGetNewLeadCount<
+  TData = Awaited<ReturnType<typeof getNewLeadCount>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNewLeadCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetNewLeadCountQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Send an enquiry to a trader
  */
 export const getCreateEnquiryUrl = () => {
@@ -3102,6 +3275,83 @@ export function useGetCategories<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetCategoriesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Total unread message count across my conversations
+ */
+export const getGetConversationsUnreadCountUrl = () => {
+  return `/api/conversations/unread-count`;
+};
+
+export const getConversationsUnreadCount = async (
+  options?: RequestInit,
+): Promise<UnreadCountResponse> => {
+  return customFetch<UnreadCountResponse>(getGetConversationsUnreadCountUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetConversationsUnreadCountQueryKey = () => {
+  return [`/api/conversations/unread-count`] as const;
+};
+
+export const getGetConversationsUnreadCountQueryOptions = <
+  TData = Awaited<ReturnType<typeof getConversationsUnreadCount>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getConversationsUnreadCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetConversationsUnreadCountQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getConversationsUnreadCount>>
+  > = ({ signal }) =>
+    getConversationsUnreadCount({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getConversationsUnreadCount>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetConversationsUnreadCountQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getConversationsUnreadCount>>
+>;
+export type GetConversationsUnreadCountQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Total unread message count across my conversations
+ */
+
+export function useGetConversationsUnreadCount<
+  TData = Awaited<ReturnType<typeof getConversationsUnreadCount>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getConversationsUnreadCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetConversationsUnreadCountQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
@@ -3535,6 +3785,93 @@ export const useUpdateConversationTraderStatus = <
 };
 
 /**
+ * @summary Mute or unmute push notifications for this conversation (per user)
+ */
+export const getMuteConversationUrl = (id: number) => {
+  return `/api/conversations/${id}/mute`;
+};
+
+export const muteConversation = async (
+  id: number,
+  muteConversationRequest: MuteConversationRequest,
+  options?: RequestInit,
+): Promise<MuteConversationResponse> => {
+  return customFetch<MuteConversationResponse>(getMuteConversationUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(muteConversationRequest),
+  });
+};
+
+export const getMuteConversationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof muteConversation>>,
+    TError,
+    { id: number; data: BodyType<MuteConversationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof muteConversation>>,
+  TError,
+  { id: number; data: BodyType<MuteConversationRequest> },
+  TContext
+> => {
+  const mutationKey = ["muteConversation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof muteConversation>>,
+    { id: number; data: BodyType<MuteConversationRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return muteConversation(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MuteConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof muteConversation>>
+>;
+export type MuteConversationMutationBody = BodyType<MuteConversationRequest>;
+export type MuteConversationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mute or unmute push notifications for this conversation (per user)
+ */
+export const useMuteConversation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof muteConversation>>,
+    TError,
+    { id: number; data: BodyType<MuteConversationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof muteConversation>>,
+  TError,
+  { id: number; data: BodyType<MuteConversationRequest> },
+  TContext
+> => {
+  return useMutation(getMuteConversationMutationOptions(options));
+};
+
+/**
  * @summary Report a conversation for moderation
  */
 export const getReportConversationUrl = (id: number) => {
@@ -3620,6 +3957,179 @@ export const useReportConversation = <
   TContext
 > => {
   return useMutation(getReportConversationMutationOptions(options));
+};
+
+/**
+ * @summary Register or refresh an Expo push token for the current user
+ */
+export const getRegisterPushTokenUrl = () => {
+  return `/api/push-tokens`;
+};
+
+export const registerPushToken = async (
+  registerPushTokenRequest: RegisterPushTokenRequest,
+  options?: RequestInit,
+): Promise<OkResponse> => {
+  return customFetch<OkResponse>(getRegisterPushTokenUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(registerPushTokenRequest),
+  });
+};
+
+export const getRegisterPushTokenMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerPushToken>>,
+    TError,
+    { data: BodyType<RegisterPushTokenRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof registerPushToken>>,
+  TError,
+  { data: BodyType<RegisterPushTokenRequest> },
+  TContext
+> => {
+  const mutationKey = ["registerPushToken"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof registerPushToken>>,
+    { data: BodyType<RegisterPushTokenRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return registerPushToken(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegisterPushTokenMutationResult = NonNullable<
+  Awaited<ReturnType<typeof registerPushToken>>
+>;
+export type RegisterPushTokenMutationBody = BodyType<RegisterPushTokenRequest>;
+export type RegisterPushTokenMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Register or refresh an Expo push token for the current user
+ */
+export const useRegisterPushToken = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerPushToken>>,
+    TError,
+    { data: BodyType<RegisterPushTokenRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof registerPushToken>>,
+  TError,
+  { data: BodyType<RegisterPushTokenRequest> },
+  TContext
+> => {
+  return useMutation(getRegisterPushTokenMutationOptions(options));
+};
+
+/**
+ * @summary Unregister a push token for the current user
+ */
+export const getUnregisterPushTokenUrl = () => {
+  return `/api/push-tokens`;
+};
+
+export const unregisterPushToken = async (
+  unregisterPushTokenRequest: UnregisterPushTokenRequest,
+  options?: RequestInit,
+): Promise<OkResponse> => {
+  return customFetch<OkResponse>(getUnregisterPushTokenUrl(), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(unregisterPushTokenRequest),
+  });
+};
+
+export const getUnregisterPushTokenMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unregisterPushToken>>,
+    TError,
+    { data: BodyType<UnregisterPushTokenRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unregisterPushToken>>,
+  TError,
+  { data: BodyType<UnregisterPushTokenRequest> },
+  TContext
+> => {
+  const mutationKey = ["unregisterPushToken"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unregisterPushToken>>,
+    { data: BodyType<UnregisterPushTokenRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return unregisterPushToken(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnregisterPushTokenMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unregisterPushToken>>
+>;
+export type UnregisterPushTokenMutationBody =
+  BodyType<UnregisterPushTokenRequest>;
+export type UnregisterPushTokenMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Unregister a push token for the current user
+ */
+export const useUnregisterPushToken = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unregisterPushToken>>,
+    TError,
+    { data: BodyType<UnregisterPushTokenRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unregisterPushToken>>,
+  TError,
+  { data: BodyType<UnregisterPushTokenRequest> },
+  TContext
+> => {
+  return useMutation(getUnregisterPushTokenMutationOptions(options));
 };
 
 /**

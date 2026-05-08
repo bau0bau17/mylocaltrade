@@ -6,9 +6,10 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import * as Notifications from "expo-notifications";
+import React, { useEffect, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -27,7 +28,48 @@ setAuthTokenGetter(() => AsyncStorage.getItem("auth_token"));
 
 const queryClient = new QueryClient();
 
+function useNotificationDeepLinks() {
+  const router = useRouter();
+  const navigatedFromInitialRef = useRef(false);
+
+  useEffect(() => {
+    const handle = (data: unknown) => {
+      if (!data || typeof data !== "object") return;
+      const d = data as { type?: string; conversationId?: number | string };
+      if (d.type === "new_message" && d.conversationId != null) {
+        router.push(`/messages/${d.conversationId}`);
+      } else if (d.type === "new_enquiry" || d.type === "lead_reminder") {
+        router.push("/trader-dashboard/leads");
+      }
+    };
+
+    // App was opened by tapping a notification while killed.
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response && !navigatedFromInitialRef.current) {
+        navigatedFromInitialRef.current = true;
+        handle(response.notification.request.content.data);
+        // Clear so a future cold start doesn't re-navigate to a stale thread.
+        const maybeClear = (
+          Notifications as unknown as {
+            clearLastNotificationResponseAsync?: () => Promise<void>;
+          }
+        ).clearLastNotificationResponseAsync;
+        if (typeof maybeClear === "function") {
+          void maybeClear();
+        }
+      }
+    });
+
+    // Tap on a notification while app is foregrounded/backgrounded.
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      handle(response.notification.request.content.data);
+    });
+    return () => sub.remove();
+  }, [router]);
+}
+
 function RootLayoutNav() {
+  useNotificationDeepLinks();
   return (
     <Stack screenOptions={{ headerBackTitle: "Back", headerTintColor: Colors.light.primary, headerStyle: { backgroundColor: Colors.light.background }, headerTitleStyle: { color: Colors.light.text } }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

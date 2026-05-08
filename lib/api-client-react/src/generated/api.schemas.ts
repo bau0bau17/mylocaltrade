@@ -143,12 +143,23 @@ export interface UserProfile {
   role: UserProfileRole;
   isActive: boolean;
   plan?: string | null;
+  /** Global toggle for push notifications across all conversations */
+  pushNotificationsEnabled?: boolean;
   createdAt?: string;
 }
 
 export interface AuthResponse {
   token: string;
   user: UserProfile;
+}
+
+export interface UpdateNotificationSettingsRequest {
+  pushNotificationsEnabled: boolean;
+}
+
+export interface UpdateNotificationSettingsResponse {
+  ok: boolean;
+  pushNotificationsEnabled: boolean;
 }
 
 export type TraderProfileSocialLinks = {
@@ -342,6 +353,8 @@ export interface Enquiry {
   preferredDate?: string | null;
   phone?: string | null;
   status: EnquiryStatus;
+  conversationId?: number | null;
+  viewedByTrader?: boolean;
   createdAt: string;
 }
 
@@ -350,8 +363,38 @@ export interface EnquiryListResponse {
   total: number;
 }
 
+export interface NewLeadCountResponse {
+  newCount: number;
+}
+
 export interface OkResponse {
   ok: boolean;
+}
+
+export type RegisterPushTokenRequestPlatform =
+  (typeof RegisterPushTokenRequestPlatform)[keyof typeof RegisterPushTokenRequestPlatform];
+
+export const RegisterPushTokenRequestPlatform = {
+  ios: "ios",
+  android: "android",
+  web: "web",
+} as const;
+
+export interface RegisterPushTokenRequest {
+  /**
+   * @minLength 8
+   * @maxLength 255
+   */
+  token: string;
+  platform?: RegisterPushTokenRequestPlatform;
+}
+
+export interface UnregisterPushTokenRequest {
+  /**
+   * @minLength 8
+   * @maxLength 255
+   */
+  token: string;
 }
 
 export type ConversationSummaryStatus =
@@ -388,11 +431,20 @@ export interface ConversationSummary {
   status: ConversationSummaryStatus;
   traderStatus: ConversationSummaryTraderStatus;
   unreadCount: number;
+  muted: boolean;
+  /** ISO timestamp when the current mute auto-expires. Null when the
+conversation is unmuted or muted indefinitely.
+ */
+  mutedUntil?: string | null;
   lastMessageAt: string;
   lastMessagePreview?: string | null;
   closedAt?: string | null;
   closedByRole?: string | null;
   createdAt: string;
+}
+
+export interface UnreadCountResponse {
+  unreadCount: number;
 }
 
 export interface ConversationListResponse {
@@ -463,6 +515,22 @@ export const UpdateTraderStatusResponseTraderStatus = {
 export interface UpdateTraderStatusResponse {
   ok: boolean;
   traderStatus: UpdateTraderStatusResponseTraderStatus;
+}
+
+export interface MuteConversationRequest {
+  muted: boolean;
+  /** Optional ISO timestamp when the mute should automatically expire.
+Ignored when `muted` is false. When `muted` is true and this is
+null/omitted, the conversation is muted indefinitely until the
+user manually unmutes it.
+ */
+  mutedUntil?: string | null;
+}
+
+export interface MuteConversationResponse {
+  ok: boolean;
+  muted: boolean;
+  mutedUntil?: string | null;
 }
 
 export interface ReportConversationRequest {

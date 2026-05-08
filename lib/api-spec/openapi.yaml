@@ -30,6 +30,8 @@ tags:
     description: Trade categories
   - name: conversations
     description: Customer-trader conversations and messages
+  - name: push-tokens
+    description: Mobile push notification token registration
 paths:
   /healthz:
     get:
@@ -225,6 +227,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserProfile"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me/notification-settings:
+    patch:
+      operationId: updateNotificationSettings
+      tags: [auth]
+      summary: Update the current user's global notification preferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationSettingsRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateNotificationSettingsResponse"
         "401":
           description: Not authenticated
           content:
@@ -984,6 +1013,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /enquiries/new-count:
+    get:
+      operationId: getNewLeadCount
+      tags: [enquiries]
+      summary: Number of leads the trader hasn't opened yet
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: New lead count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NewLeadCountResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /enquiries:
     post:
       operationId: createEnquiry
@@ -1042,6 +1092,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CategoriesResponse"
+
+  /conversations/unread-count:
+    get:
+      operationId: getConversationsUnreadCount
+      tags: [conversations]
+      summary: Total unread message count across my conversations
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Unread total
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnreadCountResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /conversations:
     get:
@@ -1196,6 +1267,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/UpdateTraderStatusResponse"
 
+  /conversations/{id}/mute:
+    patch:
+      operationId: muteConversation
+      tags: [conversations]
+      summary: Mute or unmute push notifications for this conversation (per user)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MuteConversationRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MuteConversationResponse"
+
   /conversations/{id}/report:
     post:
       operationId: reportConversation
@@ -1218,6 +1316,58 @@ paths:
       responses:
         "201":
           description: Report submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /push-tokens:
+    post:
+      operationId: registerPushToken
+      tags: [push-tokens]
+      summary: Register or refresh an Expo push token for the current user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPushTokenRequest"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: unregisterPushToken
+      tags: [push-tokens]
+      summary: Unregister a push token for the current user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnregisterPushTokenRequest"
+      responses:
+        "200":
+          description: Unregistered
           content:
             application/json:
               schema:
@@ -1571,6 +1721,9 @@ components:
         plan:
           type: string
           nullable: true
+        pushNotificationsEnabled:
+          type: boolean
+          description: Global toggle for push notifications across all conversations
         createdAt:
           type: string
           format: date-time
@@ -1580,6 +1733,22 @@ components:
         - fullName
         - role
         - isActive
+
+    UpdateNotificationSettingsRequest:
+      type: object
+      properties:
+        pushNotificationsEnabled:
+          type: boolean
+      required: [pushNotificationsEnabled]
+
+    UpdateNotificationSettingsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        pushNotificationsEnabled:
+          type: boolean
+      required: [ok, pushNotificationsEnabled]
 
     TraderProfile:
       type: object
@@ -1915,6 +2084,11 @@ components:
         status:
           type: string
           enum: [pending, responded, closed]
+        conversationId:
+          type: integer
+          nullable: true
+        viewedByTrader:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -1943,12 +2117,41 @@ components:
         - enquiries
         - total
 
+    NewLeadCountResponse:
+      type: object
+      properties:
+        newCount:
+          type: integer
+      required:
+        - newCount
+
     OkResponse:
       type: object
       properties:
         ok:
           type: boolean
       required: [ok]
+
+    RegisterPushTokenRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 8
+          maxLength: 255
+        platform:
+          type: string
+          enum: [ios, android, web]
+      required: [token]
+
+    UnregisterPushTokenRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 8
+          maxLength: 255
+      required: [token]
 
     ConversationSummary:
       type: object
@@ -1982,6 +2185,15 @@ components:
           enum: [NEW, CONTACTED, QUOTED, COMPLETED]
         unreadCount:
           type: integer
+        muted:
+          type: boolean
+        mutedUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            ISO timestamp when the current mute auto-expires. Null when the
+            conversation is unmuted or muted indefinitely.
         lastMessageAt:
           type: string
           format: date-time
@@ -2008,8 +2220,16 @@ components:
         - status
         - traderStatus
         - unreadCount
+        - muted
         - lastMessageAt
         - createdAt
+
+    UnreadCountResponse:
+      type: object
+      properties:
+        unreadCount:
+          type: integer
+      required: [unreadCount]
 
     ConversationListResponse:
       type: object
@@ -2093,6 +2313,35 @@ components:
           type: string
           enum: [NEW, CONTACTED, QUOTED, COMPLETED]
       required: [ok, traderStatus]
+
+    MuteConversationRequest:
+      type: object
+      properties:
+        muted:
+          type: boolean
+        mutedUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Optional ISO timestamp when the mute should automatically expire.
+            Ignored when `muted` is false. When `muted` is true and this is
+            null/omitted, the conversation is muted indefinitely until the
+            user manually unmutes it.
+      required: [muted]
+
+    MuteConversationResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        muted:
+          type: boolean
+        mutedUntil:
+          type: string
+          format: date-time
+          nullable: true
+      required: [ok, muted]
 
     ReportConversationRequest:
       type: object

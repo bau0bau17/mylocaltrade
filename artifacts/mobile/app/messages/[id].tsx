@@ -17,14 +17,17 @@ import { Feather } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
+import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import {
   useGetConversation,
   useSendConversationMessage,
   useUpdateConversationTraderStatus,
   useCloseConversation,
   useReportConversation,
+  useMuteConversation,
   getGetConversationQueryKey,
   getGetConversationsQueryKey,
+  getGetConversationsUnreadCountQueryKey,
 } from "@workspace/api-client-react";
 
 const TRADER_STATUSES = ["NEW", "CONTACTED", "QUOTED", "COMPLETED"] as const;
@@ -51,6 +54,7 @@ export default function ConversationThreadScreen() {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
         qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetConversationsUnreadCountQueryKey() });
       },
     },
   });
@@ -75,6 +79,15 @@ export default function ConversationThreadScreen() {
 
   const reportMutation = useReportConversation();
 
+  const muteMutation = useMuteConversation({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      },
+    },
+  });
+
   const [text, setText] = useState("");
   const [showStatus, setShowStatus] = useState(false);
 
@@ -94,11 +107,26 @@ export default function ConversationThreadScreen() {
     }
   }, [messages.length]);
 
+  // The GET conversation endpoint marks unread messages as read server-side,
+  // so once we've loaded the thread refresh the global unread badge.
+  useEffect(() => {
+    if (data) {
+      qc.invalidateQueries({ queryKey: getGetConversationsUnreadCountQueryKey() });
+    }
+  }, [data, qc]);
+
+  const violation = useMemo(() => detectContactInfo(text), [text]);
+  const violationText = violation ? contactViolationMessage(violation) : null;
+
   const onSend = () => {
     const body = text.trim();
     if (!body) return;
     if (closed) {
       Alert.alert("Conversation closed", "This conversation can no longer accept messages.");
+      return;
+    }
+    if (violation) {
+      Alert.alert("Message blocked", contactViolationMessage(violation));
       return;
     }
     sendMutation.mutate(
@@ -146,6 +174,81 @@ export default function ConversationThreadScreen() {
       ],
     );
   };
+
+  const applyMute = (mutedUntil: string | null, label: string) => {
+    muteMutation.mutate(
+      { id: conversationId, data: { muted: true, mutedUntil } },
+      {
+        onSuccess: () =>
+          Alert.alert(
+            "Notifications muted",
+            `Push notifications are off ${label}. Emails are unchanged.`,
+          ),
+        onError: () => Alert.alert("Error", "Could not update mute setting."),
+      },
+    );
+  };
+
+  const onUnmute = () => {
+    muteMutation.mutate(
+      { id: conversationId, data: { muted: false, mutedUntil: null } },
+      {
+        onSuccess: () =>
+          Alert.alert(
+            "Notifications unmuted",
+            "Push notifications for this conversation are back on.",
+          ),
+        onError: () => Alert.alert("Error", "Could not update mute setting."),
+      },
+    );
+  };
+
+  const onShowMuteOptions = () => {
+    if (!conv) return;
+    if (conv.muted) {
+      onUnmute();
+      return;
+    }
+    const now = new Date();
+    const oneHour = new Date(now.getTime() + 60 * 60 * 1000);
+    const eightHours = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    // "Until tomorrow" = 8am local time on the next calendar day.
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(8, 0, 0, 0);
+    Alert.alert("Mute notifications", "Choose how long to silence this chat.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "For 1 hour",
+        onPress: () => applyMute(oneHour.toISOString(), "for the next hour"),
+      },
+      {
+        text: "For 8 hours",
+        onPress: () => applyMute(eightHours.toISOString(), "for the next 8 hours"),
+      },
+      {
+        text: "Until tomorrow",
+        onPress: () => applyMute(tomorrow.toISOString(), "until tomorrow morning"),
+      },
+      {
+        text: "Until I turn it back on",
+        onPress: () => applyMute(null, "until you turn them back on"),
+      },
+    ]);
+  };
+
+  const mutedRemainingLabel = useMemo(() => {
+    if (!conv?.muted || !conv.mutedUntil) return null;
+    const untilMs = new Date(conv.mutedUntil).getTime();
+    const remainingMs = untilMs - Date.now();
+    if (remainingMs <= 0) return null;
+    const totalMinutes = Math.round(remainingMs / 60000);
+    if (totalMinutes < 60) return `${totalMinutes}m left`;
+    const hours = Math.round(totalMinutes / 60);
+    if (hours < 24) return `${hours}h left`;
+    const days = Math.round(hours / 24);
+    return `${days}d left`;
+  }, [conv?.muted, conv?.mutedUntil]);
 
   const onReport = () => {
     Alert.prompt?.(
@@ -230,6 +333,14 @@ export default function ConversationThreadScreen() {
                 </Text>
               </View>
             )}
+            {conv.muted ? (
+              <View style={[styles.statusPill, styles.mutedPill]}>
+                <Feather name="bell-off" size={10} color={Colors.light.textSecondary} />
+                <Text style={[styles.statusPillText, styles.mutedPillText]}>
+                  {mutedRemainingLabel ? `Muted · ${mutedRemainingLabel}` : "Muted"}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <Pressable
@@ -237,6 +348,10 @@ export default function ConversationThreadScreen() {
           onPress={() =>
             Alert.alert("Conversation actions", undefined, [
               { text: "Cancel", style: "cancel" },
+              {
+                text: conv.muted ? "Unmute notifications" : "Mute notifications",
+                onPress: onShowMuteOptions,
+              },
               ...(!closed
                 ? [{ text: "Close conversation", onPress: onClose, style: "destructive" as const }]
                 : []),
@@ -330,26 +445,37 @@ export default function ConversationThreadScreen() {
         </View>
       ) : (
         <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
-          <TextInput
-            style={styles.input}
-            value={text}
-            onChangeText={setText}
-            placeholder="Write a message…"
-            placeholderTextColor={Colors.light.textMuted}
-            multiline
-            maxLength={4000}
-          />
-          <Pressable
-            style={[styles.sendBtn, (!text.trim() || sendMutation.isPending) && styles.sendBtnDisabled]}
-            disabled={!text.trim() || sendMutation.isPending}
-            onPress={onSend}
-          >
-            {sendMutation.isPending ? (
-              <ActivityIndicator size="small" color={Colors.light.white} />
-            ) : (
-              <Feather name="send" size={18} color={Colors.light.white} />
-            )}
-          </Pressable>
+          {violationText ? (
+            <View style={styles.violationBanner}>
+              <Feather name="alert-triangle" size={14} color={Colors.light.error} />
+              <Text style={styles.violationText}>{violationText}</Text>
+            </View>
+          ) : null}
+          <View style={styles.composerRow}>
+            <TextInput
+              style={[styles.input, violationText ? styles.inputBlocked : null]}
+              value={text}
+              onChangeText={setText}
+              placeholder="Write a message…"
+              placeholderTextColor={Colors.light.textMuted}
+              multiline
+              maxLength={4000}
+            />
+            <Pressable
+              style={[
+                styles.sendBtn,
+                (!text.trim() || sendMutation.isPending || !!violation) && styles.sendBtnDisabled,
+              ]}
+              disabled={!text.trim() || sendMutation.isPending || !!violation}
+              onPress={onSend}
+            >
+              {sendMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.light.white} />
+              ) : (
+                <Feather name="send" size={18} color={Colors.light.white} />
+              )}
+            </Pressable>
+          </View>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -400,6 +526,15 @@ const styles = StyleSheet.create({
   },
   tStatusPill: { backgroundColor: Colors.light.featuredMuted },
   tStatusText: { color: Colors.light.featured },
+  mutedPill: {
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  mutedPillText: { color: Colors.light.textSecondary },
   iconBtn: {
     width: 36,
     height: 36,
@@ -485,14 +620,34 @@ const styles = StyleSheet.create({
   },
   bubbleTimeMine: { color: "rgba(255,255,255,0.75)" },
   composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 8,
     paddingHorizontal: 12,
     paddingTop: 8,
     backgroundColor: Colors.light.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
+  },
+  composerRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  violationBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 10,
+    backgroundColor: "#FEE2E2",
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  violationText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.light.error,
+    lineHeight: 16,
+  },
+  inputBlocked: {
+    borderColor: Colors.light.error,
   },
   input: {
     flex: 1,

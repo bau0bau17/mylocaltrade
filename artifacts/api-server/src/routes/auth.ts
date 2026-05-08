@@ -7,6 +7,7 @@ import {
   RegisterCustomerBody,
   RegisterTraderBody,
   LoginBody,
+  UpdateNotificationSettingsBody,
 } from "@workspace/api-zod";
 import { generateToken, authMiddleware, generatePollToken, verifyPollToken } from "../lib/auth";
 import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
@@ -184,6 +185,7 @@ router.post("/auth/login", async (req, res) => {
         role: user.role,
         isActive: user.isActive,
         plan: user.plan,
+        pushNotificationsEnabled: user.pushNotificationsEnabled,
         createdAt: user.createdAt.toISOString(),
       },
     });
@@ -358,11 +360,36 @@ router.get("/auth/me", authMiddleware, async (req, res) => {
       role: user.role,
       isActive: user.isActive,
       plan: user.plan,
+      pushNotificationsEnabled: user.pushNotificationsEnabled,
       createdAt: user.createdAt.toISOString(),
     });
   } catch (error) {
     req.log.error({ err: error }, "Get user failed");
     res.status(500).json({ error: "Failed to get user" });
+  }
+});
+
+router.patch("/auth/me/notification-settings", authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req as AuthenticatedRequest;
+    const body = UpdateNotificationSettingsBody.parse(req.body);
+    const [updated] = await db
+      .update(usersTable)
+      .set({ pushNotificationsEnabled: body.pushNotificationsEnabled, updatedAt: new Date() })
+      .where(eq(usersTable.id, userId))
+      .returning({ pushNotificationsEnabled: usersTable.pushNotificationsEnabled });
+    if (!updated) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    res.json({ ok: true, pushNotificationsEnabled: updated.pushNotificationsEnabled });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "ZodError") {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    req.log.error({ err: error }, "Update notification settings failed");
+    res.status(500).json({ error: "Failed to update notification settings" });
   }
 });
 

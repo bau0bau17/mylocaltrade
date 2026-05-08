@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { ShieldAlert, MessageSquare, Eye, Check, X, Ban } from "lucide-react";
+import { ShieldAlert, MessageSquare, Eye, Check, X, Ban, AlertTriangle } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 
 interface AdminConversationReport {
@@ -23,6 +23,17 @@ interface AdminConversationReport {
   traderBusinessName: string;
   customerFullName: string;
   conversationStatus: string;
+  contactBypassAttempts: number;
+  contactBypassAttemptsRecent: number;
+}
+
+interface ContactBypassAttempt {
+  id: number;
+  userId: number;
+  violationKind: string;
+  source: string;
+  snippet: string;
+  createdAt: string;
 }
 
 interface AdminConvMessage {
@@ -47,6 +58,13 @@ interface AdminConvResponse {
   };
   messagesAccessible: boolean;
   messages: AdminConvMessage[];
+  contactBypass: {
+    threshold: number;
+    total: number;
+    recent: number;
+    lastAt: string | null;
+    attempts: ContactBypassAttempt[];
+  };
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -159,7 +177,28 @@ function ReportCard({
               Reported by {report.reportedByRole} · {formatDateTime(report.createdAt)}
             </p>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
+            {report.reportedByRole === "system" ? (
+              <Badge
+                variant="outline"
+                className="bg-amber-500/10 text-amber-700 border-amber-500/30"
+                data-testid={`badge-auto-flagged-${report.id}`}
+              >
+                Auto-flagged
+              </Badge>
+            ) : null}
+            {report.contactBypassAttempts > 0 ? (
+              <Badge
+                variant="outline"
+                className="bg-amber-500/10 text-amber-700 border-amber-500/30 flex items-center gap-1"
+                data-testid={`badge-bypass-${report.id}`}
+                title={`${report.contactBypassAttemptsRecent} in the last 24h`}
+              >
+                <AlertTriangle className="w-3 h-3" />
+                {report.contactBypassAttempts} contact-bypass
+                {report.contactBypassAttempts === 1 ? " attempt" : " attempts"}
+              </Badge>
+            ) : null}
             <Badge variant="outline" className={STATUS_TONE[report.status]}>
               {report.status}
             </Badge>
@@ -212,17 +251,49 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
     );
   }
   if (!data) return null;
+  const bypass = data.contactBypass;
+  const bypassPanel =
+    bypass && bypass.total > 0 ? (
+      <div
+        className="border border-amber-500/30 bg-amber-500/5 rounded-md p-3 space-y-2"
+        data-testid={`bypass-panel-${conversationId}`}
+      >
+        <div className="flex items-center gap-2 text-amber-700 font-semibold text-sm">
+          <AlertTriangle className="w-4 h-4" />
+          Contact-bypass attempts: {bypass.total}
+          <span className="text-xs font-normal text-muted-foreground">
+            ({bypass.recent} in the last 24h · threshold {bypass.threshold})
+          </span>
+        </div>
+        {bypass.attempts.length > 0 ? (
+          <ul className="space-y-1 text-xs max-h-48 overflow-y-auto">
+            {bypass.attempts.map((a) => (
+              <li key={a.id} className="border-b border-amber-500/20 last:border-0 pb-1">
+                <span className="font-mono uppercase text-amber-700">{a.violationKind}</span>
+                <span className="text-muted-foreground"> · {a.source} · {formatDateTime(a.createdAt)}</span>
+                <p className="whitespace-pre-wrap break-words">{a.snippet}</p>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    ) : null;
   if (!data.messagesAccessible) {
     return (
-      <Alert>
-        <AlertDescription>
-          Messages are not accessible (no active report on this conversation).
-        </AlertDescription>
-      </Alert>
+      <div className="space-y-3">
+        {bypassPanel}
+        <Alert>
+          <AlertDescription>
+            Messages are not accessible (no active report on this conversation).
+          </AlertDescription>
+        </Alert>
+      </div>
     );
   }
   return (
-    <div className="border rounded-md bg-muted/30 max-h-96 overflow-y-auto p-3 space-y-2">
+    <div className="space-y-3">
+      {bypassPanel}
+      <div className="border rounded-md bg-muted/30 max-h-96 overflow-y-auto p-3 space-y-2">
       {data.messages.length === 0 ? (
         <p className="text-sm text-muted-foreground italic">No messages.</p>
       ) : (
@@ -238,6 +309,7 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
           </div>
         ))
       )}
+      </div>
     </div>
   );
 }

@@ -1,11 +1,15 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, isNull, isNotNull, sql } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewEnquiryEmail } from "../lib/email";
+import { sendPushToUser } from "../lib/push-notifications";
+import { scheduleLeadReminderForEnquiry } from "../lib/lead-reminders";
+import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
+import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
 
 const router: IRouter = Router();
 
@@ -19,6 +23,26 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
     }
 
     const { traderId, message, serviceRequired, preferredDate, phone } = CreateEnquiryBody.parse(req.body);
+
+    const violation =
+      detectContactInfo(message) ??
+      detectContactInfo(serviceRequired) ??
+      (preferredDate ? detectContactInfo(preferredDate) : null);
+    if (violation) {
+      void recordContactBlockAttempt({
+        userId,
+        conversationId: null,
+        violationKind: violation,
+        source: "enquiry",
+        snippet: `${serviceRequired}\n${message}`,
+      });
+      res.status(400).json({
+        error: contactViolationMessage(violation),
+        code: "CONTACT_INFO_BLOCKED",
+        violation,
+      });
+      return;
+    }
 
     const [trader] = await db
       .select()
@@ -104,7 +128,26 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       } catch (notifyErr) {
         req.log.warn({ err: notifyErr, enquiryId: enquiry.id }, "Failed to send new-enquiry email");
       }
+      try {
+        const customerName = customer?.fullName || "A customer";
+        await sendPushToUser(trader.userId, {
+          title: "New enquiry",
+          body: `${customerName}: ${serviceRequired}`,
+          data: {
+            type: "new_enquiry",
+            enquiryId: enquiry.id,
+            conversationId,
+          },
+        });
+      } catch (pushErr) {
+        req.log.warn({ err: pushErr, enquiryId: enquiry.id }, "Failed to send new-enquiry push");
+      }
     })();
+
+    // Phase 18: if the trader hasn't opened this lead within ~60 minutes,
+    // send a follow-up reminder push. The periodic sweep is the source of
+    // truth (survives restarts); this in-process timer is just for latency.
+    scheduleLeadReminderForEnquiry(enquiry.id);
 
     res.status(201).json({
       id: enquiry.id,
@@ -131,6 +174,40 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/enquiries/new-count — number of leads the trader hasn't opened yet
+router.get("/enquiries/new-count", authMiddleware, async (req, res) => {
+  try {
+    const { userId, userRole } = req as AuthenticatedRequest;
+    if (userRole !== "trader") {
+      res.json({ newCount: 0 });
+      return;
+    }
+    const [profile] = await db
+      .select({ id: traderProfilesTable.id })
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile) {
+      res.json({ newCount: 0 });
+      return;
+    }
+    const [row] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.traderProfileId, profile.id),
+          isNotNull(conversationsTable.enquiryId),
+          isNull(conversationsTable.traderViewedAt),
+        ),
+      );
+    res.json({ newCount: row?.count ?? 0 });
+  } catch (error) {
+    req.log.error({ err: error }, "Get new lead count failed");
+    res.status(500).json({ error: "Failed to get new lead count" });
+  }
+});
+
 router.get("/enquiries", authMiddleware, async (req, res) => {
   try {
     const { userId, userRole } = req as AuthenticatedRequest;
@@ -154,10 +231,13 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
           enquiry: enquiriesTable,
           customer: usersTable,
           trader: traderProfilesTable,
+          conversationId: conversationsTable.id,
+          traderViewedAt: conversationsTable.traderViewedAt,
         })
         .from(enquiriesTable)
         .innerJoin(usersTable, eq(enquiriesTable.customerId, usersTable.id))
         .innerJoin(traderProfilesTable, eq(enquiriesTable.traderId, traderProfilesTable.id))
+        .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
         .where(eq(enquiriesTable.traderId, profile.id))
         .orderBy(desc(enquiriesTable.createdAt));
     } else {
@@ -166,15 +246,18 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
           enquiry: enquiriesTable,
           customer: usersTable,
           trader: traderProfilesTable,
+          conversationId: conversationsTable.id,
+          traderViewedAt: conversationsTable.traderViewedAt,
         })
         .from(enquiriesTable)
         .innerJoin(usersTable, eq(enquiriesTable.customerId, usersTable.id))
         .innerJoin(traderProfilesTable, eq(enquiriesTable.traderId, traderProfilesTable.id))
+        .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
         .where(eq(enquiriesTable.customerId, userId))
         .orderBy(desc(enquiriesTable.createdAt));
     }
 
-    const formatted = enquiries.map(({ enquiry: e, customer: c, trader: t }) => ({
+    const formatted = enquiries.map(({ enquiry: e, customer: c, trader: t, conversationId, traderViewedAt }) => ({
       id: e.id,
       traderId: e.traderId,
       customerId: e.customerId,
@@ -186,6 +269,8 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
       preferredDate: e.preferredDate,
       phone: e.phone,
       status: e.status,
+      conversationId: conversationId ?? null,
+      viewedByTrader: traderViewedAt != null,
       createdAt: e.createdAt.toISOString(),
     }));
 
