@@ -82,6 +82,22 @@ export default function AboutScreen() {
         </View>
 
         <View style={styles.infoRow}>
+          <Feather name="shield" size={14} color={Colors.light.textMuted} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Legal Entity</Text>
+            <Text style={styles.infoText}>Service Provider LTD</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="hash" size={14} color={Colors.light.textMuted} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Company Number</Text>
+            <Text style={styles.infoText}>15830141</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
           <Feather name="globe" size={14} color={Colors.light.textMuted} />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Place of Registration</Text>
@@ -90,10 +106,18 @@ export default function AboutScreen() {
         </View>
 
         <View style={styles.infoRow}>
-          <Feather name="info" size={14} color={Colors.light.textMuted} />
+          <Feather name="map-pin" size={14} color={Colors.light.textMuted} />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Registered Office</Text>
-            <Text style={styles.infoText}>Full company details (legal entity, company number, registered office address) will be added before launch.</Text>
+            <Text style={styles.infoText}>71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="mail" size={14} color={Colors.light.textMuted} />
+          <View style={styles.infoContent}>
+            <Text style={styles.infoLabel}>Contact Email</Text>
+            <Text style={styles.infoText}>{CONTACT_EMAIL}</Text>
           </View>
         </View>
 
@@ -111,7 +135,7 @@ export default function AboutScreen() {
       <View style={styles.legalNote}>
         <Feather name="info" size={14} color={Colors.light.textMuted} />
         <Text style={styles.legalNoteText}>
-          This app is operated by MyLocalTrade, a company registered in England and Wales. Full company details will be published before launch. By using this app you agree to our Terms & Conditions and Privacy Policy. For any enquiries, use the Contact Us button above.
+          This app is operated by Service Provider LTD (Company No. 15830141), a company registered in England and Wales, trading as MyLocalTrade. Registered office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ. By using this app you agree to our Terms & Conditions and Privacy Policy. For any enquiries, use the Contact Us button above.
         </Text>
       </View>
     </ScrollView>
