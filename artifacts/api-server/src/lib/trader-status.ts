@@ -29,21 +29,53 @@ export interface DocumentTypeStatus {
   count: number;
   latestStatus?: string;
   rejectionReason?: string;
+  expiresAt?: string | null;
+  expired?: boolean;
+  expiringSoon?: boolean;
 }
 
 export interface DocumentsEvaluation {
   complete: boolean;
   byType: DocumentTypeStatus[];
+  hasExpiredRequired: boolean;
+  hasExpiringSoonRequired: boolean;
 }
 
-export function evaluateDocumentsComplete(documents: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt">[]): DocumentsEvaluation {
+const EXPIRY_SOON_DAYS = 30;
+
+export function isDocExpired(
+  d: Pick<TraderDocument, "status" | "expiresAt">,
+  now: Date = new Date(),
+): boolean {
+  if (d.status === "EXPIRED") return true;
+  if (d.expiresAt && d.expiresAt.getTime() <= now.getTime()) return true;
+  return false;
+}
+
+export function isDocExpiringSoon(
+  d: Pick<TraderDocument, "status" | "expiresAt">,
+  now: Date = new Date(),
+): boolean {
+  if (!d.expiresAt) return false;
+  if (isDocExpired(d, now)) return false;
+  const diff = d.expiresAt.getTime() - now.getTime();
+  return diff > 0 && diff <= EXPIRY_SOON_DAYS * 24 * 60 * 60 * 1000;
+}
+
+export function evaluateDocumentsComplete(documents: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[]): DocumentsEvaluation {
+  const now = new Date();
   const allTypes: TraderDocumentType[] = ["ID_DOCUMENT", "INSURANCE", "PROOF_OF_ADDRESS", "QUALIFICATION"];
   const byType: DocumentTypeStatus[] = allTypes.map((type) => {
     const docs = documents.filter((d) => d.type === type);
     const sorted = [...docs].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     const latest = sorted[0];
     const required = REQUIRED_DOCUMENT_TYPES.includes(type);
-    const acceptable = docs.some((d) => d.status === "PENDING_REVIEW" || d.status === "APPROVED");
+    // Acceptable = pending or approved AND not expired (by status or by date).
+    const acceptable = docs.some(
+      (d) => (d.status === "PENDING_REVIEW" || d.status === "APPROVED") && !isDocExpired(d, now),
+    );
+    const latestExpired = latest ? isDocExpired(latest, now) : false;
+    const latestExpiringSoon = latest ? isDocExpiringSoon(latest, now) : false;
     return {
       type,
       label: DOCUMENT_TYPE_LABELS[type],
@@ -54,10 +86,15 @@ export function evaluateDocumentsComplete(documents: Pick<TraderDocument, "type"
       count: docs.length,
       latestStatus: latest?.status,
       rejectionReason: latest?.status === "REJECTED" ? latest.rejectionReason ?? undefined : undefined,
+      expiresAt: latest?.expiresAt ? latest.expiresAt.toISOString() : null,
+      expired: latestExpired,
+      expiringSoon: latestExpiringSoon,
     };
   });
   const complete = REQUIRED_DOCUMENT_TYPES.every((req) => byType.find((b) => b.type === req)?.satisfied);
-  return { complete, byType };
+  const hasExpiredRequired = byType.some((b) => b.required && b.expired);
+  const hasExpiringSoonRequired = byType.some((b) => b.required && b.expiringSoon);
+  return { complete, byType, hasExpiredRequired, hasExpiringSoonRequired };
 }
 
 export const TRADER_STATUS = {
@@ -82,6 +119,7 @@ export function isTraderProfilePublic(
   user: Pick<User, "emailVerified" | "isActive" | "role">,
   profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive">,
   subscription?: { status: string | null } | null,
+  documents?: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[] | null,
 ): boolean {
   if (user.role !== "trader") return false;
   if (!user.emailVerified) return false;
@@ -92,6 +130,11 @@ export function isTraderProfilePublic(
   // subscription activation flow flips that flag on, and cancellation flips it off,
   // so the field stays in sync. The explicit check is preferred when available.
   if (subscription !== undefined && subscription?.status !== "active") return false;
+  // Phase 7: any expired required document hides the profile.
+  if (documents) {
+    const evaluation = evaluateDocumentsComplete(documents);
+    if (evaluation.hasExpiredRequired) return false;
+  }
   return true;
 }
 
@@ -244,12 +287,20 @@ export function buildOnboardingChecklist(
     {
       key: "documents",
       label: "Verification documents uploaded",
-      state: !businessDone ? "locked" : docsDone ? "completed" : "action_required",
+      state: !businessDone
+        ? "locked"
+        : status === TRADER_STATUS.EXPIRED_DOCUMENTS
+          ? "expired"
+          : docsDone
+            ? "completed"
+            : "action_required",
       description: !businessDone
         ? "Complete your business profile first."
-        : docsDone
-          ? undefined
-          : "Upload your photo ID and current public liability insurance.",
+        : status === TRADER_STATUS.EXPIRED_DOCUMENTS
+          ? "A required document has expired. Upload a fresh copy to restore your listing."
+          : docsDone
+            ? undefined
+            : "Upload your photo ID and current public liability insurance.",
     },
     {
       key: "review",

@@ -27,6 +27,12 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{trader.mainCategory}</Text>
             </View>
+            {trader.isVerified && (
+              <View style={styles.verifiedBadge}>
+                <Feather name="check-circle" size={10} color={Colors.light.success} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            )}
             {planStyle && (
               <View style={[styles.planBadge, { backgroundColor: planStyle.bg }]}>
                 {trader.plan === 'elite' && <Feather name="zap" size={10} color={planStyle.color} />}
@@ -116,6 +122,21 @@ const styles = StyleSheet.create({
   planText: {
     fontSize: 11,
     fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 3,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  verifiedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.success,
     letterSpacing: 0.2,
   },
   footer: {

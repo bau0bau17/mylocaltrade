@@ -105,6 +105,8 @@ export interface TraderProfile {
   plan?: TraderProfilePlan;
   isFeatured: boolean;
   isActive: boolean;
+  isVerified: boolean;
+  verifiedAt?: string | null;
   rating?: number | null;
   reviewCount: number;
   createdAt?: string;
