@@ -113,8 +113,9 @@ export default function ContactSupportScreen() {
           </View>
           <Text style={styles.successTitle}>Thank You!</Text>
           <Text style={styles.successSub}>
-            We've received your message and a confirmation copy was sent to{' '}
-            <Text style={styles.successEmail}>{form.email}</Text>.
+            We've received your message. Our support team will get back to you
+            at <Text style={styles.successEmail}>{form.email}</Text> as soon as
+            possible.
           </Text>
           <View style={styles.slaCard}>
             <Feather name="clock" size={18} color={Colors.light.primary} />
