@@ -174,15 +174,19 @@ export const LeadReminderSettingsLeadReminderMinutes = {
 } as const;
 
 /**
- * Lead-reminder delay preference for a trader. `leadReminderMinutes` is
-the chosen delay in minutes; `null` means use the platform default
-(60 minutes); `0` means disabled (no nudge will be sent).
+ * Lead-reminder preferences for a trader. `leadReminderMinutes` is the
+chosen push-reminder delay in minutes; `null` means use the platform
+default (60 minutes); `0` means the push reminder is disabled.
+`leadReminderEmailEnabled` controls the companion email independently:
+when false, no reminder email is sent even if the push reminder fires.
 
  */
 export interface LeadReminderSettings {
   leadReminderMinutes: LeadReminderSettingsLeadReminderMinutes;
   /** The platform default used when leadReminderMinutes is null. */
   defaultMinutes: number;
+  /** When false, suppress the lead-reminder email regardless of the push setting. */
+  leadReminderEmailEnabled: boolean;
 }
 
 export type UpdateLeadReminderSettingsRequestLeadReminderMinutes =
@@ -197,7 +201,8 @@ export const UpdateLeadReminderSettingsRequestLeadReminderMinutes = {
 } as const;
 
 export interface UpdateLeadReminderSettingsRequest {
-  leadReminderMinutes: UpdateLeadReminderSettingsRequestLeadReminderMinutes;
+  leadReminderMinutes?: UpdateLeadReminderSettingsRequestLeadReminderMinutes;
+  leadReminderEmailEnabled?: boolean;
 }
 
 export type TraderProfileSocialLinks = {

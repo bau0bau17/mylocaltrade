@@ -65,6 +65,11 @@ export default function AccountScreen() {
   });
   const reminderValue: number | null =
     reminderSettings?.leadReminderMinutes ?? reminderSettings?.defaultMinutes ?? 60;
+  const emailReminderEnabled: boolean = reminderSettings?.leadReminderEmailEnabled ?? true;
+  const toggleEmailReminder = (next: boolean) => {
+    if (next === emailReminderEnabled) return;
+    updateLeadReminder.mutate({ data: { leadReminderEmailEnabled: next } });
+  };
   const reminderOptions = [
     { label: '30 min', value: UpdateLeadReminderSettingsRequestLeadReminderMinutes.NUMBER_30 },
     { label: '1 hr', value: UpdateLeadReminderSettingsRequestLeadReminderMinutes.NUMBER_60 },
@@ -258,6 +263,27 @@ export default function AccountScreen() {
                   </Pressable>
                 );
               })}
+            </View>
+            <View style={styles.separator} />
+            <View style={styles.menuRow}>
+              <View style={[styles.menuIconWrap, styles.menuIconAccent]}>
+                <Feather name="mail" size={16} color={Colors.light.primary} />
+              </View>
+              <View style={styles.menuText}>
+                <Text style={[styles.menuLabel, styles.menuLabelAccent]}>Email me about unanswered leads</Text>
+                <Text style={styles.menuSub} numberOfLines={2}>
+                  {emailReminderEnabled
+                    ? 'On — we’ll also email you when the push reminder fires'
+                    : 'Off — push reminder still fires, but no email is sent'}
+                </Text>
+              </View>
+              <Switch
+                value={emailReminderEnabled}
+                onValueChange={toggleEmailReminder}
+                disabled={updateLeadReminder.isPending}
+                trackColor={{ false: Colors.light.border, true: Colors.light.primary }}
+                thumbColor={Colors.light.white}
+              />
             </View>
           </>
         ) : null}

@@ -10,6 +10,7 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -33,6 +34,10 @@ function useNotificationDeepLinks() {
   const navigatedFromInitialRef = useRef(false);
 
   useEffect(() => {
+    // expo-notifications has no native module on web — every API throws
+    // "is not available on web". Skip deep-link wiring entirely there.
+    if (Platform.OS === "web") return;
+
     const handle = (data: unknown) => {
       if (!data || typeof data !== "object") return;
       const d = data as { type?: string; conversationId?: number | string };
