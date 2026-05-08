@@ -323,6 +323,50 @@ export async function sendNewEnquiryEmail(opts: {
   }
 }
 
+export async function sendLeadReminderEmail(opts: {
+  toEmail: string;
+  toName: string;
+  customerName: string;
+  serviceRequired: string;
+}): Promise<boolean> {
+  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
+  const safeName = escapeHtml(opts.toName);
+  const safeCustomer = escapeHtml(opts.customerName);
+  const safeService = escapeHtml(opts.serviceRequired);
+  const html = emailShell({
+    title: "Unanswered lead on MyLocalTrade",
+    preheader: `You haven't opened ${safeCustomer}'s enquiry yet`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        You still have an unanswered lead from <strong style="color: #00B4D8;">${safeCustomer}</strong> for <strong>${safeService}</strong>.
+      </p>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
+        Customers usually go with the first trader who replies. Open the lead and send a quick reply to win the job.
+      </p>
+      <div style="text-align: center; margin-bottom: 8px;">
+        <a href="${dashboardUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
+          Open my leads
+        </a>
+      </div>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: `Unanswered lead from ${opts.customerName}`,
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] Lead-reminder email sent to ${opts.toEmail}`);
+    return true;
+  }
+  console.log(`[email] SMTP not configured — lead reminder for ${opts.toEmail} from ${opts.customerName}`);
+  return false;
+}
+
 export async function sendDocumentApprovedEmail(opts: {
   toEmail: string;
   toName: string;

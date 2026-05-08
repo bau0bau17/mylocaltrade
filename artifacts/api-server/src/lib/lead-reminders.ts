@@ -8,6 +8,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendPushToUser } from "./push-notifications";
+import { sendLeadReminderEmail } from "./email";
 
 /** Default delay used when a trader has not picked a value (`leadReminderMinutes IS NULL`). */
 export const DEFAULT_REMINDER_MINUTES = 60;
@@ -40,6 +41,9 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
       conv: conversationsTable,
       customerName: usersTable.fullName,
       traderReminderMinutes: traderProfilesTable.leadReminderMinutes,
+      traderEmail: traderProfilesTable.email,
+      traderContactName: traderProfilesTable.contactName,
+      traderBusinessName: traderProfilesTable.businessName,
     })
     .from(enquiriesTable)
     .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
@@ -93,40 +97,68 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
   }
 
   // Claim the reminder atomically so two concurrent sweeps can't double-send.
+  const claimedAt = new Date();
   const claimed = await db
     .update(enquiriesTable)
-    .set({ reminderSentAt: new Date() })
+    .set({ reminderSentAt: claimedAt })
     .where(and(eq(enquiriesTable.id, enquiryId), isNull(enquiriesTable.reminderSentAt)))
     .returning({ id: enquiriesTable.id });
   if (claimed.length === 0) return false;
 
   const customerName = row.customerName?.trim() || "a customer";
-  try {
-    await sendPushToUser(row.conv.traderUserId, {
-      title: "Unanswered lead",
-      body: `You still have an unanswered lead from ${customerName}.`,
-      data: {
-        type: "lead_reminder",
-        enquiryId: row.enquiry.id,
-        conversationId: row.conv.id,
-      },
-    });
-    return true;
-  } catch (err) {
-    // Push failed — release the claim so the next sweep can retry. We only
-    // clear if the row still carries the timestamp we just set; if anything
-    // else changed it in the meantime we leave it alone.
-    logger.warn({ err, enquiryId }, "Failed to send lead reminder push; releasing claim for retry");
+
+  // Fan out to push + email in parallel. Both share the single
+  // `reminderSentAt` claim above, so neither channel double-sends.
+  let pushOk = false;
+  let emailOk = false;
+
+  const pushPromise = (async () => {
     try {
-      await db
-        .update(enquiriesTable)
-        .set({ reminderSentAt: null })
-        .where(eq(enquiriesTable.id, enquiryId));
-    } catch (clearErr) {
-      logger.warn({ err: clearErr, enquiryId }, "Failed to release lead reminder claim");
+      pushOk = await sendPushToUser(row.conv!.traderUserId, {
+        title: "Unanswered lead",
+        body: `You still have an unanswered lead from ${customerName}.`,
+        data: {
+          type: "lead_reminder",
+          enquiryId: row.enquiry.id,
+          conversationId: row.conv!.id,
+        },
+      });
+    } catch (err) {
+      logger.warn({ err, enquiryId }, "Failed to send lead reminder push");
     }
-    return false;
+  })();
+
+  const emailPromise = (async () => {
+    if (!row.traderEmail) return;
+    try {
+      emailOk = await sendLeadReminderEmail({
+        toEmail: row.traderEmail,
+        toName: row.traderContactName?.trim() || row.traderBusinessName?.trim() || "there",
+        customerName,
+        serviceRequired: row.enquiry.serviceRequired,
+      });
+    } catch (err) {
+      logger.warn({ err, enquiryId }, "Failed to send lead reminder email");
+    }
+  })();
+
+  await Promise.all([pushPromise, emailPromise]);
+
+  if (pushOk || emailOk) return true;
+
+  // Both channels failed to actually deliver anything — release the claim so
+  // the next sweep can retry. Only clear if the row still carries the exact
+  // timestamp we just set; if anything else updated it in the meantime we
+  // leave it alone to avoid clobbering a concurrent successful send.
+  try {
+    await db
+      .update(enquiriesTable)
+      .set({ reminderSentAt: null })
+      .where(and(eq(enquiriesTable.id, enquiryId), eq(enquiriesTable.reminderSentAt, claimedAt)));
+  } catch (clearErr) {
+    logger.warn({ err: clearErr, enquiryId }, "Failed to release lead reminder claim");
   }
+  return false;
 }
 
 /**
