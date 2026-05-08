@@ -6,6 +6,7 @@ import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewEnquiryEmail } from "../lib/email";
+import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 
 const router: IRouter = Router();
 
@@ -19,6 +20,19 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
     }
 
     const { traderId, message, serviceRequired, preferredDate, phone } = CreateEnquiryBody.parse(req.body);
+
+    const violation =
+      detectContactInfo(message) ??
+      detectContactInfo(serviceRequired) ??
+      (preferredDate ? detectContactInfo(preferredDate) : null);
+    if (violation) {
+      res.status(400).json({
+        error: contactViolationMessage(violation),
+        code: "CONTACT_INFO_BLOCKED",
+        violation,
+      });
+      return;
+    }
 
     const [trader] = await db
       .select()

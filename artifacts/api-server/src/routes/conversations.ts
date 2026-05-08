@@ -14,6 +14,7 @@ import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewMessageEmail } from "../lib/email";
 import { sendPushToUser } from "../lib/push-notifications";
+import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 
 const router: IRouter = Router();
 
@@ -266,6 +267,15 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
       return;
     }
     const body = SendMessageBody.parse(req.body);
+    const violation = detectContactInfo(body.body);
+    if (violation) {
+      res.status(400).json({
+        error: contactViolationMessage(violation),
+        code: "CONTACT_INFO_BLOCKED",
+        violation,
+      });
+      return;
+    }
     const { userId, userRole } = req as AuthenticatedRequest;
     const actor = await getActorContext(userId, userRole);
 
