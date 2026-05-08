@@ -101,6 +101,7 @@ app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/auth/resend-verification", resendLimiter);
+app.use("/api/trader/phone/send-otp", resendLimiter);
 app.use("/api", apiLimiter);
 
 app.use("/api", router);

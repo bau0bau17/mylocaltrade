@@ -167,16 +167,23 @@ export default function TraderOnboardingDashboard() {
       {/* Checklist */}
       <Text style={styles.sectionLabel}>Verification Checklist</Text>
       <View style={styles.checklistGroup}>
-        {status.checklist.map((step, idx) => (
-          <React.Fragment key={step.key}>
-            <ChecklistRow
-              step={step}
-              onAction={step.key === 'email' && step.state === 'action_required' ? handleResend : undefined}
-              actionLabel={resending ? 'Sending…' : 'Resend email'}
-            />
-            {idx < status.checklist.length - 1 && <View style={styles.separator} />}
-          </React.Fragment>
-        ))}
+        {status.checklist.map((step, idx) => {
+          let onAction: (() => void) | undefined;
+          let actionLabel: string | undefined;
+          if (step.key === 'email' && step.state === 'action_required') {
+            onAction = handleResend;
+            actionLabel = resending ? 'Sending…' : 'Resend email';
+          } else if (step.key === 'phone' && step.state === 'action_required') {
+            onAction = () => router.push('/trader-dashboard/verify-phone');
+            actionLabel = 'Verify phone';
+          }
+          return (
+            <React.Fragment key={step.key}>
+              <ChecklistRow step={step} onAction={onAction} actionLabel={actionLabel} />
+              {idx < status.checklist.length - 1 && <View style={styles.separator} />}
+            </React.Fragment>
+          );
+        })}
       </View>
 
       {resendMsg ? (
@@ -194,7 +201,7 @@ export default function TraderOnboardingDashboard() {
       ) : null}
 
       <Text style={styles.footerNote}>
-        Phase 2 (phone verification), Phase 3 (business profile), documents and admin review will be enabled in upcoming releases.
+        Business profile, documents and admin review will be enabled in upcoming releases.
       </Text>
     </ScrollView>
   );
