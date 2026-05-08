@@ -17,6 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
+import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import {
   useGetConversation,
   useSendConversationMessage,
@@ -114,11 +115,18 @@ export default function ConversationThreadScreen() {
     }
   }, [data, qc]);
 
+  const violation = useMemo(() => detectContactInfo(text), [text]);
+  const violationText = violation ? contactViolationMessage(violation) : null;
+
   const onSend = () => {
     const body = text.trim();
     if (!body) return;
     if (closed) {
       Alert.alert("Conversation closed", "This conversation can no longer accept messages.");
+      return;
+    }
+    if (violation) {
+      Alert.alert("Message blocked", contactViolationMessage(violation));
       return;
     }
     sendMutation.mutate(
@@ -378,26 +386,37 @@ export default function ConversationThreadScreen() {
         </View>
       ) : (
         <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
-          <TextInput
-            style={styles.input}
-            value={text}
-            onChangeText={setText}
-            placeholder="Write a message…"
-            placeholderTextColor={Colors.light.textMuted}
-            multiline
-            maxLength={4000}
-          />
-          <Pressable
-            style={[styles.sendBtn, (!text.trim() || sendMutation.isPending) && styles.sendBtnDisabled]}
-            disabled={!text.trim() || sendMutation.isPending}
-            onPress={onSend}
-          >
-            {sendMutation.isPending ? (
-              <ActivityIndicator size="small" color={Colors.light.white} />
-            ) : (
-              <Feather name="send" size={18} color={Colors.light.white} />
-            )}
-          </Pressable>
+          {violationText ? (
+            <View style={styles.violationBanner}>
+              <Feather name="alert-triangle" size={14} color={Colors.light.error} />
+              <Text style={styles.violationText}>{violationText}</Text>
+            </View>
+          ) : null}
+          <View style={styles.composerRow}>
+            <TextInput
+              style={[styles.input, violationText ? styles.inputBlocked : null]}
+              value={text}
+              onChangeText={setText}
+              placeholder="Write a message…"
+              placeholderTextColor={Colors.light.textMuted}
+              multiline
+              maxLength={4000}
+            />
+            <Pressable
+              style={[
+                styles.sendBtn,
+                (!text.trim() || sendMutation.isPending || !!violation) && styles.sendBtnDisabled,
+              ]}
+              disabled={!text.trim() || sendMutation.isPending || !!violation}
+              onPress={onSend}
+            >
+              {sendMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.light.white} />
+              ) : (
+                <Feather name="send" size={18} color={Colors.light.white} />
+              )}
+            </Pressable>
+          </View>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -542,14 +561,34 @@ const styles = StyleSheet.create({
   },
   bubbleTimeMine: { color: "rgba(255,255,255,0.75)" },
   composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 8,
     paddingHorizontal: 12,
     paddingTop: 8,
     backgroundColor: Colors.light.surface,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
+  },
+  composerRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  violationBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    padding: 10,
+    backgroundColor: "#FEE2E2",
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  violationText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.light.error,
+    lineHeight: 16,
+  },
+  inputBlocked: {
+    borderColor: Colors.light.error,
   },
   input: {
     flex: 1,
