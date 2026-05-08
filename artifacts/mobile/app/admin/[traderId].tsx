@@ -69,6 +69,22 @@ interface TraderDetail {
     rejectionReason: string | null;
     adminNotes: string | null;
     isActive: boolean;
+    aiVerificationStatus: 'MATCH' | 'PARTIAL_MATCH' | 'NO_MATCH' | 'NOT_FOUND' | 'ERROR' | null;
+    aiVerificationCheckedAt: string | null;
+    aiVerificationData: {
+      verdict: 'MATCH' | 'PARTIAL_MATCH' | 'NO_MATCH' | 'NOT_FOUND' | 'ERROR';
+      reasoning: string;
+      submitted: { businessName: string; address: string; postcode: string };
+      companiesHouse: {
+        companyNumber?: string;
+        companyName?: string;
+        address?: string;
+        postcode?: string;
+        status?: string;
+        sicCodes?: string[];
+      } | null;
+      error?: string;
+    } | null;
   };
   documents: TraderDoc[];
   documentsEvaluation: {
@@ -96,6 +112,29 @@ export default function AdminTraderDetail() {
   const [reason, setReason] = useState('');
 
   const apiUrl = getApiUrl();
+  const [aiBusy, setAiBusy] = useState(false);
+
+  const runAiVerification = useCallback(async () => {
+    if (!traderId || !token) return;
+    setAiBusy(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/traders/${traderId}/ai-verification/run`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        Alert.alert('AI verification failed', j.error || `HTTP ${res.status}`);
+      } else {
+        await load();
+      }
+    } catch (e: any) {
+      Alert.alert('AI verification failed', e?.message || 'Network error');
+    } finally {
+      setAiBusy(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiUrl, traderId, token]);
 
   const load = useCallback(async () => {
     if (!token || !traderId) return;
@@ -297,6 +336,79 @@ export default function AdminTraderDetail() {
               <Text style={styles.descText}>{profile.businessDescription}</Text>
             </View>
           ) : null}
+        </View>
+
+        {/* AI Verification */}
+        <View style={styles.aiHeaderRow}>
+          <Text style={styles.sectionLabel}>AI Verification</Text>
+          <Pressable
+            style={[styles.aiRunBtn, aiBusy && { opacity: 0.5 }]}
+            disabled={aiBusy}
+            onPress={runAiVerification}
+          >
+            {aiBusy ? (
+              <ActivityIndicator size="small" color={Colors.light.primary} />
+            ) : (
+              <Feather name="refresh-cw" size={12} color={Colors.light.primary} />
+            )}
+            <Text style={styles.aiRunBtnText}>
+              {profile.aiVerificationCheckedAt ? 'Re-run check' : 'Run check'}
+            </Text>
+          </Pressable>
+        </View>
+        <View style={styles.card}>
+          {!profile.aiVerificationCheckedAt || !profile.aiVerificationData ? (
+            <Text style={styles.muted}>
+              No AI cross-check yet. Tap Run check to compare submitted data against Companies House.
+            </Text>
+          ) : (
+            <>
+              <View style={styles.aiVerdictRow}>
+                <AiVerdictPill verdict={profile.aiVerificationData.verdict} />
+                <Text style={styles.aiCheckedAt}>
+                  Checked {formatDate(profile.aiVerificationCheckedAt)}
+                </Text>
+              </View>
+              <Text style={styles.aiReasoning}>{profile.aiVerificationData.reasoning}</Text>
+              {profile.aiVerificationData.companiesHouse ? (
+                <View style={styles.aiCompareBox}>
+                  <Text style={styles.aiCompareTitle}>Submitted vs Companies House</Text>
+                  <CompareRow
+                    label="Name"
+                    a={profile.aiVerificationData.submitted.businessName}
+                    b={profile.aiVerificationData.companiesHouse.companyName ?? '—'}
+                  />
+                  <CompareRow
+                    label="Address"
+                    a={profile.aiVerificationData.submitted.address || '—'}
+                    b={profile.aiVerificationData.companiesHouse.address ?? '—'}
+                  />
+                  <CompareRow
+                    label="Postcode"
+                    a={profile.aiVerificationData.submitted.postcode}
+                    b={profile.aiVerificationData.companiesHouse.postcode ?? '—'}
+                  />
+                  {profile.aiVerificationData.companiesHouse.companyNumber ? (
+                    <CompareRow
+                      label="Co. number"
+                      a="—"
+                      b={profile.aiVerificationData.companiesHouse.companyNumber}
+                    />
+                  ) : null}
+                  {profile.aiVerificationData.companiesHouse.status ? (
+                    <CompareRow
+                      label="CH status"
+                      a="—"
+                      b={profile.aiVerificationData.companiesHouse.status}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
+              {profile.aiVerificationData.error ? (
+                <Text style={styles.aiErrorText}>Error: {profile.aiVerificationData.error}</Text>
+              ) : null}
+            </>
+          )}
         </View>
 
         {/* Documents */}
@@ -562,6 +674,35 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+function AiVerdictPill({ verdict }: { verdict: 'MATCH' | 'PARTIAL_MATCH' | 'NO_MATCH' | 'NOT_FOUND' | 'ERROR' }) {
+  const map: Record<string, { label: string; bg: string; fg: string }> = {
+    MATCH: { label: 'AI: Match', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+    PARTIAL_MATCH: { label: 'AI: Partial match', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
+    NO_MATCH: { label: 'AI: No match', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
+    NOT_FOUND: { label: 'AI: Not found on CH', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+    ERROR: { label: 'AI: Check failed', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+  };
+  const v = map[verdict] ?? map.ERROR;
+  return (
+    <View style={[styles.pill, { backgroundColor: v.bg }]}>
+      <Text style={[styles.pillText, { color: v.fg }]}>{v.label}</Text>
+    </View>
+  );
+}
+
+function CompareRow({ label, a, b }: { label: string; a: string; b: string }) {
+  const same = a.trim().toLowerCase() === b.trim().toLowerCase();
+  return (
+    <View style={styles.compareRow}>
+      <Text style={styles.compareLabel}>{label}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.compareSubmitted}>{a}</Text>
+        <Text style={[styles.compareCh, same && { color: Colors.light.success }]}>{b}</Text>
+      </View>
+    </View>
+  );
+}
+
 function DocPill({ status }: { status: TraderDoc['status'] }) {
   const map: Record<TraderDoc['status'], { label: string; bg: string; fg: string }> = {
     PENDING_REVIEW: { label: 'Pending review', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
@@ -618,6 +759,20 @@ const styles = StyleSheet.create({
   auditAction: { fontSize: 12, fontWeight: '700', color: Colors.light.text },
   auditNotes: { fontSize: 11, color: Colors.light.textMuted, marginTop: 2 },
   auditTime: { fontSize: 10, color: Colors.light.textMuted, marginTop: 4 },
+
+  aiHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, marginBottom: 8, marginLeft: 4, marginRight: 4 },
+  aiRunBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, height: 26, borderRadius: 8, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' },
+  aiRunBtnText: { fontSize: 11, fontWeight: '700', color: Colors.light.primary, letterSpacing: 0.3 },
+  aiVerdictRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  aiCheckedAt: { fontSize: 10, color: Colors.light.textMuted },
+  aiReasoning: { fontSize: 12, color: Colors.light.text, lineHeight: 17 },
+  aiCompareBox: { borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 10, gap: 8, backgroundColor: Colors.light.surface },
+  aiCompareTitle: { fontSize: 10, fontWeight: '700', color: Colors.light.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  compareRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  compareLabel: { width: 80, fontSize: 10, color: Colors.light.textMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, paddingTop: 1 },
+  compareSubmitted: { fontSize: 12, color: Colors.light.text, fontWeight: '600' },
+  compareCh: { fontSize: 11, color: Colors.light.textMuted, marginTop: 2, fontStyle: 'italic' },
+  aiErrorText: { fontSize: 11, color: Colors.light.error, fontStyle: 'italic' },
 
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   pillText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
