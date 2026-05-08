@@ -1,8 +1,31 @@
 import nodemailer from "nodemailer";
 import crypto from "crypto";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 
 const FROM_NAME = "MyLocalTrade";
 const FROM_EMAIL = process.env.SMTP_FROM ?? "noreply@mylocaltrade.co.uk";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOGO_CANDIDATES = [
+  path.resolve(__dirname, "../assets/logo.png"),
+  path.resolve(__dirname, "./assets/logo.png"),
+  path.resolve(process.cwd(), "src/assets/logo.png"),
+  path.resolve(process.cwd(), "dist/assets/logo.png"),
+];
+const LOGO_PATH = LOGO_CANDIDATES.find((p) => fs.existsSync(p)) ?? LOGO_CANDIDATES[0];
+const LOGO_CID = "mylocaltrade-logo";
+
+function logoAttachment() {
+  return {
+    filename: "logo.png",
+    path: LOGO_PATH,
+    cid: LOGO_CID,
+  };
+}
+
+const LOGO_IMG_HTML = `<img src="cid:${LOGO_CID}" alt="MyLocalTrade" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 16px; margin: 0 auto;">`;
 
 function createTransport() {
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -43,9 +66,7 @@ export async function sendVerificationEmail(
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
   <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
     <div style="text-align: center; margin-bottom: 32px;">
-      <div style="display: inline-block; background: #0E2A3A; border-radius: 16px; padding: 16px; margin-bottom: 16px;">
-        <span style="font-size: 32px;">🔧</span>
-      </div>
+      <div style="margin-bottom: 16px;">${LOGO_IMG_HTML}</div>
       <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 8px;">MyLocalTrade</h1>
       <p style="color: #9CA3AF; font-size: 14px; margin: 0;">Verify your email address</p>
     </div>
@@ -79,6 +100,7 @@ export async function sendVerificationEmail(
       to: toEmail,
       subject: "Verify your MyLocalTrade email address",
       html,
+      attachments: [logoAttachment()],
     });
     console.log(`[email] Verification email sent to ${toEmail}`);
   } else {
@@ -109,6 +131,7 @@ export async function sendContactEmail(opts: {
       🚩 CONTACT SUPPORT — REPLY WITHIN 48 HOURS
     </div>
     <div style="text-align: center; margin-bottom: 24px;">
+      <div style="margin-bottom: 12px;">${LOGO_IMG_HTML}</div>
       <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0 0 6px;">MyLocalTrade</h1>
       <p style="color: #9CA3AF; font-size: 14px; margin: 0;">New support message received via in-app form</p>
     </div>
@@ -143,6 +166,7 @@ export async function sendContactEmail(opts: {
         "X-MyLocalTrade-Type": "contact-support",
         "X-MyLocalTrade-SLA": "48h",
       },
+      attachments: [logoAttachment()],
     });
     console.log(`[email] Contact email sent to ${SUPPORT_EMAIL} from ${CONTACT_FROM_EMAIL}`);
 
@@ -156,9 +180,7 @@ export async function sendContactEmail(opts: {
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
   <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
     <div style="text-align: center; margin-bottom: 32px;">
-      <div style="display: inline-block; background: #0E2A3A; border-radius: 16px; padding: 16px; margin-bottom: 16px;">
-        <span style="font-size: 32px;">🔧</span>
-      </div>
+      <div style="margin-bottom: 16px;">${LOGO_IMG_HTML}</div>
       <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 8px;">Thank you for contacting MyLocalTrade</h1>
     </div>
     <p style="color: #E5E7EB; font-size: 16px; line-height: 1.7; margin: 0 0 16px;">Hi ${opts.fromName},</p>
@@ -192,6 +214,7 @@ export async function sendContactEmail(opts: {
           "X-MyLocalTrade-Type": "contact-acknowledgement",
           "Auto-Submitted": "auto-replied",
         },
+        attachments: [logoAttachment()],
       });
       console.log(`[email] Acknowledgement sent to ${opts.fromEmail}`);
     } catch (err) {
