@@ -1,18 +1,82 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
-import { useGetTrader } from '@workspace/api-client-react';
+import {
+  useGetTrader,
+  useGetSavedTraders,
+  useSaveTrader,
+  useUnsaveTrader,
+  getGetSavedTradersQueryKey,
+} from '@workspace/api-client-react';
 import { ReviewsSection } from '@/components/ReviewsSection';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function TraderProfileScreen() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { isAuthenticated, user } = useAuth();
+  const canSave = isAuthenticated && user?.role !== 'trader';
 
   const { data: trader, isLoading, error } = useGetTrader(Number(id));
+
+  // Only fetch the saved list when the user is logged in as a customer.
+  const { data: savedData } = useGetSavedTraders({
+    query: { enabled: canSave, queryKey: getGetSavedTradersQueryKey() },
+  });
+  const isSaved = !!savedData?.traders?.some((t) => t.id === Number(id));
+
+  const invalidateSaved = () =>
+    queryClient.invalidateQueries({ queryKey: getGetSavedTradersQueryKey() });
+
+  const saveMutation = useSaveTrader({
+    mutation: {
+      onSuccess: invalidateSaved,
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Could not save trader.';
+        Alert.alert('Save failed', msg);
+      },
+    },
+  });
+  const unsaveMutation = useUnsaveTrader({
+    mutation: {
+      onSuccess: invalidateSaved,
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Could not remove trader.';
+        Alert.alert('Update failed', msg);
+      },
+    },
+  });
+  const saveBusy = saveMutation.isPending || unsaveMutation.isPending;
+
+  const onToggleSave = () => {
+    if (!isAuthenticated) {
+      Alert.alert(
+        'Sign in to save traders',
+        'Create a free customer account to save your favourite tradespeople.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign in', onPress: () => router.push('/auth/login') },
+        ],
+      );
+      return;
+    }
+    if (user?.role === 'trader') {
+      Alert.alert('Customers only', 'Saving traders is a customer-only feature.');
+      return;
+    }
+    if (saveBusy || !trader) return;
+    if (isSaved) {
+      unsaveMutation.mutate({ traderId: trader.id });
+    } else {
+      saveMutation.mutate({ traderId: trader.id });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -43,9 +107,30 @@ export default function TraderProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={[styles.headerCover, { paddingTop: Math.max(insets.top, 50) + 12 }]}>
-          <Pressable style={styles.backNav} onPress={() => router.back()}>
-            <Feather name="arrow-left" size={20} color={Colors.light.text} />
-          </Pressable>
+          <View style={styles.headerNavRow}>
+            <Pressable style={styles.backNav} onPress={() => router.back()} hitSlop={8}>
+              <Feather name="arrow-left" size={20} color={Colors.light.text} />
+            </Pressable>
+            <Pressable
+              style={[styles.saveNav, isSaved && styles.saveNavActive]}
+              onPress={onToggleSave}
+              hitSlop={8}
+              disabled={saveBusy}
+              accessibilityRole="button"
+              accessibilityLabel={isSaved ? 'Remove from saved traders' : 'Save trader'}
+              accessibilityState={{ selected: isSaved, busy: saveBusy }}
+            >
+              {saveBusy ? (
+                <ActivityIndicator size="small" color={isSaved ? Colors.light.white : Colors.light.primary} />
+              ) : (
+                <Feather
+                  name="bookmark"
+                  size={18}
+                  color={isSaved ? Colors.light.white : Colors.light.text}
+                />
+              )}
+            </Pressable>
+          </View>
           <View style={styles.avatarContainer}>
             <Text style={styles.avatarText}>{trader.businessName.charAt(0)}</Text>
           </View>
@@ -239,17 +324,36 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
   },
+  headerNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    marginBottom: 16,
+  },
   backNav: {
-    alignSelf: 'flex-start',
     width: 36,
     height: 36,
     borderRadius: 12,
     backgroundColor: Colors.light.card,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: Colors.light.border,
+  },
+  saveNav: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: Colors.light.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  saveNavActive: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
   },
   avatarContainer: {
     width: 72,
