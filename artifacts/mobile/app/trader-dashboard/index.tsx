@@ -179,6 +179,9 @@ export default function TraderOnboardingDashboard() {
           } else if (step.key === 'business_profile' && step.state === 'action_required') {
             onAction = () => router.push('/trader-dashboard/business-profile');
             actionLabel = 'Complete profile';
+          } else if (step.key === 'documents' && step.state === 'action_required') {
+            onAction = () => router.push('/trader-dashboard/documents');
+            actionLabel = 'Upload documents';
           }
           return (
             <React.Fragment key={step.key}>
