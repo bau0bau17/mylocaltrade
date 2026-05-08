@@ -87,7 +87,7 @@ export default function AdminStatsScreen() {
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
       <Stack.Screen options={{ title: 'Live Dashboard' }} />
 
-      <View style={[styles.headerRow, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 50) + 12 }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={20} color={Colors.light.text} />
         </Pressable>
