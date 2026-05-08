@@ -5,17 +5,27 @@ import {
   usersTable,
   traderProfilesTable,
 } from "@workspace/db/schema";
-import { and, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendPushToUser } from "./push-notifications";
 
-const REMINDER_DELAY_MS = 60 * 60 * 1000;
+/** Default delay used when a trader has not picked a value (`leadReminderMinutes IS NULL`). */
+export const DEFAULT_REMINDER_MINUTES = 60;
+/** Allowed delay values exposed to traders. `0` means "off". */
+export const ALLOWED_REMINDER_MINUTES = [0, 30, 60, 180] as const;
 const REMINDER_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 
 function isMutedNow(mutedAt: Date | null, mutedUntil: Date | null, now: Date): boolean {
   if (mutedAt == null) return false;
   if (mutedUntil == null) return true;
   return mutedUntil.getTime() > now.getTime();
+}
+
+/** Resolve a trader's effective reminder delay in minutes, or `null` if disabled. */
+function effectiveDelayMinutes(raw: number | null | undefined): number | null {
+  if (raw == null) return DEFAULT_REMINDER_MINUTES;
+  if (raw === 0) return null;
+  return raw;
 }
 
 /**
@@ -29,15 +39,34 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
       enquiry: enquiriesTable,
       conv: conversationsTable,
       customerName: usersTable.fullName,
+      traderReminderMinutes: traderProfilesTable.leadReminderMinutes,
     })
     .from(enquiriesTable)
     .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
     .leftJoin(usersTable, eq(usersTable.id, enquiriesTable.customerId))
+    .leftJoin(traderProfilesTable, eq(traderProfilesTable.id, enquiriesTable.traderId))
     .where(eq(enquiriesTable.id, enquiryId))
     .limit(1);
 
   if (!row || !row.conv) return false;
   if (row.enquiry.reminderSentAt != null) return false;
+
+  const delayMinutes = effectiveDelayMinutes(row.traderReminderMinutes);
+
+  // Trader has turned reminders off — record so we don't re-check forever.
+  if (delayMinutes == null) {
+    await db
+      .update(enquiriesTable)
+      .set({ reminderSentAt: new Date() })
+      .where(and(eq(enquiriesTable.id, enquiryId), isNull(enquiriesTable.reminderSentAt)));
+    return false;
+  }
+
+  // Not enough time has elapsed yet under the trader's chosen delay. Leave
+  // `reminderSentAt` null so a later sweep will pick it up.
+  const dueAt = row.enquiry.createdAt.getTime() + delayMinutes * 60 * 1000;
+  if (Date.now() < dueAt) return false;
+
   // Trader has opened/viewed the lead — nothing to nudge.
   if (row.conv.traderUnreadCount === 0) {
     await db
@@ -101,15 +130,15 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
 }
 
 /**
- * Periodic sweep: find enquiries created at least an hour ago that have not
- * yet had a reminder dispatched, and process each one. Bounded lookback so a
+ * Periodic sweep: find enquiries whose per-trader reminder window has elapsed
+ * and that have not yet had a reminder dispatched. Bounded lookback so a
  * long-down server doesn't suddenly nudge week-old enquiries.
  */
 export async function sweepLeadReminders(): Promise<{ checked: number; sent: number }> {
-  const now = Date.now();
-  const dueBefore = new Date(now - REMINDER_DELAY_MS);
-  const lookbackAfter = new Date(now - REMINDER_LOOKBACK_MS);
+  const lookbackAfter = new Date(Date.now() - REMINDER_LOOKBACK_MS);
 
+  // Effective delay (minutes) = COALESCE(trader.lead_reminder_minutes, 60).
+  // A value of 0 means "off" — exclude those rows.
   const due = await db
     .select({ id: enquiriesTable.id })
     .from(enquiriesTable)
@@ -118,8 +147,9 @@ export async function sweepLeadReminders(): Promise<{ checked: number; sent: num
     .where(
       and(
         isNull(enquiriesTable.reminderSentAt),
-        lte(enquiriesTable.createdAt, dueBefore),
         sql`${enquiriesTable.createdAt} >= ${lookbackAfter}`,
+        sql`COALESCE(${traderProfilesTable.leadReminderMinutes}, ${DEFAULT_REMINDER_MINUTES}) > 0`,
+        sql`${enquiriesTable.createdAt} + (COALESCE(${traderProfilesTable.leadReminderMinutes}, ${DEFAULT_REMINDER_MINUTES}) * interval '1 minute') <= now()`,
         sql`${conversationsTable.traderUnreadCount} > 0`,
       ),
     );
@@ -136,15 +166,23 @@ export async function sweepLeadReminders(): Promise<{ checked: number; sent: num
 }
 
 /**
- * Schedule an in-process check ~60 minutes after an enquiry is created. The
- * periodic sweep is the source of truth (it survives restarts), but this
- * makes the happy-path latency closer to exactly 60 min.
+ * Schedule an in-process check after the trader's chosen delay. The periodic
+ * sweep is the source of truth (it survives restarts); this just makes the
+ * happy-path latency closer to exactly the chosen window.
+ *
+ * Pass `delayMinutes` as the trader's current setting (null/undefined → use
+ * default; 0 → skip scheduling entirely).
  */
-export function scheduleLeadReminderForEnquiry(enquiryId: number): void {
+export function scheduleLeadReminderForEnquiry(
+  enquiryId: number,
+  delayMinutes: number | null | undefined,
+): void {
+  const minutes = effectiveDelayMinutes(delayMinutes);
+  if (minutes == null) return;
   const t = setTimeout(() => {
     sendLeadReminderIfUnread(enquiryId).catch((err) => {
       logger.warn({ err, enquiryId }, "Scheduled lead reminder failed");
     });
-  }, REMINDER_DELAY_MS);
+  }, minutes * 60 * 1000);
   t.unref?.();
 }

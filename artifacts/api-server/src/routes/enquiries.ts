@@ -147,7 +147,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
     // Phase 18: if the trader hasn't opened this lead within ~60 minutes,
     // send a follow-up reminder push. The periodic sweep is the source of
     // truth (survives restarts); this in-process timer is just for latency.
-    scheduleLeadReminderForEnquiry(enquiry.id);
+    scheduleLeadReminderForEnquiry(enquiry.id, trader.leadReminderMinutes);
 
     res.status(201).json({
       id: enquiry.id,

@@ -261,6 +261,70 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /trader/lead-reminder-settings:
+    get:
+      operationId: getLeadReminderSettings
+      tags: [trader]
+      summary: Get the current trader's lead-reminder delay preference
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadReminderSettings"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not a trader
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateLeadReminderSettings
+      tags: [trader]
+      summary: Update the current trader's lead-reminder delay preference
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeadReminderSettingsRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadReminderSettings"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not a trader
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /traders:
     get:
       operationId: listTraders
@@ -1749,6 +1813,31 @@ components:
         pushNotificationsEnabled:
           type: boolean
       required: [ok, pushNotificationsEnabled]
+
+    LeadReminderSettings:
+      type: object
+      description: |
+        Lead-reminder delay preference for a trader. `leadReminderMinutes` is
+        the chosen delay in minutes; `null` means use the platform default
+        (60 minutes); `0` means disabled (no nudge will be sent).
+      properties:
+        leadReminderMinutes:
+          type: integer
+          nullable: true
+          enum: [0, 30, 60, 180, null]
+        defaultMinutes:
+          type: integer
+          description: The platform default used when leadReminderMinutes is null.
+      required: [leadReminderMinutes, defaultMinutes]
+
+    UpdateLeadReminderSettingsRequest:
+      type: object
+      properties:
+        leadReminderMinutes:
+          type: integer
+          nullable: true
+          enum: [0, 30, 60, 180, null]
+      required: [leadReminderMinutes]
 
     TraderProfile:
       type: object
