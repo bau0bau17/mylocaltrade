@@ -55,6 +55,7 @@ export * from "./moderateReviewRequest";
 export * from "./moderateReviewRequestAction";
 export * from "./muteConversationRequest";
 export * from "./muteConversationResponse";
+export * from "./newLeadCountResponse";
 export * from "./okResponse";
 export * from "./registerCustomerRequest";
 export * from "./registerPendingResponse";

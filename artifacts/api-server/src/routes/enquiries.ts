@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable } from "@workspace/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, isNull, isNotNull, sql } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
@@ -174,6 +174,40 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/enquiries/new-count — number of leads the trader hasn't opened yet
+router.get("/enquiries/new-count", authMiddleware, async (req, res) => {
+  try {
+    const { userId, userRole } = req as AuthenticatedRequest;
+    if (userRole !== "trader") {
+      res.json({ newCount: 0 });
+      return;
+    }
+    const [profile] = await db
+      .select({ id: traderProfilesTable.id })
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile) {
+      res.json({ newCount: 0 });
+      return;
+    }
+    const [row] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.traderProfileId, profile.id),
+          isNotNull(conversationsTable.enquiryId),
+          isNull(conversationsTable.traderViewedAt),
+        ),
+      );
+    res.json({ newCount: row?.count ?? 0 });
+  } catch (error) {
+    req.log.error({ err: error }, "Get new lead count failed");
+    res.status(500).json({ error: "Failed to get new lead count" });
+  }
+});
+
 router.get("/enquiries", authMiddleware, async (req, res) => {
   try {
     const { userId, userRole } = req as AuthenticatedRequest;
@@ -197,10 +231,13 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
           enquiry: enquiriesTable,
           customer: usersTable,
           trader: traderProfilesTable,
+          conversationId: conversationsTable.id,
+          traderViewedAt: conversationsTable.traderViewedAt,
         })
         .from(enquiriesTable)
         .innerJoin(usersTable, eq(enquiriesTable.customerId, usersTable.id))
         .innerJoin(traderProfilesTable, eq(enquiriesTable.traderId, traderProfilesTable.id))
+        .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
         .where(eq(enquiriesTable.traderId, profile.id))
         .orderBy(desc(enquiriesTable.createdAt));
     } else {
@@ -209,15 +246,18 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
           enquiry: enquiriesTable,
           customer: usersTable,
           trader: traderProfilesTable,
+          conversationId: conversationsTable.id,
+          traderViewedAt: conversationsTable.traderViewedAt,
         })
         .from(enquiriesTable)
         .innerJoin(usersTable, eq(enquiriesTable.customerId, usersTable.id))
         .innerJoin(traderProfilesTable, eq(enquiriesTable.traderId, traderProfilesTable.id))
+        .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
         .where(eq(enquiriesTable.customerId, userId))
         .orderBy(desc(enquiriesTable.createdAt));
     }
 
-    const formatted = enquiries.map(({ enquiry: e, customer: c, trader: t }) => ({
+    const formatted = enquiries.map(({ enquiry: e, customer: c, trader: t, conversationId, traderViewedAt }) => ({
       id: e.id,
       traderId: e.traderId,
       customerId: e.customerId,
@@ -229,6 +269,8 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
       preferredDate: e.preferredDate,
       phone: e.phone,
       status: e.status,
+      conversationId: conversationId ?? null,
+      viewedByTrader: traderViewedAt != null,
       createdAt: e.createdAt.toISOString(),
     }));
 

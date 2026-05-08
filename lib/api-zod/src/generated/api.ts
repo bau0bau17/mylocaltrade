@@ -929,6 +929,13 @@ export const UnsaveTraderResponse = zod.object({
 });
 
 /**
+ * @summary Number of leads the trader hasn't opened yet
+ */
+export const GetNewLeadCountResponse = zod.object({
+  newCount: zod.number(),
+});
+
+/**
  * @summary Send an enquiry to a trader
  */
 export const CreateEnquiryBody = zod.object({
@@ -956,6 +963,8 @@ export const GetEnquiriesResponse = zod.object({
       preferredDate: zod.string().nullish(),
       phone: zod.string().nullish(),
       status: zod.enum(["pending", "responded", "closed"]),
+      conversationId: zod.number().nullish(),
+      viewedByTrader: zod.boolean().optional(),
       createdAt: zod.date(),
     }),
   ),

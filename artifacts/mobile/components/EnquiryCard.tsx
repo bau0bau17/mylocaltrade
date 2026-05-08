@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import type { Enquiry } from '@workspace/api-client-react';
 
 export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
-  
+  const router = useRouter();
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return Colors.light.featured;
@@ -16,9 +18,24 @@ export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
   };
 
   const statusColor = getStatusColor(enquiry.status);
+  const isUnopened = enquiry.viewedByTrader === false;
+
+  const handlePress = () => {
+    if (enquiry.conversationId != null) {
+      router.push(`/messages/${enquiry.conversationId}`);
+    }
+  };
 
   return (
-    <View style={styles.card}>
+    <Pressable
+      onPress={handlePress}
+      disabled={enquiry.conversationId == null}
+      style={({ pressed }) => [
+        styles.card,
+        isUnopened && styles.cardUnopened,
+        pressed && enquiry.conversationId != null && { opacity: 0.85 },
+      ]}
+    >
       <View style={styles.header}>
         <View style={styles.headerInfo}>
           <Text style={styles.name}>{enquiry.customerName}</Text>
@@ -49,7 +66,7 @@ export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
           <Text style={styles.contactText}>{new Date(enquiry.createdAt).toLocaleDateString()}</Text>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -61,6 +78,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.light.border,
+  },
+  cardUnopened: {
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.light.primary,
+    paddingLeft: 13,
   },
   header: {
     flexDirection: 'row',

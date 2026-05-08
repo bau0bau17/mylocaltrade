@@ -275,6 +275,17 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         .where(eq(conversationsTable.id, id));
     }
 
+    // Phase 19: stamp the first time the trader opens this lead so the
+    // dashboard "new leads" badge can clear. Once set, never overwritten —
+    // later customer messages bump traderUnreadCount but don't make the lead
+    // "new" again.
+    if (isTrader && row.conv.traderViewedAt == null) {
+      await db
+        .update(conversationsTable)
+        .set({ traderViewedAt: new Date() })
+        .where(eq(conversationsTable.id, id));
+    }
+
     res.json({
       conversation: serializeConversation(row.conv, {
         customerName: row.customerName,

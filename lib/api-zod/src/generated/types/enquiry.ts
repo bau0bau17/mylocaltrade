@@ -19,5 +19,7 @@ export interface Enquiry {
   preferredDate?: string | null;
   phone?: string | null;
   status: EnquiryStatus;
+  conversationId?: number | null;
+  viewedByTrader?: boolean;
   createdAt: Date;
 }

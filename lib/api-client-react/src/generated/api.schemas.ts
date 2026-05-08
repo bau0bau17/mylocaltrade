@@ -353,12 +353,18 @@ export interface Enquiry {
   preferredDate?: string | null;
   phone?: string | null;
   status: EnquiryStatus;
+  conversationId?: number | null;
+  viewedByTrader?: boolean;
   createdAt: string;
 }
 
 export interface EnquiryListResponse {
   enquiries: Enquiry[];
   total: number;
+}
+
+export interface NewLeadCountResponse {
+  newCount: number;
 }
 
 export interface OkResponse {

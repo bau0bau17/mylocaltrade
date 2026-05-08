@@ -10,6 +10,7 @@ import type { FeatherIconName } from '@/types/feather-icons';
 import {
   useGetTraderOnboardingStatus,
   useGetMyTraderReviews,
+  useGetNewLeadCount,
   type TraderOnboardingStatus,
   type TraderOnboardingChecklistStep,
 } from '@workspace/api-client-react';
@@ -47,16 +48,25 @@ export default function TraderOnboardingDashboard() {
     },
   });
 
+  const { data: newLeadsData, refetch: refetchNewLeads } = useGetNewLeadCount({
+    query: {
+      queryKey: ['/api/enquiries/new-count'],
+      enabled: Boolean(token && isTrader),
+    },
+  });
+  const newLeadsCount = newLeadsData?.newCount ?? 0;
+
   const fetchStatus = useCallback(async () => {
-    await Promise.all([refetchStatus(), refetchReviews()]);
+    await Promise.all([refetchStatus(), refetchReviews(), refetchNewLeads()]);
     setRefreshing(false);
-  }, [refetchStatus, refetchReviews]);
+  }, [refetchStatus, refetchReviews, refetchNewLeads]);
 
   useFocusEffect(
     useCallback(() => {
       void refetchStatus();
       void refetchReviews();
-    }, [refetchStatus, refetchReviews])
+      void refetchNewLeads();
+    }, [refetchStatus, refetchReviews, refetchNewLeads])
   );
 
   const loading = queryLoading;
@@ -269,6 +279,30 @@ export default function TraderOnboardingDashboard() {
       {/* Quick links to other trader-dashboard sections */}
       <Text style={styles.sectionLabel}>Manage</Text>
       <View style={styles.checklistGroup}>
+        <Pressable style={styles.checklistRow} onPress={() => router.push('/trader-dashboard/leads')}>
+          <View style={[styles.iconCircle, { backgroundColor: Colors.light.primaryMuted, borderColor: Colors.light.primary }]}>
+            <Feather name="inbox" size={16} color={Colors.light.primary} />
+          </View>
+          <View style={styles.checklistMain}>
+            <View style={styles.checklistTopLine}>
+              <Text style={styles.checklistLabel}>My Leads</Text>
+              {newLeadsCount > 0 ? (
+                <View style={styles.newLeadsBadge}>
+                  <Text style={styles.newLeadsBadgeText}>
+                    {newLeadsCount > 99 ? '99+' : newLeadsCount} new
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.checklistDesc}>
+              {newLeadsCount > 0
+                ? `${newLeadsCount} unopened ${newLeadsCount === 1 ? 'enquiry' : 'enquiries'} waiting for you.`
+                : 'View and respond to customer enquiries.'}
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={Colors.light.textMuted} style={{ alignSelf: 'center' }} />
+        </Pressable>
+        <View style={styles.separator} />
         <Pressable style={styles.checklistRow} onPress={() => router.push('/trader-dashboard/billing')}>
           <View style={[styles.iconCircle, { backgroundColor: Colors.light.primaryMuted, borderColor: Colors.light.primary }]}>
             <Feather name="credit-card" size={16} color={Colors.light.primary} />
@@ -524,6 +558,8 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 14, color: Colors.light.textSecondary, textAlign: 'center', marginTop: 8 },
   retryBtn: { backgroundColor: Colors.light.primary, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, marginTop: 8 },
   retryText: { color: Colors.light.white, fontSize: 14, fontWeight: '700' },
+  newLeadsBadge: { backgroundColor: Colors.light.primary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  newLeadsBadgeText: { color: Colors.light.white, fontSize: 10, fontWeight: '700', letterSpacing: 0.3, textTransform: 'uppercase' },
   legalBanner: { backgroundColor: WARNING_MUTED, borderColor: WARNING, borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 14 },
   legalBannerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   legalBannerTitle: { fontSize: 14, fontWeight: '700', color: WARNING },

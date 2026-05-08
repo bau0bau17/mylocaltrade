@@ -47,6 +47,7 @@ import type {
   ModerateReviewRequest,
   MuteConversationRequest,
   MuteConversationResponse,
+  NewLeadCountResponse,
   OkResponse,
   RegisterCustomerRequest,
   RegisterPendingResponse,
@@ -2970,6 +2971,81 @@ export const useUnsaveTrader = <
 > => {
   return useMutation(getUnsaveTraderMutationOptions(options));
 };
+
+/**
+ * @summary Number of leads the trader hasn't opened yet
+ */
+export const getGetNewLeadCountUrl = () => {
+  return `/api/enquiries/new-count`;
+};
+
+export const getNewLeadCount = async (
+  options?: RequestInit,
+): Promise<NewLeadCountResponse> => {
+  return customFetch<NewLeadCountResponse>(getGetNewLeadCountUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetNewLeadCountQueryKey = () => {
+  return [`/api/enquiries/new-count`] as const;
+};
+
+export const getGetNewLeadCountQueryOptions = <
+  TData = Awaited<ReturnType<typeof getNewLeadCount>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNewLeadCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetNewLeadCountQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getNewLeadCount>>> = ({
+    signal,
+  }) => getNewLeadCount({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getNewLeadCount>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetNewLeadCountQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getNewLeadCount>>
+>;
+export type GetNewLeadCountQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Number of leads the trader hasn't opened yet
+ */
+
+export function useGetNewLeadCount<
+  TData = Awaited<ReturnType<typeof getNewLeadCount>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNewLeadCount>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetNewLeadCountQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Send an enquiry to a trader

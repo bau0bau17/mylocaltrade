@@ -29,6 +29,7 @@ export const conversationsTable = pgTable(
     customerMutedUntil: timestamp("customer_muted_until"),
     traderMutedAt: timestamp("trader_muted_at"),
     traderMutedUntil: timestamp("trader_muted_until"),
+    traderViewedAt: timestamp("trader_viewed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
