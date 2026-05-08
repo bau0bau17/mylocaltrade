@@ -91,12 +91,14 @@ function RootLayoutNav() {
   // the user can always jump back to the main sections.
   const isTabRoute = pathname === "/" || pathname.startsWith("/(tabs)") ||
     pathname === "/search" || pathname === "/traders" ||
-    pathname === "/account" || pathname === "/saved";
+    pathname === "/account" || pathname === "/saved" ||
+    pathname === "/legal-support";
   // Hide on the standalone admin surfaces — they are a separate workflow.
   const isAdminRoute = pathname.startsWith("/admin");
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
+      <View style={{ flex: 1 }}>
       <Stack
       screenOptions={{
         header: ({ options, navigation, back }) => (
@@ -106,11 +108,10 @@ function RootLayoutNav() {
             onBack={() => navigation.goBack()}
           />
         ),
-        contentStyle: { paddingBottom: !isTabRoute && !isAdminRoute ? 84 : 0 },
+        contentStyle: { paddingBottom: 0 },
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="legal-support" options={{ title: "Legal & Support" }} />
       <Stack.Screen name="trader/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="auth/login" options={{ title: "Log In" }} />
       <Stack.Screen name="auth/register-customer" options={{ title: "Register" }} />
@@ -142,6 +143,7 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/[traderId]" options={{ headerShown: false }} />
       <Stack.Screen name="admin/stats" options={{ headerShown: false }} />
     </Stack>
+      </View>
       {!isTabRoute && !isAdminRoute ? <BottomNav /> : null}
     </View>
   );

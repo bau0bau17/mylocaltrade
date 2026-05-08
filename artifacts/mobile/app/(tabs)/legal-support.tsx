@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import type { FeatherIconName } from '@/types/feather-icons';
+import { ScreenHeader } from '@/components/ScreenHeader';
 
 export default function LegalSupportScreen() {
   const insets = useSafeAreaInsets();
@@ -16,6 +17,7 @@ export default function LegalSupportScreen() {
 
   return (
     <View style={styles.container}>
+      <ScreenHeader title="Legal & Support" showBack onBack={() => router.back()} />
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
