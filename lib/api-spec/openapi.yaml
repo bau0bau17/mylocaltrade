@@ -1626,6 +1626,12 @@ components:
           type: string
         mainCategory:
           type: string
+        businessAddress:
+          type: string
+          description: |
+            Street address line(s) of the registered business. When the
+            trader picks a Companies House match in the live search, this is
+            pre-filled from the company's registered office address.
         town:
           type: string
         postcode:
@@ -1640,6 +1646,7 @@ components:
         - businessName
         - phone
         - mainCategory
+        - businessAddress
         - town
         - postcode
 

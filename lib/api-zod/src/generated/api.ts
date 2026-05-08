@@ -67,6 +67,11 @@ export const RegisterTraderBody = zod.object({
     ),
   phone: zod.string(),
   mainCategory: zod.string(),
+  businessAddress: zod
+    .string()
+    .describe(
+      "Street address line(s) of the registered business. When the\ntrader picks a Companies House match in the live search, this is\npre-filled from the company's registered office address.\n",
+    ),
   town: zod.string(),
   postcode: zod.string(),
 });

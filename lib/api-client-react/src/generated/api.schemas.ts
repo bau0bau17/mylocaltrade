@@ -49,6 +49,11 @@ from the Companies House live search and skips the manual
   companyNumber?: string;
   phone: string;
   mainCategory: string;
+  /** Street address line(s) of the registered business. When the
+trader picks a Companies House match in the live search, this is
+pre-filled from the company's registered office address.
+ */
+  businessAddress: string;
   town: string;
   postcode: string;
 }
