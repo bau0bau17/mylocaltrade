@@ -25,6 +25,13 @@ export default function MyEnquiriesScreen() {
           renderItem={({ item }) => (
             <View>
               <EnquiryCard enquiry={item} />
+              <Pressable
+                style={styles.openConvBtn}
+                onPress={() => router.push('/messages')}
+              >
+                <Feather name="message-circle" size={14} color={Colors.light.primary} />
+                <Text style={styles.openConvBtnText}>Open conversation</Text>
+              </Pressable>
               {item.status !== 'pending' && (
                 <Pressable
                   style={styles.reviewBtn}
@@ -69,4 +76,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   reviewBtnText: { fontSize: 13, fontWeight: '700', color: Colors.light.featured, letterSpacing: 0.2 },
+  openConvBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: -6,
+    marginBottom: 8,
+    paddingVertical: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    borderRadius: 12,
+  },
+  openConvBtnText: { fontSize: 13, fontWeight: '700', color: Colors.light.primary, letterSpacing: 0.2 },
 });

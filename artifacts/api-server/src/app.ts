@@ -119,6 +119,22 @@ const enquiriesLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const messagesLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 60,
+  message: { error: "Too many messages. Please try again in an hour." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const reportsLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many reports. Please try again tomorrow." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const documentUploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 30,
@@ -141,6 +157,8 @@ app.use("/api/auth/resend-verification", resendLimiter);
 app.use("/api/trader/phone/send-otp", resendLimiter);
 app.use("/api/contact", contactLimiter);
 app.use("/api/enquiries", enquiriesLimiter);
+app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);
+app.use(/^\/api\/conversations\/\d+\/report$/, reportsLimiter);
 app.use("/api/trader/documents/upload-url", documentUploadLimiter);
 app.use("/api", apiLimiter);
 

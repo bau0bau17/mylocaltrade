@@ -624,6 +624,60 @@ export async function sendTraderMoreInfoRequestedEmail(opts: {
   }
 }
 
+export async function sendNewMessageEmail(opts: {
+  toEmail: string;
+  toName: string;
+  senderName: string;
+  senderRole: "customer" | "trader";
+  preview: string;
+  conversationId: number;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeSender = escapeHtml(opts.senderName);
+  // Truncate preview to a safe length so we never leak entire long messages.
+  const trimmed = opts.preview.length > 140 ? opts.preview.slice(0, 140) + "…" : opts.preview;
+  const safePreview = escapeHtml(trimmed);
+  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
+  const subject =
+    opts.senderRole === "trader"
+      ? `New reply from ${opts.senderName}`
+      : `New message from ${opts.senderName}`;
+  const html = emailShell({
+    title: "New message on MyLocalTrade",
+    preheader: `${safeSender} sent you a message on MyLocalTrade`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+        You have a new message from <strong style="color: #00B4D8;">${safeSender}</strong> on MyLocalTrade.
+      </p>
+      <div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 24px;">
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safePreview}</p>
+      </div>
+      <div style="text-align: center; margin-bottom: 8px;">
+        <a href="${dashboardUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
+          Open conversation
+        </a>
+      </div>
+      <p style="color: #6B7280; font-size: 12px; line-height: 1.6; margin: 24px 0 0; text-align: center;">
+        For your safety, never share bank details or pay outside the platform without verifying the trader.
+      </p>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject,
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] New-message email sent to ${opts.toEmail} (conv=${opts.conversationId})`);
+  } else {
+    console.log(`[email] SMTP not configured — new message for ${opts.toEmail} from ${opts.senderName}`);
+  }
+}
+
 export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }

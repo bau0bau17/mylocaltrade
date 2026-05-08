@@ -1,0 +1,214 @@
+I want to add a modern customer-to-trader messaging system before publishing.
+
+The goal is to make MyLocalTrade feel more futuristic and marketplace-like, not just a basic enquiry form.
+
+Please implement Phase 17: Customer–Trader Messaging / Conversation System.
+
+Important: keep the existing enquiry system, but upgrade it so every enquiry can create a conversation thread.
+
+Core concept:
+
+When a customer sends an enquiry to a trader, the system should create a conversation between that customer and that trader.
+
+The conversation should be linked to:
+
+* customer user ID, if the customer has an account
+* trader user ID / trader profile ID
+* enquiry ID
+* job category
+* postcode / location area
+* created date
+* latest message date
+* status
+
+Conversation status:
+
+OPEN
+AWAITING_TRADER_REPLY
+AWAITING_CUSTOMER_REPLY
+CLOSED
+BLOCKED
+REPORTED
+
+Message fields:
+
+* conversation_id
+* sender_user_id
+* sender_role: CUSTOMER / TRADER / ADMIN
+* message body
+* created_at
+* read_at
+* edited_at, optional
+* deleted_at, optional
+* attachment_url, optional for later
+* system_message boolean
+
+Customer features:
+
+* Customer can send initial enquiry message
+* Customer can view conversation history
+* Customer can reply to trader
+* Customer can see unread messages
+* Customer can close conversation
+* Customer can report conversation/trader
+
+Trader features:
+
+* Trader can see all conversations in trader dashboard
+* Trader can reply to customer
+* Trader can mark conversation as contacted / quoted / completed
+* Trader can see unread messages
+* Trader can close conversation
+* Trader can report abusive customer
+
+Admin features:
+
+* Admin can view reported conversations
+* Admin can view conversation metadata
+* Admin can view messages only when a conversation is reported or for moderation/support purposes
+* Admin can block/suspend users if abuse is found
+* Admin actions should be logged in audit log
+
+Security and privacy:
+
+* Only the customer, the trader involved, and authorised admin can access the conversation
+* A trader must not access conversations belonging to another trader
+* A customer must not access conversations belonging to another customer
+* All message endpoints must enforce permissions in the backend
+* Do not expose private phone/email unless the customer or trader types it themselves
+* Add rate limiting to message sending
+* Add spam/abuse protection
+* Add report/block feature
+* Add audit log entries for reported conversations and admin moderation
+
+Notifications:
+
+* Send email notification when a new message is received
+* Do not send email to the sender
+* Add in-app notification if the notification system exists
+* Prepare structure for push notifications later
+* Include safe preview text in email, but do not expose too much sensitive content
+
+Unread/read status:
+
+* Track read/unread messages
+* Show unread count in customer dashboard
+* Show unread count in trader dashboard
+* Mark messages as read when conversation is opened
+
+UI requirements:
+
+Customer side:
+
+* Add “Messages” or “My Enquiries” page
+* Show list of conversations
+* Show trader name, category, last message, unread badge, status
+* Conversation detail page with message bubbles
+* Text input at bottom
+* Send button
+* Report button
+* Close conversation button
+
+Trader side:
+
+* Add “Messages” or “Enquiries” page in trader dashboard
+* Show conversations list
+* Filters:
+    New
+    Awaiting reply
+    Quoted
+    Completed
+    Closed
+* Conversation detail page with message bubbles
+* Quick status actions:
+    Mark as contacted
+    Mark as quoted
+    Mark as completed
+    Close conversation
+
+Public trader profile:
+
+* Replace or improve “Send Enquiry” so it starts a conversation
+* Button text can be:
+    “Message this trader”
+    or
+    “Request a quote”
+
+Important: if the customer is not logged in, allow them to submit an enquiry, but encourage account creation so they can track replies.
+
+For guest enquiries:
+
+Option A:
+
+* Create enquiry with email
+* Send email link to continue conversation
+* Ask customer to create account to reply securely
+
+Preferred approach:
+
+* Require customer login or quick account creation before full chat is available
+
+Please recommend and implement the safest MVP approach.
+
+Review connection:
+
+* After a conversation/enquiry is marked completed, customer becomes eligible to leave a review
+* Prevent reviews without a real completed enquiry/conversation
+* Keep the existing review eligibility logic aligned with conversations
+
+Futuristic UX:
+
+Please make the messaging UI clean, modern, mobile-first and slightly futuristic, using the current dark theme.
+
+Add:
+
+* Smooth message bubbles
+* Status badges
+* Unread indicators
+* “Verified Trader” badge inside conversation header if trader is verified
+* “Usually replies soon” placeholder if response-time analytics are not ready
+* Empty states that look professional
+
+Do not build AI auto-replies yet, but prepare the structure so later we can add:
+
+* AI suggested replies for traders
+* AI job summary
+* AI quote request summary
+* AI safety warning for suspicious messages
+
+Database/API needed:
+
+Create models/tables for:
+
+* conversations
+* messages
+* message_reads or read_at tracking
+* conversation_reports
+* conversation_status_history if useful
+
+API endpoints needed:
+
+Customer/trader:
+
+* create conversation from enquiry
+* get my conversations
+* get conversation detail
+* send message
+* mark conversation as read
+* update conversation status
+* close conversation
+* report conversation
+
+Admin:
+
+* get reported conversations
+* view reported conversation
+* resolve report
+* block conversation
+* audit moderation action
+
+Important business rule:
+
+The existing enquiry form should not disappear. It should become the starting point for a conversation.
+
+Please implement this before publishing, because I want MyLocalTrade to feel like a modern marketplace, not just a basic lead form.

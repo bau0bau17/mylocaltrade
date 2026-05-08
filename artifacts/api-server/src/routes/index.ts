@@ -11,6 +11,7 @@ import contactRouter from "./contact";
 import traderPhoneRouter from "./trader-phone";
 import traderDocumentsRouter from "./trader-documents";
 import reviewsRouter from "./reviews";
+import conversationsRouter from "./conversations";
 import adminRouter from "./admin";
 
 const router: IRouter = Router();
@@ -27,6 +28,7 @@ router.use(contactRouter);
 router.use(traderPhoneRouter);
 router.use(traderDocumentsRouter);
 router.use(reviewsRouter);
+router.use(conversationsRouter);
 router.use(adminRouter);
 
 export default router;

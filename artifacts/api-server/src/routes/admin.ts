@@ -7,6 +7,9 @@ import {
   traderAuditLogTable,
   subscriptionsTable,
   enquiriesTable,
+  conversationsTable,
+  messagesTable,
+  conversationReportsTable,
 } from "@workspace/db/schema";
 import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, asc } from "drizzle-orm";
 import { z } from "zod";
@@ -1004,6 +1007,240 @@ router.get("/admin/subscriptions", authMiddleware, adminOnly, async (req, res) =
   } catch (error) {
     req.log.error({ err: error }, "Admin subscriptions failed");
     res.status(500).json({ error: "Failed to load subscriptions" });
+  }
+});
+
+// === Phase 17: Conversation moderation ===
+
+const ResolveReportBody = z.object({
+  action: z.enum(["resolve", "dismiss", "block"]),
+  notes: z.string().max(1000).optional(),
+});
+
+router.get("/admin/conversation-reports", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const where = status
+      ? eq(conversationReportsTable.status, status)
+      : isNotNull(conversationReportsTable.id);
+    const rows = await db
+      .select({
+        report: conversationReportsTable,
+        conv: conversationsTable,
+        traderBusinessName: traderProfilesTable.businessName,
+        customerFullName: usersTable.fullName,
+      })
+      .from(conversationReportsTable)
+      .innerJoin(conversationsTable, eq(conversationReportsTable.conversationId, conversationsTable.id))
+      .innerJoin(traderProfilesTable, eq(conversationsTable.traderProfileId, traderProfilesTable.id))
+      .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
+      .where(where)
+      .orderBy(desc(conversationReportsTable.createdAt));
+    res.json({
+      reports: rows.map(({ report, conv, traderBusinessName, customerFullName }) => ({
+        id: report.id,
+        conversationId: report.conversationId,
+        reportedByUserId: report.reportedByUserId,
+        reportedByRole: report.reportedByRole,
+        reason: report.reason,
+        status: report.status,
+        resolutionNotes: report.resolutionNotes,
+        resolvedAt: report.resolvedAt?.toISOString() ?? null,
+        createdAt: report.createdAt.toISOString(),
+        traderBusinessName,
+        customerFullName,
+        conversationStatus: conv.status,
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin list conversation reports failed");
+    res.status(500).json({ error: "Failed to list reports" });
+  }
+});
+
+router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const [row] = await db
+      .select({
+        conv: conversationsTable,
+        customerName: usersTable.fullName,
+        customerEmail: usersTable.email,
+        traderBusinessName: traderProfilesTable.businessName,
+      })
+      .from(conversationsTable)
+      .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
+      .innerJoin(traderProfilesTable, eq(conversationsTable.traderProfileId, traderProfilesTable.id))
+      .where(eq(conversationsTable.id, id))
+      .limit(1);
+    if (!row) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    // Admins may only read message bodies for ACTIVE moderation: the
+    // conversation is currently REPORTED, or at least one OPEN report exists.
+    // Historical (DISMISSED/RESOLVED) reports do NOT re-grant access.
+    const [openReport] = await db
+      .select({ id: conversationReportsTable.id })
+      .from(conversationReportsTable)
+      .where(
+        and(
+          eq(conversationReportsTable.conversationId, id),
+          eq(conversationReportsTable.status, "OPEN"),
+        ),
+      )
+      .limit(1);
+    const canReadMessages = !!openReport || row.conv.status === "REPORTED";
+    const messages = canReadMessages
+      ? await db
+          .select()
+          .from(messagesTable)
+          .where(eq(messagesTable.conversationId, id))
+          .orderBy(messagesTable.createdAt)
+      : [];
+
+    await logAudit({
+      userId: row.conv.customerId,
+      action: "ADMIN_VIEWED_CONVERSATION",
+      performedBy: (req as AuthenticatedRequest).userId,
+      details: { conversationId: id, messagesAccessed: canReadMessages },
+    });
+
+    res.json({
+      conversation: {
+        id: row.conv.id,
+        customerId: row.conv.customerId,
+        customerName: row.customerName,
+        customerEmail: row.customerEmail,
+        traderProfileId: row.conv.traderProfileId,
+        traderBusinessName: row.traderBusinessName,
+        status: row.conv.status,
+        traderStatus: row.conv.traderStatus,
+        createdAt: row.conv.createdAt.toISOString(),
+        lastMessageAt: row.conv.lastMessageAt.toISOString(),
+      },
+      messagesAccessible: canReadMessages,
+      messages: messages.map((m) => ({
+        id: m.id,
+        senderUserId: m.senderUserId,
+        senderRole: m.senderRole,
+        body: m.body,
+        systemMessage: m.systemMessage,
+        createdAt: m.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin get conversation failed");
+    res.status(500).json({ error: "Failed to get conversation" });
+  }
+});
+
+router.post("/admin/conversation-reports/:id/resolve", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const body = ResolveReportBody.parse(req.body);
+    const adminId = (req as AuthenticatedRequest).userId;
+
+    const [report] = await db
+      .select()
+      .from(conversationReportsTable)
+      .where(eq(conversationReportsTable.id, id))
+      .limit(1);
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    const newStatus = body.action === "dismiss" ? "DISMISSED" : "RESOLVED";
+    await db
+      .update(conversationReportsTable)
+      .set({
+        status: newStatus,
+        resolutionNotes: body.notes ?? null,
+        resolvedByAdminId: adminId,
+        resolvedAt: new Date(),
+      })
+      .where(eq(conversationReportsTable.id, id));
+
+    if (body.action === "block") {
+      await db
+        .update(conversationsTable)
+        .set({ status: "BLOCKED", blockedAt: new Date(), updatedAt: new Date() })
+        .where(eq(conversationsTable.id, report.conversationId));
+    } else if (body.action === "resolve" || body.action === "dismiss") {
+      // If there are no remaining OPEN reports AND the conversation is
+      // currently REPORTED, restore it to the correct waiting state inferred
+      // from the last message's sender. Never override CLOSED/BLOCKED, and
+      // never reopen a conversation that wasn't put into REPORTED by the
+      // moderation flow.
+      const otherOpen = await db
+        .select({ id: conversationReportsTable.id })
+        .from(conversationReportsTable)
+        .where(
+          and(
+            eq(conversationReportsTable.conversationId, report.conversationId),
+            eq(conversationReportsTable.status, "OPEN"),
+          ),
+        )
+        .limit(1);
+      if (otherOpen.length === 0) {
+        const [convRow] = await db
+          .select({ status: conversationsTable.status })
+          .from(conversationsTable)
+          .where(eq(conversationsTable.id, report.conversationId))
+          .limit(1);
+        if (convRow && convRow.status === "REPORTED") {
+          const [lastMsg] = await db
+            .select({ senderRole: messagesTable.senderRole })
+            .from(messagesTable)
+            .where(eq(messagesTable.conversationId, report.conversationId))
+            .orderBy(desc(messagesTable.createdAt))
+            .limit(1);
+          const restored =
+            lastMsg?.senderRole === "trader" ? "AWAITING_CUSTOMER_REPLY" : "AWAITING_TRADER_REPLY";
+          await db
+            .update(conversationsTable)
+            .set({ status: restored, updatedAt: new Date() })
+            .where(eq(conversationsTable.id, report.conversationId));
+        }
+      }
+    }
+
+    const [conv] = await db
+      .select({ customerId: conversationsTable.customerId })
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, report.conversationId))
+      .limit(1);
+    if (conv) {
+      await logAudit({
+        userId: conv.customerId,
+        action: "CONVERSATION_REPORT_RESOLVED",
+        performedBy: adminId,
+        details: {
+          reportId: id,
+          conversationId: report.conversationId,
+          action: body.action,
+        },
+        notes: body.notes,
+      });
+    }
+
+    res.json({ ok: true, status: newStatus, action: body.action });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid action", details: error.issues });
+      return;
+    }
+    req.log.error({ err: error }, "Resolve conversation report failed");
+    res.status(500).json({ error: "Failed to resolve report" });
   }
 });
 

@@ -180,12 +180,12 @@ export default function TraderProfileScreen() {
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom || 24 }]}>
-        <Pressable 
+        <Pressable
           style={styles.contactButton}
           onPress={() => router.push(`/enquiry/${trader.id}`)}
         >
           <Feather name="message-square" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
-          <Text style={styles.contactButtonText}>Request a Quote</Text>
+          <Text style={styles.contactButtonText}>Message this trader</Text>
         </Pressable>
       </View>
     </View>

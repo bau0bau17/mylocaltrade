@@ -28,6 +28,8 @@ export const TRADER_AUDIT_ACTIONS = [
   "REVIEW_APPROVED",
   "REVIEW_REJECTED",
   "REVIEW_FLAGGED",
+  "ADMIN_VIEWED_CONVERSATION",
+  "CONVERSATION_REPORT_RESOLVED",
 ] as const;
 export type TraderAuditAction = (typeof TRADER_AUDIT_ACTIONS)[number];
 

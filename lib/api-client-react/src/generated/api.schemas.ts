@@ -350,6 +350,205 @@ export interface EnquiryListResponse {
   total: number;
 }
 
+export interface OkResponse {
+  ok: boolean;
+}
+
+export type ConversationSummaryStatus =
+  (typeof ConversationSummaryStatus)[keyof typeof ConversationSummaryStatus];
+
+export const ConversationSummaryStatus = {
+  AWAITING_TRADER_REPLY: "AWAITING_TRADER_REPLY",
+  AWAITING_CUSTOMER_REPLY: "AWAITING_CUSTOMER_REPLY",
+  CLOSED: "CLOSED",
+  BLOCKED: "BLOCKED",
+  REPORTED: "REPORTED",
+} as const;
+
+export type ConversationSummaryTraderStatus =
+  (typeof ConversationSummaryTraderStatus)[keyof typeof ConversationSummaryTraderStatus];
+
+export const ConversationSummaryTraderStatus = {
+  NEW: "NEW",
+  CONTACTED: "CONTACTED",
+  QUOTED: "QUOTED",
+  COMPLETED: "COMPLETED",
+} as const;
+
+export interface ConversationSummary {
+  id: number;
+  customerId: number;
+  customerName: string;
+  traderProfileId: number;
+  traderBusinessName: string;
+  traderVerified: boolean;
+  enquiryId?: number | null;
+  serviceRequired?: string | null;
+  postcode?: string | null;
+  status: ConversationSummaryStatus;
+  traderStatus: ConversationSummaryTraderStatus;
+  unreadCount: number;
+  lastMessageAt: string;
+  lastMessagePreview?: string | null;
+  closedAt?: string | null;
+  closedByRole?: string | null;
+  createdAt: string;
+}
+
+export interface ConversationListResponse {
+  conversations: ConversationSummary[];
+  total: number;
+}
+
+export type ConversationMessageSenderRole =
+  (typeof ConversationMessageSenderRole)[keyof typeof ConversationMessageSenderRole];
+
+export const ConversationMessageSenderRole = {
+  customer: "customer",
+  trader: "trader",
+  admin: "admin",
+  system: "system",
+} as const;
+
+export interface ConversationMessage {
+  id: number;
+  conversationId: number;
+  senderUserId?: number | null;
+  senderRole: ConversationMessageSenderRole;
+  body: string;
+  systemMessage: boolean;
+  readAt?: string | null;
+  editedAt?: string | null;
+  deletedAt?: string | null;
+  createdAt: string;
+}
+
+export interface ConversationDetailResponse {
+  conversation: ConversationSummary;
+  messages: ConversationMessage[];
+}
+
+export interface SendMessageRequest {
+  /**
+   * @minLength 1
+   * @maxLength 4000
+   */
+  body: string;
+}
+
+export type UpdateTraderStatusRequestTraderStatus =
+  (typeof UpdateTraderStatusRequestTraderStatus)[keyof typeof UpdateTraderStatusRequestTraderStatus];
+
+export const UpdateTraderStatusRequestTraderStatus = {
+  NEW: "NEW",
+  CONTACTED: "CONTACTED",
+  QUOTED: "QUOTED",
+  COMPLETED: "COMPLETED",
+} as const;
+
+export interface UpdateTraderStatusRequest {
+  traderStatus: UpdateTraderStatusRequestTraderStatus;
+}
+
+export type UpdateTraderStatusResponseTraderStatus =
+  (typeof UpdateTraderStatusResponseTraderStatus)[keyof typeof UpdateTraderStatusResponseTraderStatus];
+
+export const UpdateTraderStatusResponseTraderStatus = {
+  NEW: "NEW",
+  CONTACTED: "CONTACTED",
+  QUOTED: "QUOTED",
+  COMPLETED: "COMPLETED",
+} as const;
+
+export interface UpdateTraderStatusResponse {
+  ok: boolean;
+  traderStatus: UpdateTraderStatusResponseTraderStatus;
+}
+
+export interface ReportConversationRequest {
+  /**
+   * @minLength 5
+   * @maxLength 2000
+   */
+  reason: string;
+}
+
+export type AdminConversationReportStatus =
+  (typeof AdminConversationReportStatus)[keyof typeof AdminConversationReportStatus];
+
+export const AdminConversationReportStatus = {
+  OPEN: "OPEN",
+  RESOLVED: "RESOLVED",
+  DISMISSED: "DISMISSED",
+} as const;
+
+export interface AdminConversationReport {
+  id: number;
+  conversationId: number;
+  reportedByUserId: number;
+  reportedByRole: string;
+  reason: string;
+  status: AdminConversationReportStatus;
+  resolutionNotes?: string | null;
+  resolvedAt?: string | null;
+  createdAt: string;
+  traderBusinessName: string;
+  customerFullName: string;
+  conversationStatus: string;
+}
+
+export interface AdminConversationReportListResponse {
+  reports: AdminConversationReport[];
+}
+
+export type AdminConversationResponseConversation = {
+  id: number;
+  customerId: number;
+  customerName: string;
+  customerEmail: string;
+  traderProfileId: number;
+  traderBusinessName: string;
+  status: string;
+  traderStatus: string;
+  createdAt: string;
+  lastMessageAt: string;
+};
+
+export type AdminConversationResponseMessagesItem = {
+  id: number;
+  senderUserId?: number | null;
+  senderRole: string;
+  body: string;
+  systemMessage: boolean;
+  createdAt: string;
+};
+
+export interface AdminConversationResponse {
+  conversation: AdminConversationResponseConversation;
+  messagesAccessible: boolean;
+  messages: AdminConversationResponseMessagesItem[];
+}
+
+export type ResolveReportRequestAction =
+  (typeof ResolveReportRequestAction)[keyof typeof ResolveReportRequestAction];
+
+export const ResolveReportRequestAction = {
+  resolve: "resolve",
+  dismiss: "dismiss",
+  block: "block",
+} as const;
+
+export interface ResolveReportRequest {
+  action: ResolveReportRequestAction;
+  notes?: string;
+}
+
+export interface ResolveReportResponse {
+  ok: boolean;
+  status: string;
+  action: string;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -622,3 +821,16 @@ export const AdminListReviewsStatus = {
 } as const;
 
 export type HandleStripeWebhookBody = { [key: string]: unknown };
+
+export type GetAdminConversationReportsParams = {
+  status?: GetAdminConversationReportsStatus;
+};
+
+export type GetAdminConversationReportsStatus =
+  (typeof GetAdminConversationReportsStatus)[keyof typeof GetAdminConversationReportsStatus];
+
+export const GetAdminConversationReportsStatus = {
+  OPEN: "OPEN",
+  RESOLVED: "RESOLVED",
+  DISMISSED: "DISMISSED",
+} as const;

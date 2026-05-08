@@ -1,0 +1,526 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter, Stack } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
+import Colors from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  useGetConversation,
+  useSendConversationMessage,
+  useUpdateConversationTraderStatus,
+  useCloseConversation,
+  useReportConversation,
+  getGetConversationQueryKey,
+  getGetConversationsQueryKey,
+} from "@workspace/api-client-react";
+
+const TRADER_STATUSES = ["NEW", "CONTACTED", "QUOTED", "COMPLETED"] as const;
+type TraderStatus = (typeof TRADER_STATUSES)[number];
+
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+
+export default function ConversationThreadScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const conversationId = Number(id);
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { isTrader, user } = useAuth();
+  const listRef = useRef<FlatList>(null);
+
+  const { data, isLoading, error, refetch } = useGetConversation(conversationId);
+
+  const sendMutation = useSendConversationMessage({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      },
+    },
+  });
+
+  const updateStatusMutation = useUpdateConversationTraderStatus({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      },
+    },
+  });
+
+  const closeMutation = useCloseConversation({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      },
+    },
+  });
+
+  const reportMutation = useReportConversation();
+
+  const [text, setText] = useState("");
+  const [showStatus, setShowStatus] = useState(false);
+
+  const conv = data?.conversation;
+  const messages = data?.messages ?? [];
+  const closed =
+    conv?.status === "CLOSED" || conv?.status === "BLOCKED";
+
+  const otherName = useMemo(() => {
+    if (!conv) return "";
+    return isTrader ? conv.customerName : conv.traderBusinessName;
+  }, [conv, isTrader]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 50);
+    }
+  }, [messages.length]);
+
+  const onSend = () => {
+    const body = text.trim();
+    if (!body) return;
+    if (closed) {
+      Alert.alert("Conversation closed", "This conversation can no longer accept messages.");
+      return;
+    }
+    sendMutation.mutate(
+      { id: conversationId, data: { body } },
+      {
+        onSuccess: () => setText(""),
+        onError: (err: unknown) => {
+          const msg =
+            err instanceof Error ? err.message : "Could not send message. Please try again.";
+          Alert.alert("Error", msg);
+        },
+      },
+    );
+  };
+
+  const onChangeStatus = (s: TraderStatus) => {
+    setShowStatus(false);
+    updateStatusMutation.mutate(
+      { id: conversationId, data: { traderStatus: s } },
+      {
+        onSuccess: () => {
+          if (s === "COMPLETED") {
+            Alert.alert(
+              "Marked as completed",
+              "The customer can now leave you a review.",
+            );
+          }
+        },
+        onError: () => Alert.alert("Error", "Could not update status."),
+      },
+    );
+  };
+
+  const onClose = () => {
+    Alert.alert(
+      "Close conversation",
+      "You won't be able to send any more messages. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Close",
+          style: "destructive",
+          onPress: () => closeMutation.mutate({ id: conversationId }),
+        },
+      ],
+    );
+  };
+
+  const onReport = () => {
+    Alert.prompt?.(
+      "Report this conversation",
+      "Tell us briefly what happened (this is reviewed by our admin team).",
+      (reason) => {
+        const trimmed = (reason ?? "").trim();
+        if (trimmed.length < 5) return;
+        reportMutation.mutate(
+          { id: conversationId, data: { reason: trimmed } },
+          {
+            onSuccess: () => Alert.alert("Reported", "Thanks — our team will review this conversation."),
+            onError: () => Alert.alert("Error", "Could not submit report."),
+          },
+        );
+      },
+    );
+    // Android fallback
+    if (!Alert.prompt) {
+      reportMutation.mutate(
+        { id: conversationId, data: { reason: "Reported from mobile app" } },
+        {
+          onSuccess: () => Alert.alert("Reported", "Thanks — our team will review this conversation."),
+        },
+      );
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
+
+  if (error || !conv) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>Could not load conversation.</Text>
+        <Pressable style={styles.cta} onPress={() => router.back()}>
+          <Text style={styles.ctaText}>Go Back</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: Colors.light.background }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 44 : 0}
+    >
+      <Stack.Screen options={{ title: otherName || "Conversation" }} />
+      <View style={styles.headerCard}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerName} numberOfLines={1}>
+            {otherName}
+          </Text>
+          {conv.serviceRequired ? (
+            <Text style={styles.headerSub} numberOfLines={1}>
+              {conv.serviceRequired}
+            </Text>
+          ) : null}
+          <View style={styles.headerPills}>
+            <View style={styles.statusPill}>
+              <Text style={styles.statusPillText}>{conv.status.replace(/_/g, " ")}</Text>
+            </View>
+            {isTrader ? (
+              <Pressable
+                style={[styles.statusPill, styles.tStatusPill]}
+                onPress={() => !closed && setShowStatus((s) => !s)}
+              >
+                <Text style={[styles.statusPillText, styles.tStatusText]}>
+                  {conv.traderStatus} {!closed ? "▾" : ""}
+                </Text>
+              </Pressable>
+            ) : (
+              <View style={[styles.statusPill, styles.tStatusPill]}>
+                <Text style={[styles.statusPillText, styles.tStatusText]}>
+                  {conv.traderStatus}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+        <Pressable
+          style={styles.iconBtn}
+          onPress={() =>
+            Alert.alert("Conversation actions", undefined, [
+              { text: "Cancel", style: "cancel" },
+              ...(!closed
+                ? [{ text: "Close conversation", onPress: onClose, style: "destructive" as const }]
+                : []),
+              { text: "Report this conversation", onPress: onReport },
+            ])
+          }
+        >
+          <Feather name="more-vertical" size={18} color={Colors.light.textSecondary} />
+        </Pressable>
+      </View>
+
+      {showStatus ? (
+        <View style={styles.statusMenu}>
+          {TRADER_STATUSES.map((s) => (
+            <Pressable
+              key={s}
+              style={[
+                styles.statusMenuItem,
+                conv.traderStatus === s && styles.statusMenuItemActive,
+              ]}
+              onPress={() => onChangeStatus(s)}
+            >
+              <Text
+                style={[
+                  styles.statusMenuText,
+                  conv.traderStatus === s && styles.statusMenuTextActive,
+                ]}
+              >
+                {s}
+              </Text>
+              {s === "COMPLETED" ? (
+                <Text style={styles.statusMenuHint}>Unlocks customer review</Text>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      <FlatList
+        ref={listRef}
+        data={messages}
+        keyExtractor={(m) => String(m.id)}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: 12,
+          gap: 8,
+        }}
+        onRefresh={refetch}
+        refreshing={false}
+        renderItem={({ item }) => {
+          if (item.systemMessage) {
+            return (
+              <View style={styles.systemRow}>
+                <Text style={styles.systemText}>{item.body}</Text>
+              </View>
+            );
+          }
+          const mine =
+            (isTrader && item.senderRole === "trader") ||
+            (!isTrader && item.senderRole === "customer") ||
+            item.senderUserId === user?.id;
+          return (
+            <View style={[styles.bubbleWrap, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+              <View style={[styles.bubble, mine ? styles.bubbleMineBg : styles.bubbleTheirsBg]}>
+                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.body}</Text>
+                <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
+                  {fmtTime(item.createdAt)}
+                </Text>
+              </View>
+            </View>
+          );
+        }}
+        ListHeaderComponent={
+          <View style={styles.safetyBanner}>
+            <Feather name="shield" size={14} color={Colors.light.primary} />
+            <Text style={styles.safetyText}>
+              For your safety, keep all conversations and payments inside MyLocalTrade.
+            </Text>
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={{ alignItems: "center", padding: 40 }}>
+            <Text style={styles.systemText}>Start the conversation by sending a message.</Text>
+          </View>
+        }
+      />
+
+      {closed ? (
+        <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
+          <Text style={styles.closedText}>This conversation is {conv.status.toLowerCase()}.</Text>
+        </View>
+      ) : (
+        <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
+          <TextInput
+            style={styles.input}
+            value={text}
+            onChangeText={setText}
+            placeholder="Write a message…"
+            placeholderTextColor={Colors.light.textMuted}
+            multiline
+            maxLength={4000}
+          />
+          <Pressable
+            style={[styles.sendBtn, (!text.trim() || sendMutation.isPending) && styles.sendBtnDisabled]}
+            disabled={!text.trim() || sendMutation.isPending}
+            onPress={onSend}
+          >
+            {sendMutation.isPending ? (
+              <ActivityIndicator size="small" color={Colors.light.white} />
+            ) : (
+              <Feather name="send" size={18} color={Colors.light.white} />
+            )}
+          </Pressable>
+        </View>
+      )}
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  centered: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  errorText: { color: Colors.light.text, marginBottom: 12 },
+  cta: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  ctaText: { color: Colors.light.white, fontWeight: "700" },
+  headerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: Colors.light.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  headerName: { fontSize: 16, fontWeight: "700", color: Colors.light.text },
+  headerSub: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
+  headerPills: { flexDirection: "row", gap: 6, marginTop: 6 },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: Colors.light.primaryMuted,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: Colors.light.primary,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  tStatusPill: { backgroundColor: Colors.light.featuredMuted },
+  tStatusText: { color: Colors.light.featured },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: Colors.light.card,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusMenu: {
+    backgroundColor: Colors.light.card,
+    borderBottomWidth: 1,
+    borderColor: Colors.light.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusMenuItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: Colors.light.surface,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    minWidth: 110,
+  },
+  statusMenuItemActive: {
+    borderColor: Colors.light.featured,
+    backgroundColor: Colors.light.featuredMuted,
+  },
+  statusMenuText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.light.text,
+    letterSpacing: 0.3,
+  },
+  statusMenuTextActive: { color: Colors.light.featured },
+  statusMenuHint: { fontSize: 10, color: Colors.light.textMuted, marginTop: 2 },
+  safetyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  safetyText: { flex: 1, fontSize: 11, color: Colors.light.textSecondary, lineHeight: 16 },
+  systemRow: { alignItems: "center", paddingVertical: 4 },
+  systemText: {
+    fontSize: 11,
+    color: Colors.light.textMuted,
+    fontStyle: "italic",
+    textAlign: "center",
+  },
+  bubbleWrap: { width: "100%", flexDirection: "row" },
+  bubbleMine: { justifyContent: "flex-end" },
+  bubbleTheirs: { justifyContent: "flex-start" },
+  bubble: {
+    maxWidth: "82%",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 16,
+  },
+  bubbleMineBg: {
+    backgroundColor: Colors.light.primary,
+    borderTopRightRadius: 4,
+  },
+  bubbleTheirsBg: {
+    backgroundColor: Colors.light.card,
+    borderTopLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  bubbleText: { fontSize: 14, color: Colors.light.text, lineHeight: 20 },
+  bubbleTextMine: { color: Colors.light.white },
+  bubbleTime: {
+    fontSize: 10,
+    color: Colors.light.textMuted,
+    marginTop: 4,
+    alignSelf: "flex-end",
+  },
+  bubbleTimeMine: { color: "rgba(255,255,255,0.75)" },
+  composer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    backgroundColor: Colors.light.surface,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  input: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 140,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: Colors.light.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    color: Colors.light.text,
+    fontSize: 14,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sendBtnDisabled: { opacity: 0.4 },
+  closedText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    textAlign: "center",
+    paddingVertical: 14,
+  },
+});
