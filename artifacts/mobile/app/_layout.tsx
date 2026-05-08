@@ -87,7 +87,7 @@ function RootLayoutNav() {
       <Stack.Screen name="trader/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="auth/login" options={{ title: "Log In", presentation: "modal" }} />
       <Stack.Screen name="auth/register-customer" options={{ title: "Register", presentation: "modal" }} />
-      <Stack.Screen name="auth/register-trader" options={{ title: "Join as Trader" }} />
+      <Stack.Screen name="auth/register-trader" options={{ headerShown: false }} />
       <Stack.Screen name="pricing" options={{ title: "Subscription Plans" }} />
       <Stack.Screen name="enquiry/[traderId]" options={{ title: "Send Enquiry", presentation: "modal" }} />
       <Stack.Screen name="trader-dashboard/edit-profile" options={{ title: "Edit Profile" }} />

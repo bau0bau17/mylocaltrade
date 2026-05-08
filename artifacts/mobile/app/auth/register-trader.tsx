@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, ScrollView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -176,16 +176,34 @@ export default function RegisterTraderScreen() {
   const showSuggestionPanel =
     chOpen && formData.businessName.trim().length >= 3 && !companyNumber;
 
+  // On web previews and some Android devices, safe-area insets are 0 even
+  // though there is a visible notch / status bar. Apply a sensible minimum
+  // so the header never sits under the device cutout.
+  const topInset = Math.max(insets.top, Platform.OS === 'web' ? 56 : 44);
+
   return (
-    <KeyboardAwareScrollViewCompat
-      style={styles.container}
-      contentContainerStyle={{
-        paddingTop: insets.top + 24,
-        paddingBottom: insets.bottom + 24,
-        paddingHorizontal: 24,
-      }}
-      bottomOffset={60}
-    >
+    <View style={styles.container}>
+      <View style={[styles.topBar, { paddingTop: topInset }]}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={10}
+        >
+          <Feather name="chevron-left" size={24} color={Colors.light.primary} />
+        </Pressable>
+        <Text style={styles.topBarTitle}>Join as Trader</Text>
+        <View style={styles.backBtn} />
+      </View>
+
+      <KeyboardAwareScrollViewCompat
+        style={styles.scroll}
+        contentContainerStyle={{
+          paddingTop: 24,
+          paddingBottom: insets.bottom + 24,
+          paddingHorizontal: 24,
+        }}
+        bottomOffset={60}
+      >
       <View style={styles.header}>
         <View style={styles.logoWrap}>
           <Feather name="briefcase" size={28} color={Colors.light.secondary} />
@@ -468,7 +486,8 @@ export default function RegisterTraderScreen() {
           </Pressable>
         </View>
       </View>
-    </KeyboardAwareScrollViewCompat>
+      </KeyboardAwareScrollViewCompat>
+    </View>
   );
 }
 
@@ -476,6 +495,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  scroll: {
+    flex: 1,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    backgroundColor: Colors.light.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.light.border,
+    gap: 8,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topBarTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.light.text,
+    textAlign: 'center',
   },
   header: {
     alignItems: 'center',
