@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Pressable,
   ActivityIndicator, ScrollView,
@@ -25,6 +25,18 @@ export default function ContactSupportScreen() {
   const [sent, setSent] = useState(false);
   const [rateLimited, setRateLimited] = useState<{ nextAllowedAt: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!errorMsg) return;
+    const timer = setTimeout(() => setErrorMsg(null), 5000);
+    return () => clearTimeout(timer);
+  }, [errorMsg]);
+
+  useEffect(() => {
+    if (errorMsg && form.message.trim().length >= 10) {
+      setErrorMsg(null);
+    }
+  }, [form.message, errorMsg]);
 
   const handleSend = async () => {
     setErrorMsg(null);
