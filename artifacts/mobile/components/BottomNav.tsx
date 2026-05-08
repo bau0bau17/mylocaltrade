@@ -87,14 +87,15 @@ const styles = StyleSheet.create({
   row: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     justifyContent: 'space-around',
   },
   item: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
+    justifyContent: 'flex-start',
+    paddingTop: 12,
+    gap: 4,
   },
   label: {
     fontSize: 11,
