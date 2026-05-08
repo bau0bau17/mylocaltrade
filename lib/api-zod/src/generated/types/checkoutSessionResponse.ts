@@ -6,7 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Response from creating a Stripe checkout session.
+
+In demo mode (no STRIPE_SECRET_KEY configured), `url` is the literal
+sentinel `"DEMO_MODE"` and `demoActivationUrl` is set to a relative
+backend path the client can POST to in order to activate the
+subscription instantly without going through Stripe. In real mode
+`demoActivationUrl` is omitted and `url` is the live Stripe-hosted
+checkout URL the client should open.
+
+ */
 export interface CheckoutSessionResponse {
   sessionId: string;
   url: string;
+  /** Present only in demo mode. Relative path to POST to in order to activate the subscription. */
+  demoActivationUrl?: string | null;
 }

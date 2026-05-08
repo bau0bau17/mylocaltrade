@@ -17,11 +17,18 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdminListReviewsParams,
+  AdminReviewsResponse,
   AuthResponse,
   CategoriesResponse,
   CheckoutSessionResponse,
   CreateCheckoutRequest,
   CreateEnquiryRequest,
+  CreateReviewRequest,
+  DeleteTraderDocumentResponse,
+  DemoActivateResponse,
+  DemoActivateSubscriptionParams,
+  EligibleEnquiriesResponse,
   Enquiry,
   EnquiryListResponse,
   ErrorResponse,
@@ -31,18 +38,27 @@ import type {
   ListTradersParams,
   LoginRequest,
   MessageResponse,
+  ModerateReviewRequest,
   RegisterCustomerRequest,
   RegisterPendingResponse,
+  RegisterTraderDocumentRequest,
+  RegisterTraderDocumentResponse,
   RegisterTraderRequest,
+  RequestUploadUrlRequest,
   ResendVerificationRequest,
   RetryAfterErrorResponse,
+  Review,
+  SubscriptionMutationResponse,
   SubscriptionPlansResponse,
   SubscriptionStatus,
   SuccessResponse,
+  TraderDocumentsResponse,
   TraderListResponse,
   TraderOnboardingStatus,
   TraderProfile,
+  TraderReviewsResponse,
   UpdateTraderProfileRequest,
+  UploadUrlResponse,
   UserProfile,
 } from "./api.schemas";
 
@@ -1308,6 +1324,1125 @@ export function useGetSubscriptionStatus<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Used only when the API is running without `STRIPE_SECRET_KEY`. The
+client receives a `demoActivationUrl` from `createCheckoutSession`
+and POSTs to this endpoint to flip the pending subscription into
+the `active` state immediately.
+
+ * @summary Activate subscription in demo mode (no Stripe)
+ */
+export const getDemoActivateSubscriptionUrl = (
+  params: DemoActivateSubscriptionParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/subscriptions/demo-activate?${stringifiedParams}`
+    : `/api/subscriptions/demo-activate`;
+};
+
+export const demoActivateSubscription = async (
+  params: DemoActivateSubscriptionParams,
+  options?: RequestInit,
+): Promise<DemoActivateResponse> => {
+  return customFetch<DemoActivateResponse>(
+    getDemoActivateSubscriptionUrl(params),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getDemoActivateSubscriptionMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof demoActivateSubscription>>,
+    TError,
+    { params: DemoActivateSubscriptionParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof demoActivateSubscription>>,
+  TError,
+  { params: DemoActivateSubscriptionParams },
+  TContext
+> => {
+  const mutationKey = ["demoActivateSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof demoActivateSubscription>>,
+    { params: DemoActivateSubscriptionParams }
+  > = (props) => {
+    const { params } = props ?? {};
+
+    return demoActivateSubscription(params, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DemoActivateSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof demoActivateSubscription>>
+>;
+
+export type DemoActivateSubscriptionMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Activate subscription in demo mode (no Stripe)
+ */
+export const useDemoActivateSubscription = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof demoActivateSubscription>>,
+    TError,
+    { params: DemoActivateSubscriptionParams },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof demoActivateSubscription>>,
+  TError,
+  { params: DemoActivateSubscriptionParams },
+  TContext
+> => {
+  return useMutation(getDemoActivateSubscriptionMutationOptions(options));
+};
+
+/**
+ * @summary Schedule cancellation at period end
+ */
+export const getCancelSubscriptionUrl = () => {
+  return `/api/subscriptions/cancel`;
+};
+
+export const cancelSubscription = async (
+  options?: RequestInit,
+): Promise<SubscriptionMutationResponse> => {
+  return customFetch<SubscriptionMutationResponse>(getCancelSubscriptionUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCancelSubscriptionMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelSubscription>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelSubscription>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["cancelSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelSubscription>>,
+    void
+  > = () => {
+    return cancelSubscription(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelSubscription>>
+>;
+
+export type CancelSubscriptionMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Schedule cancellation at period end
+ */
+export const useCancelSubscription = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelSubscription>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelSubscription>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getCancelSubscriptionMutationOptions(options));
+};
+
+/**
+ * @summary Undo a scheduled cancellation
+ */
+export const getResumeSubscriptionUrl = () => {
+  return `/api/subscriptions/resume`;
+};
+
+export const resumeSubscription = async (
+  options?: RequestInit,
+): Promise<SubscriptionMutationResponse> => {
+  return customFetch<SubscriptionMutationResponse>(getResumeSubscriptionUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getResumeSubscriptionMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resumeSubscription>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resumeSubscription>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["resumeSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resumeSubscription>>,
+    void
+  > = () => {
+    return resumeSubscription(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResumeSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resumeSubscription>>
+>;
+
+export type ResumeSubscriptionMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Undo a scheduled cancellation
+ */
+export const useResumeSubscription = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resumeSubscription>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resumeSubscription>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getResumeSubscriptionMutationOptions(options));
+};
+
+/**
+ * @summary List the current trader's verification documents
+ */
+export const getGetTraderDocumentsUrl = () => {
+  return `/api/trader/documents`;
+};
+
+export const getTraderDocuments = async (
+  options?: RequestInit,
+): Promise<TraderDocumentsResponse> => {
+  return customFetch<TraderDocumentsResponse>(getGetTraderDocumentsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTraderDocumentsQueryKey = () => {
+  return [`/api/trader/documents`] as const;
+};
+
+export const getGetTraderDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTraderDocuments>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTraderDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTraderDocumentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTraderDocuments>>
+  > = ({ signal }) => getTraderDocuments({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTraderDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTraderDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTraderDocuments>>
+>;
+export type GetTraderDocumentsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary List the current trader's verification documents
+ */
+
+export function useGetTraderDocuments<
+  TData = Awaited<ReturnType<typeof getTraderDocuments>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTraderDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTraderDocumentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Register a successfully uploaded document
+ */
+export const getRegisterTraderDocumentUrl = () => {
+  return `/api/trader/documents`;
+};
+
+export const registerTraderDocument = async (
+  registerTraderDocumentRequest: RegisterTraderDocumentRequest,
+  options?: RequestInit,
+): Promise<RegisterTraderDocumentResponse> => {
+  return customFetch<RegisterTraderDocumentResponse>(
+    getRegisterTraderDocumentUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(registerTraderDocumentRequest),
+    },
+  );
+};
+
+export const getRegisterTraderDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerTraderDocument>>,
+    TError,
+    { data: BodyType<RegisterTraderDocumentRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof registerTraderDocument>>,
+  TError,
+  { data: BodyType<RegisterTraderDocumentRequest> },
+  TContext
+> => {
+  const mutationKey = ["registerTraderDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof registerTraderDocument>>,
+    { data: BodyType<RegisterTraderDocumentRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return registerTraderDocument(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegisterTraderDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof registerTraderDocument>>
+>;
+export type RegisterTraderDocumentMutationBody =
+  BodyType<RegisterTraderDocumentRequest>;
+export type RegisterTraderDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Register a successfully uploaded document
+ */
+export const useRegisterTraderDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerTraderDocument>>,
+    TError,
+    { data: BodyType<RegisterTraderDocumentRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof registerTraderDocument>>,
+  TError,
+  { data: BodyType<RegisterTraderDocumentRequest> },
+  TContext
+> => {
+  return useMutation(getRegisterTraderDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Request a presigned PUT URL for uploading a document
+ */
+export const getGetTraderDocumentUploadUrlUrl = () => {
+  return `/api/trader/documents/upload-url`;
+};
+
+export const getTraderDocumentUploadUrl = async (
+  requestUploadUrlRequest: RequestUploadUrlRequest,
+  options?: RequestInit,
+): Promise<UploadUrlResponse> => {
+  return customFetch<UploadUrlResponse>(getGetTraderDocumentUploadUrlUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(requestUploadUrlRequest),
+  });
+};
+
+export const getGetTraderDocumentUploadUrlMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getTraderDocumentUploadUrl>>,
+    TError,
+    { data: BodyType<RequestUploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof getTraderDocumentUploadUrl>>,
+  TError,
+  { data: BodyType<RequestUploadUrlRequest> },
+  TContext
+> => {
+  const mutationKey = ["getTraderDocumentUploadUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof getTraderDocumentUploadUrl>>,
+    { data: BodyType<RequestUploadUrlRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return getTraderDocumentUploadUrl(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GetTraderDocumentUploadUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof getTraderDocumentUploadUrl>>
+>;
+export type GetTraderDocumentUploadUrlMutationBody =
+  BodyType<RequestUploadUrlRequest>;
+export type GetTraderDocumentUploadUrlMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request a presigned PUT URL for uploading a document
+ */
+export const useGetTraderDocumentUploadUrl = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getTraderDocumentUploadUrl>>,
+    TError,
+    { data: BodyType<RequestUploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof getTraderDocumentUploadUrl>>,
+  TError,
+  { data: BodyType<RequestUploadUrlRequest> },
+  TContext
+> => {
+  return useMutation(getGetTraderDocumentUploadUrlMutationOptions(options));
+};
+
+/**
+ * @summary Delete a pending or rejected trader document
+ */
+export const getDeleteTraderDocumentUrl = (id: number) => {
+  return `/api/trader/documents/${id}`;
+};
+
+export const deleteTraderDocument = async (
+  id: number,
+  options?: RequestInit,
+): Promise<DeleteTraderDocumentResponse> => {
+  return customFetch<DeleteTraderDocumentResponse>(
+    getDeleteTraderDocumentUrl(id),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getDeleteTraderDocumentMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTraderDocument>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTraderDocument>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteTraderDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTraderDocument>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteTraderDocument(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTraderDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTraderDocument>>
+>;
+
+export type DeleteTraderDocumentMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a pending or rejected trader document
+ */
+export const useDeleteTraderDocument = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTraderDocument>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTraderDocument>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteTraderDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Submit a review for a trader (customer must have a non-pending enquiry)
+ */
+export const getCreateReviewUrl = () => {
+  return `/api/reviews`;
+};
+
+export const createReview = async (
+  createReviewRequest: CreateReviewRequest,
+  options?: RequestInit,
+): Promise<Review> => {
+  return customFetch<Review>(getCreateReviewUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createReviewRequest),
+  });
+};
+
+export const getCreateReviewMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createReview>>,
+    TError,
+    { data: BodyType<CreateReviewRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createReview>>,
+  TError,
+  { data: BodyType<CreateReviewRequest> },
+  TContext
+> => {
+  const mutationKey = ["createReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createReview>>,
+    { data: BodyType<CreateReviewRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createReview(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createReview>>
+>;
+export type CreateReviewMutationBody = BodyType<CreateReviewRequest>;
+export type CreateReviewMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit a review for a trader (customer must have a non-pending enquiry)
+ */
+export const useCreateReview = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createReview>>,
+    TError,
+    { data: BodyType<CreateReviewRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createReview>>,
+  TError,
+  { data: BodyType<CreateReviewRequest> },
+  TContext
+> => {
+  return useMutation(getCreateReviewMutationOptions(options));
+};
+
+/**
+ * @summary List of customer's enquiries that are eligible for a new review
+ */
+export const getGetEligibleEnquiriesForReviewUrl = () => {
+  return `/api/reviews/eligible`;
+};
+
+export const getEligibleEnquiriesForReview = async (
+  options?: RequestInit,
+): Promise<EligibleEnquiriesResponse> => {
+  return customFetch<EligibleEnquiriesResponse>(
+    getGetEligibleEnquiriesForReviewUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetEligibleEnquiriesForReviewQueryKey = () => {
+  return [`/api/reviews/eligible`] as const;
+};
+
+export const getGetEligibleEnquiriesForReviewQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEligibleEnquiriesForReview>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEligibleEnquiriesForReview>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetEligibleEnquiriesForReviewQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getEligibleEnquiriesForReview>>
+  > = ({ signal }) =>
+    getEligibleEnquiriesForReview({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEligibleEnquiriesForReview>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEligibleEnquiriesForReviewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEligibleEnquiriesForReview>>
+>;
+export type GetEligibleEnquiriesForReviewQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary List of customer's enquiries that are eligible for a new review
+ */
+
+export function useGetEligibleEnquiriesForReview<
+  TData = Awaited<ReturnType<typeof getEligibleEnquiriesForReview>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEligibleEnquiriesForReview>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEligibleEnquiriesForReviewQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Public list of approved reviews for a trader
+ */
+export const getGetTraderReviewsUrl = (id: number) => {
+  return `/api/traders/${id}/reviews`;
+};
+
+export const getTraderReviews = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TraderReviewsResponse> => {
+  return customFetch<TraderReviewsResponse>(getGetTraderReviewsUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTraderReviewsQueryKey = (id: number) => {
+  return [`/api/traders/${id}/reviews`] as const;
+};
+
+export const getGetTraderReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTraderReviews>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTraderReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTraderReviewsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTraderReviews>>
+  > = ({ signal }) => getTraderReviews(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTraderReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTraderReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTraderReviews>>
+>;
+export type GetTraderReviewsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Public list of approved reviews for a trader
+ */
+
+export function useGetTraderReviews<
+  TData = Awaited<ReturnType<typeof getTraderReviews>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTraderReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTraderReviewsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Reviews left for the authenticated trader (any status)
+ */
+export const getGetMyTraderReviewsUrl = () => {
+  return `/api/trader/reviews`;
+};
+
+export const getMyTraderReviews = async (
+  options?: RequestInit,
+): Promise<TraderReviewsResponse> => {
+  return customFetch<TraderReviewsResponse>(getGetMyTraderReviewsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMyTraderReviewsQueryKey = () => {
+  return [`/api/trader/reviews`] as const;
+};
+
+export const getGetMyTraderReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMyTraderReviews>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyTraderReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMyTraderReviewsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMyTraderReviews>>
+  > = ({ signal }) => getMyTraderReviews({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMyTraderReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMyTraderReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMyTraderReviews>>
+>;
+export type GetMyTraderReviewsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Reviews left for the authenticated trader (any status)
+ */
+
+export function useGetMyTraderReviews<
+  TData = Awaited<ReturnType<typeof getMyTraderReviews>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMyTraderReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMyTraderReviewsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin moderation queue
+ */
+export const getAdminListReviewsUrl = (params?: AdminListReviewsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/reviews?${stringifiedParams}`
+    : `/api/admin/reviews`;
+};
+
+export const adminListReviews = async (
+  params?: AdminListReviewsParams,
+  options?: RequestInit,
+): Promise<AdminReviewsResponse> => {
+  return customFetch<AdminReviewsResponse>(getAdminListReviewsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminListReviewsQueryKey = (
+  params?: AdminListReviewsParams,
+) => {
+  return [`/api/admin/reviews`, ...(params ? [params] : [])] as const;
+};
+
+export const getAdminListReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminListReviews>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params?: AdminListReviewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAdminListReviewsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminListReviews>>
+  > = ({ signal }) => adminListReviews(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminListReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminListReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminListReviews>>
+>;
+export type AdminListReviewsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Admin moderation queue
+ */
+
+export function useAdminListReviews<
+  TData = Awaited<ReturnType<typeof adminListReviews>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params?: AdminListReviewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminListReviewsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Approve / reject / flag a review
+ */
+export const getAdminModerateReviewUrl = (id: number) => {
+  return `/api/admin/reviews/${id}/moderate`;
+};
+
+export const adminModerateReview = async (
+  id: number,
+  moderateReviewRequest: ModerateReviewRequest,
+  options?: RequestInit,
+): Promise<Review> => {
+  return customFetch<Review>(getAdminModerateReviewUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(moderateReviewRequest),
+  });
+};
+
+export const getAdminModerateReviewMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminModerateReview>>,
+    TError,
+    { id: number; data: BodyType<ModerateReviewRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminModerateReview>>,
+  TError,
+  { id: number; data: BodyType<ModerateReviewRequest> },
+  TContext
+> => {
+  const mutationKey = ["adminModerateReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminModerateReview>>,
+    { id: number; data: BodyType<ModerateReviewRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminModerateReview(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminModerateReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminModerateReview>>
+>;
+export type AdminModerateReviewMutationBody = BodyType<ModerateReviewRequest>;
+export type AdminModerateReviewMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Approve / reject / flag a review
+ */
+export const useAdminModerateReview = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminModerateReview>>,
+    TError,
+    { id: number; data: BodyType<ModerateReviewRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminModerateReview>>,
+  TError,
+  { id: number; data: BodyType<ModerateReviewRequest> },
+  TContext
+> => {
+  return useMutation(getAdminModerateReviewMutationOptions(options));
+};
 
 /**
  * @summary Handle Stripe webhook

@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useGetTrader } from '@workspace/api-client-react';
+import { ReviewsSection } from '@/components/ReviewsSection';
 
 export default function TraderProfileScreen() {
   const { id } = useLocalSearchParams();
@@ -130,6 +131,16 @@ export default function TraderProfileScreen() {
                 </View>
               ))}
             </View>
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>Reviews</Text>
+              <Pressable onPress={() => router.push(`/write-review/${trader.id}`)}>
+                <Text style={styles.sectionAction}>Write a review</Text>
+              </Pressable>
+            </View>
+            <ReviewsSection traderId={trader.id} />
           </View>
 
           <View style={styles.section}>
@@ -262,6 +273,17 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginBottom: 10,
     textAlign: 'center',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionAction: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.light.primary,
   },
   badges: {
     flexDirection: 'row',

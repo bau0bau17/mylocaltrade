@@ -6,19 +6,20 @@ import Colors from '@/constants/colors';
 import {
   useGetSubscriptionPlans,
   useCreateCheckoutSession,
+  useDemoActivateSubscription,
   useGetTraderOnboardingStatus,
 } from '@workspace/api-client-react';
 import { PlanCard } from '@/components/PlanCard';
-import type { CreateCheckoutRequestPlanId } from '@workspace/api-client-react';
+import type { CreateCheckoutRequestPlanId, DemoActivateSubscriptionParams } from '@workspace/api-client-react';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/contexts/AuthContext';
-import { getApiUrl } from '@/lib/api-url';
 import { useRouter } from 'expo-router';
 
 export default function PricingScreen() {
   const insets = useSafeAreaInsets();
   const { data: plansData, isLoading: isLoadingPlans } = useGetSubscriptionPlans();
   const { mutateAsync: createCheckout } = useCreateCheckoutSession();
+  const { mutateAsync: demoActivate } = useDemoActivateSubscription();
   const { token, isTrader } = useAuth();
   const router = useRouter();
 
@@ -42,28 +43,26 @@ export default function PricingScreen() {
   const handleSelectPlan = async (planId: string) => {
     setSelectedPlanId(planId);
     try {
-      const response = await createCheckout({ 
-        data: { planId: planId as CreateCheckoutRequestPlanId } 
+      const response = await createCheckout({
+        data: { planId: planId as CreateCheckoutRequestPlanId },
       });
 
-      const responseData = response as { url: string; sessionId: string; demoActivationUrl?: string };
-      if (responseData.url === 'DEMO_MODE' && responseData.demoActivationUrl) {
-        const baseUrl = getApiUrl();
-        const activateRes = await fetch(`${baseUrl}${responseData.demoActivationUrl}`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        const activateData = await activateRes.json();
+      // Demo mode: backend returns the sentinel `url: "DEMO_MODE"` and a
+      // demoActivationUrl we can call instantly to flip the subscription
+      // active without going through Stripe.
+      if (response.url === 'DEMO_MODE' && response.demoActivationUrl) {
+        const params: DemoActivateSubscriptionParams = {
+          sessionId: response.sessionId,
+          planId: planId as CreateCheckoutRequestPlanId,
+        };
+        const activateData = await demoActivate({ params });
         if (activateData.success) {
           Alert.alert('Success', `Your ${planId} plan has been activated! (Demo Mode)`);
         } else {
           Alert.alert('Error', activateData.error || 'Activation failed');
         }
-      } else if (responseData.url && responseData.url !== 'DEMO_MODE') {
-        await WebBrowser.openBrowserAsync(responseData.url);
+      } else if (response.url && response.url !== 'DEMO_MODE') {
+        await WebBrowser.openBrowserAsync(response.url);
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Could not start checkout process';

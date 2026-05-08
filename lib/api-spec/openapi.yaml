@@ -24,6 +24,8 @@ tags:
     description: Saved traders
   - name: enquiries
     description: Enquiries and leads
+  - name: trader-documents
+  - name: reviews
   - name: categories
     description: Trade categories
 paths:
@@ -414,6 +416,424 @@ paths:
                 $ref: "#/components/schemas/SubscriptionStatus"
         "401":
           description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /subscriptions/demo-activate:
+    post:
+      operationId: demoActivateSubscription
+      tags: [subscriptions]
+      summary: Activate subscription in demo mode (no Stripe)
+      description: |
+        Used only when the API is running without `STRIPE_SECRET_KEY`. The
+        client receives a `demoActivationUrl` from `createCheckoutSession`
+        and POSTs to this endpoint to flip the pending subscription into
+        the `active` state immediately.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: planId
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [basic, premium, elite]
+      responses:
+        "200":
+          description: Demo subscription activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoActivateResponse"
+        "400":
+          description: Invalid or already-processed session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Demo activation not available in production
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /subscriptions/cancel:
+    post:
+      operationId: cancelSubscription
+      tags: [subscriptions]
+      summary: Schedule cancellation at period end
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Cancellation scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionMutationResponse"
+        "400":
+          description: No active subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /subscriptions/resume:
+    post:
+      operationId: resumeSubscription
+      tags: [subscriptions]
+      summary: Undo a scheduled cancellation
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Subscription resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionMutationResponse"
+        "400":
+          description: No scheduled cancellation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trader/documents:
+    get:
+      operationId: getTraderDocuments
+      tags: [trader-documents]
+      summary: List the current trader's verification documents
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Documents and evaluation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderDocumentsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: registerTraderDocument
+      tags: [trader-documents]
+      summary: Register a successfully uploaded document
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterTraderDocumentRequest"
+      responses:
+        "201":
+          description: Document registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterTraderDocumentResponse"
+        "400":
+          description: Invalid document data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trader/documents/upload-url:
+    post:
+      operationId: getTraderDocumentUploadUrl
+      tags: [trader-documents]
+      summary: Request a presigned PUT URL for uploading a document
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestUploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trader/documents/{id}:
+    delete:
+      operationId: deleteTraderDocument
+      tags: [trader-documents]
+      summary: Delete a pending or rejected trader document
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Document deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteTraderDocumentResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Approved documents cannot be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reviews:
+    post:
+      operationId: createReview
+      tags: [reviews]
+      summary: Submit a review for a trader (customer must have a non-pending enquiry)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewRequest"
+      responses:
+        "201":
+          description: Review submitted (pending moderation)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+        "400":
+          description: Invalid review data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Customer has no eligible enquiry with this trader
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A review for this enquiry already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /reviews/eligible:
+    get:
+      operationId: getEligibleEnquiriesForReview
+      tags: [reviews]
+      summary: List of customer's enquiries that are eligible for a new review
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Eligible enquiries (already reviewed entries are excluded)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EligibleEnquiriesResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /traders/{id}/reviews:
+    get:
+      operationId: getTraderReviews
+      tags: [reviews]
+      summary: Public list of approved reviews for a trader
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Approved reviews
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderReviewsResponse"
+        "404":
+          description: Trader not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trader/reviews:
+    get:
+      operationId: getMyTraderReviews
+      tags: [reviews]
+      summary: Reviews left for the authenticated trader (any status)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: All reviews for this trader, including pending and rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderReviewsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/reviews:
+    get:
+      operationId: adminListReviews
+      tags: [reviews]
+      summary: Admin moderation queue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, FLAGGED]
+      responses:
+        "200":
+          description: Reviews for moderation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminReviewsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not an admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/reviews/{id}/moderate:
+    post:
+      operationId: adminModerateReview
+      tags: [reviews]
+      summary: Approve / reject / flag a review
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModerateReviewRequest"
+      responses:
+        "200":
+          description: Updated review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not an admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Review not found
           content:
             application/json:
               schema:
@@ -1073,14 +1493,57 @@ components:
 
     CheckoutSessionResponse:
       type: object
+      description: |
+        Response from creating a Stripe checkout session.
+
+        In demo mode (no STRIPE_SECRET_KEY configured), `url` is the literal
+        sentinel `"DEMO_MODE"` and `demoActivationUrl` is set to a relative
+        backend path the client can POST to in order to activate the
+        subscription instantly without going through Stripe. In real mode
+        `demoActivationUrl` is omitted and `url` is the live Stripe-hosted
+        checkout URL the client should open.
       properties:
         sessionId:
           type: string
         url:
           type: string
+        demoActivationUrl:
+          type: string
+          nullable: true
+          description: Present only in demo mode. Relative path to POST to in order to activate the subscription.
       required:
         - sessionId
         - url
+
+    DemoActivateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        plan:
+          type: string
+        status:
+          type: string
+        error:
+          type: string
+      required:
+        - success
+
+    SubscriptionMutationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        cancelAtPeriodEnd:
+          type: boolean
+        currentPeriodEnd:
+          type: string
+          format: date-time
+          nullable: true
+        alreadyScheduled:
+          type: boolean
+      required:
+        - success
 
     SubscriptionStatus:
       type: object
@@ -1203,3 +1666,295 @@ components:
         - name
         - icon
         - traderCount
+
+    TraderDocument:
+      type: object
+      properties:
+        id: { type: integer }
+        type:
+          type: string
+          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, OTHER]
+        originalFilename: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+        status:
+          type: string
+          enum: [PENDING_REVIEW, APPROVED, REJECTED, EXPIRED]
+        rejectionReason:
+          type: string
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - originalFilename
+        - mimeType
+        - sizeBytes
+        - status
+        - createdAt
+
+    DocumentTypeStatus:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, OTHER]
+        label: { type: string }
+        required: { type: boolean }
+        hint: { type: string }
+        satisfied: { type: boolean }
+        hasUpload: { type: boolean }
+        count: { type: integer }
+        latestStatus: { type: string }
+        rejectionReason: { type: string }
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        expired: { type: boolean }
+        expiringSoon: { type: boolean }
+      required:
+        - type
+        - label
+        - required
+        - satisfied
+        - hasUpload
+        - count
+
+    DocumentsEvaluation:
+      type: object
+      properties:
+        complete: { type: boolean }
+        hasExpiredRequired: { type: boolean }
+        hasExpiringSoonRequired: { type: boolean }
+        byType:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentTypeStatus"
+      required:
+        - complete
+        - hasExpiredRequired
+        - hasExpiringSoonRequired
+        - byType
+
+    TraderDocumentsResponse:
+      type: object
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraderDocument"
+        evaluation:
+          $ref: "#/components/schemas/DocumentsEvaluation"
+        maxUploadBytes: { type: integer }
+        allowedMimeTypes:
+          type: array
+          items: { type: string }
+      required:
+        - documents
+        - evaluation
+        - maxUploadBytes
+        - allowedMimeTypes
+
+    RequestUploadUrlRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, OTHER]
+        filename: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+      required:
+        - type
+        - filename
+        - mimeType
+        - sizeBytes
+
+    UploadUrlResponse:
+      type: object
+      properties:
+        uploadURL: { type: string }
+        objectPath: { type: string }
+        method: { type: string }
+        expectedHeaders:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+        - uploadURL
+        - objectPath
+        - method
+
+    RegisterTraderDocumentRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, OTHER]
+        objectPath: { type: string }
+        originalFilename: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - type
+        - objectPath
+        - originalFilename
+        - mimeType
+        - sizeBytes
+
+    RegisterTraderDocumentResponse:
+      type: object
+      properties:
+        document:
+          $ref: "#/components/schemas/TraderDocument"
+        evaluation:
+          $ref: "#/components/schemas/DocumentsEvaluation"
+      required:
+        - document
+        - evaluation
+
+    DeleteTraderDocumentResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        evaluation:
+          $ref: "#/components/schemas/DocumentsEvaluation"
+      required:
+        - ok
+        - evaluation
+
+    Review:
+      type: object
+      properties:
+        id: { type: integer }
+        traderId: { type: integer }
+        customerId: { type: integer }
+        customerName: { type: string }
+        enquiryId:
+          type: integer
+          nullable: true
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text: { type: string }
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, FLAGGED]
+        traderReply:
+          type: string
+          nullable: true
+        traderReplyAt:
+          type: string
+          format: date-time
+          nullable: true
+        moderatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        moderationNotes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - traderId
+        - customerId
+        - customerName
+        - rating
+        - text
+        - status
+        - createdAt
+
+    CreateReviewRequest:
+      type: object
+      properties:
+        traderId: { type: integer }
+        enquiryId: { type: integer }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        text:
+          type: string
+          minLength: 10
+          maxLength: 2000
+      required:
+        - traderId
+        - enquiryId
+        - rating
+        - text
+
+    EligibleEnquiry:
+      type: object
+      properties:
+        enquiryId: { type: integer }
+        traderId: { type: integer }
+        traderBusinessName: { type: string }
+        serviceRequired: { type: string }
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - enquiryId
+        - traderId
+        - traderBusinessName
+        - serviceRequired
+        - createdAt
+
+    EligibleEnquiriesResponse:
+      type: object
+      properties:
+        enquiries:
+          type: array
+          items:
+            $ref: "#/components/schemas/EligibleEnquiry"
+      required:
+        - enquiries
+
+    TraderReviewsResponse:
+      type: object
+      properties:
+        reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/Review"
+        averageRating:
+          type: number
+          nullable: true
+        totalCount: { type: integer }
+      required:
+        - reviews
+        - totalCount
+
+    AdminReviewsResponse:
+      type: object
+      properties:
+        reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/Review"
+      required:
+        - reviews
+
+    ModerateReviewRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [approve, reject, flag]
+        notes:
+          type: string
+      required:
+        - action

@@ -1,0 +1,69 @@
+Let’s continue with the remaining items in this order.
+
+Priority 1: Align the OpenAPI checkout schema with demo mode
+
+Please fix the OpenAPI schema mismatch for checkout first.
+
+The checkout demo response currently has extra fields compared with the spec. Please update the OpenAPI spec and generated client/types so the API response, frontend/mobile usage and generated hooks are fully consistent.
+
+Requirements:
+
+* Align checkout demo response with OpenAPI spec
+* Update OpenAPI schema if the extra fields are valid and needed
+* Regenerate the API client/hooks
+* Remove any temporary workaround caused by the mismatch
+* Make sure billing/subscription demo flow still works
+* Make sure no TypeScript errors remain
+
+Priority 2: Migrate remaining mobile screens from direct fetch to generated hooks
+
+After the checkout schema is aligned, please migrate the remaining mobile screens that still use direct fetch.
+
+Screens mentioned:
+
+* Billing
+* Profile editing
+* Documents
+
+Requirements:
+
+* Replace direct fetch calls with generated API hooks/client
+* Keep the existing UI and behaviour the same
+* Do not change business logic unless required
+* Remove duplicated API logic
+* Make error/loading states consistent
+* Make sure authentication headers/session handling still work
+* Type-check after changes
+
+Priority 3: Review/rating submission from client
+
+After the API/mobile cleanup is complete, implement the missing review/rating submission system.
+
+Requirements:
+
+* Create the required reviews table/model
+* Allow customers to submit a review only after a real enquiry/job interaction
+* Rating from 1 to 5
+* Written review
+* Link review to trader
+* Link review to customer/user where available
+* Link review to enquiry/job where available
+* Prevent duplicate review for the same enquiry/job
+* Add review status:
+    PENDING
+    APPROVED
+    REJECTED
+    FLAGGED
+* Reviews should not appear publicly until approved, unless we decide otherwise later
+* Admin can approve/reject/hide reviews
+* Trader can see reviews on their dashboard
+* Trader can reply to reviews later, but if too much now, prepare the structure and add it as a follow-up
+* Public trader profile should show average rating and total number of approved reviews
+* Search cards should show rating if available
+* Add audit log entries for review submitted, approved, rejected or flagged
+
+Important:
+
+Please finish Priority 1 and Priority 2 first because they stabilise the API/mobile foundation. Then move to Priority 3 for review submission.
+
+Do not move to publishing yet.
