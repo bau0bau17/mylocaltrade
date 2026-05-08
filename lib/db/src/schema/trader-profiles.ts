@@ -54,7 +54,9 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   rejectionReason: text("rejection_reason"),
   adminNotes: text("admin_notes"),
   termsAcceptedAt: timestamp("terms_accepted_at"),
+  termsVersion: varchar("terms_version", { length: 20 }),
   privacyAcceptedAt: timestamp("privacy_accepted_at"),
+  privacyVersion: varchar("privacy_version", { length: 20 }),
 
   // --- Phone verification (Phase 2) ---
   phoneOtpHash: varchar("phone_otp_hash", { length: 255 }),

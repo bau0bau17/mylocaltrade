@@ -18,6 +18,16 @@ interface ChecklistStep {
   comingSoon?: boolean;
 }
 
+interface LegalAcceptance {
+  termsCurrent: string;
+  termsAccepted: string | null;
+  termsNeedsReaccept: boolean;
+  privacyCurrent: string;
+  privacyAccepted: string | null;
+  privacyNeedsReaccept: boolean;
+  needsReaccept: boolean;
+}
+
 interface OnboardingStatus {
   verificationStatus: string;
   message: string;
@@ -30,6 +40,7 @@ interface OnboardingStatus {
   rejectionReason: string | null;
   adminNotes: string | null;
   checklist: ChecklistStep[];
+  legal?: LegalAcceptance;
   email: string;
   businessName: string;
 }
@@ -44,6 +55,7 @@ export default function TraderOnboardingDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
+  const [acceptingLegal, setAcceptingLegal] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     if (!token) return;
@@ -74,6 +86,31 @@ export default function TraderOnboardingDashboard() {
     const t = setTimeout(() => setResendMsg(null), 5000);
     return () => clearTimeout(t);
   }, [resendMsg]);
+
+  const handleAcceptLegal = async () => {
+    if (!token || !status?.legal?.needsReaccept || acceptingLegal) return;
+    setAcceptingLegal(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/trader/accept-terms`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          acceptTerms: status.legal.termsNeedsReaccept,
+          acceptPrivacy: status.legal.privacyNeedsReaccept,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to record acceptance');
+      await fetchStatus();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to record acceptance');
+    } finally {
+      setAcceptingLegal(false);
+    }
+  };
 
   const handleResend = async () => {
     if (!status?.email || resending) return;
@@ -152,6 +189,34 @@ export default function TraderOnboardingDashboard() {
             : `Your trader profile is not live yet. ${status.message}`}
         </Text>
       </View>
+
+      {/* Phase 8: terms / privacy re-accept banner */}
+      {status.legal?.needsReaccept ? (
+        <View style={styles.legalBanner}>
+          <View style={styles.legalBannerHeader}>
+            <Feather name="file-text" size={16} color={WARNING} />
+            <Text style={styles.legalBannerTitle}>
+              {status.legal.termsNeedsReaccept && status.legal.privacyNeedsReaccept
+                ? 'Updated Terms & Privacy Policy'
+                : status.legal.termsNeedsReaccept
+                ? 'Updated Terms of Service'
+                : 'Updated Privacy Policy'}
+            </Text>
+          </View>
+          <Text style={styles.legalBannerBody}>
+            We&apos;ve updated our policies. Please review and re-accept to keep using your account.
+          </Text>
+          <Pressable
+            onPress={handleAcceptLegal}
+            disabled={acceptingLegal}
+            style={[styles.legalBannerBtn, acceptingLegal && { opacity: 0.6 }]}
+          >
+            <Text style={styles.legalBannerBtnText}>
+              {acceptingLegal ? 'Saving…' : 'Review & accept'}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Progress bar */}
       <View style={styles.progressCard}>
@@ -340,4 +405,10 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 14, color: Colors.light.textSecondary, textAlign: 'center', marginTop: 8 },
   retryBtn: { backgroundColor: Colors.light.primary, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10, marginTop: 8 },
   retryText: { color: Colors.light.white, fontSize: 14, fontWeight: '700' },
+  legalBanner: { backgroundColor: WARNING_MUTED, borderColor: WARNING, borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 14 },
+  legalBannerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  legalBannerTitle: { fontSize: 14, fontWeight: '700', color: WARNING },
+  legalBannerBody: { fontSize: 13, color: Colors.light.text, lineHeight: 18 },
+  legalBannerBtn: { marginTop: 10, alignSelf: 'flex-start', backgroundColor: WARNING, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  legalBannerBtnText: { color: Colors.light.white, fontSize: 13, fontWeight: '700' },
 });

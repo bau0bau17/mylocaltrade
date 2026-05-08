@@ -1,0 +1,88 @@
+import { db } from "@workspace/db";
+import {
+  traderProfilesTable,
+  traderDocumentsTable,
+} from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
+import { logger } from "./logger";
+import { TRADER_STATUS, evaluateDocumentsComplete, logAudit } from "./trader-status";
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Phase 8: periodic sweep that flips VERIFIED traders to EXPIRED_DOCUMENTS once
+ * a required document expires. Without this, traders are only re-evaluated on
+ * upload/delete (see reconcileDocumentsState in trader-documents.ts).
+ */
+export async function reconcileExpiredDocuments(): Promise<{ checked: number; flipped: number }> {
+  const verified = await db
+    .select()
+    .from(traderProfilesTable)
+    .where(eq(traderProfilesTable.verificationStatus, TRADER_STATUS.VERIFIED));
+
+  let flipped = 0;
+  for (const profile of verified) {
+    const docs = await db
+      .select()
+      .from(traderDocumentsTable)
+      .where(eq(traderDocumentsTable.userId, profile.userId));
+    const evaluation = evaluateDocumentsComplete(docs);
+    if (!evaluation.hasExpiredRequired) continue;
+
+    await db
+      .update(traderProfilesTable)
+      .set({
+        verificationStatus: TRADER_STATUS.EXPIRED_DOCUMENTS,
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(traderProfilesTable.userId, profile.userId));
+
+    await logAudit({
+      userId: profile.userId,
+      action: "DOCUMENT_EXPIRED",
+      details: {
+        source: "scheduler",
+        expiredTypes: evaluation.byType.filter((b) => b.required && b.expired).map((b) => b.type),
+      },
+    });
+    flipped += 1;
+  }
+
+  return { checked: verified.length, flipped };
+}
+
+let scheduledTimer: NodeJS.Timeout | null = null;
+
+export function startScheduler(): void {
+  if (scheduledTimer) return;
+  // Run shortly after boot so we catch anything that expired while down,
+  // then every hour. Keep it simple — no external job runner.
+  const initialDelayMs = 30 * 1000;
+  setTimeout(async () => {
+    try {
+      const result = await reconcileExpiredDocuments();
+      logger.info({ ...result }, "Expired-documents sweep (initial)");
+    } catch (err) {
+      logger.error({ err }, "Expired-documents sweep (initial) failed");
+    }
+  }, initialDelayMs);
+
+  scheduledTimer = setInterval(async () => {
+    try {
+      const result = await reconcileExpiredDocuments();
+      logger.info({ ...result }, "Expired-documents sweep");
+    } catch (err) {
+      logger.error({ err }, "Expired-documents sweep failed");
+    }
+  }, HOUR_MS);
+  // Don't keep the event loop alive just for this timer.
+  scheduledTimer.unref?.();
+}
+
+export function stopScheduler(): void {
+  if (scheduledTimer) {
+    clearInterval(scheduledTimer);
+    scheduledTimer = null;
+  }
+}
