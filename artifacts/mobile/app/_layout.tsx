@@ -109,8 +109,9 @@ function RootLayoutNav() {
       <Stack.Screen name="safety-advice" options={{ title: "Customer Safety Advice" }} />
       <Stack.Screen name="code-of-conduct" options={{ title: "Trader Code of Conduct" }} />
       <Stack.Screen name="how-verification-works" options={{ title: "How Verification Works" }} />
-      <Stack.Screen name="admin/index" options={{ title: "Admin · Trader Review" }} />
-      <Stack.Screen name="admin/[traderId]" options={{ title: "Trader Review" }} />
+      <Stack.Screen name="admin/index" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/[traderId]" options={{ headerShown: false }} />
+      <Stack.Screen name="admin/stats" options={{ headerShown: false }} />
     </Stack>
   );
 }
