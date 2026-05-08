@@ -44,7 +44,7 @@ export default function LoginScreen() {
     <KeyboardAwareScrollViewCompat
       style={styles.container}
       contentContainerStyle={{
-        paddingTop: insets.top + 24,
+        paddingTop: 24,
         paddingBottom: insets.bottom + 24,
         paddingHorizontal: 24,
       }}

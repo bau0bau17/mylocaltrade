@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import type { FeatherIconName } from '@/types/feather-icons';
 import {
   useGetConversationsUnreadCount,
@@ -87,15 +88,12 @@ export default function AccountScreen() {
 
   if (!isAuthenticated) {
     return (
-      <ScrollView
-        style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 100 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>Account</Text>
-        </View>
-
+      <View style={styles.container}>
+        <ScreenHeader variant="tab" title="Account" />
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 100 }}
+          showsVerticalScrollIndicator={false}
+        >
         <View style={styles.unauthContent}>
           <Image
             source={require('@/assets/images/icon.png')}
@@ -135,20 +133,18 @@ export default function AccountScreen() {
         <View style={[styles.group, { marginHorizontal: 16 }]}>
           <MenuRow icon="life-buoy" label="Legal & Support" onPress={() => router.push('/legal-support')} />
         </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <ScrollView
-      style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Account</Text>
-      </View>
-
+    <View style={styles.container}>
+      <ScreenHeader variant="tab" title="Account" />
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+        showsVerticalScrollIndicator={false}
+      >
       <View style={styles.profileCard}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
@@ -319,7 +315,8 @@ export default function AccountScreen() {
           <Text style={styles.logoutText}>Log Out</Text>
         </Pressable>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

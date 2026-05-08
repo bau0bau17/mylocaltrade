@@ -156,17 +156,9 @@ export default function TraderOnboardingDashboard() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 80, paddingHorizontal: 20 }}
+      contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 80, paddingHorizontal: 20 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStatus(); }} tintColor={Colors.light.primary} />}
     >
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={20} color={Colors.light.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Trader Onboarding</Text>
-        <View style={{ width: 36 }} />
-      </View>
 
       {/* Greeting card */}
       <View style={styles.greetingCard}>

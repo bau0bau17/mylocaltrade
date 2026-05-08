@@ -52,18 +52,12 @@ export default function LeadsScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>My Leads</Text>
-          {newCount > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{newCount > 99 ? '99+' : `${newCount} new`}</Text>
-            </View>
-          ) : null}
+    <View style={styles.container}>
+      {newCount > 0 ? (
+        <View style={styles.header}>
+          <Text style={styles.subtitle}>{newCount > 99 ? '99+' : `${newCount} new`} enquiries to review</Text>
         </View>
-        <Text style={styles.subtitle}>Manage your customer enquiries</Text>
-      </View>
+      ) : null}
 
       <FlatList
         data={data?.enquiries || []}
