@@ -36,8 +36,13 @@ export interface CompaniesHouseProfile {
 }
 
 function chAuthHeader(): string {
-  const key = process.env.COMPANIES_HOUSE_API_KEY;
-  if (!key) throw new Error("COMPANIES_HOUSE_API_KEY not configured");
+  const raw = process.env.COMPANIES_HOUSE_API_KEY;
+  if (!raw) throw new Error("COMPANIES_HOUSE_API_KEY not configured");
+  // Defensively strip any whitespace / newlines that may have been pasted
+  // into the secret — Companies House rejects the Basic header otherwise
+  // with "Invalid Authorization header".
+  const key = raw.replace(/\s+/g, "");
+  if (!key) throw new Error("COMPANIES_HOUSE_API_KEY is empty after trim");
   return "Basic " + Buffer.from(`${key}:`).toString("base64");
 }
 
