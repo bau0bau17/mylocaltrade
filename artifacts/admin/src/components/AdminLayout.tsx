@@ -14,6 +14,7 @@ import {
   Star,
   LogOut,
   Shield,
+  ShieldAlert,
 } from "lucide-react";
 
 interface NavItem {
@@ -29,6 +30,7 @@ const NAV: NavItem[] = [
   { href: "/audit-report", label: "Audit report", icon: ClipboardList },
   { href: "/enquiries", label: "Enquiries", icon: Mail },
   { href: "/reviews", label: "Reviews", icon: Star },
+  { href: "/conversation-reports", label: "Conversation reports", icon: ShieldAlert },
   { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
 ];
 

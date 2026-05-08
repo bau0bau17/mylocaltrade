@@ -45,6 +45,8 @@ function RootLayoutNav() {
       <Stack.Screen name="trader-dashboard/gallery" options={{ title: "Gallery" }} />
       <Stack.Screen name="saved-traders" options={{ title: "Saved Traders" }} />
       <Stack.Screen name="my-enquiries" options={{ title: "My Enquiries" }} />
+      <Stack.Screen name="messages/index" options={{ title: "Messages" }} />
+      <Stack.Screen name="messages/[id]" options={{ title: "Conversation" }} />
       <Stack.Screen name="about" options={{ title: "About Us" }} />
       <Stack.Screen name="privacy" options={{ title: "Privacy Policy" }} />
       <Stack.Screen name="terms" options={{ title: "Terms & Conditions" }} />

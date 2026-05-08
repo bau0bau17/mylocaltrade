@@ -953,3 +953,220 @@ export const GetCategoriesResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary List my conversations (customer or trader)
+ */
+export const GetConversationsResponse = zod.object({
+  conversations: zod.array(
+    zod.object({
+      id: zod.number(),
+      customerId: zod.number(),
+      customerName: zod.string(),
+      traderProfileId: zod.number(),
+      traderBusinessName: zod.string(),
+      traderVerified: zod.boolean(),
+      enquiryId: zod.number().nullish(),
+      serviceRequired: zod.string().nullish(),
+      postcode: zod.string().nullish(),
+      status: zod.enum([
+        "AWAITING_TRADER_REPLY",
+        "AWAITING_CUSTOMER_REPLY",
+        "CLOSED",
+        "BLOCKED",
+        "REPORTED",
+      ]),
+      traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
+      unreadCount: zod.number(),
+      lastMessageAt: zod.date(),
+      lastMessagePreview: zod.string().nullish(),
+      closedAt: zod.date().nullish(),
+      closedByRole: zod.string().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * @summary Get a conversation with all messages (marks as read)
+ */
+export const GetConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetConversationResponse = zod.object({
+  conversation: zod.object({
+    id: zod.number(),
+    customerId: zod.number(),
+    customerName: zod.string(),
+    traderProfileId: zod.number(),
+    traderBusinessName: zod.string(),
+    traderVerified: zod.boolean(),
+    enquiryId: zod.number().nullish(),
+    serviceRequired: zod.string().nullish(),
+    postcode: zod.string().nullish(),
+    status: zod.enum([
+      "AWAITING_TRADER_REPLY",
+      "AWAITING_CUSTOMER_REPLY",
+      "CLOSED",
+      "BLOCKED",
+      "REPORTED",
+    ]),
+    traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
+    unreadCount: zod.number(),
+    lastMessageAt: zod.date(),
+    lastMessagePreview: zod.string().nullish(),
+    closedAt: zod.date().nullish(),
+    closedByRole: zod.string().nullish(),
+    createdAt: zod.date(),
+  }),
+  messages: zod.array(
+    zod.object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      senderUserId: zod.number().nullish(),
+      senderRole: zod.enum(["customer", "trader", "admin", "system"]),
+      body: zod.string(),
+      systemMessage: zod.boolean(),
+      readAt: zod.date().nullish(),
+      editedAt: zod.date().nullish(),
+      deletedAt: zod.date().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Send a message in a conversation
+ */
+export const SendConversationMessageParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const sendConversationMessageBodyBodyMax = 4000;
+
+export const SendConversationMessageBody = zod.object({
+  body: zod.string().min(1).max(sendConversationMessageBodyBodyMax),
+});
+
+/**
+ * @summary Close a conversation
+ */
+export const CloseConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CloseConversationResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Trader updates job status (NEW/CONTACTED/QUOTED/COMPLETED)
+ */
+export const UpdateConversationTraderStatusParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateConversationTraderStatusBody = zod.object({
+  traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
+});
+
+export const UpdateConversationTraderStatusResponse = zod.object({
+  ok: zod.boolean(),
+  traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
+});
+
+/**
+ * @summary Report a conversation for moderation
+ */
+export const ReportConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const reportConversationBodyReasonMin = 5;
+export const reportConversationBodyReasonMax = 2000;
+
+export const ReportConversationBody = zod.object({
+  reason: zod
+    .string()
+    .min(reportConversationBodyReasonMin)
+    .max(reportConversationBodyReasonMax),
+});
+
+/**
+ * @summary Admin — list conversation reports
+ */
+export const GetAdminConversationReportsQueryParams = zod.object({
+  status: zod.enum(["OPEN", "RESOLVED", "DISMISSED"]).optional(),
+});
+
+export const GetAdminConversationReportsResponse = zod.object({
+  reports: zod.array(
+    zod.object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      reportedByUserId: zod.number(),
+      reportedByRole: zod.string(),
+      reason: zod.string(),
+      status: zod.enum(["OPEN", "RESOLVED", "DISMISSED"]),
+      resolutionNotes: zod.string().nullish(),
+      resolvedAt: zod.date().nullish(),
+      createdAt: zod.date(),
+      traderBusinessName: zod.string(),
+      customerFullName: zod.string(),
+      conversationStatus: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Admin — view conversation (messages only if reported)
+ */
+export const GetAdminConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetAdminConversationResponse = zod.object({
+  conversation: zod.object({
+    id: zod.number(),
+    customerId: zod.number(),
+    customerName: zod.string(),
+    customerEmail: zod.string(),
+    traderProfileId: zod.number(),
+    traderBusinessName: zod.string(),
+    status: zod.string(),
+    traderStatus: zod.string(),
+    createdAt: zod.date(),
+    lastMessageAt: zod.date(),
+  }),
+  messagesAccessible: zod.boolean(),
+  messages: zod.array(
+    zod.object({
+      id: zod.number(),
+      senderUserId: zod.number().nullish(),
+      senderRole: zod.string(),
+      body: zod.string(),
+      systemMessage: zod.boolean(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Admin — resolve, dismiss or block a reported conversation
+ */
+export const ResolveAdminConversationReportParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ResolveAdminConversationReportBody = zod.object({
+  action: zod.enum(["resolve", "dismiss", "block"]),
+  notes: zod.string().optional(),
+});
+
+export const ResolveAdminConversationReportResponse = zod.object({
+  ok: zod.boolean(),
+  status: zod.string(),
+  action: zod.string(),
+});

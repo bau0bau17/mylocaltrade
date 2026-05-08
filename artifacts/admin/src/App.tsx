@@ -13,6 +13,7 @@ import AuditReportPage from "@/pages/AuditReport";
 import ExpiringDocs from "@/pages/ExpiringDocs";
 import EnquiriesPage from "@/pages/Enquiries";
 import ReviewsPage from "@/pages/Reviews";
+import ConversationReportsPage from "@/pages/ConversationReports";
 import Subscriptions from "@/pages/Subscriptions";
 import NotFound from "@/pages/not-found";
 
@@ -32,6 +33,7 @@ function ProtectedRoutes() {
           <Route path="/expiring-documents" component={ExpiringDocs} />
           <Route path="/enquiries" component={EnquiriesPage} />
           <Route path="/reviews" component={ReviewsPage} />
+          <Route path="/conversation-reports" component={ConversationReportsPage} />
           <Route path="/subscriptions" component={Subscriptions} />
           <Route component={NotFound} />
         </Switch>

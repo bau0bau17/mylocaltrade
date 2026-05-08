@@ -28,6 +28,8 @@ tags:
   - name: reviews
   - name: categories
     description: Trade categories
+  - name: conversations
+    description: Customer-trader conversations and messages
 paths:
   /healthz:
     get:
@@ -1041,6 +1043,256 @@ paths:
               schema:
                 $ref: "#/components/schemas/CategoriesResponse"
 
+  /conversations:
+    get:
+      operationId: getConversations
+      tags: [conversations]
+      summary: List my conversations (customer or trader)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Conversations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationListResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get a conversation with all messages (marks as read)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationDetailResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations/{id}/messages:
+    post:
+      operationId: sendConversationMessage
+      tags: [conversations]
+      summary: Send a message in a conversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationMessage"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conversation closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /conversations/{id}/close:
+    post:
+      operationId: closeConversation
+      tags: [conversations]
+      summary: Close a conversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /conversations/{id}/trader-status:
+    patch:
+      operationId: updateConversationTraderStatus
+      tags: [conversations]
+      summary: Trader updates job status (NEW/CONTACTED/QUOTED/COMPLETED)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTraderStatusRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateTraderStatusResponse"
+
+  /conversations/{id}/report:
+    post:
+      operationId: reportConversation
+      tags: [conversations]
+      summary: Report a conversation for moderation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportConversationRequest"
+      responses:
+        "201":
+          description: Report submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /admin/conversation-reports:
+    get:
+      operationId: getAdminConversationReports
+      tags: [conversations]
+      summary: Admin — list conversation reports
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, RESOLVED, DISMISSED]
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminConversationReportListResponse"
+
+  /admin/conversations/{id}:
+    get:
+      operationId: getAdminConversation
+      tags: [conversations]
+      summary: Admin — view conversation (messages only if reported)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Admin conversation view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminConversationResponse"
+
+  /admin/conversation-reports/{id}/resolve:
+    post:
+      operationId: resolveAdminConversationReport
+      tags: [conversations]
+      summary: Admin — resolve, dismiss or block a reported conversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveReportRequest"
+      responses:
+        "200":
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolveReportResponse"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1690,6 +1942,303 @@ components:
       required:
         - enquiries
         - total
+
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required: [ok]
+
+    ConversationSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: integer
+        customerName:
+          type: string
+        traderProfileId:
+          type: integer
+        traderBusinessName:
+          type: string
+        traderVerified:
+          type: boolean
+        enquiryId:
+          type: integer
+          nullable: true
+        serviceRequired:
+          type: string
+          nullable: true
+        postcode:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [AWAITING_TRADER_REPLY, AWAITING_CUSTOMER_REPLY, CLOSED, BLOCKED, REPORTED]
+        traderStatus:
+          type: string
+          enum: [NEW, CONTACTED, QUOTED, COMPLETED]
+        unreadCount:
+          type: integer
+        lastMessageAt:
+          type: string
+          format: date-time
+        lastMessagePreview:
+          type: string
+          nullable: true
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+        closedByRole:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - customerId
+        - customerName
+        - traderProfileId
+        - traderBusinessName
+        - traderVerified
+        - status
+        - traderStatus
+        - unreadCount
+        - lastMessageAt
+        - createdAt
+
+    ConversationListResponse:
+      type: object
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationSummary"
+        total:
+          type: integer
+      required: [conversations, total]
+
+    ConversationMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        senderUserId:
+          type: integer
+          nullable: true
+        senderRole:
+          type: string
+          enum: [customer, trader, admin, system]
+        body:
+          type: string
+        systemMessage:
+          type: boolean
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        editedAt:
+          type: string
+          format: date-time
+          nullable: true
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, conversationId, senderRole, body, systemMessage, createdAt]
+
+    ConversationDetailResponse:
+      type: object
+      properties:
+        conversation:
+          $ref: "#/components/schemas/ConversationSummary"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationMessage"
+      required: [conversation, messages]
+
+    SendMessageRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required: [body]
+
+    UpdateTraderStatusRequest:
+      type: object
+      properties:
+        traderStatus:
+          type: string
+          enum: [NEW, CONTACTED, QUOTED, COMPLETED]
+      required: [traderStatus]
+
+    UpdateTraderStatusResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        traderStatus:
+          type: string
+          enum: [NEW, CONTACTED, QUOTED, COMPLETED]
+      required: [ok, traderStatus]
+
+    ReportConversationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+      required: [reason]
+
+    AdminConversationReport:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        reportedByUserId:
+          type: integer
+        reportedByRole:
+          type: string
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [OPEN, RESOLVED, DISMISSED]
+        resolutionNotes:
+          type: string
+          nullable: true
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        traderBusinessName:
+          type: string
+        customerFullName:
+          type: string
+        conversationStatus:
+          type: string
+      required:
+        - id
+        - conversationId
+        - reportedByUserId
+        - reportedByRole
+        - reason
+        - status
+        - createdAt
+        - traderBusinessName
+        - customerFullName
+        - conversationStatus
+
+    AdminConversationReportListResponse:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminConversationReport"
+      required: [reports]
+
+    AdminConversationResponse:
+      type: object
+      properties:
+        conversation:
+          type: object
+          properties:
+            id:
+              type: integer
+            customerId:
+              type: integer
+            customerName:
+              type: string
+            customerEmail:
+              type: string
+            traderProfileId:
+              type: integer
+            traderBusinessName:
+              type: string
+            status:
+              type: string
+            traderStatus:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+            lastMessageAt:
+              type: string
+              format: date-time
+          required:
+            - id
+            - customerId
+            - customerName
+            - customerEmail
+            - traderProfileId
+            - traderBusinessName
+            - status
+            - traderStatus
+            - createdAt
+            - lastMessageAt
+        messagesAccessible:
+          type: boolean
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              senderUserId:
+                type: integer
+                nullable: true
+              senderRole:
+                type: string
+              body:
+                type: string
+              systemMessage:
+                type: boolean
+              createdAt:
+                type: string
+                format: date-time
+            required: [id, senderRole, body, systemMessage, createdAt]
+      required: [conversation, messagesAccessible, messages]
+
+    ResolveReportRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [resolve, dismiss, block]
+        notes:
+          type: string
+      required: [action]
+
+    ResolveReportResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+        action:
+          type: string
+      required: [ok, status, action]
 
     CategoriesResponse:
       type: object

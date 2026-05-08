@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { enquiriesTable, usersTable, traderProfilesTable } from "@workspace/db/schema";
+import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable } from "@workspace/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
@@ -37,18 +37,49 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       .where(eq(usersTable.id, userId))
       .limit(1);
 
-    const [enquiry] = await db
-      .insert(enquiriesTable)
-      .values({
-        traderId,
-        customerId: userId,
-        message,
-        serviceRequired,
-        preferredDate: preferredDate || null,
-        phone: phone || null,
-        status: "pending",
-      })
-      .returning();
+    // Phase 17: every enquiry from a logged-in customer also opens a
+    // conversation thread, atomically. The original enquiry message becomes
+    // the first message in that thread so customer + trader can chat.
+    const previewBody =
+      `Service: ${serviceRequired}\n\n${message}` +
+      (preferredDate ? `\n\nPreferred date: ${preferredDate}` : "");
+    const { enquiry, conversationId } = await db.transaction(async (tx) => {
+      const [enq] = await tx
+        .insert(enquiriesTable)
+        .values({
+          traderId,
+          customerId: userId,
+          message,
+          serviceRequired,
+          preferredDate: preferredDate || null,
+          phone: phone || null,
+          status: "pending",
+        })
+        .returning();
+      const [conv] = await tx
+        .insert(conversationsTable)
+        .values({
+          customerId: userId,
+          traderUserId: trader.userId,
+          traderProfileId: trader.id,
+          enquiryId: enq.id,
+          serviceRequired,
+          status: "AWAITING_TRADER_REPLY",
+          traderStatus: "NEW",
+          customerUnreadCount: 0,
+          traderUnreadCount: 1,
+          lastMessageAt: new Date(),
+          lastMessagePreview: previewBody.slice(0, 200),
+        })
+        .returning({ id: conversationsTable.id });
+      await tx.insert(messagesTable).values({
+        conversationId: conv.id,
+        senderUserId: userId,
+        senderRole: "customer",
+        body: previewBody,
+      });
+      return { enquiry: enq, conversationId: conv.id };
+    });
 
     // Notify the trader — fire-and-forget so the API response is never
     // blocked on SMTP latency. Failures are logged, never surfaced.
@@ -87,6 +118,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       preferredDate: enquiry.preferredDate,
       phone: enquiry.phone,
       status: enquiry.status,
+      conversationId,
       createdAt: enquiry.createdAt.toISOString(),
     });
   } catch (error: unknown) {
