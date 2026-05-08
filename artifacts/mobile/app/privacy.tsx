@@ -1,13 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
-const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
-
 export default function PrivacyScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   return (
     <ScrollView 
@@ -136,7 +136,7 @@ export default function PrivacyScreen() {
         </View>
         <Pressable
           style={styles.contactBtn}
-          onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=MyLocalTrade%20Data%20Rights%20Request`)}
+          onPress={() => router.push('/contact-support?subject=Data%20Rights%20Request')}
         >
           <Feather name="mail" size={16} color={Colors.light.primary} />
           <Text style={styles.contactBtnText}>Contact Us</Text>

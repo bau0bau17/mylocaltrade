@@ -4,7 +4,7 @@ import {
   ActivityIndicator, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,14 +13,24 @@ import { getApiUrl } from '@/lib/api-url';
 export default function ContactSupportScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const params = useLocalSearchParams<{ subject?: string }>();
+  const initialSubject = typeof params.subject === 'string' ? params.subject : '';
 
   const [form, setForm] = useState({
     name: user?.fullName ?? '',
     email: user?.email ?? '',
-    subject: '',
+    subject: initialSubject,
     message: '',
   });
+
+  useEffect(() => {
+    setForm(p => ({
+      ...p,
+      name: p.name || (user?.fullName ?? ''),
+      email: p.email || (user?.email ?? ''),
+    }));
+  }, [user?.fullName, user?.email]);
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [rateLimited, setRateLimited] = useState<{ nextAllowedAt: string } | null>(null);
@@ -95,7 +105,31 @@ export default function ContactSupportScreen() {
         <Text style={styles.title}>Contact Support</Text>
       </View>
 
-      {rateLimited ? (
+      {isAuthLoading ? (
+        <View style={styles.successContainer}>
+          <ActivityIndicator color={Colors.light.primary} />
+        </View>
+      ) : !isAuthenticated ? (
+        <ScrollView
+          contentContainerStyle={[styles.successContainer, { paddingBottom: insets.bottom + 32 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.successIcon, { backgroundColor: Colors.light.primaryMuted }]}>
+            <Feather name="lock" size={48} color={Colors.light.primary} />
+          </View>
+          <Text style={styles.successTitle}>Sign In Required</Text>
+          <Text style={styles.successSub}>
+            Please sign in to contact our support team. This helps us verify your
+            identity and respond to you faster.
+          </Text>
+          <Pressable
+            style={styles.doneBtn}
+            onPress={() => router.push('/auth/login')}
+          >
+            <Text style={styles.doneBtnText}>Sign In</Text>
+          </Pressable>
+        </ScrollView>
+      ) : rateLimited ? (
         <ScrollView
           contentContainerStyle={[styles.successContainer, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
