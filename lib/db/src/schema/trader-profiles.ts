@@ -67,6 +67,9 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   // --- Lead reminder preferences (Phase 22) ---
   // null = use default (60 min); 0 = off; otherwise delay in minutes (e.g. 30, 60, 180).
   leadReminderMinutes: integer("lead_reminder_minutes"),
+  // Per-channel opt-out for the lead-reminder email (push toggle is separate).
+  // Flipped off by the one-click unsubscribe link in the reminder email itself.
+  leadReminderEmailEnabled: boolean("lead_reminder_email_enabled").notNull().default(true),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
