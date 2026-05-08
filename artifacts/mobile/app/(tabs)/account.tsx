@@ -160,12 +160,12 @@ export default function AccountScreen() {
           <Text style={styles.profileEmail}>{user?.email}</Text>
           <View style={[styles.roleBadge, isTrader && styles.traderBadge]}>
             <Feather
-              name={isTrader ? 'briefcase' : 'user'}
+              name={isAdmin ? 'shield' : isTrader ? 'briefcase' : 'user'}
               size={10}
               color={isTrader ? Colors.light.featured : Colors.light.primary}
             />
             <Text style={[styles.roleText, isTrader && styles.traderRoleText]}>
-              {isTrader ? 'Trader Account' : 'Customer Account'}
+              {isAdmin ? 'Administrator' : isTrader ? 'Trader Account' : 'Customer Account'}
             </Text>
           </View>
         </View>
