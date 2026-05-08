@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { ShieldAlert, MessageSquare, Eye, Check, X, Ban, AlertTriangle } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
+import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 
 interface AdminConversationReport {
   id: number;
@@ -319,6 +320,9 @@ function ResolveActions({ reportId }: { reportId: number }) {
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
 
+  const violation = useMemo(() => detectContactInfo(notes), [notes]);
+  const violationText = violation ? contactViolationMessage(violation) : null;
+
   const mutation = useMutation({
     mutationFn: (action: "resolve" | "dismiss" | "block") =>
       api<{ ok: boolean }>(`/api/admin/conversation-reports/${reportId}/resolve`, {
@@ -332,6 +336,8 @@ function ResolveActions({ reportId }: { reportId: number }) {
     },
   });
 
+  const blocked = !!violation || mutation.isPending;
+
   return (
     <div className="flex flex-col gap-2 w-full">
       <div className="flex gap-2 flex-wrap">
@@ -339,7 +345,7 @@ function ResolveActions({ reportId }: { reportId: number }) {
           size="sm"
           variant="default"
           onClick={() => mutation.mutate("resolve")}
-          disabled={mutation.isPending}
+          disabled={blocked}
           data-testid={`btn-resolve-${reportId}`}
         >
           <Check className="w-4 h-4 mr-1" /> Resolve
@@ -348,7 +354,7 @@ function ResolveActions({ reportId }: { reportId: number }) {
           size="sm"
           variant="outline"
           onClick={() => mutation.mutate("dismiss")}
-          disabled={mutation.isPending}
+          disabled={blocked}
           data-testid={`btn-dismiss-${reportId}`}
         >
           <X className="w-4 h-4 mr-1" /> Dismiss
@@ -357,7 +363,7 @@ function ResolveActions({ reportId }: { reportId: number }) {
           size="sm"
           variant="destructive"
           onClick={() => mutation.mutate("block")}
-          disabled={mutation.isPending}
+          disabled={blocked}
           data-testid={`btn-block-${reportId}`}
         >
           <Ban className="w-4 h-4 mr-1" /> Block conversation
@@ -372,7 +378,15 @@ function ResolveActions({ reportId }: { reportId: number }) {
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Optional resolution notes (audit log)"
           rows={2}
+          className={violationText ? "border-destructive focus-visible:ring-destructive" : undefined}
+          data-testid={`notes-${reportId}`}
         />
+      ) : null}
+      {violationText ? (
+        <Alert variant="destructive" data-testid={`violation-${reportId}`}>
+          <AlertTriangle className="w-4 h-4" />
+          <AlertDescription>{violationText}</AlertDescription>
+        </Alert>
       ) : null}
       {mutation.error ? (
         <Alert variant="destructive">
