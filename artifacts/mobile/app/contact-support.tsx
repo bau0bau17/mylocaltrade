@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Pressable,
-  ActivityIndicator, Alert, ScrollView,
+  ActivityIndicator, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -24,14 +24,20 @@ export default function ContactSupportScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [rateLimited, setRateLimited] = useState<{ nextAllowedAt: string } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSend = async () => {
-    if (!form.name || !form.email || !form.subject || !form.message) {
-      Alert.alert('Missing fields', 'Please fill in all fields before sending.');
+    setErrorMsg(null);
+    if (!form.name.trim() || !form.email.trim() || !form.subject.trim() || !form.message.trim()) {
+      setErrorMsg('Please fill in all fields before sending.');
       return;
     }
-    if (form.message.length < 10) {
-      Alert.alert('Message too short', 'Please write a more detailed message.');
+    if (!form.email.includes('@')) {
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
+    if (form.message.trim().length < 10) {
+      setErrorMsg('Please write a more detailed message (at least 10 characters).');
       return;
     }
 
@@ -42,16 +48,16 @@ export default function ContactSupportScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.status === 429 && data?.code === 'CONTACT_RATE_LIMIT') {
         setRateLimited({ nextAllowedAt: data.nextAllowedAt });
         return;
       }
-      if (!res.ok) throw new Error(data.error || 'Failed to send');
+      if (!res.ok) throw new Error(data.error || `Failed to send (HTTP ${res.status})`);
       setSent(true);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Could not send message';
-      Alert.alert('Error', msg);
+      const msg = err instanceof Error ? err.message : 'Could not send message. Check your connection and try again.';
+      setErrorMsg(msg);
     } finally {
       setIsLoading(false);
     }
@@ -197,6 +203,13 @@ export default function ContactSupportScreen() {
               <Text style={styles.charCount}>{form.message.length} / 2000</Text>
             </View>
 
+            {errorMsg ? (
+              <View style={styles.errorBox}>
+                <Feather name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.errorText}>{errorMsg}</Text>
+              </View>
+            ) : null}
+
             <Pressable
               style={[styles.sendBtn, isLoading && styles.sendBtnDisabled]}
               onPress={handleSend}
@@ -326,6 +339,24 @@ const styles = StyleSheet.create({
     color: Colors.light.textMuted,
     textAlign: 'right',
     marginRight: 4,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 4,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#991B1B',
+    lineHeight: 19,
+    fontWeight: '500',
   },
   sendBtn: {
     flexDirection: 'row',
