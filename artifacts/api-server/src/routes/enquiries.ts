@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable } from "@workspace/db/schema";
-import { eq, desc, and, isNull, isNotNull, sql } from "drizzle-orm";
+import { eq, desc, and, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
@@ -205,6 +205,145 @@ router.get("/enquiries/new-count", authMiddleware, async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, "Get new lead count failed");
     res.status(500).json({ error: "Failed to get new lead count" });
+  }
+});
+
+// GET /api/enquiries/compare — customer's enquiries grouped by job (serviceRequired)
+// so they can compare quotes/responses from multiple traders side by side.
+router.get("/enquiries/compare", authMiddleware, async (req, res) => {
+  try {
+    const { userId, userRole } = req as AuthenticatedRequest;
+    if (userRole !== "customer") {
+      res.status(403).json({ error: "Only customers can compare enquiries" });
+      return;
+    }
+
+    const rows = await db
+      .select({
+        enquiryId: enquiriesTable.id,
+        serviceRequired: enquiriesTable.serviceRequired,
+        enquiryStatus: enquiriesTable.status,
+        enquiryCreatedAt: enquiriesTable.createdAt,
+        traderProfileId: traderProfilesTable.id,
+        traderUserId: traderProfilesTable.userId,
+        traderBusinessName: traderProfilesTable.businessName,
+        traderTown: traderProfilesTable.town,
+        traderRating: traderProfilesTable.rating,
+        traderReviewCount: traderProfilesTable.reviewCount,
+        conversationId: conversationsTable.id,
+        traderStatus: conversationsTable.traderStatus,
+        conversationStatus: conversationsTable.status,
+        lastMessageAt: conversationsTable.lastMessageAt,
+        lastMessagePreview: conversationsTable.lastMessagePreview,
+      })
+      .from(enquiriesTable)
+      .innerJoin(traderProfilesTable, eq(enquiriesTable.traderId, traderProfilesTable.id))
+      .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
+      .where(eq(enquiriesTable.customerId, userId))
+      .orderBy(desc(enquiriesTable.createdAt));
+
+    // Pull the latest trader message per conversation so the customer sees the
+    // actual response (the conversation preview can be the customer's own
+    // message if the trader hasn't replied).
+    const conversationIds = rows.map((r) => r.conversationId).filter((c): c is number => c != null);
+    const latestTraderByConv = new Map<
+      number,
+      { body: string; createdAt: Date }
+    >();
+    if (conversationIds.length > 0) {
+      const traderMessages = await db
+        .select({
+          conversationId: messagesTable.conversationId,
+          body: messagesTable.body,
+          createdAt: messagesTable.createdAt,
+        })
+        .from(messagesTable)
+        .where(
+          and(
+            eq(messagesTable.senderRole, "trader"),
+            inArray(messagesTable.conversationId, conversationIds),
+          ),
+        )
+        .orderBy(desc(messagesTable.createdAt));
+      for (const m of traderMessages) {
+        if (m.conversationId == null) continue;
+        if (!latestTraderByConv.has(m.conversationId)) {
+          latestTraderByConv.set(m.conversationId, {
+            body: m.body,
+            createdAt: m.createdAt,
+          });
+        }
+      }
+    }
+
+    type Offer = {
+      enquiryId: number;
+      enquiryStatus: string;
+      enquiryCreatedAt: string;
+      traderProfileId: number;
+      traderUserId: number;
+      traderBusinessName: string;
+      traderTown: string | null;
+      traderRating: number | null;
+      traderReviewCount: number;
+      conversationId: number | null;
+      traderStatus: string | null;
+      conversationStatus: string | null;
+      lastMessageAt: string | null;
+      lastTraderReplyPreview: string | null;
+      lastTraderReplyAt: string | null;
+      hasTraderReply: boolean;
+    };
+
+    const groups = new Map<string, { serviceRequired: string; offers: Offer[] }>();
+    for (const r of rows) {
+      const key = r.serviceRequired.trim().toLowerCase();
+      if (!groups.has(key)) {
+        groups.set(key, { serviceRequired: r.serviceRequired, offers: [] });
+      }
+      const traderReply = r.conversationId != null ? latestTraderByConv.get(r.conversationId) : undefined;
+      groups.get(key)!.offers.push({
+        enquiryId: r.enquiryId,
+        enquiryStatus: r.enquiryStatus,
+        enquiryCreatedAt: r.enquiryCreatedAt.toISOString(),
+        traderProfileId: r.traderProfileId,
+        traderUserId: r.traderUserId,
+        traderBusinessName: r.traderBusinessName,
+        traderTown: r.traderTown ?? null,
+        traderRating: r.traderRating != null ? Number(r.traderRating) : null,
+        traderReviewCount: r.traderReviewCount ?? 0,
+        conversationId: r.conversationId ?? null,
+        traderStatus: r.traderStatus ?? null,
+        conversationStatus: r.conversationStatus ?? null,
+        lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
+        lastTraderReplyPreview: traderReply?.body.slice(0, 240) ?? null,
+        lastTraderReplyAt: traderReply ? traderReply.createdAt.toISOString() : null,
+        hasTraderReply: !!traderReply,
+      });
+    }
+
+    const result = Array.from(groups.values())
+      // Newest job first (by most recent enquiry in the group)
+      .map((g) => ({
+        ...g,
+        offers: g.offers.sort((a, b) => {
+          // Replies first, then by recency
+          if (a.hasTraderReply !== b.hasTraderReply) return a.hasTraderReply ? -1 : 1;
+          const at = a.lastTraderReplyAt ?? a.enquiryCreatedAt;
+          const bt = b.lastTraderReplyAt ?? b.enquiryCreatedAt;
+          return bt.localeCompare(at);
+        }),
+      }))
+      .sort((a, b) => {
+        const aLatest = a.offers[0]?.enquiryCreatedAt ?? "";
+        const bLatest = b.offers[0]?.enquiryCreatedAt ?? "";
+        return bLatest.localeCompare(aLatest);
+      });
+
+    res.json({ groups: result, totalGroups: result.length });
+  } catch (error) {
+    req.log.error({ err: error }, "Compare enquiries failed");
+    res.status(500).json({ error: "Failed to load comparison" });
   }
 });
 
