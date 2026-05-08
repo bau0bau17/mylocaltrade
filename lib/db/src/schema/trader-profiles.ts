@@ -56,6 +56,12 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   termsAcceptedAt: timestamp("terms_accepted_at"),
   privacyAcceptedAt: timestamp("privacy_accepted_at"),
 
+  // --- Phone verification (Phase 2) ---
+  phoneOtpHash: varchar("phone_otp_hash", { length: 255 }),
+  phoneOtpExpiresAt: timestamp("phone_otp_expires_at"),
+  phoneOtpAttempts: integer("phone_otp_attempts").notNull().default(0),
+  phoneOtpLastSentAt: timestamp("phone_otp_last_sent_at"),
+
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

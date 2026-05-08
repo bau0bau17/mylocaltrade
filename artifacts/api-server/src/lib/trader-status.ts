@@ -81,9 +81,12 @@ export function buildOnboardingChecklist(
     {
       key: "phone",
       label: "Phone verified",
-      state: !emailDone ? "locked" : phoneDone ? "completed" : "pending",
-      description: !emailDone ? "Verify your email first." : undefined,
-      comingSoon: emailDone && !phoneDone, // Phase 2
+      state: !emailDone ? "locked" : phoneDone ? "completed" : "action_required",
+      description: !emailDone
+        ? "Verify your email first."
+        : phoneDone
+          ? undefined
+          : "We'll send you a 6-digit code to confirm your number.",
     },
     {
       key: "business_profile",
