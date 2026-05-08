@@ -427,7 +427,7 @@ router.get("/auth/me", authMiddleware, async (req, res) => {
       res.status(404).json({ error: "User not found" });
       return;
     }
-    if (user.deletedAt || !user.isActive) {
+    if (user.deletedAt) {
       res.status(401).json({ error: "Account is no longer active" });
       return;
     }
