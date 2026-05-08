@@ -139,6 +139,7 @@ export default function AdminIndexScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.filtersScroll}
         contentContainerStyle={styles.filtersRow}
       >
         {STATUS_FILTERS.map((f) => {
@@ -296,6 +297,7 @@ const styles = StyleSheet.create({
   searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 12, paddingHorizontal: 12, height: 40, borderRadius: 12, backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border },
   search: { flex: 1, fontSize: 13, color: Colors.light.text, padding: 0 },
 
+  filtersScroll: { flexGrow: 0, flexShrink: 0 },
   filtersRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
   chip: { paddingHorizontal: 12, height: 30, borderRadius: 14, borderWidth: 1, borderColor: Colors.light.border, backgroundColor: Colors.light.card, alignItems: 'center', justifyContent: 'center' },
   chipActive: { backgroundColor: Colors.light.primary, borderColor: Colors.light.primary },
