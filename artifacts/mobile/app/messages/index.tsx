@@ -30,6 +30,18 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB");
 }
 
+function mutedRemaining(mutedUntil?: string | null): string | null {
+  if (!mutedUntil) return null;
+  const remainingMs = new Date(mutedUntil).getTime() - Date.now();
+  if (remainingMs <= 0) return null;
+  const totalMinutes = Math.round(remainingMs / 60000);
+  if (totalMinutes < 60) return `${totalMinutes}m left`;
+  const hours = Math.round(totalMinutes / 60);
+  if (hours < 24) return `${hours}h left`;
+  const days = Math.round(hours / 24);
+  return `${days}d left`;
+}
+
 const STATUS_LABEL: Record<string, string> = {
   AWAITING_TRADER_REPLY: "Awaiting trader",
   AWAITING_CUSTOMER_REPLY: "Awaiting you",
@@ -108,32 +120,49 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
         renderItem={({ item }) => {
           const otherName = isTrader ? item.customerName : item.traderBusinessName;
           const unread = item.unreadCount > 0;
+          const muted = !!item.muted;
+          const remaining = muted ? mutedRemaining(item.mutedUntil) : null;
+          const muteLabel = muted ? (remaining ? `Muted · ${remaining}` : "Muted") : null;
           return (
             <Pressable
-              style={[styles.row, unread && styles.rowUnread]}
+              style={[styles.row, unread && styles.rowUnread, muted && styles.rowMuted]}
               onPress={() => router.push(`/messages/${item.id}`)}
             >
-              <View style={[styles.avatar, unread && styles.avatarUnread]}>
-                <Text style={styles.avatarText}>
+              <View style={[styles.avatar, unread && styles.avatarUnread, muted && styles.avatarMuted]}>
+                <Text style={[styles.avatarText, muted && styles.mutedDim]}>
                   {otherName?.charAt(0)?.toUpperCase() ?? "?"}
                 </Text>
                 {unread ? (
-                  <View style={styles.badge}>
+                  <View style={[styles.badge, muted && styles.badgeMuted]}>
                     <Text style={styles.badgeText}>{item.unreadCount}</Text>
+                  </View>
+                ) : null}
+                {muted ? (
+                  <View style={styles.bellOverlay}>
+                    <Feather name="bell-off" size={10} color={Colors.light.textSecondary} />
                   </View>
                 ) : null}
               </View>
               <View style={styles.rowBody}>
                 <View style={styles.rowTop}>
                   <Text
-                    style={[styles.rowName, unread && styles.rowNameUnread]}
+                    style={[
+                      styles.rowName,
+                      unread && styles.rowNameUnread,
+                      muted && styles.mutedDim,
+                    ]}
                     numberOfLines={1}
                   >
                     {otherName}
                   </Text>
-                  <Text style={styles.rowTime}>{timeAgo(item.lastMessageAt)}</Text>
+                  <Text style={[styles.rowTime, muted && styles.mutedDim]}>
+                    {timeAgo(item.lastMessageAt)}
+                  </Text>
                 </View>
-                <Text style={styles.rowPreview} numberOfLines={1}>
+                <Text
+                  style={[styles.rowPreview, muted && styles.mutedDim]}
+                  numberOfLines={1}
+                >
                   {item.lastMessagePreview ?? "(no messages yet)"}
                 </Text>
                 <View style={styles.rowFooter}>
@@ -149,10 +178,10 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
                       </Text>
                     </View>
                   ) : null}
-                  {item.muted ? (
+                  {muted ? (
                     <View style={[styles.statusPill, styles.mutedPill]}>
                       <Feather name="bell-off" size={10} color={Colors.light.textSecondary} />
-                      <Text style={[styles.statusText, styles.mutedText]}>Muted</Text>
+                      <Text style={[styles.statusText, styles.mutedText]}>{muteLabel}</Text>
                     </View>
                   ) : null}
                 </View>
@@ -231,6 +260,23 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rowUnread: { borderColor: Colors.light.primary },
+  rowMuted: { backgroundColor: Colors.light.surface, opacity: 0.85 },
+  mutedDim: { color: Colors.light.textMuted },
+  avatarMuted: { backgroundColor: Colors.light.surface },
+  badgeMuted: { backgroundColor: Colors.light.textMuted },
+  bellOverlay: {
+    position: "absolute",
+    bottom: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.light.surface,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   avatar: {
     width: 48,
     height: 48,
