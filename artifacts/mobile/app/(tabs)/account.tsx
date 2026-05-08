@@ -103,6 +103,8 @@ export default function AccountScreen() {
         <>
           <Text style={styles.sectionLabel}>Trader Dashboard</Text>
           <View style={[styles.group, { marginHorizontal: 16 }]}>
+            <MenuRow icon="check-circle" label="Onboarding & Verification" sub="Track your verification progress" onPress={() => router.push('/trader-dashboard')} accent />
+            <View style={styles.separator} />
             <MenuRow icon="user" label="Edit Profile" onPress={() => router.push('/trader-dashboard/edit-profile')} />
             <View style={styles.separator} />
             <MenuRow icon="tool" label="My Services" onPress={() => router.push('/trader-dashboard/services')} />

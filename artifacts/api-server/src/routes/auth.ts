@@ -11,6 +11,9 @@ import {
 import { generateToken, authMiddleware, generatePollToken, verifyPollToken } from "../lib/auth";
 import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
+import { TRADER_STATUS, logAudit, buildOnboardingChecklist, statusMessage, isTraderProfilePublic } from "../lib/trader-status";
+
+const RESEND_COOLDOWN_MS = 60 * 1000;
 
 const router: IRouter = Router();
 
@@ -36,6 +39,7 @@ router.post("/auth/register/customer", async (req, res) => {
       isActive: false,
       emailVerified: false,
       emailVerificationToken: verificationToken,
+      emailVerificationSentAt: new Date(),
     }).returning();
 
     sendVerificationEmail(user.email, user.fullName, verificationToken).catch((err) =>
@@ -61,6 +65,22 @@ router.post("/auth/register/trader", async (req, res) => {
   try {
     const body = RegisterTraderBody.parse(req.body);
 
+    // Phase 1: extra fields not yet in OpenAPI spec — validate ad-hoc.
+    const extra = req.body as {
+      confirmPassword?: string;
+      termsAccepted?: boolean;
+      privacyAccepted?: boolean;
+    };
+
+    if (!extra.confirmPassword || extra.confirmPassword !== body.password) {
+      res.status(400).json({ error: "Passwords do not match" });
+      return;
+    }
+    if (extra.termsAccepted !== true || extra.privacyAccepted !== true) {
+      res.status(400).json({ error: "You must accept the Terms and Privacy Policy to continue." });
+      return;
+    }
+
     const existing = await db.select().from(usersTable).where(eq(usersTable.email, body.email)).limit(1);
     if (existing.length > 0) {
       res.status(409).json({ error: "An account with this email already exists" });
@@ -69,6 +89,7 @@ router.post("/auth/register/trader", async (req, res) => {
 
     const passwordHash = await bcryptjs.hash(body.password, 12);
     const verificationToken = generateVerificationToken();
+    const now = new Date();
 
     const result = await db.transaction(async (tx) => {
       const [user] = await tx.insert(usersTable).values({
@@ -80,6 +101,7 @@ router.post("/auth/register/trader", async (req, res) => {
         isActive: false,
         emailVerified: false,
         emailVerificationToken: verificationToken,
+        emailVerificationSentAt: now,
       }).returning();
 
       await tx.insert(traderProfilesTable).values({
@@ -92,9 +114,18 @@ router.post("/auth/register/trader", async (req, res) => {
         town: body.town,
         postcode: body.postcode,
         isActive: false,
+        verificationStatus: TRADER_STATUS.PENDING_EMAIL_VERIFICATION,
+        termsAcceptedAt: now,
+        privacyAcceptedAt: now,
       });
 
       return user;
+    });
+
+    logAudit({
+      userId: result.id,
+      action: "TRADER_ACCOUNT_CREATED",
+      details: { email: result.email, businessName: body.businessName, mainCategory: body.mainCategory },
     });
 
     sendVerificationEmail(result.email, result.fullName, verificationToken).catch((err) =>
@@ -197,6 +228,27 @@ router.get("/auth/verify-email", async (req, res) => {
       })
       .where(eq(usersTable.id, user.id));
 
+    // Trader status transition: PENDING_EMAIL_VERIFICATION -> PENDING_PHONE_VERIFICATION
+    // Only transition if currently in the email-pending state (idempotent, never downgrade).
+    if (user.role === "trader") {
+      const [profile] = await db
+        .select()
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.userId, user.id))
+        .limit(1);
+      if (profile && profile.verificationStatus === TRADER_STATUS.PENDING_EMAIL_VERIFICATION) {
+        await db
+          .update(traderProfilesTable)
+          .set({
+            verificationStatus: TRADER_STATUS.PENDING_PHONE_VERIFICATION,
+            updatedAt: new Date(),
+          })
+          .where(eq(traderProfilesTable.userId, user.id));
+      }
+    }
+
+    logAudit({ userId: user.id, action: "EMAIL_VERIFIED" });
+
     res.send(verifyPage("Email Verified!", "Your email has been verified. You can now log in to MyLocalTrade.", true));
   } catch (error) {
     req.log.error({ err: error }, "Email verification failed");
@@ -223,14 +275,29 @@ router.post("/auth/resend-verification", async (req, res) => {
       return;
     }
 
+    // Rate limit: 60s cooldown between resends
+    if (user.emailVerificationSentAt) {
+      const elapsed = Date.now() - new Date(user.emailVerificationSentAt).getTime();
+      if (elapsed < RESEND_COOLDOWN_MS) {
+        const retryIn = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000);
+        res.status(429).json({
+          error: `Please wait ${retryIn}s before requesting another email.`,
+          retryAfterSeconds: retryIn,
+        });
+        return;
+      }
+    }
+
     const newToken = generateVerificationToken();
     await db.update(usersTable)
-      .set({ emailVerificationToken: newToken, updatedAt: new Date() })
+      .set({ emailVerificationToken: newToken, emailVerificationSentAt: new Date(), updatedAt: new Date() })
       .where(eq(usersTable.id, user.id));
 
     sendVerificationEmail(user.email, user.fullName, newToken).catch((err) =>
       req.log.error({ err }, "Failed to send verification email")
     );
+
+    logAudit({ userId: user.id, action: "EMAIL_VERIFICATION_RESENT" });
 
     res.json({ message: "Verification email sent. Please check your inbox." });
   } catch (error) {
@@ -286,6 +353,45 @@ router.get("/auth/me", authMiddleware, async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, "Get user failed");
     res.status(500).json({ error: "Failed to get user" });
+  }
+});
+
+router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req as AuthenticatedRequest;
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!user || user.role !== "trader") {
+      res.status(403).json({ error: "Only traders can view onboarding status." });
+      return;
+    }
+    const [profile] = await db
+      .select()
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile) {
+      res.status(404).json({ error: "Trader profile not found." });
+      return;
+    }
+
+    res.json({
+      verificationStatus: profile.verificationStatus,
+      message: statusMessage(profile),
+      isPublic: isTraderProfilePublic(user, profile),
+      emailVerified: user.emailVerified,
+      phoneVerified: profile.phoneVerified,
+      businessProfileCompleted: profile.businessProfileCompleted,
+      documentsSubmitted: profile.documentsSubmitted,
+      isActive: profile.isActive,
+      rejectionReason: profile.rejectionReason,
+      adminNotes: profile.adminNotes,
+      checklist: buildOnboardingChecklist(user, profile),
+      email: user.email,
+      businessName: profile.businessName,
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Get onboarding status failed");
+    res.status(500).json({ error: "Failed to get onboarding status" });
   }
 });
 

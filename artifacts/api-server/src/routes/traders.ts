@@ -13,7 +13,10 @@ router.get("/traders", async (req, res) => {
     const limitNum = Math.min(50, Math.max(1, parseInt(String(limit)) || 20));
     const offset = (pageNum - 1) * limitNum;
 
-    const conditions = [eq(traderProfilesTable.isActive, true)];
+    const conditions = [
+      eq(traderProfilesTable.isActive, true),
+      eq(traderProfilesTable.verificationStatus, "VERIFIED"),
+    ];
 
     if (category && typeof category === "string") {
       conditions.push(ilike(traderProfilesTable.mainCategory, `%${category}%`));
@@ -79,7 +82,11 @@ router.get("/traders/featured", async (req, res) => {
     const traders = await db
       .select()
       .from(traderProfilesTable)
-      .where(and(eq(traderProfilesTable.isActive, true), eq(traderProfilesTable.isFeatured, true)))
+      .where(and(
+        eq(traderProfilesTable.isActive, true),
+        eq(traderProfilesTable.verificationStatus, "VERIFIED"),
+        eq(traderProfilesTable.isFeatured, true),
+      ))
       .orderBy(desc(traderProfilesTable.createdAt))
       .limit(limit);
 
@@ -110,7 +117,7 @@ router.get("/traders/:id", async (req, res) => {
       .where(eq(traderProfilesTable.id, id))
       .limit(1);
 
-    if (!trader || !trader.isActive) {
+    if (!trader || !trader.isActive || trader.verificationStatus !== "VERIFIED") {
       res.status(404).json({ error: "Trader not found" });
       return;
     }
