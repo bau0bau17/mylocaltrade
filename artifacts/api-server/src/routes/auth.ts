@@ -131,7 +131,7 @@ router.post("/auth/register/trader", async (req, res) => {
               : "Trader supplied a Companies House number that resolves to a real record, but the submitted business name does not align with the registered name. Flagged for manual review.",
             submitted: {
               businessName: body.businessName,
-              address: body.town,
+              address: [body.businessAddress, body.town].filter(Boolean).join(", "),
               postcode: body.postcode,
             },
             companiesHouse: {
@@ -171,6 +171,7 @@ router.post("/auth/register/trader", async (req, res) => {
         email: body.email,
         phone: body.phone,
         mainCategory: body.mainCategory,
+        businessAddress: body.businessAddress,
         town: body.town,
         postcode: body.postcode,
         isActive: false,

@@ -31,6 +31,7 @@ export default function RegisterTraderScreen() {
     confirmPassword: '',
     phone: '',
     mainCategory: '',
+    businessAddress: '',
     town: '',
     postcode: '',
   });
@@ -105,9 +106,13 @@ export default function RegisterTraderScreen() {
   }, [formData.businessName]);
 
   const pickSuggestion = (hit: ChHit) => {
+    // Prefer the structured first address line; fall back to the snippet
+    // (which is the full registered office address joined with commas).
+    const addressLine = hit.addressLine ?? hit.addressSnippet ?? '';
     setFormData((prev) => ({
       ...prev,
       businessName: hit.companyName,
+      businessAddress: addressLine || prev.businessAddress,
       town: hit.town || prev.town,
       postcode: hit.postcode || prev.postcode,
     }));
@@ -121,7 +126,7 @@ export default function RegisterTraderScreen() {
     setErrorMsg(null);
     const requiredFields: (keyof typeof formData)[] = [
       'businessName', 'contactName', 'email', 'password', 'confirmPassword',
-      'phone', 'mainCategory', 'town', 'postcode',
+      'phone', 'mainCategory', 'businessAddress', 'town', 'postcode',
     ];
     const isMissing = requiredFields.some(field => !formData[field].trim());
     if (isMissing) {
@@ -152,6 +157,7 @@ export default function RegisterTraderScreen() {
         confirmPassword: formData.confirmPassword,
         phone: formData.phone.trim(),
         mainCategory: formData.mainCategory.trim(),
+        businessAddress: formData.businessAddress.trim(),
         town: formData.town.trim(),
         postcode: formData.postcode.trim().toUpperCase(),
         termsAccepted: true,
@@ -292,6 +298,21 @@ export default function RegisterTraderScreen() {
               placeholderTextColor={Colors.light.textMuted}
               value={formData.mainCategory}
               onChangeText={(text) => setFormData(prev => ({ ...prev, mainCategory: text }))}
+            />
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Business Address *</Text>
+          <View style={styles.inputWrap}>
+            <Feather name="home" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 12 High Street"
+              placeholderTextColor={Colors.light.textMuted}
+              value={formData.businessAddress}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, businessAddress: text }))}
+              autoCapitalize="words"
             />
           </View>
         </View>
