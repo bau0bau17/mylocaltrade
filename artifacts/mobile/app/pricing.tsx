@@ -111,7 +111,7 @@ export default function PricingScreen() {
             <Text style={styles.gateBody}>
               These subscriptions are for tradespeople who want to be listed on MyLocalTrade. Customers browse and contact traders for free.
             </Text>
-            <Pressable style={styles.gateBtn} onPress={() => router.push('/auth/register')}>
+            <Pressable style={styles.gateBtn} onPress={() => router.push('/auth/register-trader')}>
               <Text style={styles.gateBtnText}>Register as a trader</Text>
             </Pressable>
           </View>

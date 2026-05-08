@@ -26,6 +26,8 @@ export default {
     errorMuted: "rgba(239, 68, 68, 0.12)",
     glow: "rgba(0, 180, 216, 0.25)",
     success: "#06D6A0",
+    warning: "#F59E0B",
+    warningMuted: "rgba(245, 158, 11, 0.12)",
     white: "#FFFFFF",
   },
   dark: {
@@ -55,6 +57,8 @@ export default {
     errorMuted: "rgba(248, 113, 113, 0.12)",
     glow: "rgba(0, 180, 216, 0.25)",
     success: "#06D6A0",
+    warning: "#FBBF24",
+    warningMuted: "rgba(251, 191, 36, 0.12)",
     white: "#FFFFFF",
   }
 };

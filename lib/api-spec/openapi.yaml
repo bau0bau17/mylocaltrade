@@ -842,7 +842,7 @@ components:
           type: string
         role:
           type: string
-          enum: [customer, trader]
+          enum: [customer, trader, admin]
         isActive:
           type: boolean
         plan:
