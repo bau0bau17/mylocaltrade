@@ -27,23 +27,26 @@ export default function AboutScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          MyLocalTrade is the UK's premier platform for connecting homeowners with trusted, verified local tradespeople.
+          MyLocalTrade connects customers with independent local tradespeople across the UK.
         </Text>
         <Text style={styles.paragraph}>
-          Founded with the mission to bring transparency and trust to the local services industry, we ensure that finding a reliable plumber, electrician, or builder is as simple as a few taps on your phone.
+          Our goal is to make it easier for homeowners to discover, contact and review tradespeople in their area. Traders listed on MyLocalTrade are independent businesses and are not employees, agents or representatives of MyLocalTrade.
+        </Text>
+        <Text style={styles.paragraph}>
+          Customers should always make their own checks before hiring a tradesperson, including requesting written quotes and confirming any qualifications, insurance or registrations relevant to the work.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>Our Promise</Text>
+        <Text style={styles.heading}>Our Approach</Text>
         <View style={styles.promiseCard}>
           <View style={styles.promiseItem}>
             <View style={[styles.promiseIcon, { backgroundColor: Colors.light.secondaryMuted }]}>
               <Feather name="check-circle" size={16} color={Colors.light.secondary} />
             </View>
             <View style={styles.promiseContent}>
-              <Text style={styles.promiseTitle}>Verified Professionals</Text>
-              <Text style={styles.promiseDesc}>We check credentials of all tradespeople.</Text>
+              <Text style={styles.promiseTitle}>Information Checks</Text>
+              <Text style={styles.promiseDesc}>Trader profiles may include verified information where applicable. Details such as contact information, business details, insurance or qualifications may be checked where required.</Text>
             </View>
           </View>
           <View style={styles.promiseItem}>
@@ -51,8 +54,8 @@ export default function AboutScreen() {
               <Feather name="star" size={16} color={Colors.light.featured} />
             </View>
             <View style={styles.promiseContent}>
-              <Text style={styles.promiseTitle}>Real Reviews</Text>
-              <Text style={styles.promiseDesc}>Only genuine customers can leave feedback.</Text>
+              <Text style={styles.promiseTitle}>Customer Reviews</Text>
+              <Text style={styles.promiseDesc}>Reviews come from people who have used the platform to enquire. Reviews reflect individual experiences, not a guarantee of quality.</Text>
             </View>
           </View>
           <View style={styles.promiseItem}>
@@ -60,8 +63,8 @@ export default function AboutScreen() {
               <Feather name="map-pin" size={16} color={Colors.light.primary} />
             </View>
             <View style={styles.promiseContent}>
-              <Text style={styles.promiseTitle}>Local First</Text>
-              <Text style={styles.promiseDesc}>We prioritize your immediate community.</Text>
+              <Text style={styles.promiseTitle}>Local Focus</Text>
+              <Text style={styles.promiseDesc}>We help customers find tradespeople operating in their local area.</Text>
             </View>
           </View>
         </View>

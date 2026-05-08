@@ -1,0 +1,91 @@
+Please execute all 4 recommended pre-launch fixes now, in this order.
+
+1. Production hardening
+
+Please implement the production hardening items:
+
+* Set admin pages to noindex, nofollow
+* Update admin robots.txt to Disallow: /
+* Ensure the admin portal cannot be indexed by Google
+* Gate /api/subscriptions/demo-activate so it is disabled in production
+* In production, /api/subscriptions/demo-activate should return 404 or a safe error
+* Make sure demo subscription activation cannot be used when NODE_ENV=production
+* Confirm OTP mockCode is never returned when NODE_ENV=production
+* Confirm no sensitive data is logged
+
+This is critical before publishing.
+
+2. Legal wording update
+
+Please update risky wording in about.tsx and anywhere else similar wording appears.
+
+Replace strong claims such as:
+
+“We check credentials of all tradespeople”
+“trusted, verified local tradespeople”
+“UK’s premier platform”
+“all traders are verified”
+
+With safer wording such as:
+
+“MyLocalTrade connects customers with independent local tradespeople.”
+“Trader profiles may include verified information where applicable.”
+“Information such as contact details, business details, insurance or qualifications may be checked where required.”
+“Customers should always make their own checks before hiring a tradesperson.”
+
+Please avoid absolute claims such as fully vetted, guaranteed, background checked, DBS checked, or guaranteed quality unless the platform genuinely performs and documents those checks.
+
+3. Trader status emails
+
+Please add transactional emails for the most important admin decisions:
+
+* Trader approved
+* Trader rejected
+* More information requested
+* Trader suspended, if quick to add
+
+Requirements:
+
+* Add sendTraderApprovedEmail
+* Add sendTraderRejectedEmail
+* Add sendTraderMoreInfoRequestedEmail if request-info exists
+* Connect them to admin approve / reject / request-info endpoints
+* Emails should be non-blocking, so admin actions do not fail if email sending fails
+* Email content should clearly explain the trader’s status and next step
+* Do not expose sensitive admin notes unless they are intended for the trader
+
+4. Missing trust/legal pages
+
+Please add the missing simple pages/screens:
+
+* Cookie Policy
+* Complaints Procedure
+* Report a Trader
+* Customer Safety Advice
+* Trader Code of Conduct
+* How Verification Works
+
+These can be simple but professional pages for now.
+
+Important wording for these pages:
+
+* MyLocalTrade is a platform connecting customers with independent local traders
+* Traders are not employees, agents or representatives of MyLocalTrade
+* Verification helps improve trust and transparency but does not guarantee the quality of work
+* Customers should request written quotes and check qualifications/insurance where relevant
+* For gas work, customers should independently check Gas Safe registration
+* For electrical work, customers should ask for relevant certification
+
+5. Final confirmation after fixes
+
+After completing all 4 areas, please provide a short final confirmation with:
+
+* What files/routes were changed
+* Whether demo subscription activation is blocked in production
+* Whether admin pages are noindex/nofollow and robots.txt blocks indexing
+* Whether risky wording was replaced
+* Whether trader approval/rejection/request-info emails were added
+* Whether missing trust/legal pages were added
+* Any remaining launch blockers
+
+Do not publish yet. Complete these fixes first, then we will review the final report and decide the publish step.

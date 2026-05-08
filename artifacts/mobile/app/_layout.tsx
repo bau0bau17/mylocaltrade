@@ -49,6 +49,12 @@ function RootLayoutNav() {
       <Stack.Screen name="privacy" options={{ title: "Privacy Policy" }} />
       <Stack.Screen name="terms" options={{ title: "Terms & Conditions" }} />
       <Stack.Screen name="refund" options={{ title: "Refund Policy" }} />
+      <Stack.Screen name="cookie-policy" options={{ title: "Cookie Policy" }} />
+      <Stack.Screen name="complaints" options={{ title: "Complaints Procedure" }} />
+      <Stack.Screen name="report-trader" options={{ title: "Report a Trader" }} />
+      <Stack.Screen name="safety-advice" options={{ title: "Customer Safety Advice" }} />
+      <Stack.Screen name="code-of-conduct" options={{ title: "Trader Code of Conduct" }} />
+      <Stack.Screen name="how-verification-works" options={{ title: "How Verification Works" }} />
       <Stack.Screen name="admin/index" options={{ title: "Admin · Trader Review" }} />
       <Stack.Screen name="admin/[traderId]" options={{ title: "Trader Review" }} />
     </Stack>

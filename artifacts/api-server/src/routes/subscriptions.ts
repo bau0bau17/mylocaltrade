@@ -224,8 +224,11 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
 
 router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (req, res) => {
   try {
-    if (!IS_DEMO_MODE) {
-      res.status(403).json({ error: "Demo activation is not available in production" });
+    // Hard-block in production regardless of STRIPE_SECRET_KEY presence so this
+    // endpoint cannot be used to bypass payments. Returns 404 to avoid leaking
+    // the existence of the demo path to live clients.
+    if (process.env.NODE_ENV === "production" || !IS_DEMO_MODE) {
+      res.status(404).json({ error: "Not found" });
       return;
     }
 

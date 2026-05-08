@@ -51,6 +51,51 @@ export default function LegalSupportScreen() {
             sub="Subscription cancellation terms"
             onPress={() => router.push('/refund')}
           />
+          <View style={styles.separator} />
+          <MenuRow
+            icon="settings"
+            label="Cookie Policy"
+            sub="How we use cookies and similar technologies"
+            onPress={() => router.push('/cookie-policy')}
+          />
+        </View>
+
+        <Text style={styles.sectionLabel}>Trust & Safety</Text>
+        <View style={styles.group}>
+          <MenuRow
+            icon="check-circle"
+            label="How Verification Works"
+            sub="What we check and what we don't"
+            onPress={() => router.push('/how-verification-works')}
+          />
+          <View style={styles.separator} />
+          <MenuRow
+            icon="shield"
+            label="Customer Safety Advice"
+            sub="Tips before hiring a tradesperson"
+            onPress={() => router.push('/safety-advice')}
+          />
+          <View style={styles.separator} />
+          <MenuRow
+            icon="award"
+            label="Trader Code of Conduct"
+            sub="Standards we expect from traders"
+            onPress={() => router.push('/code-of-conduct')}
+          />
+          <View style={styles.separator} />
+          <MenuRow
+            icon="alert-circle"
+            label="Report a Trader"
+            sub="Raise a concern about a listing"
+            onPress={() => router.push('/report-trader')}
+          />
+          <View style={styles.separator} />
+          <MenuRow
+            icon="flag"
+            label="Complaints Procedure"
+            sub="How to make a complaint"
+            onPress={() => router.push('/complaints')}
+          />
         </View>
 
         <Text style={styles.sectionLabel}>Support</Text>

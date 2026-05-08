@@ -18,7 +18,13 @@ import {
   evaluateDocumentsComplete,
   logAudit,
 } from "../lib/trader-status";
-import { sendDocumentApprovedEmail, sendDocumentRejectedEmail } from "../lib/email";
+import {
+  sendDocumentApprovedEmail,
+  sendDocumentRejectedEmail,
+  sendTraderApprovedEmail,
+  sendTraderRejectedEmail,
+  sendTraderMoreInfoRequestedEmail,
+} from "../lib/email";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -422,6 +428,26 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
       notes: body.notes,
     });
 
+    // Best-effort, non-blocking notification email to the trader.
+    void (async () => {
+      try {
+        const [user] = await db
+          .select({ email: usersTable.email, fullName: usersTable.fullName })
+          .from(usersTable)
+          .where(eq(usersTable.id, userId))
+          .limit(1);
+        if (user?.email) {
+          await sendTraderApprovedEmail({
+            toEmail: user.email,
+            toName: user.fullName,
+            businessName: updated?.businessName ?? null,
+          });
+        }
+      } catch (err) {
+        req.log.warn({ err }, "Failed to send trader-approved email");
+      }
+    })();
+
     res.json({ profile: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -465,6 +491,28 @@ router.post("/admin/traders/:userId/reject", authMiddleware, adminOnly, async (r
       performedBy: adminId,
       notes: body.reason,
     });
+
+    // Best-effort, non-blocking notification email to the trader.
+    // body.reason is a customer-facing reason intended to be shown to the trader.
+    void (async () => {
+      try {
+        const [user] = await db
+          .select({ email: usersTable.email, fullName: usersTable.fullName })
+          .from(usersTable)
+          .where(eq(usersTable.id, userId))
+          .limit(1);
+        if (user?.email) {
+          await sendTraderRejectedEmail({
+            toEmail: user.email,
+            toName: user.fullName,
+            reason: body.reason,
+          });
+        }
+      } catch (err) {
+        req.log.warn({ err }, "Failed to send trader-rejected email");
+      }
+    })();
+
     res.json({ profile: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -508,6 +556,28 @@ router.post("/admin/traders/:userId/request-info", authMiddleware, adminOnly, as
       performedBy: adminId,
       notes: body.notes,
     });
+
+    // Best-effort, non-blocking notification email to the trader.
+    // body.notes describes what the admin needs from the trader and is intended to be shared.
+    void (async () => {
+      try {
+        const [user] = await db
+          .select({ email: usersTable.email, fullName: usersTable.fullName })
+          .from(usersTable)
+          .where(eq(usersTable.id, userId))
+          .limit(1);
+        if (user?.email) {
+          await sendTraderMoreInfoRequestedEmail({
+            toEmail: user.email,
+            toName: user.fullName,
+            notes: body.notes,
+          });
+        }
+      } catch (err) {
+        req.log.warn({ err }, "Failed to send trader more-info email");
+      }
+    })();
+
     res.json({ profile: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
