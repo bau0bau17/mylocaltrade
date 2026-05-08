@@ -21,6 +21,12 @@ export interface RegisterTraderRequest {
   privacyAccepted: boolean;
   contactName: string;
   businessName: string;
+  /** Optional UK Companies House registration number. If present, the
+backend treats the trader as having selected a confirmed match
+from the Companies House live search and skips the manual
+"under review" step for the business identity check.
+ */
+  companyNumber?: string;
   phone: string;
   mainCategory: string;
   town: string;

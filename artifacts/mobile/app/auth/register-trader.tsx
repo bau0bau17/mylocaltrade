@@ -1,11 +1,22 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useAuth } from '@/contexts/AuthContext';
+import { getApiUrl } from '@/lib/api-url';
+
+interface ChHit {
+  companyNumber: string;
+  companyName: string;
+  status: string | null;
+  addressLine: string | null;
+  town: string | null;
+  postcode: string | null;
+  addressSnippet: string | null;
+}
 
 export default function RegisterTraderScreen() {
   const insets = useSafeAreaInsets();
@@ -23,6 +34,15 @@ export default function RegisterTraderScreen() {
     town: '',
     postcode: '',
   });
+  const [companyNumber, setCompanyNumber] = useState<string | null>(null);
+  const [confirmedName, setConfirmedName] = useState<string | null>(null);
+  const [chSuggestions, setChSuggestions] = useState<ChHit[]>([]);
+  const [chLoading, setChLoading] = useState(false);
+  const [chError, setChError] = useState<string | null>(null);
+  const [chOpen, setChOpen] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastQueryRef = useRef<string>('');
+
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -32,6 +52,70 @@ export default function RegisterTraderScreen() {
     const t = setTimeout(() => setErrorMsg(null), 5000);
     return () => clearTimeout(t);
   }, [errorMsg]);
+
+  // Live Companies House search, debounced.
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = formData.businessName.trim();
+
+    // If the trader edits the name AWAY from the matched company they picked,
+    // drop the confirmed selection so we don't claim a verification we don't
+    // have. We compare against the exact name we stored at pick-time so a
+    // re-render right after picking does not clear it.
+    if (companyNumber && confirmedName && q !== confirmedName) {
+      setCompanyNumber(null);
+      setConfirmedName(null);
+    }
+
+    if (q.length < 3) {
+      setChSuggestions([]);
+      setChError(null);
+      setChLoading(false);
+      return;
+    }
+
+    setChLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      lastQueryRef.current = q;
+      try {
+        const res = await fetch(
+          `${getApiUrl()}/api/companies-house/search?q=${encodeURIComponent(q)}`,
+        );
+        if (lastQueryRef.current !== q) return;
+        if (!res.ok) {
+          setChError('Could not search Companies House right now.');
+          setChSuggestions([]);
+        } else {
+          const json = (await res.json()) as { items: ChHit[] };
+          setChSuggestions(json.items ?? []);
+          setChError(null);
+        }
+      } catch {
+        setChError('Could not search Companies House right now.');
+        setChSuggestions([]);
+      } finally {
+        setChLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.businessName]);
+
+  const pickSuggestion = (hit: ChHit) => {
+    setFormData((prev) => ({
+      ...prev,
+      businessName: hit.companyName,
+      town: hit.town || prev.town,
+      postcode: hit.postcode || prev.postcode,
+    }));
+    setCompanyNumber(hit.companyNumber);
+    setConfirmedName(hit.companyName);
+    setChSuggestions([]);
+    setChOpen(false);
+  };
 
   const handleRegister = async () => {
     setErrorMsg(null);
@@ -61,6 +145,7 @@ export default function RegisterTraderScreen() {
     try {
       const payload = {
         businessName: formData.businessName.trim(),
+        ...(companyNumber ? { companyNumber } : {}),
         contactName: formData.contactName.trim(),
         email: formData.email.trim(),
         password: formData.password,
@@ -81,6 +166,9 @@ export default function RegisterTraderScreen() {
       setIsLoading(false);
     }
   };
+
+  const showSuggestionPanel =
+    chOpen && formData.businessName.trim().length >= 3 && !companyNumber;
 
   return (
     <KeyboardAwareScrollViewCompat
@@ -107,16 +195,91 @@ export default function RegisterTraderScreen() {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Business Name *</Text>
-          <View style={styles.inputWrap}>
-            <Feather name="briefcase" size={16} color={Colors.light.textMuted} />
+          <View
+            style={[
+              styles.inputWrap,
+              companyNumber ? styles.inputWrapVerified : null,
+            ]}
+          >
+            <Feather
+              name={companyNumber ? 'check-circle' : 'briefcase'}
+              size={16}
+              color={companyNumber ? Colors.light.secondary : Colors.light.textMuted}
+            />
             <TextInput
               style={styles.input}
-              placeholder="e.g. Smith Plumbing Ltd"
+              placeholder="Start typing your registered company name"
               placeholderTextColor={Colors.light.textMuted}
               value={formData.businessName}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, businessName: text }))}
+              onChangeText={(text) => setFormData((prev) => ({ ...prev, businessName: text }))}
+              onFocus={() => setChOpen(true)}
+              autoCapitalize="words"
             />
+            {chLoading ? (
+              <ActivityIndicator size="small" color={Colors.light.textMuted} />
+            ) : null}
           </View>
+
+          {companyNumber ? (
+            <View style={styles.verifiedBadge}>
+              <Feather name="shield" size={12} color={Colors.light.secondary} />
+              <Text style={styles.verifiedText}>
+                Matched on Companies House (Co. No. {companyNumber}). Address pre-filled below.
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.hintText}>
+              Pick your registered company from the list to auto-fill your details. If your business isn't listed, type manually — your account will go to manual review.
+            </Text>
+          )}
+
+          {showSuggestionPanel && (chSuggestions.length > 0 || chError || chLoading) ? (
+            <View style={styles.suggestionPanel}>
+              {chError ? (
+                <View style={styles.suggestionError}>
+                  <Feather name="alert-triangle" size={14} color={Colors.light.error} />
+                  <Text style={styles.suggestionErrorText}>{chError}</Text>
+                </View>
+              ) : null}
+              {!chError && chSuggestions.length === 0 && !chLoading ? (
+                <Text style={styles.suggestionEmpty}>
+                  No matches. You can keep typing or fill in the form manually below.
+                </Text>
+              ) : null}
+              <ScrollView
+                style={{ maxHeight: 240 }}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+              >
+                {chSuggestions.map((hit) => {
+                  const subline = [hit.addressSnippet, hit.status ? `Status: ${hit.status}` : null]
+                    .filter(Boolean)
+                    .join(' · ');
+                  return (
+                    <Pressable
+                      key={hit.companyNumber}
+                      style={styles.suggestionItem}
+                      onPress={() => pickSuggestion(hit)}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.suggestionName}>{hit.companyName}</Text>
+                        {subline ? (
+                          <Text style={styles.suggestionSub} numberOfLines={2}>
+                            {subline}
+                          </Text>
+                        ) : null}
+                        <Text style={styles.suggestionMeta}>Co. No. {hit.companyNumber}</Text>
+                      </View>
+                      <Feather name="chevron-right" size={18} color={Colors.light.textMuted} />
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Pressable style={styles.suggestionDismiss} onPress={() => setChOpen(false)}>
+                <Text style={styles.suggestionDismissText}>Hide suggestions</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.inputGroup}>
@@ -358,11 +521,96 @@ const styles = StyleSheet.create({
     height: 50,
     gap: 10,
   },
+  inputWrapVerified: {
+    borderColor: Colors.light.secondary,
+    backgroundColor: Colors.light.secondaryMuted,
+  },
   input: {
     flex: 1,
     height: '100%',
     fontSize: 15,
     color: Colors.light.text,
+  },
+  hintText: {
+    fontSize: 12,
+    color: Colors.light.textMuted,
+    lineHeight: 17,
+    paddingHorizontal: 4,
+    marginTop: 2,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
+    marginTop: 2,
+  },
+  verifiedText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.light.secondary,
+    fontWeight: '600',
+    lineHeight: 16,
+  },
+  suggestionPanel: {
+    marginTop: 6,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.light.border,
+    gap: 8,
+  },
+  suggestionName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.text,
+  },
+  suggestionSub: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  suggestionMeta: {
+    fontSize: 11,
+    color: Colors.light.textMuted,
+    marginTop: 2,
+  },
+  suggestionEmpty: {
+    fontSize: 12,
+    color: Colors.light.textMuted,
+    padding: 14,
+  },
+  suggestionError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: Colors.light.errorMuted,
+  },
+  suggestionErrorText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.light.error,
+  },
+  suggestionDismiss: {
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: Colors.light.background,
+  },
+  suggestionDismissText: {
+    fontSize: 12,
+    color: Colors.light.textMuted,
+    fontWeight: '600',
   },
   checkboxRow: {
     flexDirection: 'row',

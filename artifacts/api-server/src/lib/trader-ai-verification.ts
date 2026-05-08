@@ -2,35 +2,13 @@ import { db } from "@workspace/db";
 import { traderProfilesTable, type TraderProfile } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { logAudit } from "./trader-status";
+import {
+  searchCompanyTopHit,
+  getCompanyProfile,
+  formatChAddress,
+} from "./companies-house";
 
 export type AiVerificationSource = "AUTO_UNDER_REVIEW" | "ADMIN_MANUAL";
-
-const COMPANIES_HOUSE_API = "https://api.company-information.service.gov.uk";
-
-interface CompaniesHouseSearchHit {
-  company_number?: string;
-  title?: string;
-  address_snippet?: string;
-}
-
-interface CompaniesHouseSearchResponse {
-  items?: CompaniesHouseSearchHit[];
-}
-
-interface CompaniesHouseProfile {
-  company_number?: string;
-  company_name?: string;
-  company_status?: string;
-  sic_codes?: string[];
-  registered_office_address?: {
-    address_line_1?: string;
-    address_line_2?: string;
-    locality?: string;
-    region?: string;
-    postal_code?: string;
-    country?: string;
-  };
-}
 
 export interface AiVerificationResult {
   verdict: "MATCH" | "PARTIAL_MATCH" | "NO_MATCH" | "NOT_FOUND" | "ERROR";
@@ -45,36 +23,6 @@ export interface AiVerificationResult {
     sicCodes?: string[];
   } | null;
   error?: string;
-}
-
-function chAuthHeader(): string {
-  const key = process.env.COMPANIES_HOUSE_API_KEY;
-  if (!key) throw new Error("COMPANIES_HOUSE_API_KEY not configured");
-  return "Basic " + Buffer.from(`${key}:`).toString("base64");
-}
-
-async function searchCompany(name: string): Promise<CompaniesHouseSearchHit | null> {
-  const url = `${COMPANIES_HOUSE_API}/search/companies?q=${encodeURIComponent(name)}&items_per_page=5`;
-  const res = await fetch(url, { headers: { Authorization: chAuthHeader() } });
-  if (!res.ok) throw new Error(`Companies House search failed: ${res.status}`);
-  const data = (await res.json()) as CompaniesHouseSearchResponse;
-  return data.items?.[0] ?? null;
-}
-
-async function getCompanyProfile(companyNumber: string): Promise<CompaniesHouseProfile | null> {
-  const url = `${COMPANIES_HOUSE_API}/company/${encodeURIComponent(companyNumber)}`;
-  const res = await fetch(url, { headers: { Authorization: chAuthHeader() } });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`Companies House profile failed: ${res.status}`);
-  return (await res.json()) as CompaniesHouseProfile;
-}
-
-function formatChAddress(p: CompaniesHouseProfile): string {
-  const a = p.registered_office_address;
-  if (!a) return "";
-  return [a.address_line_1, a.address_line_2, a.locality, a.region, a.postal_code, a.country]
-    .filter(Boolean)
-    .join(", ");
 }
 
 async function aiCompare(
@@ -133,7 +81,7 @@ export async function runAiVerification(
 
   let result: AiVerificationResult;
   try {
-    const hit = await searchCompany(profile.businessName);
+    const hit = await searchCompanyTopHit(profile.businessName);
     if (!hit?.company_number) {
       result = {
         verdict: "NOT_FOUND",

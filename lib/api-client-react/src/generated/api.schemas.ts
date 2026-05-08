@@ -41,6 +41,12 @@ export interface RegisterTraderRequest {
   privacyAccepted: boolean;
   contactName: string;
   businessName: string;
+  /** Optional UK Companies House registration number. If present, the
+backend treats the trader as having selected a confirmed match
+from the Companies House live search and skips the manual
+"under review" step for the business identity check.
+ */
+  companyNumber?: string;
   phone: string;
   mainCategory: string;
   town: string;
@@ -665,6 +671,20 @@ export interface ResolveReportResponse {
   action: string;
 }
 
+export interface CompaniesHouseSearchHit {
+  companyNumber: string;
+  companyName: string;
+  status?: string | null;
+  addressLine?: string | null;
+  town?: string | null;
+  postcode?: string | null;
+  addressSnippet?: string | null;
+}
+
+export interface CompaniesHouseSearchResponse {
+  items: CompaniesHouseSearchHit[];
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -950,3 +970,10 @@ export const GetAdminConversationReportsStatus = {
   RESOLVED: "RESOLVED",
   DISMISSED: "DISMISSED",
 } as const;
+
+export type SearchCompaniesHouseParams = {
+  /**
+   * Company name fragment to search for.
+   */
+  q: string;
+};

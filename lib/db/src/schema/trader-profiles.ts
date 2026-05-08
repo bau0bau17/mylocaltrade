@@ -20,6 +20,7 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => usersTable.id).unique(),
   businessName: varchar("business_name", { length: 255 }).notNull(),
+  companyNumber: varchar("company_number", { length: 20 }),
   contactName: varchar("contact_name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 50 }).notNull(),

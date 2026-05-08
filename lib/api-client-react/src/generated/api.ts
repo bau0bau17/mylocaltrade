@@ -24,6 +24,7 @@ import type {
   AuthResponse,
   CategoriesResponse,
   CheckoutSessionResponse,
+  CompaniesHouseSearchResponse,
   ConversationDetailResponse,
   ConversationListResponse,
   ConversationMessage,
@@ -64,6 +65,7 @@ import type {
   ResolveReportResponse,
   RetryAfterErrorResponse,
   Review,
+  SearchCompaniesHouseParams,
   SendMessageRequest,
   SubscriptionMutationResponse,
   SubscriptionPlansResponse,
@@ -4587,3 +4589,111 @@ export const useResolveAdminConversationReport = <
 > => {
   return useMutation(getResolveAdminConversationReportMutationOptions(options));
 };
+
+/**
+ * Public, unauthenticated lookup used during trader registration to
+let the trader pick a confirmed match (which auto-populates address
+and town). Returns up to 6 best matches. Queries shorter than 3
+characters return an empty list.
+
+ * @summary Search the UK Companies House register by name
+ */
+export const getSearchCompaniesHouseUrl = (
+  params: SearchCompaniesHouseParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/companies-house/search?${stringifiedParams}`
+    : `/api/companies-house/search`;
+};
+
+export const searchCompaniesHouse = async (
+  params: SearchCompaniesHouseParams,
+  options?: RequestInit,
+): Promise<CompaniesHouseSearchResponse> => {
+  return customFetch<CompaniesHouseSearchResponse>(
+    getSearchCompaniesHouseUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getSearchCompaniesHouseQueryKey = (
+  params?: SearchCompaniesHouseParams,
+) => {
+  return [`/api/companies-house/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchCompaniesHouseQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchCompaniesHouse>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: SearchCompaniesHouseParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchCompaniesHouse>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getSearchCompaniesHouseQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof searchCompaniesHouse>>
+  > = ({ signal }) =>
+    searchCompaniesHouse(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchCompaniesHouse>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchCompaniesHouseQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchCompaniesHouse>>
+>;
+export type SearchCompaniesHouseQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Search the UK Companies House register by name
+ */
+
+export function useSearchCompaniesHouse<
+  TData = Awaited<ReturnType<typeof searchCompaniesHouse>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: SearchCompaniesHouseParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchCompaniesHouse>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchCompaniesHouseQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
