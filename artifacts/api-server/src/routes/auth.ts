@@ -161,6 +161,11 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
+    if (user.deletedAt) {
+      res.status(403).json({ error: "This account has been deleted." });
+      return;
+    }
+
     const valid = await bcryptjs.compare(body.password, user.passwordHash);
     if (!valid) {
       res.status(401).json({ error: "Invalid email or password" });

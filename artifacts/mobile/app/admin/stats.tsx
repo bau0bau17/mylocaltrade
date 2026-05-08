@@ -18,7 +18,14 @@ import { getApiUrl } from '@/lib/api-url';
 
 type StatsResponse = {
   generatedAt: string;
-  users: { total: number; byRole: Record<string, number>; newToday: number; newLast7d: number };
+  users: {
+    total: number;
+    byRole: Record<string, number>;
+    newToday: number;
+    newLast7d: number;
+    allTimeRegistered: number;
+    deleted: number;
+  };
   traders: { byStatus: Record<string, number>; activeOnPlatform: number };
   enquiries: { total: number; byStatus: Record<string, number>; today: number; last7d: number };
   conversations: { total: number; byStatus: Record<string, number> };
@@ -145,12 +152,31 @@ export default function AdminStatsScreen() {
             {/* USERS */}
             <SectionTitle icon="users" label="Users" />
             <View style={styles.grid}>
-              <StatCard title="Total Users" value={data.users.total} icon="users" />
+              <StatCard
+                title="Active Users"
+                value={data.users.total}
+                icon="users"
+                accent="primary"
+                hint="Currently active accounts"
+              />
+              <StatCard
+                title="All-Time Registered"
+                value={data.users.allTimeRegistered}
+                icon="archive"
+                hint="Includes deleted accounts"
+              />
               <StatCard
                 title="New Today"
                 value={data.users.newToday}
                 icon="user-plus"
                 accent={data.users.newToday > 0 ? 'success' : 'muted'}
+              />
+              <StatCard
+                title="Deleted"
+                value={data.users.deleted}
+                icon="user-x"
+                accent={data.users.deleted > 0 ? 'danger' : 'muted'}
+                hint="Removed accounts"
               />
               <StatCard title="Customers" value={data.users.byRole.customer ?? 0} icon="user" />
               <StatCard title="Traders" value={data.users.byRole.trader ?? 0} icon="briefcase" />
