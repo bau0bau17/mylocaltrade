@@ -1,0 +1,702 @@
+Vreau să implementezi un sistem complet de înregistrare și verificare pentru Traderi în aplicația MyLocalTrade.
+
+MyLocalTrade este o platformă care conectează clienți cu business owners / tradesmen, cum ar fi plumbers, electricians, builders, roofers, gardeners, gas engineers etc.
+
+Scopul este ca un Trader să se poată înregistra rapid, dar profilul lui să NU fie public și să NU poată primi lead-uri până când nu trece prin pașii de verificare necesari.
+
+Te rog implementează totul pas cu pas, păstrând designul actual dark/mobile-first din aplicație.
+
+1. Schimbă logica generală pentru Trader signup
+
+Înregistrarea Traderului trebuie să fie împărțită în mai multe etape:
+
+Step 1: Basic Trader Account
+Step 2: Email and Phone Verification
+Step 3: Business Profile Completion
+Step 4: Documents and Qualification Upload
+Step 5: Admin Review
+Step 6: Subscription / Payment
+Step 7: Profile goes live only after approval
+
+Important: după prima înregistrare, contul poate exista în sistem, dar profilul NU trebuie să fie vizibil public până când statusul este VERIFIED și subscription-ul este activ.
+
+2. Păstrează prima pagină de signup simplă
+
+Prima pagină de signup pentru Trader trebuie să rămână simplă și să ceară doar informațiile de bază:
+
+Business Name
+Main Category
+Town / City
+Postcode
+Contact Name
+Email Address
+Phone Number
+Password
+Confirm Password
+
+Adaugă și un checkbox obligatoriu:
+
+I confirm that the information provided is accurate and I agree to MyLocalTrade’s Terms and Privacy Policy.
+
+Adaugă un text informativ sub titlu:
+
+Create your trader account. Verification will be required before your profile goes live.
+
+Și încă un text scurt înainte de buton:
+
+After signup, you’ll be asked to verify your email, phone number, business details and insurance/qualifications where applicable.
+
+Schimbă titlul principal din “Join as a Trader” în:
+
+Create your Trader Account
+
+3. Creează statusuri clare pentru Trader account
+
+Adaugă în backend / database un câmp pentru trader verification status.
+
+Statusurile trebuie să fie:
+
+PENDING_EMAIL_VERIFICATION
+PENDING_PHONE_VERIFICATION
+PROFILE_INCOMPLETE
+PENDING_DOCUMENTS
+UNDER_REVIEW
+VERIFIED
+REJECTED
+SUSPENDED
+EXPIRED_DOCUMENTS
+
+După signup inițial, statusul trebuie să fie:
+
+PENDING_EMAIL_VERIFICATION
+
+După verificarea emailului, statusul trece la:
+
+PENDING_PHONE_VERIFICATION
+
+După verificarea telefonului, statusul trece la:
+
+PROFILE_INCOMPLETE
+
+După completarea profilului business, statusul trece la:
+
+PENDING_DOCUMENTS
+
+După upload documente, statusul trece la:
+
+UNDER_REVIEW
+
+După aprobarea manuală de către admin, statusul trece la:
+
+VERIFIED
+
+Dacă admin respinge aplicația, statusul devine:
+
+REJECTED
+
+Dacă documentele expiră, statusul devine:
+
+EXPIRED_DOCUMENTS
+
+Dacă traderul este blocat de admin, statusul devine:
+
+SUSPENDED
+
+4. Implementează verificare email
+
+După signup, trimite automat un email de verificare către Trader.
+
+Emailul trebuie să conțină un link de verificare.
+
+Până când emailul nu este verificat, Traderul nu poate continua la phone verification sau business profile.
+
+În dashboard, afișează mesaj:
+
+Please verify your email address to continue setting up your Trader account.
+
+Adaugă buton:
+
+Resend verification email
+
+5. Implementează verificare telefon
+
+După ce emailul este verificat, Traderul trebuie să verifice telefonul prin cod OTP.
+
+Poate fi implementat inițial mock/local dacă nu există încă integrare SMS reală, dar structura trebuie să fie pregătită pentru Twilio sau alt SMS provider.
+
+Flow:
+
+Trader apasă “Send verification code”
+Sistemul generează cod OTP
+Trader introduce codul
+Dacă este corect, phone_verified devine true
+Statusul devine PROFILE_INCOMPLETE
+
+În dashboard, afișează clar:
+
+Phone verification required before your profile can be reviewed.
+
+6. Creează Trader onboarding dashboard
+
+După login, dacă userul este Trader, trimite-l către Trader Dashboard.
+
+Dashboard-ul trebuie să afișeze un progress checklist:
+
+Email verified
+Phone verified
+Business profile completed
+Documents uploaded
+Admin review
+Subscription active
+Profile live
+
+Fiecare element trebuie să aibă status vizual:
+
+Completed
+Pending
+Action required
+Rejected
+Expired
+
+Traderul trebuie să vadă clar ce mai are de făcut.
+
+Exemplu:
+
+Your Trader profile is not live yet. Complete the steps below to activate your profile.
+
+7. Creează pagina Business Profile
+
+Adaugă o pagină separată unde Traderul completează informațiile business.
+
+Câmpuri necesare:
+
+Business Type:
+Sole Trader
+Limited Company
+Partnership
+
+Trading Name
+Legal Business Name
+Company Registration Number, doar dacă Business Type este Limited Company
+Business Address Line 1
+Business Address Line 2
+Town / City
+County
+Postcode
+Business Email
+Business Phone
+Website, optional
+Years of Experience
+Service Area Radius:
+5 miles
+10 miles
+20 miles
+30 miles
+50 miles
+Custom
+
+Business Description
+Services Offered
+Main Category
+Additional Categories
+Logo Upload
+Work Photos Upload
+
+După ce aceste informații sunt salvate complet, marchează business_profile_completed = true.
+
+Dacă emailul și telefonul sunt deja verificate, schimbă statusul în PENDING_DOCUMENTS.
+
+8. Creează document upload pentru verificare
+
+Adaugă o pagină “Verification Documents”.
+
+Traderul trebuie să poată încărca documente.
+
+Documentele trebuie împărțite pe categorii:
+
+Identity Verification
+Business Proof
+Public Liability Insurance
+Trade Qualifications
+Category-Specific Documents
+
+Pentru fiecare document, salvează:
+
+document_type
+file_url
+upload_date
+expiry_date, dacă există
+status: PENDING / APPROVED / REJECTED / EXPIRED
+admin_notes
+
+9. Identity Verification
+
+Cere următoarele:
+
+Full Legal Name
+Date of Birth
+Home Address
+Photo ID Upload:
+Passport
+Driving Licence
+National ID Card
+
+Aceste informații trebuie să fie private și să NU apară public pe profil.
+
+Pe dashboard, afișează doar:
+
+Identity document uploaded
+Pending review / Approved / Rejected
+
+10. Business Proof
+
+Dacă business type este Limited Company, cere:
+
+Company Registration Number
+Registered Company Name
+Registered Office Address
+
+Pregătește structura pentru Companies House lookup.
+
+Dacă nu există integrare Companies House acum, lasă câmpurile manuale, dar creează metoda/structura ca să poată fi adăugată mai târziu.
+
+Dacă business type este Sole Trader, cere unul dintre următoarele documente:
+
+Recent business invoice
+Business bank statement with sensitive data hidden
+HMRC letter
+Proof of trading name
+
+Nu afișa niciodată aceste documente public.
+
+11. Public Liability Insurance
+
+Adaugă câmpuri:
+
+Insurance Provider
+Policy Number
+Cover Amount
+Expiry Date
+Insurance Certificate Upload
+
+Policy number trebuie să fie vizibil doar pentru admin, nu public.
+
+Pe profilul public se poate afișa doar:
+
+Public Liability Insurance Checked
+Expires: Month/Year
+
+Dacă insurance expiry date este în trecut, schimbă statusul contului în EXPIRED_DOCUMENTS și ascunde profilul public până când traderul încarcă document nou.
+
+12. Trade Qualifications
+
+Creează un sistem flexibil pentru calificări, în funcție de categoria principală.
+
+Dacă Trader alege Electrician, cere opțional/obligatoriu:
+
+NICEIC registration
+NAPIT registration
+ECA membership
+18th Edition certificate
+Electrical qualification certificate
+
+Dacă Trader alege Gas Engineer, cere obligatoriu:
+
+Gas Safe Register Number
+Gas Safe Certificate / proof
+
+Gas Engineer nu trebuie să poată deveni VERIFIED fără Gas Safe information.
+
+Dacă Trader alege Plumber, cere:
+
+Plumbing qualification, optional
+Public liability insurance, required
+Proof of previous work, optional
+
+Dacă Trader alege Roofer / Builder, cere:
+
+Public liability insurance
+Proof of previous work
+Trade body membership, optional
+
+Dacă Trader alege Locksmith / Security, aplică verificare mai strictă:
+
+Photo ID required
+Business proof required
+Public liability insurance required
+Admin manual approval required
+
+13. Admin review system
+
+Creează în Admin Panel o secțiune:
+
+Trader Verification Requests
+
+Admin trebuie să vadă lista de traderi cu status UNDER_REVIEW.
+
+Pentru fiecare Trader, admin trebuie să poată vedea:
+
+Business details
+Contact details
+Email verified status
+Phone verified status
+Uploaded documents
+Document expiry dates
+Category
+Subscription status
+Notes
+
+Admin trebuie să poată face:
+
+Approve Trader
+Reject Trader
+Request More Information
+Suspend Trader
+Approve individual document
+Reject individual document
+Add admin note
+
+Dacă admin aprobă traderul:
+
+status = VERIFIED
+
+Dacă admin respinge:
+
+status = REJECTED
+
+Dacă admin cere mai multe informații:
+
+status = PENDING_DOCUMENTS
+
+și traderul primește mesaj în dashboard cu admin note.
+
+14. Public profile visibility rules
+
+Un Trader poate apărea public doar dacă TOATE condițiile sunt îndeplinite:
+
+email_verified = true
+phone_verified = true
+business_profile_completed = true
+required_documents_uploaded = true
+admin status = VERIFIED
+subscription_status = ACTIVE
+account_status is not SUSPENDED
+insurance is not expired, where required
+
+Dacă una dintre aceste condiții nu este îndeplinită, profilul trebuie ascuns din:
+
+Search results
+Category pages
+Public trader profile pages
+Recommended traders
+Featured traders
+Homepage cards
+
+15. Subscription and payment logic
+
+După ce traderul este verificat sau în paralel cu verificarea, trebuie să poată alege un subscription plan.
+
+Planuri:
+
+Basic
+Premium
+Elite
+
+Dar profilul nu devine live decât dacă:
+
+Trader is VERIFIED
+Subscription is ACTIVE
+
+Dacă subscription expiră, este anulat sau plata eșuează:
+
+subscription_status = INACTIVE / CANCELLED / PAST_DUE
+
+și profilul trebuie ascuns public.
+
+Dashboard message:
+
+Your subscription is not active. Please choose a plan to make your profile live.
+
+16. Badge-uri publice pe profil
+
+Pe profilul public al traderului, afișează badge-uri clare:
+
+Verified Trader
+Email Verified
+Phone Verified
+Public Liability Insurance Checked
+Qualifications Checked, if applicable
+Company Checked, if applicable
+Member Since
+Response Time, if available
+
+Nu afișa public:
+
+Date of birth
+Home address
+Photo ID
+Insurance policy number
+Uploaded private documents
+Personal email, unless trader chooses to show business email
+
+17. Security requirements
+
+Implementează sau pregătește structura pentru:
+
+Strong password validation
+Password confirmation
+Email verification
+Phone OTP verification
+Rate limiting pentru signup și login
+reCAPTCHA sau Cloudflare Turnstile pe signup/login
+Block disposable email addresses
+Prevent duplicate trader accounts with same phone number
+Prevent duplicate trader accounts with same company registration number
+Audit log pentru acțiuni importante
+Admin action log
+Secure document storage
+Private document access only for admin and account owner
+No public access to uploaded verification files
+GDPR consent stored with timestamp
+Terms acceptance stored with timestamp
+
+18. Audit log
+
+Creează audit log pentru:
+
+Trader account created
+Email verified
+Phone verified
+Business profile updated
+Document uploaded
+Document approved
+Document rejected
+Admin requested more information
+Trader approved
+Trader rejected
+Trader suspended
+Subscription activated
+Subscription cancelled
+Profile went live
+Profile hidden
+
+Fiecare log trebuie să salveze:
+
+user_id
+action
+timestamp
+performed_by
+details
+
+19. Notifications
+
+Adaugă notificări în dashboard și email notifications pentru:
+
+Email verification required
+Phone verification required
+Business profile incomplete
+Documents required
+Documents received
+Admin requested more information
+Trader approved
+Trader rejected
+Insurance expiring soon
+Insurance expired
+Subscription inactive
+Profile is now live
+
+Pentru insurance expiry, trimite notificări:
+
+30 days before expiry
+7 days before expiry
+On expiry date
+
+20. UX design requirements
+
+Păstrează designul actual dark, modern, mobile-first.
+
+Fă formularul simplu, cu carduri și iconițe.
+
+Nu pune toate câmpurile într-o singură pagină lungă.
+
+Folosește pași separați:
+
+Basic Account
+Verify Email
+Verify Phone
+Business Profile
+Documents
+Review
+Subscription
+Go Live
+
+Adaugă progress bar sau checklist.
+
+Adaugă mesaje clare pentru fiecare status.
+
+Exemplu:
+
+Your profile is currently under review. We’ll notify you once your documents have been checked.
+
+Your profile is verified, but your subscription is not active yet.
+
+Your insurance document has expired. Please upload a new certificate to make your profile visible again.
+
+21. Database changes needed
+
+Adaugă sau actualizează tabelele / modelele pentru:
+
+TraderProfile
+TraderVerificationStatus
+TraderDocuments
+TraderQualifications
+TraderInsurance
+TraderAuditLog
+TraderSubscriptionStatus
+AdminReviewNotes
+
+Asigură-te că datele sensibile sunt separate de datele publice.
+
+Datele publice ale traderului trebuie să fie separate de documentele private de verificare.
+
+22. API / backend requirements
+
+Creează endpoint-uri pentru:
+
+Create trader account
+Verify email
+Resend verification email
+Send phone OTP
+Verify phone OTP
+Get trader onboarding status
+Update business profile
+Upload verification document
+Get trader documents
+Submit trader for review
+Admin get pending trader reviews
+Admin approve trader
+Admin reject trader
+Admin request more information
+Admin approve document
+Admin reject document
+Admin suspend trader
+Check profile visibility
+Get public trader profile only if visible
+
+23. Frontend pages needed
+
+Creează / actualizează următoarele pagini:
+
+Trader Signup
+Trader Email Verification
+Trader Phone Verification
+Trader Onboarding Dashboard
+Trader Business Profile
+Trader Document Upload
+Trader Subscription Selection
+Trader Review Status
+Public Trader Profile
+Admin Trader Verification Requests
+Admin Trader Verification Detail Page
+
+24. Important business rule
+
+A trader account can exist before verification, but a trader profile must not go live until the trader is fully verified and has an active subscription.
+
+This rule must be enforced in the backend, not only in the frontend.
+
+25. Admin notes and rejection reason
+
+Când admin respinge un document sau un trader, trebuie să poată scrie un motiv.
+
+Traderul trebuie să vadă motivul în dashboard.
+
+Exemplu:
+
+Your Public Liability Insurance document was rejected because the expiry date was not visible. Please upload a clearer certificate.
+
+26. Document expiry logic
+
+Pentru orice document cu expiry date:
+
+Dacă expiră, statusul documentului devine EXPIRED.
+
+Dacă documentul este required, trader status devine EXPIRED_DOCUMENTS.
+
+Dacă profilul era live, trebuie ascuns automat.
+
+Traderul trebuie să primească notificare și să poată încărca document nou.
+
+27. Category-specific required documents
+
+Implementează logică în care fiecare category are documente required diferite.
+
+Exemple:
+
+Gas Engineer:
+Gas Safe number required
+Gas Safe proof required
+Public liability insurance required
+ID required
+
+Electrician:
+Public liability insurance required
+At least one electrical qualification or registration recommended/required
+ID required
+
+Plumber:
+Public liability insurance required
+ID required
+Qualification optional
+
+Builder:
+Public liability insurance required
+ID required
+Previous work proof optional
+
+Gardener:
+Public liability insurance recommended
+ID required
+Business proof optional
+
+Locksmith:
+ID required
+Business proof required
+Public liability insurance required
+Manual admin review required
+
+28. Public search results
+
+Actualizează search results ca să afișeze doar traderi care sunt live.
+
+Un trader live trebuie să îndeplinească:
+
+verification_status = VERIFIED
+subscription_status = ACTIVE
+profile_visibility = PUBLIC
+not suspended
+required documents approved
+no expired required documents
+
+29. Test data
+
+Creează test data pentru următoarele situații:
+
+Trader pending email verification
+Trader pending phone verification
+Trader profile incomplete
+Trader pending documents
+Trader under review
+Trader verified but no subscription
+Trader verified with active subscription and live profile
+Trader rejected
+Trader suspended
+Trader with expired insurance
+
+30. Final result expected
+
+La final vreau ca aplicația să aibă un sistem profesional de onboarding pentru Traderi, cu verificare serioasă, securitate, documente, admin approval și reguli clare pentru când profilul devine public.
+
+Nu vreau ca traderii să apară public imediat după signup.
+
+Vreau ca MyLocalTrade să pară o platformă serioasă și sigură, similară cu Checkatrade, unde clienții pot avea încredere că traderii sunt verificați.
