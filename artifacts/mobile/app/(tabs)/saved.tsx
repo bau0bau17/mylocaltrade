@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useGetSavedTraders } from '@workspace/api-client-react';
 import { TraderCard } from '@/components/TraderCard';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function SavedScreen() {
@@ -15,11 +16,12 @@ export default function SavedScreen() {
   const { data, isLoading } = useGetSavedTraders();
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Saved</Text>
-        <Text style={styles.subtitle}>Your saved tradespeople</Text>
-      </View>
+    <View style={styles.container}>
+      <ScreenHeader
+        variant="tab"
+        title="Saved"
+        subtitle="Your saved tradespeople"
+      />
 
       {!isAuthenticated ? (
         <View style={styles.centered}>

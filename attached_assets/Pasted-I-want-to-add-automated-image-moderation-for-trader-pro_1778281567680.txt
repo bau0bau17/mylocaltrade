@@ -1,0 +1,158 @@
+I want to add automated image moderation for trader profile and portfolio image uploads.
+
+Goal:
+
+Prevent obscene, unsafe, illegal or inappropriate images from being published on trader profiles.
+
+This should apply to:
+
+- Business logo uploads
+- Main profile image uploads
+- Portfolio/work gallery image uploads
+
+Do not apply this to private verification documents in the same way, because ID/insurance documents are private and reviewed separately by admin.
+
+Image upload flow:
+
+1. Trader uploads image
+2. Validate file type and file size
+3. Store image temporarily or privately
+4. Run automated image moderation
+5. Based on moderation result, set image status
+6. Only approved images can appear publicly
+
+Allowed file types:
+
+- JPG
+- JPEG
+- PNG
+- WEBP
+
+Reject unsafe file types:
+
+- EXE
+- ZIP
+- JS
+- HTML
+- SVG
+- PDF for public portfolio images
+
+Set max file size:
+
+- 5MB per portfolio/profile image
+
+Image status values:
+
+PENDING_AUTO_REVIEW
+APPROVED
+REJECTED
+NEEDS_MANUAL_REVIEW
+HIDDEN
+REPORTED
+
+Automated moderation should check for:
+
+- Nudity or sexual content
+- Explicit adult content
+- Violence or gore
+- Hate symbols
+- Weapons
+- Drugs
+- Self harm content
+- Offensive or shocking content
+- Personal documents uploaded into the wrong place
+- Screenshots containing private information, where possible
+
+Decision rules:
+
+If image is clearly safe:
+- status = APPROVED
+- image can appear on public trader profile
+
+If image is clearly unsafe:
+- status = REJECTED
+- image must not appear publicly
+- trader sees a safe message explaining that the image could not be accepted
+
+If image is uncertain:
+- status = NEEDS_MANUAL_REVIEW
+- image does not appear publicly
+- admin can approve or reject manually
+
+Trader message for rejected image:
+
+“Your image could not be accepted because it may not meet MyLocalTrade’s image safety guidelines. Please upload a clear and appropriate photo of your business or work.”
+
+Trader message for manual review:
+
+“Your image has been uploaded and is awaiting review before it can appear publicly.”
+
+Admin panel requirements:
+
+Add an Image Moderation section where admin can see:
+
+- Pending manual review images
+- Rejected images
+- Reported images
+- Trader name
+- Image type
+- Upload date
+- Moderation result
+- Moderation reason
+- Confidence score, if available
+- Admin notes
+
+Admin actions:
+
+- Approve image
+- Reject image
+- Hide image
+- Add admin note
+
+Public profile rule:
+
+Only images with status APPROVED can appear publicly.
+
+Security:
+
+- Do not expose temporary/private image URLs publicly
+- Do not show rejected or pending images publicly
+- Do not allow users to bypass moderation by calling image URLs directly
+- Store moderation result in database
+- Add rate limit for image uploads
+- Add maximum number of uploads per day per trader to prevent abuse
+
+Audit log actions:
+
+TRADER_IMAGE_UPLOADED
+TRADER_IMAGE_AUTO_APPROVED
+TRADER_IMAGE_AUTO_REJECTED
+TRADER_IMAGE_NEEDS_MANUAL_REVIEW
+ADMIN_IMAGE_APPROVED
+ADMIN_IMAGE_REJECTED
+ADMIN_IMAGE_HIDDEN
+TRADER_IMAGE_REPORTED
+
+User guidance before upload:
+
+Add this text near the upload area:
+
+“Upload clear photos of your own work or business. Do not upload offensive images, nudity, customer personal details, addresses, number plates, faces without permission, screenshots of private conversations, or documents in the public gallery.”
+
+Important:
+
+Use an automated moderation provider/service through the backend only.
+
+Do not expose moderation API keys in frontend or mobile code.
+
+Use environment variables for any moderation API key.
+
+If the moderation provider is unavailable:
+
+- Do not auto-approve the image
+- Set status = NEEDS_MANUAL_REVIEW
+- Keep image hidden until admin review
+
+Final goal:
+
+Trader portfolio images should be automatically checked before they appear publicly, with suspicious or unsafe images sent to admin review.

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { TraderCard } from '@/components/TraderCard';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useListTraders } from '@workspace/api-client-react';
 
 const CATEGORIES = ['All', 'Plumber', 'Electrician', 'Roofer', 'Cleaner', 'Painter', 'Builder'];
@@ -25,11 +26,12 @@ export default function TradersScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Traders</Text>
-        <Text style={styles.subtitle}>{data?.total || 0} available</Text>
-      </View>
+    <View style={styles.container}>
+      <ScreenHeader
+        variant="tab"
+        title="Traders"
+        subtitle={`${data?.total || 0} available`}
+      />
       
       <View style={styles.filterBar}>
         <FlatList

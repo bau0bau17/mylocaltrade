@@ -17,6 +17,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import Colors from "@/constants/colors";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -81,15 +82,26 @@ function useNotificationDeepLinks() {
 function RootLayoutNav() {
   useNotificationDeepLinks();
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back", headerTintColor: Colors.light.primary, headerStyle: { backgroundColor: Colors.light.background }, headerTitleStyle: { color: Colors.light.text } }}>
+    <Stack
+      screenOptions={{
+        header: ({ options, navigation, back }) => (
+          <ScreenHeader
+            title={(options.title as string) ?? ""}
+            showBack={!!back}
+            onBack={() => navigation.goBack()}
+          />
+        ),
+      }}
+    >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="legal-support" options={{ headerShown: false }} />
+      <Stack.Screen name="legal-support" options={{ title: "Legal & Support" }} />
       <Stack.Screen name="trader/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="auth/login" options={{ title: "Log In", presentation: "modal" }} />
-      <Stack.Screen name="auth/register-customer" options={{ title: "Register", presentation: "modal" }} />
-      <Stack.Screen name="auth/register-trader" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/login" options={{ title: "Log In" }} />
+      <Stack.Screen name="auth/register-customer" options={{ title: "Register" }} />
+      <Stack.Screen name="auth/register-trader" options={{ title: "Join as Trader" }} />
       <Stack.Screen name="pricing" options={{ title: "Subscription Plans" }} />
-      <Stack.Screen name="enquiry/[traderId]" options={{ title: "Send Enquiry", presentation: "modal" }} />
+      <Stack.Screen name="enquiry/[traderId]" options={{ title: "Send Enquiry" }} />
+      <Stack.Screen name="trader-dashboard/index" options={{ title: "Trader Onboarding" }} />
       <Stack.Screen name="trader-dashboard/edit-profile" options={{ title: "Edit Profile" }} />
       <Stack.Screen name="trader-dashboard/leads" options={{ title: "My Leads" }} />
       <Stack.Screen name="trader-dashboard/billing" options={{ title: "Billing & Plan" }} />

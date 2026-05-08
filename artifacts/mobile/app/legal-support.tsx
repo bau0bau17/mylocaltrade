@@ -15,14 +15,7 @@ export default function LegalSupportScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-          <Feather name="chevron-left" size={24} color={Colors.light.primary} />
-        </Pressable>
-        <Text style={styles.title}>Legal & Support</Text>
-      </View>
-
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
@@ -152,30 +145,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: Colors.light.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-    gap: 8,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    backgroundColor: Colors.light.primaryMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.light.text,
-    letterSpacing: 0.3,
   },
   scrollContent: {
     padding: 16,

@@ -86,7 +86,7 @@ export default function EnquiryScreen() {
     <KeyboardAwareScrollViewCompat
       style={styles.container}
       contentContainerStyle={{
-        paddingTop: insets.top + 16,
+        paddingTop: 16,
         paddingBottom: insets.bottom + 24,
         paddingHorizontal: 20,
       }}

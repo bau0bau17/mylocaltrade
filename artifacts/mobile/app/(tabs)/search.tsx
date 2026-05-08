@@ -6,6 +6,7 @@ import { useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import { TraderCard } from '@/components/TraderCard';
+import { ScreenHeader } from '@/components/ScreenHeader';
 import { useListTraders, getListTradersQueryKey } from '@workspace/api-client-react';
 import { useLocation } from '@/hooks/useLocation';
 import type { FeatherIconName } from '@/types/feather-icons';
@@ -87,10 +88,9 @@ export default function SearchScreen() {
     : `Near ${location.label}`;
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}>
+    <View style={styles.container}>
+      <ScreenHeader variant="tab" title="Search" />
       <View style={styles.header}>
-        <Text style={styles.title}>Search</Text>
-
         <View style={styles.searchForm}>
           <View style={styles.inputContainer}>
             <Feather name="search" size={18} color={Colors.light.textMuted} />
