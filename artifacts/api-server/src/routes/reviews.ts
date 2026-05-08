@@ -307,11 +307,15 @@ router.post("/trader/reviews/:id/reply", authMiddleware, traderOnly, async (req,
       res.status(403).json({ error: "You can only reply to reviews on your own profile" });
       return;
     }
+    if (review.status !== "APPROVED") {
+      res.status(409).json({ error: "You can only reply to reviews that have been approved" });
+      return;
+    }
 
     const [updated] = await db
       .update(reviewsTable)
       .set({
-        traderReply: body.reply.trim(),
+        traderReply: body.reply,
         traderReplyAt: new Date(),
         updatedAt: new Date(),
       })

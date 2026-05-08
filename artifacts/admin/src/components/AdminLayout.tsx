@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
@@ -39,6 +41,17 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
 
+  const { data: pendingReviews } = useQuery({
+    queryKey: ["admin", "reviews", "pending-count"],
+    queryFn: () =>
+      api<{ reviews: Array<{ id: number }> }>("/api/admin/reviews", {
+        query: { status: "PENDING" },
+      }),
+    refetchInterval: 60_000,
+    enabled: !!user,
+  });
+  const pendingCount = pendingReviews?.reviews.length ?? 0;
+
   return (
     <div className="flex min-h-screen w-full bg-secondary/30">
       <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
@@ -67,7 +80,15 @@ export function AdminLayout({ children }: { children: ReactNode }) {
                 data-testid={`nav-${item.href.replace(/\//g, "") || "dashboard"}`}
               >
                 <Icon className="w-4 h-4" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.href === "/reviews" && pendingCount > 0 && (
+                  <span
+                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground"
+                    data-testid="badge-pending-reviews"
+                  >
+                    {pendingCount}
+                  </span>
+                )}
               </Link>
             );
           })}
