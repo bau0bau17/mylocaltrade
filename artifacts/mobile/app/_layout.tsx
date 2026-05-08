@@ -106,7 +106,7 @@ function RootLayoutNav() {
             onBack={() => navigation.goBack()}
           />
         ),
-        contentStyle: { paddingBottom: !isTabRoute && !isAdminRoute ? 68 : 0 },
+        contentStyle: { paddingBottom: !isTabRoute && !isAdminRoute ? 84 : 0 },
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

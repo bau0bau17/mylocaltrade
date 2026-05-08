@@ -39,10 +39,14 @@ export function BottomNav() {
     return null;
   })();
 
-  const bottomPad = Math.max(insets.bottom, 8);
+  const isWeb = Platform.OS === 'web';
+  // Match the native Tabs bar height exactly: web uses a fixed 84px,
+  // native uses 49pt (iOS) / 56dp (Android) above the bottom safe area.
+  const baseHeight = isWeb ? 84 : isIOS ? 49 : 56;
+  const bottomPad = isWeb ? 0 : insets.bottom;
 
   return (
-    <View style={[styles.wrap, { paddingBottom: bottomPad, height: 60 + bottomPad }]}>
+    <View style={[styles.wrap, { paddingBottom: bottomPad, height: baseHeight + bottomPad }]}>
       {isIOS ? (
         <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
       ) : (
@@ -85,7 +89,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingTop: 8,
   },
   item: {
     flex: 1,
