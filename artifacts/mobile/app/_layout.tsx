@@ -38,6 +38,8 @@ function useNotificationDeepLinks() {
       const d = data as { type?: string; conversationId?: number | string };
       if (d.type === "new_message" && d.conversationId != null) {
         router.push(`/messages/${d.conversationId}`);
+      } else if (d.type === "new_enquiry") {
+        router.push("/trader-dashboard/leads");
       }
     };
 

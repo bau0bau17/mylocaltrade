@@ -6,6 +6,7 @@ import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewEnquiryEmail } from "../lib/email";
+import { sendPushToUser } from "../lib/push-notifications";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 
 const router: IRouter = Router();
@@ -117,6 +118,20 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
         }
       } catch (notifyErr) {
         req.log.warn({ err: notifyErr, enquiryId: enquiry.id }, "Failed to send new-enquiry email");
+      }
+      try {
+        const customerName = customer?.fullName || "A customer";
+        await sendPushToUser(trader.userId, {
+          title: "New enquiry",
+          body: `${customerName}: ${serviceRequired}`,
+          data: {
+            type: "new_enquiry",
+            enquiryId: enquiry.id,
+            conversationId,
+          },
+        });
+      } catch (pushErr) {
+        req.log.warn({ err: pushErr, enquiryId: enquiry.id }, "Failed to send new-enquiry push");
       }
     })();
 
