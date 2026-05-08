@@ -12,6 +12,7 @@ import { generateToken, authMiddleware, generatePollToken, verifyPollToken } fro
 import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, logAudit, buildOnboardingChecklist, statusMessage, isTraderProfilePublic, evaluateBusinessProfileComplete, evaluateDocumentsComplete } from "../lib/trader-status";
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, evaluateLegalAcceptance } from "../lib/legal";
 import { traderDocumentsTable } from "@workspace/db/schema";
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -117,7 +118,9 @@ router.post("/auth/register/trader", async (req, res) => {
         isActive: false,
         verificationStatus: TRADER_STATUS.PENDING_EMAIL_VERIFICATION,
         termsAcceptedAt: now,
+        termsVersion: CURRENT_TERMS_VERSION,
         privacyAcceptedAt: now,
+        privacyVersion: CURRENT_PRIVACY_VERSION,
       });
 
       return user;
@@ -410,12 +413,63 @@ router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
       businessProfile,
       documents,
       subscription,
+      legal: evaluateLegalAcceptance(profile),
       email: user.email,
       businessName: profile.businessName,
     });
   } catch (error) {
     req.log.error({ err: error }, "Get onboarding status failed");
     res.status(500).json({ error: "Failed to get onboarding status" });
+  }
+});
+
+// Phase 8: re-accept latest terms / privacy after a version bump.
+router.post("/trader/accept-terms", authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req as AuthenticatedRequest;
+    const body = req.body as { acceptTerms?: boolean; acceptPrivacy?: boolean };
+    if (body.acceptTerms !== true && body.acceptPrivacy !== true) {
+      res.status(400).json({ error: "Nothing to accept." });
+      return;
+    }
+    const [profile] = await db
+      .select()
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile) {
+      res.status(404).json({ error: "Trader profile not found." });
+      return;
+    }
+    const now = new Date();
+    const update: Record<string, unknown> = { updatedAt: now };
+    if (body.acceptTerms) {
+      update.termsVersion = CURRENT_TERMS_VERSION;
+      update.termsAcceptedAt = now;
+    }
+    if (body.acceptPrivacy) {
+      update.privacyVersion = CURRENT_PRIVACY_VERSION;
+      update.privacyAcceptedAt = now;
+    }
+    const [updated] = await db
+      .update(traderProfilesTable)
+      .set(update)
+      .where(eq(traderProfilesTable.userId, userId))
+      .returning();
+    await logAudit({
+      userId,
+      action: "BUSINESS_PROFILE_UPDATED",
+      details: {
+        legal: {
+          terms: body.acceptTerms ? CURRENT_TERMS_VERSION : undefined,
+          privacy: body.acceptPrivacy ? CURRENT_PRIVACY_VERSION : undefined,
+        },
+      },
+    });
+    res.json({ legal: evaluateLegalAcceptance(updated) });
+  } catch (error) {
+    req.log.error({ err: error }, "Accept terms failed");
+    res.status(500).json({ error: "Failed to record acceptance" });
   }
 });
 

@@ -480,6 +480,103 @@ router.post("/admin/traders/:userId/request-info", authMiddleware, adminOnly, as
   }
 });
 
+// Phase 8: GET /api/admin/audit-report?from=&to=&action=&format=json|csv
+router.get("/admin/audit-report", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const fromRaw = typeof req.query.from === "string" ? req.query.from : undefined;
+    const toRaw = typeof req.query.to === "string" ? req.query.to : undefined;
+    const actionFilter = typeof req.query.action === "string" ? req.query.action : undefined;
+    const format = req.query.format === "csv" ? "csv" : "json";
+
+    const from = fromRaw ? new Date(fromRaw) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const to = toRaw ? new Date(toRaw) : new Date();
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      res.status(400).json({ error: "Invalid from/to date." });
+      return;
+    }
+
+    const conds = [
+      sql`${traderAuditLogTable.createdAt} >= ${from}`,
+      sql`${traderAuditLogTable.createdAt} <= ${to}`,
+    ];
+    if (actionFilter) conds.push(eq(traderAuditLogTable.action, actionFilter));
+
+    const rows = await db
+      .select({
+        id: traderAuditLogTable.id,
+        userId: traderAuditLogTable.userId,
+        action: traderAuditLogTable.action,
+        performedBy: traderAuditLogTable.performedBy,
+        notes: traderAuditLogTable.notes,
+        details: traderAuditLogTable.details,
+        createdAt: traderAuditLogTable.createdAt,
+        userEmail: usersTable.email,
+        businessName: traderProfilesTable.businessName,
+      })
+      .from(traderAuditLogTable)
+      .leftJoin(usersTable, eq(usersTable.id, traderAuditLogTable.userId))
+      .leftJoin(traderProfilesTable, eq(traderProfilesTable.userId, traderAuditLogTable.userId))
+      .where(and(...conds))
+      .orderBy(desc(traderAuditLogTable.createdAt))
+      .limit(5000);
+
+    const counts = await db
+      .select({
+        action: traderAuditLogTable.action,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(traderAuditLogTable)
+      .where(and(...conds))
+      .groupBy(traderAuditLogTable.action)
+      .orderBy(desc(sql`count(*)`));
+
+    if (format === "csv") {
+      const escape = (v: unknown): string => {
+        if (v === null || v === undefined) return "";
+        const s = typeof v === "string" ? v : JSON.stringify(v);
+        if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      };
+      const header = "id,createdAt,action,userId,userEmail,businessName,performedBy,notes,details";
+      const lines = rows.map((r) =>
+        [
+          r.id,
+          r.createdAt.toISOString(),
+          r.action,
+          r.userId,
+          r.userEmail ?? "",
+          r.businessName ?? "",
+          r.performedBy ?? "",
+          r.notes ?? "",
+          r.details ? JSON.stringify(r.details) : "",
+        ].map(escape).join(","),
+      );
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="audit-report-${from.toISOString().slice(0, 10)}-to-${to.toISOString().slice(0, 10)}.csv"`,
+      );
+      res.send([header, ...lines].join("\n"));
+      return;
+    }
+
+    res.json({
+      from: from.toISOString(),
+      to: to.toISOString(),
+      action: actionFilter ?? null,
+      total: rows.length,
+      counts,
+      entries: rows.map((r) => ({
+        ...r,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Audit report failed");
+    res.status(500).json({ error: "Failed to build audit report" });
+  }
+});
+
 // POST /api/admin/traders/:userId/suspend
 router.post("/admin/traders/:userId/suspend", authMiddleware, adminOnly, async (req, res) => {
   try {
