@@ -30,6 +30,8 @@ tags:
     description: Trade categories
   - name: conversations
     description: Customer-trader conversations and messages
+  - name: push-tokens
+    description: Mobile push notification token registration
 paths:
   /healthz:
     get:
@@ -1244,6 +1246,58 @@ paths:
               schema:
                 $ref: "#/components/schemas/OkResponse"
 
+  /push-tokens:
+    post:
+      operationId: registerPushToken
+      tags: [push-tokens]
+      summary: Register or refresh an Expo push token for the current user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterPushTokenRequest"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: unregisterPushToken
+      tags: [push-tokens]
+      summary: Unregister a push token for the current user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnregisterPushTokenRequest"
+      responses:
+        "200":
+          description: Unregistered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
   /admin/conversation-reports:
     get:
       operationId: getAdminConversationReports
@@ -1970,6 +2024,27 @@ components:
         ok:
           type: boolean
       required: [ok]
+
+    RegisterPushTokenRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 8
+          maxLength: 255
+        platform:
+          type: string
+          enum: [ios, android, web]
+      required: [token]
+
+    UnregisterPushTokenRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 8
+          maxLength: 255
+      required: [token]
 
     ConversationSummary:
       type: object

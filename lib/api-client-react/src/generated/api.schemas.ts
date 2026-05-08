@@ -354,6 +354,32 @@ export interface OkResponse {
   ok: boolean;
 }
 
+export type RegisterPushTokenRequestPlatform =
+  (typeof RegisterPushTokenRequestPlatform)[keyof typeof RegisterPushTokenRequestPlatform];
+
+export const RegisterPushTokenRequestPlatform = {
+  ios: "ios",
+  android: "android",
+  web: "web",
+} as const;
+
+export interface RegisterPushTokenRequest {
+  /**
+   * @minLength 8
+   * @maxLength 255
+   */
+  token: string;
+  platform?: RegisterPushTokenRequestPlatform;
+}
+
+export interface UnregisterPushTokenRequest {
+  /**
+   * @minLength 8
+   * @maxLength 255
+   */
+  token: string;
+}
+
 export type ConversationSummaryStatus =
   (typeof ConversationSummaryStatus)[keyof typeof ConversationSummaryStatus];
 

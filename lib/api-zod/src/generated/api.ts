@@ -1102,6 +1102,37 @@ export const ReportConversationBody = zod.object({
 });
 
 /**
+ * @summary Register or refresh an Expo push token for the current user
+ */
+export const registerPushTokenBodyTokenMin = 8;
+export const registerPushTokenBodyTokenMax = 255;
+
+export const RegisterPushTokenBody = zod.object({
+  token: zod
+    .string()
+    .min(registerPushTokenBodyTokenMin)
+    .max(registerPushTokenBodyTokenMax),
+  platform: zod.enum(["ios", "android", "web"]).optional(),
+});
+
+/**
+ * @summary Unregister a push token for the current user
+ */
+export const unregisterPushTokenBodyTokenMin = 8;
+export const unregisterPushTokenBodyTokenMax = 255;
+
+export const UnregisterPushTokenBody = zod.object({
+  token: zod
+    .string()
+    .min(unregisterPushTokenBodyTokenMin)
+    .max(unregisterPushTokenBodyTokenMax),
+});
+
+export const UnregisterPushTokenResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
  * @summary Admin — list conversation reports
  */
 export const GetAdminConversationReportsQueryParams = zod.object({

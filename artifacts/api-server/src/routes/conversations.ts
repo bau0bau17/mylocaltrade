@@ -13,6 +13,7 @@ import { and, eq, desc, sql } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewMessageEmail } from "../lib/email";
+import { sendPushToUser } from "../lib/push-notifications";
 
 const router: IRouter = Router();
 
@@ -356,6 +357,19 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
             preview,
             conversationId: id,
           });
+        }
+        try {
+          await sendPushToUser(recipientUserId, {
+            title: senderName,
+            body: preview,
+            data: {
+              type: "new_message",
+              conversationId: id,
+              messageId: created.id,
+            },
+          });
+        } catch (pushErr) {
+          req.log.warn({ err: pushErr, conversationId: id }, "Failed to send new-message push");
         }
       } catch (notifyErr) {
         req.log.warn({ err: notifyErr, conversationId: id }, "Failed to send new-message email");

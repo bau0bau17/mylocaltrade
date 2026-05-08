@@ -12,6 +12,10 @@ import {
   registerTrader as apiRegisterTrader,
   resendVerificationEmail as apiResendVerificationEmail,
 } from '@workspace/api-client-react';
+import {
+  registerForPushNotificationsAsync,
+  unregisterPushNotificationsAsync,
+} from '@/lib/push-notifications';
 
 export class EmailNotVerifiedError extends Error {
   readonly code = 'EMAIL_NOT_VERIFIED';
@@ -70,6 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
+        // Refresh the push token in the background so server has the latest.
+        void registerForPushNotificationsAsync();
       }
     } catch (e) {
       console.error('Failed to load auth state', e);
@@ -85,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem('auth_user', JSON.stringify(response.user));
       setToken(response.token);
       setUser(response.user);
+      void registerForPushNotificationsAsync();
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 403) {
         const apiErr = err as { data?: { code?: string; email?: string } };
@@ -127,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    await unregisterPushNotificationsAsync();
     await AsyncStorage.removeItem('auth_token');
     await AsyncStorage.removeItem('auth_user');
     setToken(null);
