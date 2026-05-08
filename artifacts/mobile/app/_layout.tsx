@@ -50,6 +50,8 @@ function RootLayoutNav() {
       <Stack.Screen name="privacy" options={{ title: "Privacy Policy" }} />
       <Stack.Screen name="terms" options={{ title: "Terms & Conditions" }} />
       <Stack.Screen name="refund" options={{ title: "Refund Policy" }} />
+      <Stack.Screen name="admin/index" options={{ title: "Admin · Trader Review" }} />
+      <Stack.Screen name="admin/[traderId]" options={{ title: "Trader Review" }} />
     </Stack>
   );
 }

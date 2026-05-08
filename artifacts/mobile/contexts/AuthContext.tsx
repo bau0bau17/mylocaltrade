@@ -26,6 +26,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isTrader: boolean;
   isCustomer: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -128,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         isTrader: user?.role === 'trader',
         isCustomer: user?.role === 'customer',
+        isAdmin: user?.role === 'admin',
       }}
     >
       {children}
