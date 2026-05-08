@@ -72,6 +72,13 @@ export function verifyUnsubscribeToken(token: string): {
   return { traderProfileId: decoded.traderProfileId, kind: decoded.kind };
 }
 
+/**
+ * Load the user backing a bearer token and return null if the account
+ * should no longer be trusted. We only reject on `deletedAt` here:
+ * `users.isActive` tracks subscription state for traders (false during
+ * onboarding before payment, and after cancellation) and is intentionally
+ * allowed to log in — see /auth/login, which mirrors this rule.
+ */
 async function loadActiveUser(userId: number): Promise<{
   id: number;
   role: "customer" | "trader" | "admin";
@@ -80,7 +87,6 @@ async function loadActiveUser(userId: number): Promise<{
     .select({
       id: usersTable.id,
       role: usersTable.role,
-      isActive: usersTable.isActive,
       deletedAt: usersTable.deletedAt,
     })
     .from(usersTable)
@@ -88,7 +94,6 @@ async function loadActiveUser(userId: number): Promise<{
     .limit(1);
   if (!user) return null;
   if (user.deletedAt) return null;
-  if (!user.isActive) return null;
   return { id: user.id, role: user.role as "customer" | "trader" | "admin" };
 }
 
