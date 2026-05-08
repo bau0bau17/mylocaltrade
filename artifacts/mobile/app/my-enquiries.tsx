@@ -37,6 +37,15 @@ export default function MyEnquiriesScreen() {
         <FlatList
           data={data.enquiries}
           keyExtractor={(item) => String(item.id)}
+          ListHeaderComponent={
+            <Pressable
+              style={styles.compareBtn}
+              onPress={() => router.push('/compare-offers')}
+            >
+              <Feather name="bar-chart-2" size={16} color="#fff" />
+              <Text style={styles.compareBtnText}>Compare offers side-by-side</Text>
+            </Pressable>
+          }
           renderItem={({ item }) => (
             <View>
               <EnquiryCard enquiry={item} />
@@ -103,4 +112,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   openConvBtnText: { fontSize: 13, fontWeight: '700', color: Colors.light.primary, letterSpacing: 0.2 },
+  compareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 4,
+    paddingVertical: 12,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 12,
+  },
+  compareBtnText: { fontSize: 14, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
 });
