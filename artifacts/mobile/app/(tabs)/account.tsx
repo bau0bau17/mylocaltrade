@@ -292,20 +292,24 @@ export default function AccountScreen() {
         ) : null}
       </View>
 
-      <Text style={styles.sectionLabel}>Support & Legal</Text>
-      <View style={[styles.group, { marginHorizontal: 16 }]}>
-        <MenuRow
-          icon="mail"
-          label="Contact Support"
-          sub="Send us a message"
-          onPress={() => router.push('/contact-support')}
-          accent
-        />
-        <View style={styles.separator} />
-        <MenuRow icon="info" label="About MyLocalTrade" onPress={() => router.push('/about')} />
-        <View style={styles.separator} />
-        <MenuRow icon="life-buoy" label="Legal & Support" onPress={() => router.push('/legal-support')} />
-      </View>
+      {!isAdmin ? (
+        <>
+          <Text style={styles.sectionLabel}>Support & Legal</Text>
+          <View style={[styles.group, { marginHorizontal: 16 }]}>
+            <MenuRow
+              icon="mail"
+              label="Contact Support"
+              sub="Send us a message"
+              onPress={() => router.push('/contact-support')}
+              accent
+            />
+            <View style={styles.separator} />
+            <MenuRow icon="info" label="About MyLocalTrade" onPress={() => router.push('/about')} />
+            <View style={styles.separator} />
+            <MenuRow icon="life-buoy" label="Legal & Support" onPress={() => router.push('/legal-support')} />
+          </View>
+        </>
+      ) : null}
 
       <View style={styles.logoutWrap}>
         <Pressable style={styles.logoutButton} onPress={handleLogout}>
