@@ -399,6 +399,97 @@ export async function sendDocumentRejectedEmail(opts: {
   }
 }
 
+export async function sendReviewApprovedEmail(opts: {
+  toEmail: string;
+  toName: string;
+  customerName: string;
+  rating: number;
+  reviewText: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeCustomer = escapeHtml(opts.customerName);
+  const safeText = escapeHtml(opts.reviewText);
+  const stars = "★".repeat(opts.rating) + "☆".repeat(5 - opts.rating);
+  const html = emailShell({
+    title: "A new review was approved",
+    preheader: `${safeCustomer} left you a ${opts.rating}-star review`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+        A new review on your MyLocalTrade profile has been approved by our moderation team and is now public.
+      </p>
+      <div style="background: #0E1A2A; border-left: 3px solid #06D6A0; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #FBBF24; font-size: 16px; margin: 0 0 4px; letter-spacing: 2px;">${stars}</p>
+        <p style="color: #9CA3AF; font-size: 12px; margin: 0 0 8px;">${safeCustomer}</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeText}</p>
+      </div>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
+        Open the trader dashboard to reply publicly — a quick, friendly response builds trust with future customers.
+      </p>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: `New ${opts.rating}-star review on your profile`,
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] Review-approved email sent to ${opts.toEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — review approved (${opts.rating}★) for ${opts.toEmail}`);
+  }
+}
+
+export async function sendReviewReplyEmail(opts: {
+  toEmail: string;
+  toName: string;
+  traderName: string;
+  reviewText: string;
+  replyText: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeTrader = escapeHtml(opts.traderName);
+  const safeReview = escapeHtml(opts.reviewText);
+  const safeReply = escapeHtml(opts.replyText);
+  const html = emailShell({
+    title: "The trader replied to your review",
+    preheader: `${safeTrader} replied to your review on MyLocalTrade`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+        <strong style="color: #00B4D8;">${safeTrader}</strong> just posted a public reply to your review.
+      </p>
+      <div style="background: #0B1120; border: 1px solid #1F2937; border-radius: 10px; padding: 14px 16px; margin: 0 0 12px;">
+        <p style="color: #6B7280; font-size: 11px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Your review</p>
+        <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReview}</p>
+      </div>
+      <div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #00B4D8; font-size: 11px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Trader's reply</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReply}</p>
+      </div>
+      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
+        You can view the full conversation on the trader's profile in the MyLocalTrade app.
+      </p>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: `${opts.traderName} replied to your review`,
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] Review-reply email sent to ${opts.toEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — reply notification for ${opts.toEmail} from ${opts.traderName}`);
+  }
+}
+
 export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }

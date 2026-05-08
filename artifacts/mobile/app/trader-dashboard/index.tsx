@@ -9,6 +9,7 @@ import { getApiUrl } from '@/lib/api-url';
 import type { FeatherIconName } from '@/types/feather-icons';
 import {
   useGetTraderOnboardingStatus,
+  useGetMyTraderReviews,
   type TraderOnboardingStatus,
   type TraderOnboardingChecklistStep,
 } from '@workspace/api-client-react';
@@ -39,15 +40,23 @@ export default function TraderOnboardingDashboard() {
     },
   });
 
+  const { data: reviewsData, refetch: refetchReviews } = useGetMyTraderReviews({
+    query: {
+      queryKey: ['/api/trader/reviews'],
+      enabled: Boolean(token && isTrader),
+    },
+  });
+
   const fetchStatus = useCallback(async () => {
-    await refetchStatus();
+    await Promise.all([refetchStatus(), refetchReviews()]);
     setRefreshing(false);
-  }, [refetchStatus]);
+  }, [refetchStatus, refetchReviews]);
 
   useFocusEffect(
     useCallback(() => {
       void refetchStatus();
-    }, [refetchStatus])
+      void refetchReviews();
+    }, [refetchStatus, refetchReviews])
   );
 
   const loading = queryLoading;
@@ -242,20 +251,24 @@ export default function TraderOnboardingDashboard() {
         </View>
       ) : null}
 
+      {/* Reviews summary card */}
+      <Text style={styles.sectionLabel}>Reviews</Text>
+      <ReviewsSummaryCard
+        averageRating={reviewsData?.averageRating ?? null}
+        approvedCount={reviewsData?.totalCount ?? 0}
+        pendingCount={
+          (reviewsData?.reviews ?? []).filter((r) => r.status === 'PENDING').length
+        }
+        latestApprovedAt={(() => {
+          const approved = (reviewsData?.reviews ?? []).filter((r) => r.status === 'APPROVED');
+          return approved[0]?.createdAt ?? null;
+        })()}
+        onOpen={() => router.push('/trader-dashboard/reviews')}
+      />
+
       {/* Quick links to other trader-dashboard sections */}
       <Text style={styles.sectionLabel}>Manage</Text>
       <View style={styles.checklistGroup}>
-        <Pressable style={styles.checklistRow} onPress={() => router.push('/trader-dashboard/reviews')}>
-          <View style={[styles.iconCircle, { backgroundColor: Colors.light.featuredMuted, borderColor: Colors.light.featured }]}>
-            <Feather name="star" size={16} color={Colors.light.featured} />
-          </View>
-          <View style={styles.checklistMain}>
-            <Text style={styles.checklistLabel}>Reviews & replies</Text>
-            <Text style={styles.checklistDesc}>See what customers are saying and reply publicly.</Text>
-          </View>
-          <Feather name="chevron-right" size={18} color={Colors.light.textMuted} style={{ alignSelf: 'center' }} />
-        </Pressable>
-        <View style={styles.separator} />
         <Pressable style={styles.checklistRow} onPress={() => router.push('/trader-dashboard/billing')}>
           <View style={[styles.iconCircle, { backgroundColor: Colors.light.primaryMuted, borderColor: Colors.light.primary }]}>
             <Feather name="credit-card" size={16} color={Colors.light.primary} />
@@ -281,6 +294,111 @@ export default function TraderOnboardingDashboard() {
     </ScrollView>
   );
 }
+
+function formatRelative(iso: string): string {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const diffSec = Math.max(0, Math.floor((now - then) / 1000));
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffD = Math.floor(diffHr / 24);
+  if (diffD < 7) return `${diffD}d ago`;
+  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function ReviewsSummaryCard({
+  averageRating,
+  approvedCount,
+  pendingCount,
+  latestApprovedAt,
+  onOpen,
+}: {
+  averageRating: number | null;
+  approvedCount: number;
+  pendingCount: number;
+  latestApprovedAt: string | null;
+  onOpen: () => void;
+}) {
+  const hasReviews = approvedCount > 0;
+  return (
+    <Pressable style={summaryStyles.card} onPress={onOpen}>
+      <View style={summaryStyles.headerRow}>
+        <View style={summaryStyles.ratingBlock}>
+          <Text style={summaryStyles.avgValue}>
+            {averageRating != null ? averageRating.toFixed(1) : '—'}
+          </Text>
+          <View style={summaryStyles.starsRow}>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <Feather
+                key={n}
+                name="star"
+                size={14}
+                color={n <= Math.round(averageRating ?? 0) ? Colors.light.featured : Colors.light.border}
+              />
+            ))}
+          </View>
+          <Text style={summaryStyles.metaText}>
+            {hasReviews
+              ? `${approvedCount} public review${approvedCount === 1 ? '' : 's'}`
+              : 'No public reviews yet'}
+          </Text>
+        </View>
+        <View style={summaryStyles.statsBlock}>
+          {pendingCount > 0 ? (
+            <View style={summaryStyles.pill}>
+              <Feather name="clock" size={11} color={Colors.light.featured} />
+              <Text style={summaryStyles.pillText}>
+                {pendingCount} awaiting approval
+              </Text>
+            </View>
+          ) : null}
+          {latestApprovedAt ? (
+            <Text style={summaryStyles.metaText}>Latest {formatRelative(latestApprovedAt)}</Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={summaryStyles.cta}>
+        <Text style={summaryStyles.ctaText}>Open reviews</Text>
+        <Feather name="arrow-right" size={14} color={Colors.light.primary} />
+      </View>
+    </Pressable>
+  );
+}
+
+const summaryStyles = StyleSheet.create({
+  card: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12,
+  },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  ratingBlock: { gap: 4, flex: 1 },
+  avgValue: { fontSize: 28, fontWeight: '700', color: Colors.light.text, lineHeight: 32 },
+  starsRow: { flexDirection: 'row', gap: 2 },
+  metaText: { fontSize: 11, color: Colors.light.textMuted },
+  statsBlock: { alignItems: 'flex-end', justifyContent: 'flex-start', gap: 6 },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: Colors.light.featuredMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.featured,
+  },
+  pillText: { fontSize: 10, fontWeight: '700', color: Colors.light.featured, letterSpacing: 0.3 },
+  cta: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  ctaText: { fontSize: 12, fontWeight: '700', color: Colors.light.primary },
+});
 
 function ChecklistRow({ step, onAction, actionLabel }: { step: ChecklistStep; onAction?: () => void; actionLabel?: string }) {
   const visual = visualForState(step.state);
