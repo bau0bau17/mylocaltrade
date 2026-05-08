@@ -16,12 +16,10 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { View } from "react-native";
-import { usePathname } from "expo-router";
 
 import Colors from "@/constants/colors";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScreenHeader } from "@/components/ScreenHeader";
-import { BottomNav } from "@/components/BottomNav";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -85,16 +83,6 @@ function useNotificationDeepLinks() {
 
 function RootLayoutNav() {
   useNotificationDeepLinks();
-  const pathname = usePathname() || "";
-  // Tab routes (Home, Search, Traders, Account, Saved) already render the
-  // native Tabs bar. Everywhere else we render a persistent BottomNav so
-  // the user can always jump back to the main sections.
-  const isTabRoute = pathname === "/" || pathname.startsWith("/(tabs)") ||
-    pathname === "/search" || pathname === "/traders" ||
-    pathname === "/account" || pathname === "/saved" ||
-    pathname === "/legal-support";
-  // Hide on the standalone admin surfaces — they are a separate workflow.
-  const isAdminRoute = pathname.startsWith("/admin");
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
@@ -113,38 +101,11 @@ function RootLayoutNav() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="trader/[id]" options={{ headerShown: false }} />
-      <Stack.Screen name="auth/login" options={{ title: "Log In" }} />
-      <Stack.Screen name="auth/register-customer" options={{ title: "Register" }} />
-      <Stack.Screen name="auth/register-trader" options={{ title: "Join as Trader" }} />
-      <Stack.Screen name="pricing" options={{ title: "Subscription Plans" }} />
-      <Stack.Screen name="enquiry/[traderId]" options={{ title: "Send Enquiry" }} />
-      <Stack.Screen name="trader-dashboard/index" options={{ title: "Trader Onboarding" }} />
-      <Stack.Screen name="trader-dashboard/edit-profile" options={{ title: "Edit Profile" }} />
-      <Stack.Screen name="trader-dashboard/leads" options={{ title: "My Leads" }} />
-      <Stack.Screen name="trader-dashboard/billing" options={{ title: "Billing & Plan" }} />
-      <Stack.Screen name="trader-dashboard/services" options={{ title: "My Services" }} />
-      <Stack.Screen name="trader-dashboard/gallery" options={{ title: "Gallery" }} />
-      <Stack.Screen name="saved-traders" options={{ title: "Saved Traders" }} />
-      <Stack.Screen name="my-enquiries" options={{ title: "My Enquiries" }} />
-      <Stack.Screen name="compare-offers" options={{ title: "Compare Offers" }} />
-      <Stack.Screen name="messages/index" options={{ title: "Messages" }} />
-      <Stack.Screen name="messages/[id]" options={{ title: "Conversation" }} />
-      <Stack.Screen name="about" options={{ title: "About Us" }} />
-      <Stack.Screen name="privacy" options={{ title: "Privacy Policy" }} />
-      <Stack.Screen name="terms" options={{ title: "Terms & Conditions" }} />
-      <Stack.Screen name="refund" options={{ title: "Refund Policy" }} />
-      <Stack.Screen name="cookie-policy" options={{ title: "Cookie Policy" }} />
-      <Stack.Screen name="complaints" options={{ title: "Complaints Procedure" }} />
-      <Stack.Screen name="report-trader" options={{ title: "Report a Trader" }} />
-      <Stack.Screen name="safety-advice" options={{ title: "Customer Safety Advice" }} />
-      <Stack.Screen name="code-of-conduct" options={{ title: "Trader Code of Conduct" }} />
-      <Stack.Screen name="how-verification-works" options={{ title: "How Verification Works" }} />
       <Stack.Screen name="admin/index" options={{ headerShown: false }} />
       <Stack.Screen name="admin/[traderId]" options={{ headerShown: false }} />
       <Stack.Screen name="admin/stats" options={{ headerShown: false }} />
     </Stack>
       </View>
-      {!isTabRoute && !isAdminRoute ? <BottomNav /> : null}
     </View>
   );
 }
