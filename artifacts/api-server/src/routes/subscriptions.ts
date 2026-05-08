@@ -531,7 +531,7 @@ async function deactivateSubscription(customerId: string) {
 
     await tx
       .update(subscriptionsTable)
-      .set({ status: "canceled", cancelAtPeriodEnd: false, updatedAt: new Date() })
+      .set({ status: "cancelled", cancelAtPeriodEnd: false, updatedAt: new Date() })
       .where(eq(subscriptionsTable.userId, user.id));
   });
   if (deactivatedUserId) {
