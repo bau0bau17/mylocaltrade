@@ -12,7 +12,7 @@ import {
   conversationReportsTable,
   reviewsTable,
 } from "@workspace/db/schema";
-import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, asc } from "drizzle-orm";
+import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, isNull, asc } from "drizzle-orm";
 import { z } from "zod";
 import { authMiddleware, adminOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
@@ -63,6 +63,8 @@ router.get("/admin/stats", authMiddleware, adminOnly, async (req, res) => {
       usersByRole,
       newUsersToday,
       newUsersWeek,
+      allTimeRegistered,
+      deletedUsers,
       tradersByStatus,
       tradersActive,
       enquiriesByStatus,
@@ -79,15 +81,23 @@ router.get("/admin/stats", authMiddleware, adminOnly, async (req, res) => {
       db
         .select({ role: usersTable.role, count: sql<number>`count(*)::int` })
         .from(usersTable)
+        .where(isNull(usersTable.deletedAt))
         .groupBy(usersTable.role),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(usersTable)
-        .where(gte(usersTable.createdAt, startOfDay)),
+        .where(and(gte(usersTable.createdAt, startOfDay), isNull(usersTable.deletedAt))),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(usersTable)
-        .where(gte(usersTable.createdAt, sevenDaysAgo)),
+        .where(and(gte(usersTable.createdAt, sevenDaysAgo), isNull(usersTable.deletedAt))),
+      // All-time registrations — includes soft-deleted accounts so the
+      // historical signup total never goes down.
+      db.select({ count: sql<number>`count(*)::int` }).from(usersTable),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(usersTable)
+        .where(isNotNull(usersTable.deletedAt)),
       db
         .select({
           status: traderProfilesTable.verificationStatus,
@@ -167,6 +177,8 @@ router.get("/admin/stats", authMiddleware, adminOnly, async (req, res) => {
         byRole: mapRows(usersByRole),
         newToday: newUsersToday[0]?.count ?? 0,
         newLast7d: newUsersWeek[0]?.count ?? 0,
+        allTimeRegistered: allTimeRegistered[0]?.count ?? 0,
+        deleted: deletedUsers[0]?.count ?? 0,
       },
       traders: {
         byStatus: mapRows(tradersByStatus),
