@@ -1,0 +1,77 @@
+Let’s continue with the final polish items before publishing.
+
+Please do them in this order:
+
+Priority 1: Integration tests for the review reply endpoint
+
+This should be done first because it protects the review/reply logic.
+
+Please add integration tests for:
+
+* Trader can reply only to reviews belonging to their own trader profile
+* Ownership denied returns the correct error
+* Reply is blocked if review status is not APPROVED
+* Non-approved review reply should return 409
+* Trader can create a reply on an approved review
+* Trader can edit/update their existing reply
+* Customer/public profile only shows replies for approved visible reviews
+* Admin/moderation logic is not bypassed
+
+Priority 2: Summary card on trader dashboard
+
+Add a clear review summary card on the trader dashboard so the trader does not need to open the review tab to see performance.
+
+Card should show:
+
+* Average rating
+* Total number of approved reviews
+* Number of pending reviews, if applicable
+* Latest review date, if available
+* Quick link/button to open Reviews tab
+
+Priority 3: Public review sorting/filtering
+
+On the public trader profile, add review sorting/filtering.
+
+Options:
+
+* Most recent
+* Highest rating
+* Lowest rating
+
+If possible, also add:
+
+* Filter by 5 stars
+* Filter by 4 stars
+* Filter by 3 stars or below
+
+Keep it simple and mobile-friendly.
+
+Priority 4: Notifications
+
+Add notifications after the review flow is stable.
+
+Requirements:
+
+* Email notification to trader when a new review is approved
+* Email notification to customer when trader replies
+* In-app notification if notification system already exists
+* Prepare push notification structure for later, but do not overcomplicate now
+* Notifications should not be sent for rejected/hidden reviews
+
+Priority 5: Moderation report in admin audit
+
+Add a moderation report section in admin/audit.
+
+It should show:
+
+* Who approved a review
+* Who rejected a review
+* Who flagged or hid a review
+* Timestamp
+* Review ID
+* Trader
+* Customer, if available
+* Reason/admin note, if available
+
+Please complete Priority 1 first, then continue in order.

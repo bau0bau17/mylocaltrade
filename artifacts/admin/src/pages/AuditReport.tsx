@@ -36,7 +36,31 @@ const ACTION_OPTIONS = [
   "PHONE_VERIFIED",
   "SUBSCRIPTION_ACTIVATED",
   "SUBSCRIPTION_CANCELLED",
+  "REVIEW_SUBMITTED",
+  "REVIEW_APPROVED",
+  "REVIEW_REJECTED",
+  "REVIEW_FLAGGED",
 ];
+
+const REVIEW_QUICK_FILTERS: Array<{ label: string; value: string }> = [
+  { label: "All review activity", value: "REVIEW_ALL" },
+  { label: "Submitted", value: "REVIEW_SUBMITTED" },
+  { label: "Approved", value: "REVIEW_APPROVED" },
+  { label: "Rejected", value: "REVIEW_REJECTED" },
+  { label: "Flagged", value: "REVIEW_FLAGGED" },
+];
+
+function isReviewAction(a: string): boolean {
+  return a.startsWith("REVIEW_");
+}
+
+function reviewIdFromDetails(details: unknown): number | null {
+  if (details && typeof details === "object" && "reviewId" in details) {
+    const v = (details as { reviewId: unknown }).reviewId;
+    if (typeof v === "number") return v;
+  }
+  return null;
+}
 
 function isoDateOnly(value: string): string {
   if (!value) return "";
@@ -55,7 +79,9 @@ export default function AuditReportPage() {
     () => ({
       from: new Date(`${from}T00:00:00.000Z`).toISOString(),
       to: new Date(`${to}T23:59:59.999Z`).toISOString(),
-      action: action === "ALL" ? undefined : action,
+      // REVIEW_ALL is a client-side composite filter; we fetch all rows in the
+      // window and narrow on the client below.
+      action: action === "ALL" || action === "REVIEW_ALL" ? undefined : action,
     }),
     [from, to, action],
   );
@@ -88,6 +114,29 @@ export default function AuditReportPage() {
         <h1 className="text-2xl font-semibold">Audit report</h1>
         <p className="text-sm text-muted-foreground">Review compliance-grade actions across the platform.</p>
       </div>
+
+      <Card>
+        <CardHeader className="pb-3"><CardTitle className="text-base">Moderation shortcuts</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {REVIEW_QUICK_FILTERS.map((q) => {
+            const active =
+              q.value === "REVIEW_ALL"
+                ? action === "REVIEW_ALL"
+                : action === q.value;
+            return (
+              <Button
+                key={q.value}
+                size="sm"
+                variant={active ? "default" : "outline"}
+                onClick={() => setAction(q.value)}
+                data-testid={`btn-review-${q.value}`}
+              >
+                {q.label}
+              </Button>
+            );
+          })}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Filters</CardTitle></CardHeader>
@@ -131,15 +180,25 @@ export default function AuditReportPage() {
       {isLoading ? (
         <Skeleton className="h-72" />
       ) : data ? (
+        (() => {
+        const filteredEntries = action === "REVIEW_ALL"
+          ? data.entries.filter((e) => isReviewAction(e.action))
+          : data.entries;
+        const filteredCounts = action === "REVIEW_ALL"
+          ? data.counts.filter((c) => isReviewAction(c.action))
+          : data.counts;
+        const totalShown = action === "REVIEW_ALL" ? filteredEntries.length : data.total;
+        const showReviewCol = action === "REVIEW_ALL" || isReviewAction(action);
+        return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-1">
-            <CardHeader><CardTitle className="text-base">Actions ({data.total})</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Actions ({totalShown})</CardTitle></CardHeader>
             <CardContent>
-              {data.counts.length === 0 ? (
+              {filteredCounts.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No matching entries.</p>
               ) : (
                 <ul className="space-y-1.5">
-                  {data.counts.map((c) => (
+                  {filteredCounts.map((c) => (
                     <li key={c.action} className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{c.action.replace(/_/g, " ")}</span>
                       <span className="font-mono tabular-nums">{c.count}</span>
@@ -153,7 +212,7 @@ export default function AuditReportPage() {
           <Card className="lg:col-span-2">
             <CardHeader><CardTitle className="text-base">Entries</CardTitle></CardHeader>
             <CardContent className="p-0">
-              {data.entries.length === 0 ? (
+              {filteredEntries.length === 0 ? (
                 <p className="p-6 text-sm text-muted-foreground">No entries.</p>
               ) : (
                 <div className="max-h-[28rem] overflow-y-auto">
@@ -163,22 +222,33 @@ export default function AuditReportPage() {
                         <th className="text-left px-3 py-2">When</th>
                         <th className="text-left px-3 py-2">Action</th>
                         <th className="text-left px-3 py-2">Trader</th>
+                        {showReviewCol && (
+                          <th className="text-left px-3 py-2">Review</th>
+                        )}
                         <th className="text-left px-3 py-2">Notes</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {data.entries.map((e) => (
-                        <tr key={e.id}>
-                          <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                            {formatDateTime(e.createdAt)}
-                          </td>
-                          <td className="px-3 py-2 font-medium whitespace-nowrap">{e.action.replace(/_/g, " ")}</td>
-                          <td className="px-3 py-2 text-xs">
-                            {e.businessName ?? e.userEmail ?? `user #${e.userId}`}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground">{e.notes ?? ""}</td>
-                        </tr>
-                      ))}
+                      {filteredEntries.map((e) => {
+                        const reviewId = reviewIdFromDetails(e.details);
+                        return (
+                          <tr key={e.id}>
+                            <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                              {formatDateTime(e.createdAt)}
+                            </td>
+                            <td className="px-3 py-2 font-medium whitespace-nowrap">{e.action.replace(/_/g, " ")}</td>
+                            <td className="px-3 py-2 text-xs">
+                              {e.businessName ?? e.userEmail ?? `user #${e.userId}`}
+                            </td>
+                            {showReviewCol && (
+                              <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                                {reviewId != null ? `#${reviewId}` : "—"}
+                              </td>
+                            )}
+                            <td className="px-3 py-2 text-xs text-muted-foreground">{e.notes ?? ""}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -186,6 +256,8 @@ export default function AuditReportPage() {
             </CardContent>
           </Card>
         </div>
+        );
+        })()
       ) : null}
     </div>
   );

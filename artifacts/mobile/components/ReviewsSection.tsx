@@ -1,8 +1,24 @@
-import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useGetTraderReviews, type Review } from '@workspace/api-client-react';
+
+type SortKey = 'recent' | 'high' | 'low';
+type RatingFilter = 'all' | '5' | '4' | '3low';
+
+const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
+  { key: 'recent', label: 'Most recent' },
+  { key: 'high', label: 'Highest' },
+  { key: 'low', label: 'Lowest' },
+];
+
+const FILTER_OPTIONS: Array<{ key: RatingFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: '5', label: '5★' },
+  { key: '4', label: '4★' },
+  { key: '3low', label: '3★ & below' },
+];
 
 function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
@@ -24,6 +40,29 @@ export function ReviewsSection({ traderId }: { traderId: number }) {
     query: { queryKey: [`/api/traders/${traderId}/reviews`] },
   });
 
+  const [sort, setSort] = useState<SortKey>('recent');
+  const [filter, setFilter] = useState<RatingFilter>('all');
+
+  const all: Review[] = data?.reviews ?? [];
+  const avg = data?.averageRating ?? null;
+  const count = data?.totalCount ?? 0;
+
+  const visible = useMemo(() => {
+    let list = [...all];
+    if (filter === '5') list = list.filter((r) => r.rating === 5);
+    else if (filter === '4') list = list.filter((r) => r.rating === 4);
+    else if (filter === '3low') list = list.filter((r) => r.rating <= 3);
+
+    if (sort === 'recent') {
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else if (sort === 'high') {
+      list.sort((a, b) => b.rating - a.rating || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } else {
+      list.sort((a, b) => a.rating - b.rating || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return list;
+  }, [all, sort, filter]);
+
   if (isLoading) {
     return (
       <View style={styles.loading}>
@@ -32,30 +71,63 @@ export function ReviewsSection({ traderId }: { traderId: number }) {
     );
   }
 
-  const reviews: Review[] = data?.reviews ?? [];
-  const avg = data?.averageRating ?? null;
-  const count = data?.totalCount ?? 0;
-
   return (
     <View>
       <View style={styles.summary}>
-        <View>
-          <Text style={styles.avgValue}>{avg != null ? avg.toFixed(1) : '—'}</Text>
-          <Stars rating={Math.round(avg ?? 0)} size={16} />
-          <Text style={styles.avgLabel}>
-            {count === 0 ? 'No reviews yet' : `${count} review${count === 1 ? '' : 's'}`}
-          </Text>
-        </View>
+        <Text style={styles.avgValue}>{avg != null ? avg.toFixed(1) : '—'}</Text>
+        <Stars rating={Math.round(avg ?? 0)} size={16} />
+        <Text style={styles.avgLabel}>
+          {count === 0 ? 'No reviews yet' : `${count} review${count === 1 ? '' : 's'}`}
+        </Text>
       </View>
-      {reviews.length === 0 ? (
+
+      {count > 0 && (
+        <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {SORT_OPTIONS.map((opt) => {
+              const active = sort === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => setSort(opt.key)}
+                  style={[styles.chip, active && styles.chipActive]}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {FILTER_OPTIONS.map((opt) => {
+              const active = filter === opt.key;
+              return (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => setFilter(opt.key)}
+                  style={[styles.chip, styles.filterChip, active && styles.chipActive]}
+                >
+                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </>
+      )}
+
+      {count === 0 ? (
         <View style={styles.emptyBox}>
           <Feather name="message-circle" size={20} color={Colors.light.textMuted} />
           <Text style={styles.emptyText}>
             Be the first to leave a review after this trader responds to your enquiry.
           </Text>
         </View>
+      ) : visible.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Feather name="filter" size={18} color={Colors.light.textMuted} />
+          <Text style={styles.emptyText}>No reviews match the selected filter.</Text>
+        </View>
       ) : (
-        reviews.map((r) => (
+        visible.map((r) => (
           <View key={r.id} style={styles.reviewCard}>
             <View style={styles.reviewHead}>
               <View>
@@ -85,12 +157,18 @@ export function ReviewsSection({ traderId }: { traderId: number }) {
 
 const styles = StyleSheet.create({
   loading: { paddingVertical: 24, alignItems: 'center' },
-  summary: { paddingVertical: 12 },
+  summary: { paddingVertical: 12, gap: 4 },
   avgValue: { fontSize: 28, fontWeight: '700', color: Colors.light.text, marginBottom: 4 },
   avgLabel: { fontSize: 12, color: Colors.light.textMuted, marginTop: 4 },
-  emptyBox: { padding: 16, borderRadius: 12, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border, alignItems: 'center', gap: 6 },
+  chipRow: { flexDirection: 'row', gap: 6, paddingVertical: 6 },
+  chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: Colors.light.border, backgroundColor: Colors.light.card },
+  filterChip: { backgroundColor: Colors.light.surface },
+  chipActive: { backgroundColor: Colors.light.primary, borderColor: Colors.light.primary },
+  chipText: { fontSize: 11, fontWeight: '600', color: Colors.light.text },
+  chipTextActive: { color: '#fff' },
+  emptyBox: { padding: 16, borderRadius: 12, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border, alignItems: 'center', gap: 6, marginTop: 8 },
   emptyText: { fontSize: 13, color: Colors.light.textMuted, textAlign: 'center', lineHeight: 18 },
-  reviewCard: { backgroundColor: Colors.light.card, borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: Colors.light.border },
+  reviewCard: { backgroundColor: Colors.light.card, borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: Colors.light.border, marginTop: 8 },
   reviewHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   reviewer: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
   reviewDate: { fontSize: 11, color: Colors.light.textMuted, marginTop: 2 },

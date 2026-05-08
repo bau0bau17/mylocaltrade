@@ -11,6 +11,8 @@ import { z } from "zod";
 import { authMiddleware, adminOnly, customerOnly, traderOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit } from "../lib/trader-status";
+import { sendReviewApprovedEmail, sendReviewReplyEmail } from "../lib/email";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -312,6 +314,8 @@ router.post("/trader/reviews/:id/reply", authMiddleware, traderOnly, async (req,
       return;
     }
 
+    const wasFirstReply = !review.traderReply;
+
     const [updated] = await db
       .update(reviewsTable)
       .set({
@@ -321,6 +325,36 @@ router.post("/trader/reviews/:id/reply", authMiddleware, traderOnly, async (req,
       })
       .where(eq(reviewsTable.id, id))
       .returning();
+
+    // Notify the customer the first time a trader replies. Best-effort; we
+    // don't fail the request if the email subsystem is offline.
+    if (wasFirstReply) {
+      void (async () => {
+        try {
+          const [customer] = await db
+            .select({ email: usersTable.email, fullName: usersTable.fullName })
+            .from(usersTable)
+            .where(eq(usersTable.id, review.customerId))
+            .limit(1);
+          const [traderRow] = await db
+            .select({ businessName: traderProfilesTable.businessName })
+            .from(traderProfilesTable)
+            .where(eq(traderProfilesTable.id, review.traderId))
+            .limit(1);
+          if (customer?.email && traderRow?.businessName) {
+            await sendReviewReplyEmail({
+              toEmail: customer.email,
+              toName: customer.fullName ?? "there",
+              traderName: traderRow.businessName,
+              reviewText: review.text,
+              replyText: body.reply,
+            });
+          }
+        } catch (err) {
+          logger.error({ err, reviewId: id }, "Failed to send review-reply email");
+        }
+      })();
+    }
 
     res.json(await serializeReview(updated));
   } catch (error: unknown) {
@@ -389,7 +423,10 @@ router.post("/admin/reviews/:id/moderate", authMiddleware, adminOnly, async (req
     await recomputeTraderRating(review.traderId);
 
     const [trader] = await db
-      .select({ userId: traderProfilesTable.userId })
+      .select({
+        userId: traderProfilesTable.userId,
+        businessName: traderProfilesTable.businessName,
+      })
       .from(traderProfilesTable)
       .where(eq(traderProfilesTable.id, review.traderId))
       .limit(1);
@@ -404,9 +441,38 @@ router.post("/admin/reviews/:id/moderate", authMiddleware, adminOnly, async (req
         userId: trader.userId,
         action,
         performedBy: adminId,
-        details: { reviewId: id },
+        details: { reviewId: id, traderId: review.traderId, customerId: review.customerId },
         notes: body.notes,
       });
+
+      // Email the trader on approval only; rejected/flagged reviews stay private.
+      if (body.action === "approve") {
+        void (async () => {
+          try {
+            const [traderUser] = await db
+              .select({ email: usersTable.email, fullName: usersTable.fullName })
+              .from(usersTable)
+              .where(eq(usersTable.id, trader.userId))
+              .limit(1);
+            const [customer] = await db
+              .select({ fullName: usersTable.fullName })
+              .from(usersTable)
+              .where(eq(usersTable.id, review.customerId))
+              .limit(1);
+            if (traderUser?.email) {
+              await sendReviewApprovedEmail({
+                toEmail: traderUser.email,
+                toName: traderUser.fullName ?? trader.businessName,
+                customerName: customer?.fullName ?? "A customer",
+                rating: review.rating,
+                reviewText: review.text,
+              });
+            }
+          } catch (err) {
+            logger.error({ err, reviewId: id }, "Failed to send review-approved email");
+          }
+        })();
+      }
     }
 
     res.json(await serializeReview(updated));
