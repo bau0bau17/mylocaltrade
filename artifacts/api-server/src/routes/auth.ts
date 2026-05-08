@@ -11,7 +11,7 @@ import {
 import { generateToken, authMiddleware, generatePollToken, verifyPollToken } from "../lib/auth";
 import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
-import { TRADER_STATUS, logAudit, buildOnboardingChecklist, statusMessage, isTraderProfilePublic } from "../lib/trader-status";
+import { TRADER_STATUS, logAudit, buildOnboardingChecklist, statusMessage, isTraderProfilePublic, evaluateBusinessProfileComplete } from "../lib/trader-status";
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
@@ -374,6 +374,8 @@ router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
       return;
     }
 
+    const businessProfile = evaluateBusinessProfileComplete(profile);
+
     res.json({
       verificationStatus: profile.verificationStatus,
       message: statusMessage(profile),
@@ -386,6 +388,7 @@ router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
       rejectionReason: profile.rejectionReason,
       adminNotes: profile.adminNotes,
       checklist: buildOnboardingChecklist(user, profile),
+      businessProfile,
       email: user.email,
       businessName: profile.businessName,
     });
