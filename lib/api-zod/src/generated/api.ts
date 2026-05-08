@@ -985,6 +985,7 @@ export const GetConversationsResponse = zod.object({
       ]),
       traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
       unreadCount: zod.number(),
+      muted: zod.boolean(),
       lastMessageAt: zod.date(),
       lastMessagePreview: zod.string().nullish(),
       closedAt: zod.date().nullish(),
@@ -1022,6 +1023,7 @@ export const GetConversationResponse = zod.object({
     ]),
     traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
     unreadCount: zod.number(),
+    muted: zod.boolean(),
     lastMessageAt: zod.date(),
     lastMessagePreview: zod.string().nullish(),
     closedAt: zod.date().nullish(),
@@ -1082,6 +1084,22 @@ export const UpdateConversationTraderStatusBody = zod.object({
 export const UpdateConversationTraderStatusResponse = zod.object({
   ok: zod.boolean(),
   traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
+});
+
+/**
+ * @summary Mute or unmute push notifications for this conversation (per user)
+ */
+export const MuteConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const MuteConversationBody = zod.object({
+  muted: zod.boolean(),
+});
+
+export const MuteConversationResponse = zod.object({
+  ok: zod.boolean(),
+  muted: zod.boolean(),
 });
 
 /**

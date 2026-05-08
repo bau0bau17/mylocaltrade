@@ -149,6 +149,12 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
                       </Text>
                     </View>
                   ) : null}
+                  {item.muted ? (
+                    <View style={[styles.statusPill, styles.mutedPill]}>
+                      <Feather name="bell-off" size={10} color={Colors.light.textSecondary} />
+                      <Text style={[styles.statusText, styles.mutedText]}>Muted</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
             </Pressable>
@@ -275,4 +281,13 @@ const styles = StyleSheet.create({
   },
   tStatusPill: { backgroundColor: Colors.light.featuredMuted },
   tStatusText: { color: Colors.light.featured },
+  mutedPill: {
+    backgroundColor: Colors.light.surface,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  mutedText: { color: Colors.light.textSecondary },
 });

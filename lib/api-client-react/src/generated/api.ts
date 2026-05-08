@@ -45,6 +45,8 @@ import type {
   LoginRequest,
   MessageResponse,
   ModerateReviewRequest,
+  MuteConversationRequest,
+  MuteConversationResponse,
   OkResponse,
   RegisterCustomerRequest,
   RegisterPendingResponse,
@@ -3612,6 +3614,93 @@ export const useUpdateConversationTraderStatus = <
   TContext
 > => {
   return useMutation(getUpdateConversationTraderStatusMutationOptions(options));
+};
+
+/**
+ * @summary Mute or unmute push notifications for this conversation (per user)
+ */
+export const getMuteConversationUrl = (id: number) => {
+  return `/api/conversations/${id}/mute`;
+};
+
+export const muteConversation = async (
+  id: number,
+  muteConversationRequest: MuteConversationRequest,
+  options?: RequestInit,
+): Promise<MuteConversationResponse> => {
+  return customFetch<MuteConversationResponse>(getMuteConversationUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(muteConversationRequest),
+  });
+};
+
+export const getMuteConversationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof muteConversation>>,
+    TError,
+    { id: number; data: BodyType<MuteConversationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof muteConversation>>,
+  TError,
+  { id: number; data: BodyType<MuteConversationRequest> },
+  TContext
+> => {
+  const mutationKey = ["muteConversation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof muteConversation>>,
+    { id: number; data: BodyType<MuteConversationRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return muteConversation(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MuteConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof muteConversation>>
+>;
+export type MuteConversationMutationBody = BodyType<MuteConversationRequest>;
+export type MuteConversationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mute or unmute push notifications for this conversation (per user)
+ */
+export const useMuteConversation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof muteConversation>>,
+    TError,
+    { id: number; data: BodyType<MuteConversationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof muteConversation>>,
+  TError,
+  { id: number; data: BodyType<MuteConversationRequest> },
+  TContext
+> => {
+  return useMutation(getMuteConversationMutationOptions(options));
 };
 
 /**

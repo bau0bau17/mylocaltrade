@@ -21,6 +21,7 @@ export interface ConversationSummary {
   status: ConversationSummaryStatus;
   traderStatus: ConversationSummaryTraderStatus;
   unreadCount: number;
+  muted: boolean;
   lastMessageAt: Date;
   lastMessagePreview?: string | null;
   closedAt?: Date | null;

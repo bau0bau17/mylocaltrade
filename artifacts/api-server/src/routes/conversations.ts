@@ -30,6 +30,10 @@ const TraderStatusBody = z.object({
   traderStatus: z.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
 });
 
+const MuteBody = z.object({
+  muted: z.boolean(),
+});
+
 type ConversationRow = typeof conversationsTable.$inferSelect;
 type MessageRow = typeof messagesTable.$inferSelect;
 
@@ -41,8 +45,13 @@ function serializeConversation(
     traderBusinessName?: string | null;
     traderVerified?: boolean;
     unreadCount: number;
+    viewerRole: "customer" | "trader";
   },
 ) {
+  const muted =
+    extras.viewerRole === "customer"
+      ? c.customerMutedAt != null
+      : c.traderMutedAt != null;
   return {
     id: c.id,
     customerId: extras.customerId ?? c.customerId,
@@ -56,6 +65,7 @@ function serializeConversation(
     status: c.status,
     traderStatus: c.traderStatus,
     unreadCount: extras.unreadCount,
+    muted,
     lastMessageAt: c.lastMessageAt.toISOString(),
     lastMessagePreview: c.lastMessagePreview,
     closedAt: c.closedAt?.toISOString() ?? null,
@@ -169,6 +179,7 @@ router.get("/conversations", authMiddleware, async (req, res) => {
         traderBusinessName,
         traderVerified: traderVerificationStatus === "VERIFIED",
         unreadCount: actor.role === "customer" ? conv.customerUnreadCount : conv.traderUnreadCount,
+        viewerRole: actor.role === "customer" ? "customer" : "trader",
       }),
     );
 
@@ -249,6 +260,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         traderBusinessName: row.traderBusinessName,
         traderVerified: row.traderVerificationStatus === "VERIFIED",
         unreadCount: 0,
+        viewerRole: isCustomer ? "customer" : "trader",
       }),
       messages: messages.map(serializeMessage),
     });
@@ -368,18 +380,23 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
             conversationId: id,
           });
         }
-        try {
-          await sendPushToUser(recipientUserId, {
-            title: senderName,
-            body: preview,
-            data: {
-              type: "new_message",
-              conversationId: id,
-              messageId: created.id,
-            },
-          });
-        } catch (pushErr) {
-          req.log.warn({ err: pushErr, conversationId: id }, "Failed to send new-message push");
+        const recipientMuted = isCustomer
+          ? conv.traderMutedAt != null
+          : conv.customerMutedAt != null;
+        if (!recipientMuted) {
+          try {
+            await sendPushToUser(recipientUserId, {
+              title: senderName,
+              body: preview,
+              data: {
+                type: "new_message",
+                conversationId: id,
+                messageId: created.id,
+              },
+            });
+          } catch (pushErr) {
+            req.log.warn({ err: pushErr, conversationId: id }, "Failed to send new-message push");
+          }
         }
       } catch (notifyErr) {
         req.log.warn({ err: notifyErr, conversationId: id }, "Failed to send new-message email");
@@ -494,6 +511,54 @@ router.patch("/conversations/:id/trader-status", authMiddleware, async (req, res
     }
     req.log.error({ err: error }, "Update trader status failed");
     res.status(500).json({ error: "Failed to update trader status" });
+  }
+});
+
+// PATCH /api/conversations/:id/mute — toggle per-user push mute
+router.patch("/conversations/:id/mute", authMiddleware, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid conversation id" });
+      return;
+    }
+    const body = MuteBody.parse(req.body);
+    const { userId, userRole } = req as AuthenticatedRequest;
+    const actor = await getActorContext(userId, userRole);
+
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, id))
+      .limit(1);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    const isCustomer = actor.role === "customer" && conv.customerId === userId;
+    const isTrader = actor.role === "trader" && actor.traderProfileId === conv.traderProfileId;
+    if (!isCustomer && !isTrader) {
+      res.status(403).json({ error: "You do not have access to this conversation" });
+      return;
+    }
+
+    const at = body.muted ? new Date() : null;
+    await db
+      .update(conversationsTable)
+      .set({
+        ...(isCustomer ? { customerMutedAt: at } : { traderMutedAt: at }),
+        updatedAt: new Date(),
+      })
+      .where(eq(conversationsTable.id, id));
+
+    res.json({ ok: true, muted: body.muted });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid mute request", details: error.issues });
+      return;
+    }
+    req.log.error({ err: error }, "Mute conversation failed");
+    res.status(500).json({ error: "Failed to update mute setting" });
   }
 });
 

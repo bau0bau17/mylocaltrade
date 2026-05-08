@@ -23,6 +23,7 @@ import {
   useUpdateConversationTraderStatus,
   useCloseConversation,
   useReportConversation,
+  useMuteConversation,
   getGetConversationQueryKey,
   getGetConversationsQueryKey,
   getGetConversationsUnreadCountQueryKey,
@@ -76,6 +77,15 @@ export default function ConversationThreadScreen() {
   });
 
   const reportMutation = useReportConversation();
+
+  const muteMutation = useMuteConversation({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      },
+    },
+  });
 
   const [text, setText] = useState("");
   const [showStatus, setShowStatus] = useState(false);
@@ -154,6 +164,24 @@ export default function ConversationThreadScreen() {
           onPress: () => closeMutation.mutate({ id: conversationId }),
         },
       ],
+    );
+  };
+
+  const onToggleMute = () => {
+    if (!conv) return;
+    const next = !conv.muted;
+    muteMutation.mutate(
+      { id: conversationId, data: { muted: next } },
+      {
+        onSuccess: () =>
+          Alert.alert(
+            next ? "Notifications muted" : "Notifications unmuted",
+            next
+              ? "You won't receive push notifications for this conversation. Emails are unchanged."
+              : "Push notifications for this conversation are back on.",
+          ),
+        onError: () => Alert.alert("Error", "Could not update mute setting."),
+      },
     );
   };
 
@@ -240,6 +268,12 @@ export default function ConversationThreadScreen() {
                 </Text>
               </View>
             )}
+            {conv.muted ? (
+              <View style={[styles.statusPill, styles.mutedPill]}>
+                <Feather name="bell-off" size={10} color={Colors.light.textSecondary} />
+                <Text style={[styles.statusPillText, styles.mutedPillText]}>Muted</Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <Pressable
@@ -247,6 +281,10 @@ export default function ConversationThreadScreen() {
           onPress={() =>
             Alert.alert("Conversation actions", undefined, [
               { text: "Cancel", style: "cancel" },
+              {
+                text: conv.muted ? "Unmute notifications" : "Mute notifications",
+                onPress: onToggleMute,
+              },
               ...(!closed
                 ? [{ text: "Close conversation", onPress: onClose, style: "destructive" as const }]
                 : []),
@@ -410,6 +448,15 @@ const styles = StyleSheet.create({
   },
   tStatusPill: { backgroundColor: Colors.light.featuredMuted },
   tStatusText: { color: Colors.light.featured },
+  mutedPill: {
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  mutedPillText: { color: Colors.light.textSecondary },
   iconBtn: {
     width: 36,
     height: 36,

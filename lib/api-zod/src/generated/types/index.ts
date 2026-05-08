@@ -53,6 +53,8 @@ export * from "./loginRequest";
 export * from "./messageResponse";
 export * from "./moderateReviewRequest";
 export * from "./moderateReviewRequestAction";
+export * from "./muteConversationRequest";
+export * from "./muteConversationResponse";
 export * from "./okResponse";
 export * from "./registerCustomerRequest";
 export * from "./registerPendingResponse";

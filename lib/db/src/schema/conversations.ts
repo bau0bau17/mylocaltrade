@@ -25,6 +25,8 @@ export const conversationsTable = pgTable(
     closedAt: timestamp("closed_at"),
     closedByRole: varchar("closed_by_role", { length: 16 }),
     blockedAt: timestamp("blocked_at"),
+    customerMutedAt: timestamp("customer_muted_at"),
+    traderMutedAt: timestamp("trader_muted_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

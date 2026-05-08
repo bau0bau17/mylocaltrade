@@ -414,6 +414,7 @@ export interface ConversationSummary {
   status: ConversationSummaryStatus;
   traderStatus: ConversationSummaryTraderStatus;
   unreadCount: number;
+  muted: boolean;
   lastMessageAt: string;
   lastMessagePreview?: string | null;
   closedAt?: string | null;
@@ -493,6 +494,15 @@ export const UpdateTraderStatusResponseTraderStatus = {
 export interface UpdateTraderStatusResponse {
   ok: boolean;
   traderStatus: UpdateTraderStatusResponseTraderStatus;
+}
+
+export interface MuteConversationRequest {
+  muted: boolean;
+}
+
+export interface MuteConversationResponse {
+  ok: boolean;
+  muted: boolean;
 }
 
 export interface ReportConversationRequest {
