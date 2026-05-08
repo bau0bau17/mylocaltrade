@@ -26,6 +26,10 @@ const ModerateBody = z.object({
   notes: z.string().max(1000).optional(),
 });
 
+const ReplyBody = z.object({
+  reply: z.string().trim().min(1).max(2000),
+});
+
 type ReviewRow = typeof reviewsTable.$inferSelect;
 
 async function serializeReview(r: ReviewRow, customerName?: string) {
@@ -266,6 +270,62 @@ router.get("/trader/reviews", authMiddleware, traderOnly, async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, "Get my trader reviews failed");
     res.status(500).json({ error: "Failed to get reviews" });
+  }
+});
+
+// POST /api/trader/reviews/:id/reply — trader replies to a review on their profile
+router.post("/trader/reviews/:id/reply", authMiddleware, traderOnly, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid review id" });
+      return;
+    }
+    const body = ReplyBody.parse(req.body);
+    const { userId } = req as AuthenticatedRequest;
+
+    const [profile] = await db
+      .select({ id: traderProfilesTable.id })
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile) {
+      res.status(403).json({ error: "Trader profile not found" });
+      return;
+    }
+
+    const [review] = await db
+      .select()
+      .from(reviewsTable)
+      .where(eq(reviewsTable.id, id))
+      .limit(1);
+    if (!review) {
+      res.status(404).json({ error: "Review not found" });
+      return;
+    }
+    if (review.traderId !== profile.id) {
+      res.status(403).json({ error: "You can only reply to reviews on your own profile" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(reviewsTable)
+      .set({
+        traderReply: body.reply.trim(),
+        traderReplyAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(reviewsTable.id, id))
+      .returning();
+
+    res.json(await serializeReview(updated));
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid reply", details: error.issues });
+      return;
+    }
+    req.log.error({ err: error }, "Reply to review failed");
+    res.status(500).json({ error: "Failed to post reply" });
   }
 });
 

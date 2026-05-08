@@ -44,6 +44,7 @@ import type {
   RegisterTraderDocumentRequest,
   RegisterTraderDocumentResponse,
   RegisterTraderRequest,
+  ReplyToReviewRequest,
   RequestUploadUrlRequest,
   ResendVerificationRequest,
   RetryAfterErrorResponse,
@@ -2259,6 +2260,93 @@ export function useGetMyTraderReviews<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Trader posts (or updates) a public reply to one of their reviews
+ */
+export const getReplyToReviewUrl = (id: number) => {
+  return `/api/trader/reviews/${id}/reply`;
+};
+
+export const replyToReview = async (
+  id: number,
+  replyToReviewRequest: ReplyToReviewRequest,
+  options?: RequestInit,
+): Promise<Review> => {
+  return customFetch<Review>(getReplyToReviewUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(replyToReviewRequest),
+  });
+};
+
+export const getReplyToReviewMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof replyToReview>>,
+    TError,
+    { id: number; data: BodyType<ReplyToReviewRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof replyToReview>>,
+  TError,
+  { id: number; data: BodyType<ReplyToReviewRequest> },
+  TContext
+> => {
+  const mutationKey = ["replyToReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof replyToReview>>,
+    { id: number; data: BodyType<ReplyToReviewRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return replyToReview(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReplyToReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof replyToReview>>
+>;
+export type ReplyToReviewMutationBody = BodyType<ReplyToReviewRequest>;
+export type ReplyToReviewMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Trader posts (or updates) a public reply to one of their reviews
+ */
+export const useReplyToReview = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof replyToReview>>,
+    TError,
+    { id: number; data: BodyType<ReplyToReviewRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof replyToReview>>,
+  TError,
+  { id: number; data: BodyType<ReplyToReviewRequest> },
+  TContext
+> => {
+  return useMutation(getReplyToReviewMutationOptions(options));
+};
 
 /**
  * @summary Admin moderation queue

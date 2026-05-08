@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Mail,
   CreditCard,
+  Star,
   LogOut,
   Shield,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const NAV: NavItem[] = [
   { href: "/expiring-documents", label: "Expiring docs", icon: FileWarning },
   { href: "/audit-report", label: "Audit report", icon: ClipboardList },
   { href: "/enquiries", label: "Enquiries", icon: Mail },
+  { href: "/reviews", label: "Reviews", icon: Star },
   { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
 ];
 

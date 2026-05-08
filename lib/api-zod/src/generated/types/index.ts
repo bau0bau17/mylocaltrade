@@ -44,6 +44,7 @@ export * from "./registerTraderDocumentRequest";
 export * from "./registerTraderDocumentRequestType";
 export * from "./registerTraderDocumentResponse";
 export * from "./registerTraderRequest";
+export * from "./replyToReviewRequest";
 export * from "./requestUploadUrlRequest";
 export * from "./requestUploadUrlRequestType";
 export * from "./resendVerificationRequest";

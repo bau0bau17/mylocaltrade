@@ -242,6 +242,32 @@ export default function TraderOnboardingDashboard() {
         </View>
       ) : null}
 
+      {/* Quick links to other trader-dashboard sections */}
+      <Text style={styles.sectionLabel}>Manage</Text>
+      <View style={styles.checklistGroup}>
+        <Pressable style={styles.checklistRow} onPress={() => router.push('/trader-dashboard/reviews')}>
+          <View style={[styles.iconCircle, { backgroundColor: Colors.light.featuredMuted, borderColor: Colors.light.featured }]}>
+            <Feather name="star" size={16} color={Colors.light.featured} />
+          </View>
+          <View style={styles.checklistMain}>
+            <Text style={styles.checklistLabel}>Reviews & replies</Text>
+            <Text style={styles.checklistDesc}>See what customers are saying and reply publicly.</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={Colors.light.textMuted} style={{ alignSelf: 'center' }} />
+        </Pressable>
+        <View style={styles.separator} />
+        <Pressable style={styles.checklistRow} onPress={() => router.push('/trader-dashboard/billing')}>
+          <View style={[styles.iconCircle, { backgroundColor: Colors.light.primaryMuted, borderColor: Colors.light.primary }]}>
+            <Feather name="credit-card" size={16} color={Colors.light.primary} />
+          </View>
+          <View style={styles.checklistMain}>
+            <Text style={styles.checklistLabel}>Billing & plan</Text>
+            <Text style={styles.checklistDesc}>Manage your subscription and invoices.</Text>
+          </View>
+          <Feather name="chevron-right" size={18} color={Colors.light.textMuted} style={{ alignSelf: 'center' }} />
+        </Pressable>
+      </View>
+
       {status.rejectionReason ? (
         <View style={styles.adminNoteBox}>
           <Text style={styles.adminNoteTitle}>Rejection reason</Text>
