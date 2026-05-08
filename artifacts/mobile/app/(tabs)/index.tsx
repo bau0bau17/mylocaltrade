@@ -47,7 +47,7 @@ export default function HomeScreen() {
             <View style={styles.brandDot} />
             <View>
               <Text style={styles.appName}>MyLocalTrade</Text>
-              <Text style={styles.headerSubtitle}>Find trusted local tradespeople across the UK</Text>
+              <Text style={styles.headerSubtitle}>Find independent local tradespeople across the UK</Text>
             </View>
           </View>
           <Pressable style={styles.headerIcon} onPress={() => router.push('/(tabs)/account')}>
@@ -113,7 +113,7 @@ export default function HomeScreen() {
               <Feather name="shield" size={17} color={Colors.light.primary} />
             </View>
             <Text style={styles.trustLabel}>UK</Text>
-            <Text style={styles.trustSub}>Trusted</Text>
+            <Text style={styles.trustSub}>Wide</Text>
           </View>
           <View style={styles.trustDivider} />
           <View style={styles.trustItem}>

@@ -490,6 +490,140 @@ export async function sendReviewReplyEmail(opts: {
   }
 }
 
+export async function sendTraderApprovedEmail(opts: {
+  toEmail: string;
+  toName: string;
+  businessName?: string | null;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : null;
+  const html = emailShell({
+    title: "Your MyLocalTrade profile has been approved",
+    preheader: "Your trader profile is now live on MyLocalTrade.",
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        Good news — your MyLocalTrade trader profile${safeBusiness ? ` for <strong style="color: #00B4D8;">${safeBusiness}</strong>` : ""} has been approved.
+      </p>
+      <div style="background: #0E1A2A; border-left: 3px solid #22C55E; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #22C55E; font-size: 13px; font-weight: 600; margin: 0 0 6px;">What this means</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">
+          Your profile is visible to customers searching on MyLocalTrade, provided you have an active subscription and your required documents remain valid.
+        </p>
+      </div>
+      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 12px;"><strong>Next steps</strong></p>
+      <ul style="color: #E5E7EB; font-size: 14px; line-height: 1.7; margin: 0 0 20px; padding-left: 20px;">
+        <li>Open the MyLocalTrade app and check your public profile</li>
+        <li>Make sure your subscription is active so your profile stays visible</li>
+        <li>Keep your insurance and qualification documents up to date — expired documents will hide your profile automatically</li>
+      </ul>
+      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
+        If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
+      </p>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: "Your MyLocalTrade profile has been approved",
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] Trader-approved email sent to ${opts.toEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — trader-approved notification for ${opts.toEmail}`);
+  }
+}
+
+export async function sendTraderRejectedEmail(opts: {
+  toEmail: string;
+  toName: string;
+  reason: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeReason = escapeHtml(opts.reason);
+  const html = emailShell({
+    title: "Update on your MyLocalTrade application",
+    preheader: "Your trader application was not approved.",
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        Thank you for applying to list your business on MyLocalTrade. After reviewing your application, we are not able to approve your trader profile at this time.
+      </p>
+      <div style="background: #0E1A2A; border-left: 3px solid #EF4444; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #EF4444; font-size: 13px; font-weight: 600; margin: 0 0 6px;">Reason</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
+      </div>
+      <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0 0 12px;">
+        If you believe this decision is incorrect, or if you would like to update your information and re-apply, please reply to this email or contact us at support@mylocaltrade.co.uk.
+      </p>
+      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
+        Your account remains active so you can update your details and apply again in the future.
+      </p>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: "Update on your MyLocalTrade application",
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] Trader-rejected email sent to ${opts.toEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — trader-rejected notification for ${opts.toEmail}`);
+  }
+}
+
+export async function sendTraderMoreInfoRequestedEmail(opts: {
+  toEmail: string;
+  toName: string;
+  notes: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeNotes = escapeHtml(opts.notes);
+  const html = emailShell({
+    title: "More information needed for your MyLocalTrade application",
+    preheader: "Our team needs a few more details to review your application.",
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        Thanks for submitting your trader application. Before we can complete our review, we need a little more information from you.
+      </p>
+      <div style="background: #0E1A2A; border-left: 3px solid #F59E0B; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #F59E0B; font-size: 13px; font-weight: 600; margin: 0 0 6px;">What we need</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeNotes}</p>
+      </div>
+      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 12px;"><strong>Next steps</strong></p>
+      <ul style="color: #E5E7EB; font-size: 14px; line-height: 1.7; margin: 0 0 20px; padding-left: 20px;">
+        <li>Open the MyLocalTrade app and go to your trader dashboard</li>
+        <li>Update or upload the requested information</li>
+        <li>Once submitted, our team will review your application again</li>
+      </ul>
+      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
+        If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
+      </p>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: "More information needed for your MyLocalTrade application",
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] Trader more-info email sent to ${opts.toEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — more-info notification for ${opts.toEmail}`);
+  }
+}
+
 export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
