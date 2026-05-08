@@ -13,6 +13,7 @@ export const enquiriesTable = pgTable("enquiries", {
   preferredDate: varchar("preferred_date", { length: 100 }),
   phone: varchar("phone", { length: 50 }),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
+  reminderSentAt: timestamp("reminder_sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

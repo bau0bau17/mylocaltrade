@@ -7,6 +7,7 @@ import { CreateEnquiryBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewEnquiryEmail } from "../lib/email";
 import { sendPushToUser } from "../lib/push-notifications";
+import { scheduleLeadReminderForEnquiry } from "../lib/lead-reminders";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
 
@@ -142,6 +143,11 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
         req.log.warn({ err: pushErr, enquiryId: enquiry.id }, "Failed to send new-enquiry push");
       }
     })();
+
+    // Phase 18: if the trader hasn't opened this lead within ~60 minutes,
+    // send a follow-up reminder push. The periodic sweep is the source of
+    // truth (survives restarts); this in-process timer is just for latency.
+    scheduleLeadReminderForEnquiry(enquiry.id);
 
     res.status(201).json({
       id: enquiry.id,

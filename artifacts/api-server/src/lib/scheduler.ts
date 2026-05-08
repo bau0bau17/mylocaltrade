@@ -6,8 +6,10 @@ import {
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { TRADER_STATUS, evaluateDocumentsComplete, logAudit } from "./trader-status";
+import { sweepLeadReminders } from "./lead-reminders";
 
 const HOUR_MS = 60 * 60 * 1000;
+const LEAD_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
  * Phase 8: periodic sweep that flips VERIFIED traders to EXPIRED_DOCUMENTS once
@@ -53,6 +55,7 @@ export async function reconcileExpiredDocuments(): Promise<{ checked: number; fl
 }
 
 let scheduledTimer: NodeJS.Timeout | null = null;
+let leadReminderTimer: NodeJS.Timeout | null = null;
 
 export function startScheduler(): void {
   if (scheduledTimer) return;
@@ -78,11 +81,29 @@ export function startScheduler(): void {
   }, HOUR_MS);
   // Don't keep the event loop alive just for this timer.
   scheduledTimer.unref?.();
+
+  // Lead-reminder sweep: nudge traders who haven't opened a new enquiry
+  // within an hour. Runs frequently so the latency stays close to ~60 min.
+  leadReminderTimer = setInterval(async () => {
+    try {
+      const result = await sweepLeadReminders();
+      if (result.sent > 0) {
+        logger.info({ ...result }, "Lead-reminder sweep");
+      }
+    } catch (err) {
+      logger.error({ err }, "Lead-reminder sweep failed");
+    }
+  }, LEAD_REMINDER_INTERVAL_MS);
+  leadReminderTimer.unref?.();
 }
 
 export function stopScheduler(): void {
   if (scheduledTimer) {
     clearInterval(scheduledTimer);
     scheduledTimer = null;
+  }
+  if (leadReminderTimer) {
+    clearInterval(leadReminderTimer);
+    leadReminderTimer = null;
   }
 }
