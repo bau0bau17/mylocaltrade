@@ -734,6 +734,37 @@ export const GetMyTraderReviewsResponse = zod.object({
 });
 
 /**
+ * @summary Trader posts (or updates) a public reply to one of their reviews
+ */
+export const ReplyToReviewParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const replyToReviewBodyReplyMax = 2000;
+
+export const ReplyToReviewBody = zod.object({
+  reply: zod.string().min(1).max(replyToReviewBodyReplyMax),
+});
+
+export const replyToReviewResponseRatingMax = 5;
+
+export const ReplyToReviewResponse = zod.object({
+  id: zod.number(),
+  traderId: zod.number(),
+  customerId: zod.number(),
+  customerName: zod.string(),
+  enquiryId: zod.number().nullish(),
+  rating: zod.number().min(1).max(replyToReviewResponseRatingMax),
+  text: zod.string(),
+  status: zod.enum(["PENDING", "APPROVED", "REJECTED", "FLAGGED"]),
+  traderReply: zod.string().nullish(),
+  traderReplyAt: zod.date().nullish(),
+  moderatedAt: zod.date().nullish(),
+  moderationNotes: zod.string().nullish(),
+  createdAt: zod.date(),
+});
+
+/**
  * @summary Admin moderation queue
  */
 export const AdminListReviewsQueryParams = zod.object({

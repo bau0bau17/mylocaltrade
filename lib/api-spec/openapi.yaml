@@ -760,6 +760,57 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /trader/reviews/{id}/reply:
+    post:
+      operationId: replyToReview
+      tags: [reviews]
+      summary: Trader posts (or updates) a public reply to one of their reviews
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplyToReviewRequest"
+      responses:
+        "200":
+          description: Updated review with reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the trader who owns this review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Review not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /admin/reviews:
     get:
       operationId: adminListReviews
@@ -1958,3 +2009,13 @@ components:
           type: string
       required:
         - action
+
+    ReplyToReviewRequest:
+      type: object
+      properties:
+        reply:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+        - reply

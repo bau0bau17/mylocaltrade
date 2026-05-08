@@ -572,6 +572,14 @@ export interface ModerateReviewRequest {
   notes?: string;
 }
 
+export interface ReplyToReviewRequest {
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
+  reply: string;
+}
+
 export type ListTradersParams = {
   category?: string;
   location?: string;
