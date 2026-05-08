@@ -94,7 +94,7 @@ export async function sendContactEmail(opts: {
   message: string;
 }): Promise<void> {
   const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
-  const CONTACT_FROM_EMAIL = "noreply@mylocaltradeltd.co.uk";
+  const CONTACT_FROM_EMAIL = "noreply@mylocaltrade.co.uk";
   const html = `
 <!DOCTYPE html>
 <html>
