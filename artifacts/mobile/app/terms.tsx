@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
-const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
+const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
 
 export default function TermsScreen() {
   const insets = useSafeAreaInsets();
@@ -22,10 +22,10 @@ export default function TermsScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          These terms and conditions ("Terms") govern your use of the MyLocalTrade mobile application ("App") operated by Service Provider LTD ("Company", "we", "us"), a company registered in England and Wales under Company No. 15830141.
+          These terms and conditions ("Terms") govern your use of the MyLocalTrade mobile application ("App") operated by MyLocalTrade ("Company", "we", "us"), a company registered in England and Wales.
         </Text>
         <Text style={styles.paragraph}>
-          Our registered office is at 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ.
+          Full company details (legal entity, company number and registered office address) will be published before launch.
         </Text>
       </View>
 

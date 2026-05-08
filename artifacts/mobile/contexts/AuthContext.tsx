@@ -1,8 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { UserProfile, LoginRequest, RegisterCustomerRequest, RegisterTraderRequest } from '@workspace/api-client-react';
-import { login as apiLogin } from '@workspace/api-client-react';
-import { getApiUrl } from '@/lib/api-url';
+import type {
+  UserProfile,
+  LoginRequest,
+  RegisterCustomerRequest,
+  RegisterTraderRequest,
+} from '@workspace/api-client-react';
+import {
+  login as apiLogin,
+  registerCustomer as apiRegisterCustomer,
+  registerTrader as apiRegisterTrader,
+  resendVerificationEmail as apiResendVerificationEmail,
+} from '@workspace/api-client-react';
 
 export class EmailNotVerifiedError extends Error {
   readonly code = 'EMAIL_NOT_VERIFIED';
@@ -30,6 +39,20 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+interface ApiErrorLike {
+  status?: number;
+  data?: { error?: string; code?: string; email?: string };
+}
+
+function extractApiError(err: unknown, fallback: string): Error {
+  if (err && typeof err === 'object') {
+    const e = err as ApiErrorLike;
+    if (e.data?.error) return new Error(e.data.error);
+  }
+  if (err instanceof Error) return err;
+  return new Error(fallback);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -73,39 +96,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const registerCustomer = async (data: RegisterCustomerRequest): Promise<{ email: string; pollToken: string }> => {
-    const base = getApiUrl();
-    const res = await fetch(`${base}/api/auth/register/customer`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Registration failed');
-    return { email: json.email as string, pollToken: json.pollToken as string };
+  const registerCustomer = async (
+    data: RegisterCustomerRequest,
+  ): Promise<{ email: string; pollToken: string }> => {
+    try {
+      const json = await apiRegisterCustomer(data);
+      return { email: json.email, pollToken: json.pollToken };
+    } catch (err) {
+      throw extractApiError(err, 'Registration failed');
+    }
   };
 
-  const registerTrader = async (data: RegisterTraderRequest): Promise<{ email: string; pollToken: string }> => {
-    const base = getApiUrl();
-    const res = await fetch(`${base}/api/auth/register/trader`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Registration failed');
-    return { email: json.email as string, pollToken: json.pollToken as string };
+  const registerTrader = async (
+    data: RegisterTraderRequest,
+  ): Promise<{ email: string; pollToken: string }> => {
+    try {
+      const json = await apiRegisterTrader(data);
+      return { email: json.email, pollToken: json.pollToken };
+    } catch (err) {
+      throw extractApiError(err, 'Registration failed');
+    }
   };
 
   const resendVerification = async (email: string): Promise<void> => {
-    const base = getApiUrl();
-    const res = await fetch(`${base}/api/auth/resend-verification`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Failed to resend email');
+    try {
+      await apiResendVerificationEmail({ email });
+    } catch (err) {
+      throw extractApiError(err, 'Failed to resend email');
+    }
   };
 
   const logout = async () => {

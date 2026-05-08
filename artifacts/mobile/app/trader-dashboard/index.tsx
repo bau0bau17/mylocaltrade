@@ -7,79 +7,51 @@ import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
 import type { FeatherIconName } from '@/types/feather-icons';
+import {
+  useGetTraderOnboardingStatus,
+  type TraderOnboardingStatus,
+  type TraderOnboardingChecklistStep,
+} from '@workspace/api-client-react';
 
-type StepState = 'completed' | 'pending' | 'action_required' | 'locked' | 'rejected' | 'expired';
-
-interface ChecklistStep {
-  key: string;
-  label: string;
-  state: StepState;
-  description?: string;
-  comingSoon?: boolean;
-}
-
-interface LegalAcceptance {
-  termsCurrent: string;
-  termsAccepted: string | null;
-  termsNeedsReaccept: boolean;
-  privacyCurrent: string;
-  privacyAccepted: string | null;
-  privacyNeedsReaccept: boolean;
-  needsReaccept: boolean;
-}
-
-interface OnboardingStatus {
-  verificationStatus: string;
-  message: string;
-  isPublic: boolean;
-  emailVerified: boolean;
-  phoneVerified: boolean;
-  businessProfileCompleted: boolean;
-  documentsSubmitted: boolean;
-  isActive: boolean;
-  rejectionReason: string | null;
-  adminNotes: string | null;
-  checklist: ChecklistStep[];
-  legal?: LegalAcceptance;
-  email: string;
-  businessName: string;
-}
+type StepState = TraderOnboardingChecklistStep['state'];
+type ChecklistStep = TraderOnboardingChecklistStep;
+type OnboardingStatus = TraderOnboardingStatus;
 
 export default function TraderOnboardingDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token, user, isTrader, resendVerification } = useAuth();
-  const [status, setStatus] = useState<OnboardingStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [acceptingLegal, setAcceptingLegal] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
+
+  const {
+    data: status,
+    isLoading: queryLoading,
+    error: queryError,
+    refetch: refetchStatus,
+  } = useGetTraderOnboardingStatus({
+    query: {
+      queryKey: ['/api/trader/onboarding-status'],
+      enabled: Boolean(token && isTrader),
+    },
+  });
 
   const fetchStatus = useCallback(async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${getApiUrl()}/api/trader/onboarding-status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to load onboarding status');
-      setStatus(json);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [token]);
+    await refetchStatus();
+    setRefreshing(false);
+  }, [refetchStatus]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchStatus();
-    }, [fetchStatus])
+      void refetchStatus();
+    }, [refetchStatus])
   );
+
+  const loading = queryLoading;
+  const error = acceptError ?? (queryError instanceof Error ? queryError.message : queryError ? 'Failed to load' : null);
 
   useEffect(() => {
     if (!resendMsg) return;
@@ -90,7 +62,10 @@ export default function TraderOnboardingDashboard() {
   const handleAcceptLegal = async () => {
     if (!token || !status?.legal?.needsReaccept || acceptingLegal) return;
     setAcceptingLegal(true);
+    setAcceptError(null);
     try {
+      // accept-terms isn't yet in the OpenAPI surface — keep raw fetch here
+      // until that endpoint is modeled in the spec.
       const res = await fetch(`${getApiUrl()}/api/trader/accept-terms`, {
         method: 'POST',
         headers: {
@@ -104,9 +79,9 @@ export default function TraderOnboardingDashboard() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to record acceptance');
-      await fetchStatus();
+      await refetchStatus();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to record acceptance');
+      setAcceptError(e instanceof Error ? e.message : 'Failed to record acceptance');
     } finally {
       setAcceptingLegal(false);
     }

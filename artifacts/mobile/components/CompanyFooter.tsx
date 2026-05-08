@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 
-const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
+const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
 
 export function CompanyFooter() {
   const router = useRouter();
@@ -40,10 +40,10 @@ export function CompanyFooter() {
       <View style={styles.companyBlock}>
         <View style={styles.companyNameRow}>
           <Feather name="briefcase" size={11} color={Colors.light.textMuted} />
-          <Text style={styles.companyName}>Service Provider LTD</Text>
+          <Text style={styles.companyName}>MyLocalTrade</Text>
         </View>
-        <Text style={styles.companyDetail}>Registered in England and Wales · No: 15830141</Text>
-        <Text style={styles.companyDetail}>71-75 Shelton Street, Covent Garden, London, WC2H 9JQ</Text>
+        <Text style={styles.companyDetail}>Registered in England and Wales</Text>
+        <Text style={styles.companyDetail}>Company details available on request</Text>
       </View>
 
       <Text style={styles.copyright}>

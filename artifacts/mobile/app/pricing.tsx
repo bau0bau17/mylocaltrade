@@ -3,14 +3,17 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
-import { useGetSubscriptionPlans, useCreateCheckoutSession } from '@workspace/api-client-react';
+import {
+  useGetSubscriptionPlans,
+  useCreateCheckoutSession,
+  useGetTraderOnboardingStatus,
+} from '@workspace/api-client-react';
 import { PlanCard } from '@/components/PlanCard';
 import type { CreateCheckoutRequestPlanId } from '@workspace/api-client-react';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
 
 export default function PricingScreen() {
   const insets = useSafeAreaInsets();
@@ -20,21 +23,21 @@ export default function PricingScreen() {
   const router = useRouter();
 
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [verifiedStatus, setVerifiedStatus] = useState<'unknown' | 'verified' | 'not_verified'>('unknown');
 
-  useEffect(() => {
-    if (!isTrader || !token) { setVerifiedStatus('not_verified'); return; }
-    (async () => {
-      try {
-        const r = await fetch(`${getApiUrl()}/api/trader/onboarding-status`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!r.ok) { setVerifiedStatus('not_verified'); return; }
-        const json = await r.json();
-        setVerifiedStatus(json.verificationStatus === 'VERIFIED' ? 'verified' : 'not_verified');
-      } catch { setVerifiedStatus('not_verified'); }
-    })();
-  }, [isTrader, token]);
+  const { data: onboardingStatus, isLoading: isLoadingOnboarding } = useGetTraderOnboardingStatus({
+    query: {
+      queryKey: ['/api/trader/onboarding-status'],
+      enabled: Boolean(isTrader && token),
+    },
+  });
+  const verifiedStatus: 'unknown' | 'verified' | 'not_verified' =
+    !isTrader || !token
+      ? 'not_verified'
+      : isLoadingOnboarding
+      ? 'unknown'
+      : onboardingStatus?.verificationStatus === 'VERIFIED'
+      ? 'verified'
+      : 'not_verified';
 
   const handleSelectPlan = async (planId: string) => {
     setSelectedPlanId(planId);

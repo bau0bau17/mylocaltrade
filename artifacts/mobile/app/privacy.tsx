@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
-const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
+const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
 
 export default function PrivacyScreen() {
   const insets = useSafeAreaInsets();
@@ -23,7 +23,7 @@ export default function PrivacyScreen() {
       <View style={styles.section}>
         <Text style={styles.lastUpdated}>Last Updated: March 2026</Text>
         <Text style={styles.paragraph}>
-          This Privacy Policy explains how Service Provider LTD (trading as "MyLocalTrade"), a company registered in England and Wales (Company No. 15830141, registered office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ), collects, uses, discloses, and safeguards your personal data when you use our mobile application.
+          This Privacy Policy explains how MyLocalTrade (a company registered in England and Wales — full legal entity, company number and registered office will be published before launch) collects, uses, discloses, and safeguards your personal data when you use our mobile application.
         </Text>
         <Text style={styles.paragraph}>
           We are the data controller for the purposes of the UK General Data Protection Regulation (UK GDPR) and the Data Protection Act 2018.

@@ -8,6 +8,7 @@ import Colors from '@/constants/colors';
 import { TraderCard } from '@/components/TraderCard';
 import { useListTraders, getListTradersQueryKey } from '@workspace/api-client-react';
 import { useLocation } from '@/hooks/useLocation';
+import type { FeatherIconName } from '@/types/feather-icons';
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
@@ -74,7 +75,11 @@ export default function SearchScreen() {
     setHasSearched(true);
   };
 
-  const locationIcon = location.permissionDenied ? 'map-pin' : location.isLoading ? 'loader' : 'map-pin';
+  const locationIcon: FeatherIconName = location.permissionDenied
+    ? 'map-pin'
+    : location.isLoading
+    ? 'loader'
+    : 'map-pin';
   const locationPlaceholder = location.isLoading
     ? 'Detecting location...'
     : location.permissionDenied
@@ -107,7 +112,7 @@ export default function SearchScreen() {
 
           <View style={styles.inputContainer}>
             <Feather
-              name={locationIcon as any}
+              name={locationIcon}
               size={18}
               color={location.isLoading ? Colors.light.primary : Colors.light.secondary}
             />

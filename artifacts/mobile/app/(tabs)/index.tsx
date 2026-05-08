@@ -60,7 +60,7 @@ export default function HomeScreen() {
             <ActivityIndicator size="small" color={Colors.light.secondary} style={{ marginRight: 4 }} />
           ) : (
             <Feather
-              name={location.permissionDenied ? 'map-pin-off' as any : 'map-pin'}
+              name={(location.permissionDenied ? 'map-pin-off' : 'map-pin') as FeatherIconName}
               size={13}
               color={location.permissionDenied ? Colors.light.textMuted : Colors.light.secondary}
             />

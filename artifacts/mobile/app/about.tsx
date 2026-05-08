@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
-const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
+const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
 
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
@@ -79,22 +79,6 @@ export default function AboutScreen() {
         </View>
 
         <View style={styles.infoRow}>
-          <Feather name="file-text" size={14} color={Colors.light.textMuted} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Legal Entity</Text>
-            <Text style={styles.infoText}>Service Provider LTD</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Feather name="hash" size={14} color={Colors.light.textMuted} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Company Number</Text>
-            <Text style={styles.infoText}>15830141</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
           <Feather name="globe" size={14} color={Colors.light.textMuted} />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Place of Registration</Text>
@@ -103,10 +87,10 @@ export default function AboutScreen() {
         </View>
 
         <View style={styles.infoRow}>
-          <Feather name="map-pin" size={14} color={Colors.light.textMuted} />
+          <Feather name="info" size={14} color={Colors.light.textMuted} />
           <View style={styles.infoContent}>
             <Text style={styles.infoLabel}>Registered Office</Text>
-            <Text style={styles.infoText}>71-75 Shelton Street{'\n'}Covent Garden, London{'\n'}WC2H 9JQ, United Kingdom</Text>
+            <Text style={styles.infoText}>Full company details (legal entity, company number, registered office address) will be added before launch.</Text>
           </View>
         </View>
 
@@ -124,7 +108,7 @@ export default function AboutScreen() {
       <View style={styles.legalNote}>
         <Feather name="info" size={14} color={Colors.light.textMuted} />
         <Text style={styles.legalNoteText}>
-          This app is operated by Service Provider LTD, a company registered in England and Wales (Company No. 15830141). By using this app you agree to our Terms & Conditions and Privacy Policy. For any enquiries, use the Contact Us button above.
+          This app is operated by MyLocalTrade, a company registered in England and Wales. Full company details will be published before launch. By using this app you agree to our Terms & Conditions and Privacy Policy. For any enquiries, use the Contact Us button above.
         </Text>
       </View>
     </ScrollView>

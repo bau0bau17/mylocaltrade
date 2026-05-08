@@ -30,12 +30,17 @@ import type {
   HealthStatus,
   ListTradersParams,
   LoginRequest,
+  MessageResponse,
   RegisterCustomerRequest,
+  RegisterPendingResponse,
   RegisterTraderRequest,
+  ResendVerificationRequest,
+  RetryAfterErrorResponse,
   SubscriptionPlansResponse,
   SubscriptionStatus,
   SuccessResponse,
   TraderListResponse,
+  TraderOnboardingStatus,
   TraderProfile,
   UpdateTraderProfileRequest,
   UserProfile,
@@ -127,6 +132,10 @@ export function useHealthCheck<
 }
 
 /**
+ * Creates an inactive customer account and emails a verification link.
+The account cannot sign in until the email is verified. The response
+is a pending-registration acknowledgement, NOT a session.
+
  * @summary Register a new customer
  */
 export const getRegisterCustomerUrl = () => {
@@ -136,8 +145,8 @@ export const getRegisterCustomerUrl = () => {
 export const registerCustomer = async (
   registerCustomerRequest: RegisterCustomerRequest,
   options?: RequestInit,
-): Promise<AuthResponse> => {
-  return customFetch<AuthResponse>(getRegisterCustomerUrl(), {
+): Promise<RegisterPendingResponse> => {
+  return customFetch<RegisterPendingResponse>(getRegisterCustomerUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -213,6 +222,12 @@ export const useRegisterCustomer = <
 };
 
 /**
+ * Creates an inactive trader account and an associated trader profile,
+then emails a verification link. The trader account becomes
+publicly visible only after a successful subscription payment
+webhook (see /subscriptions/checkout). The response is a
+pending-registration acknowledgement, NOT a session.
+
  * @summary Register a new trader
  */
 export const getRegisterTraderUrl = () => {
@@ -222,8 +237,8 @@ export const getRegisterTraderUrl = () => {
 export const registerTrader = async (
   registerTraderRequest: RegisterTraderRequest,
   options?: RequestInit,
-): Promise<AuthResponse> => {
-  return customFetch<AuthResponse>(getRegisterTraderUrl(), {
+): Promise<RegisterPendingResponse> => {
+  return customFetch<RegisterPendingResponse>(getRegisterTraderUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -296,6 +311,100 @@ export const useRegisterTrader = <
   TContext
 > => {
   return useMutation(getRegisterTraderMutationOptions(options));
+};
+
+/**
+ * Resends the email-verification link for an unverified account.
+Always responds 200 with a generic message when the email is unknown
+(to avoid leaking which addresses are registered). Rate-limited to
+one request per 60 seconds per account.
+
+ * @summary Resend the email verification link
+ */
+export const getResendVerificationEmailUrl = () => {
+  return `/api/auth/resend-verification`;
+};
+
+export const resendVerificationEmail = async (
+  resendVerificationRequest: ResendVerificationRequest,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getResendVerificationEmailUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resendVerificationRequest),
+  });
+};
+
+export const getResendVerificationEmailMutationOptions = <
+  TError = ErrorType<ErrorResponse | RetryAfterErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendVerificationEmail>>,
+    TError,
+    { data: BodyType<ResendVerificationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resendVerificationEmail>>,
+  TError,
+  { data: BodyType<ResendVerificationRequest> },
+  TContext
+> => {
+  const mutationKey = ["resendVerificationEmail"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resendVerificationEmail>>,
+    { data: BodyType<ResendVerificationRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return resendVerificationEmail(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResendVerificationEmailMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resendVerificationEmail>>
+>;
+export type ResendVerificationEmailMutationBody =
+  BodyType<ResendVerificationRequest>;
+export type ResendVerificationEmailMutationError = ErrorType<
+  ErrorResponse | RetryAfterErrorResponse
+>;
+
+/**
+ * @summary Resend the email verification link
+ */
+export const useResendVerificationEmail = <
+  TError = ErrorType<ErrorResponse | RetryAfterErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resendVerificationEmail>>,
+    TError,
+    { data: BodyType<ResendVerificationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resendVerificationEmail>>,
+  TError,
+  { data: BodyType<ResendVerificationRequest> },
+  TContext
+> => {
+  return useMutation(getResendVerificationEmailMutationOptions(options));
 };
 
 /**
@@ -383,6 +492,85 @@ export const useLogin = <
 > => {
   return useMutation(getLoginMutationOptions(options));
 };
+
+/**
+ * @summary Get the signed-in trader's onboarding/verification status
+ */
+export const getGetTraderOnboardingStatusUrl = () => {
+  return `/api/trader/onboarding-status`;
+};
+
+export const getTraderOnboardingStatus = async (
+  options?: RequestInit,
+): Promise<TraderOnboardingStatus> => {
+  return customFetch<TraderOnboardingStatus>(
+    getGetTraderOnboardingStatusUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetTraderOnboardingStatusQueryKey = () => {
+  return [`/api/trader/onboarding-status`] as const;
+};
+
+export const getGetTraderOnboardingStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTraderOnboardingStatus>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTraderOnboardingStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetTraderOnboardingStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTraderOnboardingStatus>>
+  > = ({ signal }) => getTraderOnboardingStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTraderOnboardingStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTraderOnboardingStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTraderOnboardingStatus>>
+>;
+export type GetTraderOnboardingStatusQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get the signed-in trader's onboarding/verification status
+ */
+
+export function useGetTraderOnboardingStatus<
+  TData = Awaited<ReturnType<typeof getTraderOnboardingStatus>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTraderOnboardingStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTraderOnboardingStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Get current user
