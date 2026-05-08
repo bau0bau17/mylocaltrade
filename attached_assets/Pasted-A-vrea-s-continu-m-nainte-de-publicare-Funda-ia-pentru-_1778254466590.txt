@@ -1,0 +1,184 @@
+Aș vrea să continuăm înainte de publicare. Fundația pentru trader onboarding și verificare pare foarte bună, dar prioritatea mea este să facem platforma utilizabilă și credibilă pentru clienți și traderi.
+
+Te rog să continuăm în următoarea ordine:
+
+Phase 9: Dedicated Web Admin Panel
+
+Aceasta este prioritatea principală înainte de publicare.
+
+Momentan nu vreau ca admin-ul să folosească direct API-ul. Vreau un panou admin web clar, securizat și ușor de folosit.
+
+Admin panel trebuie să includă:
+
+* Login admin securizat
+* Dashboard general cu statistici
+* Listă traderi
+* Filtre după status: pending, under review, verified, rejected, suspended, expired documents
+* Pagină detaliată pentru fiecare trader
+* Vizualizare business profile
+* Vizualizare documente încărcate
+* Approve / reject documents
+* Approve / reject trader
+* Suspend / unsuspend trader
+* Request more information
+* Add admin notes
+* View audit logs
+* Export audit report JSON/CSV
+* View subscriptions and visibility status
+* View expired/expiring documents
+* View enquiries
+* View reported traders / complaints, if already supported
+
+Important: admin panel must not expose sensitive documents publicly. Document viewing/downloading must remain permission-protected.
+
+Phase 10: Review and Rating System
+
+După admin panel, vreau să implementăm sistemul de reviews.
+
+Requirements:
+
+* Customers can leave a review only after a real enquiry/job interaction
+* Rating from 1 to 5 stars
+* Written review
+* Optional job category
+* Review date
+* Trader can reply to a review
+* Customer email must be verified before review is published
+* Admin can moderate reviews
+* Admin can approve, hide or remove suspicious reviews
+* Users can report a review
+* Prevent duplicate reviews for the same enquiry/job
+* Average rating should appear on trader profile and search cards
+* Number of reviews should appear publicly
+* Reviews should not go live if flagged or pending moderation
+
+Important: do not allow fake open reviews from anyone without a real interaction.
+
+Phase 11: Enquiry Management + Basic Messaging
+
+After reviews, improve the enquiry system.
+
+Requirements:
+
+* Customer can submit enquiry to trader
+* Enquiry saved in database, not only sent by email
+* Trader dashboard shows all enquiries
+* Enquiry status:
+    NEW
+    VIEWED
+    CONTACTED
+    QUOTED
+    ACCEPTED
+    DECLINED
+    COMPLETED
+    CANCELLED
+* Trader can update enquiry status
+* Customer can see their enquiry status if they have an account
+* Admin can view enquiries for moderation/support
+* Email notifications for new enquiries
+* Prepare structure for in-app chat later, but if full chat is too much now, start with enquiry management first
+
+Phase 12: Notifications
+
+Add notification system after enquiry management.
+
+Requirements:
+
+* Email notifications for important events
+* In-app notifications dashboard
+* Prepare for push notifications later with Expo
+* Notification types:
+    New enquiry
+    Trader approved
+    Trader rejected
+    More information requested
+    Document approved/rejected
+    Insurance expiring soon
+    Subscription inactive
+    Review received
+    Review reply
+    Complaint/report update
+
+Push notifications can be prepared later, but database structure should support it.
+
+Phase 13: Portfolio Gallery
+
+Add portfolio/work photo gallery for traders.
+
+Requirements:
+
+* Trader can upload work photos
+* Photos visible on public trader profile
+* Admin can moderate/remove inappropriate photos
+* Trader can add captions
+* Limit number of photos based on plan:
+    Basic: limited gallery
+    Premium: more photos
+    Elite: larger gallery / featured portfolio
+
+Phase 14: Advanced Search
+
+After the core marketplace features work, improve search.
+
+Requirements:
+
+* Filter by category
+* Filter by town/postcode
+* Radius search
+* Verified only
+* Rating
+* Emergency service
+* Insurance checked
+* Availability
+* Sort by relevance, rating, distance, newest, featured
+
+Phase 15: Trader Analytics Dashboard
+
+Add trader stats later.
+
+Requirements:
+
+* Profile views
+* Enquiries received
+* Enquiries by month
+* Conversion status
+* Review count
+* Average rating
+* Subscription status
+* Visibility status
+
+Phase 16: Testing and Launch Preparation
+
+Before publishing publicly, we need testing.
+
+Requirements:
+
+* Unit tests for critical status logic
+* Integration tests for signup, verification, document upload, admin approval, subscription gating and public visibility
+* Test all trader statuses
+* Test expired documents
+* Test subscription inactive
+* Test suspended traders
+* Test public search only shows eligible traders
+* Test security headers and rate limits
+* Test admin permissions
+* Test document access permissions
+
+After these phases, then we can move to deployment/publication.
+
+For now, please start with Phase 9: Dedicated Web Admin Panel.
+
+Do not move to App Store / Play Store submission yet. I want the platform to be operationally manageable first.
+
+⸻
+
+Pe scurt, ordinea bună este:
+
+1. Admin Panel dedicat
+2. Reviews/rating
+3. Enquiry management / basic messaging
+4. Notifications
+5. Portfolio gallery
+6. Advanced search
+7. Trader analytics
+8. Testing + launch
