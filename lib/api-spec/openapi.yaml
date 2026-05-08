@@ -1585,6 +1585,8 @@ components:
           minLength: 8
         fullName:
           type: string
+          minLength: 1
+          maxLength: 100
         phone:
           type: string
       required:
@@ -1613,6 +1615,8 @@ components:
           description: User explicitly accepted the current Privacy Policy.
         contactName:
           type: string
+          minLength: 1
+          maxLength: 100
         businessName:
           type: string
         companyNumber:

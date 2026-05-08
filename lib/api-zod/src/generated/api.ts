@@ -27,7 +27,7 @@ export const registerCustomerBodyPasswordMin = 8;
 export const RegisterCustomerBody = zod.object({
   email: zod.string().email(),
   password: zod.string().min(registerCustomerBodyPasswordMin),
-  fullName: zod.string(),
+  fullName: zod.string().min(1).max(100),
   phone: zod.string().optional(),
 });
 
@@ -57,7 +57,7 @@ export const RegisterTraderBody = zod.object({
   privacyAccepted: zod
     .boolean()
     .describe("User explicitly accepted the current Privacy Policy."),
-  contactName: zod.string(),
+  contactName: zod.string().min(1).max(100),
   businessName: zod.string(),
   companyNumber: zod
     .string()
