@@ -62,19 +62,31 @@ export default function ContactSupportScreen() {
       </View>
 
       {sent ? (
-        <View style={styles.successContainer}>
+        <ScrollView
+          contentContainerStyle={[styles.successContainer, { paddingBottom: insets.bottom + 32 }]}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.successIcon}>
             <Feather name="check-circle" size={48} color={Colors.light.secondary} />
           </View>
-          <Text style={styles.successTitle}>Message Sent!</Text>
+          <Text style={styles.successTitle}>Thank You!</Text>
           <Text style={styles.successSub}>
-            We've received your message and will get back to you at{' '}
-            <Text style={styles.successEmail}>{form.email}</Text> as soon as possible.
+            We've received your message and a confirmation copy was sent to{' '}
+            <Text style={styles.successEmail}>{form.email}</Text>.
           </Text>
+          <View style={styles.slaCard}>
+            <Feather name="clock" size={18} color={Colors.light.primary} />
+            <Text style={styles.slaText}>
+              We aim to reply within{' '}
+              <Text style={styles.slaBold}>48 working hours</Text>, though
+              occasionally it may take a little longer during busy periods.
+              Thanks for your patience.
+            </Text>
+          </View>
           <Pressable style={styles.doneBtn} onPress={() => router.back()}>
             <Text style={styles.doneBtnText}>Done</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       ) : (
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
@@ -292,10 +304,31 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   successContainer: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
+  },
+  slaCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: Colors.light.primaryMuted,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginBottom: 28,
+  },
+  slaText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    lineHeight: 21,
+  },
+  slaBold: {
+    color: Colors.light.text,
+    fontWeight: '700',
   },
   successIcon: {
     width: 96,
