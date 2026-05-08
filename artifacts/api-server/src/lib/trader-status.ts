@@ -50,6 +50,79 @@ export async function logAudit(entry: AuditEntry): Promise<void> {
   }
 }
 
+export interface BusinessProfileRequirement {
+  field: string;
+  label: string;
+  satisfied: boolean;
+  hint: string;
+}
+
+export interface BusinessProfileEvaluation {
+  complete: boolean;
+  requirements: BusinessProfileRequirement[];
+}
+
+const MIN_DESCRIPTION_LEN = 80;
+
+export function evaluateBusinessProfileComplete(
+  profile: Pick<TraderProfile,
+    "businessDescription" | "businessAddress" | "additionalServices" | "serviceAreas" |
+    "openingHours" | "town" | "postcode" | "mainCategory">,
+): BusinessProfileEvaluation {
+  const desc = (profile.businessDescription ?? "").trim();
+  const addr = (profile.businessAddress ?? "").trim();
+  const town = (profile.town ?? "").trim();
+  const postcode = (profile.postcode ?? "").trim();
+  const services = profile.additionalServices ?? [];
+  const areas = profile.serviceAreas ?? [];
+  const hours = (profile.openingHours ?? "").trim();
+  const category = (profile.mainCategory ?? "").trim();
+
+  const requirements: BusinessProfileRequirement[] = [
+    {
+      field: "mainCategory",
+      label: "Main trade category",
+      satisfied: category.length > 0,
+      hint: "Select your main trade (e.g. Plumber, Electrician).",
+    },
+    {
+      field: "businessDescription",
+      label: "Business description",
+      satisfied: desc.length >= MIN_DESCRIPTION_LEN,
+      hint: `At least ${MIN_DESCRIPTION_LEN} characters describing what you do.`,
+    },
+    {
+      field: "businessAddress",
+      label: "Business address",
+      satisfied: addr.length > 0 && town.length > 0 && postcode.length > 0,
+      hint: "Full street address, town and postcode.",
+    },
+    {
+      field: "additionalServices",
+      label: "Services offered",
+      satisfied: services.length >= 1,
+      hint: "Add at least one service you provide.",
+    },
+    {
+      field: "serviceAreas",
+      label: "Service areas",
+      satisfied: areas.length >= 1,
+      hint: "Add at least one town/area you cover.",
+    },
+    {
+      field: "openingHours",
+      label: "Opening hours",
+      satisfied: hours.length > 0,
+      hint: "Tell customers when you're available.",
+    },
+  ];
+
+  return {
+    complete: requirements.every(r => r.satisfied),
+    requirements,
+  };
+}
+
 export interface ChecklistStep {
   key: "email" | "phone" | "business_profile" | "documents" | "review" | "subscription" | "live";
   label: string;
@@ -91,8 +164,12 @@ export function buildOnboardingChecklist(
     {
       key: "business_profile",
       label: "Business profile completed",
-      state: !phoneDone ? "locked" : businessDone ? "completed" : "pending",
-      comingSoon: phoneDone && !businessDone, // Phase 3
+      state: !phoneDone ? "locked" : businessDone ? "completed" : "action_required",
+      description: !phoneDone
+        ? "Verify your phone first."
+        : businessDone
+          ? undefined
+          : "Tell customers what you do, where you work and when you're available.",
     },
     {
       key: "documents",

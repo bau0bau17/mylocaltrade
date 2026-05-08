@@ -176,6 +176,9 @@ export default function TraderOnboardingDashboard() {
           } else if (step.key === 'phone' && step.state === 'action_required') {
             onAction = () => router.push('/trader-dashboard/verify-phone');
             actionLabel = 'Verify phone';
+          } else if (step.key === 'business_profile' && step.state === 'action_required') {
+            onAction = () => router.push('/trader-dashboard/business-profile');
+            actionLabel = 'Complete profile';
           }
           return (
             <React.Fragment key={step.key}>

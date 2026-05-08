@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { UpdateTraderProfileBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
+import { TRADER_STATUS, evaluateBusinessProfileComplete, logAudit } from "../lib/trader-status";
 
 const router: IRouter = Router();
 
@@ -86,6 +87,35 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       res.status(404).json({ error: "Trader profile not found" });
       return;
     }
+
+    // Re-evaluate business profile completion + transition status if needed.
+    const evalResult = evaluateBusinessProfileComplete(updated);
+    const wasCompleted = updated.businessProfileCompleted;
+    const stateChange: Record<string, unknown> = {};
+    if (evalResult.complete && !wasCompleted) {
+      stateChange.businessProfileCompleted = true;
+      if (updated.verificationStatus === TRADER_STATUS.PROFILE_INCOMPLETE) {
+        stateChange.verificationStatus = TRADER_STATUS.PENDING_DOCUMENTS;
+      }
+    } else if (!evalResult.complete && wasCompleted) {
+      stateChange.businessProfileCompleted = false;
+      // Don't downgrade if already past documents stage; only revert if still in pending-docs.
+      if (updated.verificationStatus === TRADER_STATUS.PENDING_DOCUMENTS) {
+        stateChange.verificationStatus = TRADER_STATUS.PROFILE_INCOMPLETE;
+      }
+    }
+    if (Object.keys(stateChange).length > 0) {
+      stateChange.updatedAt = new Date();
+      await db
+        .update(traderProfilesTable)
+        .set(stateChange)
+        .where(eq(traderProfilesTable.userId, userId));
+      Object.assign(updated, stateChange);
+      if (stateChange.businessProfileCompleted === true) {
+        logAudit({ userId, action: "BUSINESS_PROFILE_COMPLETED" });
+      }
+    }
+    logAudit({ userId, action: "BUSINESS_PROFILE_UPDATED" });
 
     res.json({
       id: updated.id,
