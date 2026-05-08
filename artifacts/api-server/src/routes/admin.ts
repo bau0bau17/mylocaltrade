@@ -102,7 +102,7 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
 // GET /api/admin/traders/:userId
 router.get("/admin/traders/:userId", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const userId = Number.parseInt(req.params.userId, 10);
+    const userId = Number.parseInt(String(req.params.userId), 10);
     if (!Number.isFinite(userId)) {
       res.status(400).json({ error: "Invalid user id" });
       return;
@@ -158,7 +158,7 @@ router.get("/admin/traders/:userId", authMiddleware, adminOnly, async (req, res)
 // GET /api/admin/documents/:id/view-url — short-lived signed URL for in-browser preview
 router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const id = Number.parseInt(req.params.id, 10);
+    const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {
       res.status(400).json({ error: "Invalid id" });
       return;
@@ -191,7 +191,7 @@ router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (re
 // GET /api/admin/documents/:id/file — admin-scoped proxy stream
 router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const id = Number.parseInt(req.params.id, 10);
+    const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {
       res.status(400).json({ error: "Invalid id" });
       return;
@@ -236,7 +236,7 @@ const RejectDocumentBody = z.object({
 router.post("/admin/documents/:id/approve", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { userId: adminId } = req as AuthenticatedRequest;
-    const id = Number.parseInt(req.params.id, 10);
+    const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {
       res.status(400).json({ error: "Invalid id" });
       return;
@@ -272,7 +272,7 @@ router.post("/admin/documents/:id/approve", authMiddleware, adminOnly, async (re
 router.post("/admin/documents/:id/reject", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { userId: adminId } = req as AuthenticatedRequest;
-    const id = Number.parseInt(req.params.id, 10);
+    const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {
       res.status(400).json({ error: "Invalid id" });
       return;
@@ -323,7 +323,7 @@ async function getTraderProfile(userId: number) {
 router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { userId: adminId } = req as AuthenticatedRequest;
-    const userId = Number.parseInt(req.params.userId, 10);
+    const userId = Number.parseInt(String(req.params.userId), 10);
     if (!Number.isFinite(userId)) {
       res.status(400).json({ error: "Invalid user id" });
       return;
@@ -399,7 +399,7 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
 router.post("/admin/traders/:userId/reject", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { userId: adminId } = req as AuthenticatedRequest;
-    const userId = Number.parseInt(req.params.userId, 10);
+    const userId = Number.parseInt(String(req.params.userId), 10);
     if (!Number.isFinite(userId)) {
       res.status(400).json({ error: "Invalid user id" });
       return;
@@ -443,7 +443,7 @@ router.post("/admin/traders/:userId/reject", authMiddleware, adminOnly, async (r
 router.post("/admin/traders/:userId/request-info", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { userId: adminId } = req as AuthenticatedRequest;
-    const userId = Number.parseInt(req.params.userId, 10);
+    const userId = Number.parseInt(String(req.params.userId), 10);
     if (!Number.isFinite(userId)) {
       res.status(400).json({ error: "Invalid user id" });
       return;
@@ -582,7 +582,7 @@ router.get("/admin/audit-report", authMiddleware, adminOnly, async (req, res) =>
 router.post("/admin/traders/:userId/suspend", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { userId: adminId } = req as AuthenticatedRequest;
-    const userId = Number.parseInt(req.params.userId, 10);
+    const userId = Number.parseInt(String(req.params.userId), 10);
     if (!Number.isFinite(userId)) {
       res.status(400).json({ error: "Invalid user id" });
       return;
@@ -626,7 +626,7 @@ router.post("/admin/traders/:userId/suspend", authMiddleware, adminOnly, async (
 router.post("/admin/traders/:userId/unsuspend", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { userId: adminId } = req as AuthenticatedRequest;
-    const userId = Number.parseInt(req.params.userId, 10);
+    const userId = Number.parseInt(String(req.params.userId), 10);
     if (!Number.isFinite(userId)) {
       res.status(400).json({ error: "Invalid user id" });
       return;

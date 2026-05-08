@@ -245,7 +245,7 @@ router.post("/trader/documents", authMiddleware, traderOnly, async (req, res) =>
 router.delete("/trader/documents/:id", authMiddleware, traderOnly, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
-    const id = Number.parseInt(req.params.id, 10);
+    const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {
       res.status(400).json({ error: "Invalid document id" });
       return;
@@ -286,7 +286,7 @@ router.delete("/trader/documents/:id", authMiddleware, traderOnly, async (req, r
 router.get("/trader/documents/:id/file", authMiddleware, traderOnly, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
-    const id = Number.parseInt(req.params.id, 10);
+    const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {
       res.status(400).json({ error: "Invalid document id" });
       return;
