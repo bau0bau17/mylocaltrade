@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import bcryptjs from "bcryptjs";
 import { db } from "@workspace/db";
-import { usersTable, traderProfilesTable } from "@workspace/db/schema";
+import { usersTable, traderProfilesTable, subscriptionsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import {
   RegisterCustomerBody,
@@ -381,11 +381,24 @@ router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
       .from(traderDocumentsTable)
       .where(eq(traderDocumentsTable.userId, userId));
     const documents = evaluateDocumentsComplete(docs);
+    const [sub] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, userId))
+      .limit(1);
+    const subscription = sub
+      ? {
+          status: sub.status,
+          planId: sub.planId,
+          cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+          currentPeriodEnd: sub.currentPeriodEnd,
+        }
+      : null;
 
     res.json({
       verificationStatus: profile.verificationStatus,
       message: statusMessage(profile),
-      isPublic: isTraderProfilePublic(user, profile),
+      isPublic: isTraderProfilePublic(user, profile, subscription),
       emailVerified: user.emailVerified,
       phoneVerified: profile.phoneVerified,
       businessProfileCompleted: profile.businessProfileCompleted,
@@ -393,9 +406,10 @@ router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
       isActive: profile.isActive,
       rejectionReason: profile.rejectionReason,
       adminNotes: profile.adminNotes,
-      checklist: buildOnboardingChecklist(user, profile),
+      checklist: buildOnboardingChecklist(user, profile, subscription),
       businessProfile,
       documents,
+      subscription,
       email: user.email,
       businessName: profile.businessName,
     });

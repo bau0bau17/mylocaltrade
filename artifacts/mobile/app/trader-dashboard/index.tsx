@@ -182,6 +182,9 @@ export default function TraderOnboardingDashboard() {
           } else if (step.key === 'documents' && step.state === 'action_required') {
             onAction = () => router.push('/trader-dashboard/documents');
             actionLabel = 'Upload documents';
+          } else if (step.key === 'subscription' && step.state === 'action_required') {
+            onAction = () => router.push('/pricing');
+            actionLabel = 'Choose plan';
           }
           return (
             <React.Fragment key={step.key}>

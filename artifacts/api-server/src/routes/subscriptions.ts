@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { CreateCheckoutSessionBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
+import { logAudit, TRADER_STATUS } from "../lib/trader-status";
 
 const router: IRouter = Router();
 
@@ -88,6 +89,17 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
     if (!user) {
       res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    // Phase 6: only verified traders may subscribe.
+    const [profile] = await db
+      .select()
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile || profile.verificationStatus !== TRADER_STATUS.VERIFIED) {
+      res.status(403).json({ error: "Your account must be verified before you can subscribe." });
       return;
     }
 
@@ -270,10 +282,95 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
         .where(eq(traderProfilesTable.userId, userId));
     });
 
+    await logAudit({ userId, action: "SUBSCRIPTION_ACTIVATED", details: { plan: planId, demo: true } });
+    await logAudit({ userId, action: "PROFILE_WENT_LIVE", details: { plan: planId } });
+
     res.json({ success: true, plan: planId, status: "active" });
   } catch (error) {
     req.log.error({ err: error }, "Demo activation failed");
     res.status(500).json({ error: "Demo activation failed" });
+  }
+});
+
+// POST /api/subscriptions/cancel — schedule cancellation at period end (mock + Stripe-ready)
+router.post("/subscriptions/cancel", authMiddleware, traderOnly, async (req, res) => {
+  try {
+    const { userId } = req as AuthenticatedRequest;
+    const [sub] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, userId))
+      .limit(1);
+    if (!sub || sub.status !== "active") {
+      res.status(400).json({ error: "No active subscription to cancel." });
+      return;
+    }
+    if (sub.cancelAtPeriodEnd) {
+      res.json({ success: true, alreadyScheduled: true, cancelAtPeriodEnd: true, currentPeriodEnd: sub.currentPeriodEnd });
+      return;
+    }
+
+    if (!IS_DEMO_MODE && sub.stripeSubscriptionId && process.env.STRIPE_SECRET_KEY) {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+      try {
+        await stripe.subscriptions.update(sub.stripeSubscriptionId, { cancel_at_period_end: true });
+      } catch (e) {
+        req.log.error({ err: e }, "Stripe cancel failed");
+        res.status(502).json({ error: "Failed to cancel with payment provider." });
+        return;
+      }
+    }
+
+    await db
+      .update(subscriptionsTable)
+      .set({ cancelAtPeriodEnd: true, updatedAt: new Date() })
+      .where(eq(subscriptionsTable.userId, userId));
+
+    await logAudit({ userId, action: "SUBSCRIPTION_CANCELLED", details: { scheduled: true, periodEnd: sub.currentPeriodEnd } });
+
+    res.json({ success: true, cancelAtPeriodEnd: true, currentPeriodEnd: sub.currentPeriodEnd });
+  } catch (error) {
+    req.log.error({ err: error }, "Cancel subscription failed");
+    res.status(500).json({ error: "Failed to cancel subscription" });
+  }
+});
+
+// POST /api/subscriptions/resume — undo a scheduled cancellation
+router.post("/subscriptions/resume", authMiddleware, traderOnly, async (req, res) => {
+  try {
+    const { userId } = req as AuthenticatedRequest;
+    const [sub] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, userId))
+      .limit(1);
+    if (!sub || sub.status !== "active" || !sub.cancelAtPeriodEnd) {
+      res.status(400).json({ error: "No scheduled cancellation to resume." });
+      return;
+    }
+
+    if (!IS_DEMO_MODE && sub.stripeSubscriptionId && process.env.STRIPE_SECRET_KEY) {
+      const Stripe = (await import("stripe")).default;
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+      try {
+        await stripe.subscriptions.update(sub.stripeSubscriptionId, { cancel_at_period_end: false });
+      } catch (e) {
+        req.log.error({ err: e }, "Stripe resume failed");
+        res.status(502).json({ error: "Failed to resume with payment provider." });
+        return;
+      }
+    }
+
+    await db
+      .update(subscriptionsTable)
+      .set({ cancelAtPeriodEnd: false, updatedAt: new Date() })
+      .where(eq(subscriptionsTable.userId, userId));
+
+    res.json({ success: true, cancelAtPeriodEnd: false });
+  } catch (error) {
+    req.log.error({ err: error }, "Resume subscription failed");
+    res.status(500).json({ error: "Failed to resume subscription" });
   }
 });
 
@@ -294,8 +391,9 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
       .limit(1);
 
     res.json({
-      plan: user.plan,
-      status: user.isActive ? "active" : "inactive",
+      plan: sub?.planId ?? user.plan,
+      status: sub?.status ?? (user.isActive ? "active" : "inactive"),
+      currentPeriodStart: sub?.currentPeriodStart || null,
       currentPeriodEnd: sub?.currentPeriodEnd || null,
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd || false,
     });
@@ -336,6 +434,8 @@ function verifyWebhookSignature(payload: Buffer, signature: string, secret: stri
 }
 
 async function activateSubscription(customerId: string, planId: string | null, subscriptionId: string | null) {
+  let activatedUserId: number | null = null;
+  let wentLive = false;
   await db.transaction(async (tx) => {
     const [user] = await tx
       .select()
@@ -344,6 +444,7 @@ async function activateSubscription(customerId: string, planId: string | null, s
       .limit(1);
 
     if (!user) return;
+    activatedUserId = user.id;
 
     await tx
       .update(usersTable)
@@ -370,6 +471,8 @@ async function activateSubscription(customerId: string, planId: string | null, s
       .where(eq(subscriptionsTable.userId, user.id))
       .limit(1);
 
+    wentLive = existingSub.length === 0 || existingSub[0].status !== "active";
+
     if (existingSub.length > 0) {
       await tx
         .update(subscriptionsTable)
@@ -377,6 +480,7 @@ async function activateSubscription(customerId: string, planId: string | null, s
           status: "active",
           planId: planId || existingSub[0].planId,
           stripeSubscriptionId: subscriptionId,
+          cancelAtPeriodEnd: false,
           updatedAt: new Date(),
         })
         .where(eq(subscriptionsTable.userId, user.id));
@@ -390,9 +494,16 @@ async function activateSubscription(customerId: string, planId: string | null, s
       });
     }
   });
+  if (activatedUserId) {
+    await logAudit({ userId: activatedUserId, action: "SUBSCRIPTION_ACTIVATED", details: { plan: planId, stripe: true } });
+    if (wentLive) {
+      await logAudit({ userId: activatedUserId, action: "PROFILE_WENT_LIVE", details: { plan: planId } });
+    }
+  }
 }
 
 async function deactivateSubscription(customerId: string) {
+  let deactivatedUserId: number | null = null;
   await db.transaction(async (tx) => {
     const [user] = await tx
       .select()
@@ -401,6 +512,7 @@ async function deactivateSubscription(customerId: string) {
       .limit(1);
 
     if (!user) return;
+    deactivatedUserId = user.id;
 
     await tx
       .update(usersTable)
@@ -419,9 +531,12 @@ async function deactivateSubscription(customerId: string) {
 
     await tx
       .update(subscriptionsTable)
-      .set({ status: "canceled", updatedAt: new Date() })
+      .set({ status: "canceled", cancelAtPeriodEnd: false, updatedAt: new Date() })
       .where(eq(subscriptionsTable.userId, user.id));
   });
+  if (deactivatedUserId) {
+    await logAudit({ userId: deactivatedUserId, action: "SUBSCRIPTION_CANCELLED", details: { stripe: true } });
+  }
 }
 
 router.post("/webhooks/stripe", async (req, res) => {
