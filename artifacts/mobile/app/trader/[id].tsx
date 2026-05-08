@@ -53,6 +53,12 @@ export default function TraderProfileScreen() {
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{trader.mainCategory}</Text>
             </View>
+            {trader.isVerified && (
+              <View style={[styles.planBadge, { backgroundColor: 'rgba(16, 185, 129, 0.14)' }]}>
+                <Feather name="check-circle" size={11} color={Colors.light.success} />
+                <Text style={[styles.planTextColored, { color: Colors.light.success }]}>Verified</Text>
+              </View>
+            )}
             {trader.plan === 'elite' && (
               <View style={[styles.planBadge, { backgroundColor: Colors.light.eliteMuted }]}>
                 <Feather name="zap" size={10} color={Colors.light.elite} />
@@ -65,6 +71,11 @@ export default function TraderProfileScreen() {
               </View>
             )}
           </View>
+          {trader.verifiedAt && (
+            <Text style={styles.verifiedSince}>
+              Verified by MyLocalTrade · {new Date(trader.verifiedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+            </Text>
+          )}
         </View>
 
         <View style={styles.content}>
@@ -255,6 +266,14 @@ const styles = StyleSheet.create({
   badges: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  verifiedSince: {
+    marginTop: 8,
+    fontSize: 11,
+    color: Colors.light.textMuted,
+    letterSpacing: 0.3,
   },
   categoryBadge: {
     backgroundColor: Colors.light.primaryMuted,

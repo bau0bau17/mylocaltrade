@@ -30,6 +30,8 @@ export interface TraderProfile {
   plan?: TraderProfilePlan;
   isFeatured: boolean;
   isActive: boolean;
+  isVerified: boolean;
+  verifiedAt?: Date | null;
   rating?: number | null;
   reviewCount: number;
   createdAt?: Date;

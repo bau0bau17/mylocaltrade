@@ -152,6 +152,8 @@ function formatTrader(t: TraderProfile) {
     plan: t.plan,
     isFeatured: t.isFeatured,
     isActive: t.isActive,
+    isVerified: t.verificationStatus === "VERIFIED",
+    verifiedAt: t.verifiedAt ? t.verifiedAt.toISOString() : null,
     rating: t.rating,
     reviewCount: t.reviewCount,
     createdAt: t.createdAt.toISOString(),

@@ -398,7 +398,7 @@ router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
     res.json({
       verificationStatus: profile.verificationStatus,
       message: statusMessage(profile),
-      isPublic: isTraderProfilePublic(user, profile, subscription),
+      isPublic: isTraderProfilePublic(user, profile, subscription, docs),
       emailVerified: user.emailVerified,
       phoneVerified: profile.phoneVerified,
       businessProfileCompleted: profile.businessProfileCompleted,

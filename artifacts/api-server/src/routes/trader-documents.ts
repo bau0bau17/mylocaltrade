@@ -34,6 +34,15 @@ const RegisterDocumentBody = z.object({
   originalFilename: z.string().min(1).max(255),
   mimeType: z.string().min(1).max(100),
   sizeBytes: z.number().int().positive().max(MAX_UPLOAD_BYTES),
+  // Optional expiry date for time-bound documents (insurance, qualifications).
+  expiresAt: z
+    .string()
+    .datetime({ offset: true })
+    .optional()
+    .nullable()
+    .refine((v) => v == null || new Date(v).getTime() > Date.now(), {
+      message: "Expiry date must be in the future",
+    }),
 });
 
 function serializeDoc(d: typeof traderDocumentsTable.$inferSelect) {
@@ -84,6 +93,27 @@ async function reconcileDocumentsState(userId: number) {
     }
   }
 
+  // Phase 7: expired required document for a previously verified trader →
+  // flip to EXPIRED_DOCUMENTS and hide the profile.
+  if (
+    profile.verificationStatus === TRADER_STATUS.VERIFIED &&
+    evaluation.hasExpiredRequired
+  ) {
+    stateChange.verificationStatus = TRADER_STATUS.EXPIRED_DOCUMENTS;
+    stateChange.isActive = false;
+  }
+
+  // If the trader has uploaded a fresh replacement and no required doc is
+  // expired any more, queue them for re-review (admin must re-approve).
+  if (
+    profile.verificationStatus === TRADER_STATUS.EXPIRED_DOCUMENTS &&
+    evaluation.complete &&
+    !evaluation.hasExpiredRequired
+  ) {
+    stateChange.verificationStatus = TRADER_STATUS.UNDER_REVIEW;
+    stateChange.submittedForReviewAt = new Date();
+  }
+
   if (Object.keys(stateChange).length > 0) {
     stateChange.updatedAt = new Date();
     await db
@@ -92,6 +122,9 @@ async function reconcileDocumentsState(userId: number) {
       .where(eq(traderProfilesTable.userId, userId));
     if (stateChange.verificationStatus === TRADER_STATUS.UNDER_REVIEW) {
       await logAudit({ userId, action: "TRADER_SUBMITTED_FOR_REVIEW" });
+    }
+    if (stateChange.verificationStatus === TRADER_STATUS.EXPIRED_DOCUMENTS) {
+      await logAudit({ userId, action: "DOCUMENT_EXPIRED" });
     }
   }
   return evaluation;
@@ -185,6 +218,7 @@ router.post("/trader/documents", authMiddleware, traderOnly, async (req, res) =>
         mimeType: body.mimeType,
         sizeBytes: storedSize,
         status: "PENDING_REVIEW",
+        expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
       })
       .returning();
 

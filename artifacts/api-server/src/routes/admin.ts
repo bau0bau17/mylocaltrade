@@ -5,6 +5,7 @@ import {
   traderProfilesTable,
   traderDocumentsTable,
   traderAuditLogTable,
+  subscriptionsTable,
 } from "@workspace/db/schema";
 import { and, eq, ilike, or, desc, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -351,6 +352,16 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
       .set({ status: "APPROVED", reviewedAt: new Date(), reviewedBy: adminId })
       .where(and(eq(traderDocumentsTable.userId, userId), eq(traderDocumentsTable.status, "PENDING_REVIEW")));
 
+    // Phase 7: re-approving from EXPIRED_DOCUMENTS should restore visibility if the
+    // trader still has an active subscription. Otherwise leave isActive untouched —
+    // the subscription activation flow will flip it on when they next subscribe.
+    const [sub] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, userId))
+      .limit(1);
+    const restoreActive = sub?.status === "active";
+
     const [updated] = await db
       .update(traderProfilesTable)
       .set({
@@ -359,6 +370,7 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
         rejectedAt: null,
         rejectionReason: null,
         adminNotes: body.notes ?? profile.adminNotes,
+        ...(restoreActive ? { isActive: true } : {}),
         updatedAt: new Date(),
       })
       .where(eq(traderProfilesTable.userId, userId))

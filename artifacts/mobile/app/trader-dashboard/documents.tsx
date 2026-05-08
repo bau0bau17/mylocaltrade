@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, RefreshControl, ScrollView, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -26,11 +26,14 @@ interface DocItem {
   sizeBytes: number;
   status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'EXPIRED';
   rejectionReason: string | null;
+  expiresAt: string | null;
   createdAt: string;
 }
 
 interface DocsEvaluation {
   complete: boolean;
+  hasExpiredRequired: boolean;
+  hasExpiringSoonRequired: boolean;
   byType: Array<{
     type: string;
     label: string;
@@ -40,7 +43,26 @@ interface DocsEvaluation {
     count: number;
     latestStatus?: string;
     rejectionReason?: string;
+    expiresAt?: string | null;
+    expired?: boolean;
+    expiringSoon?: boolean;
   }>;
+}
+
+const TRACK_EXPIRY: Record<string, boolean> = {
+  INSURANCE: true,
+  QUALIFICATION: true,
+};
+
+function parseExpiry(input: string): { iso: string | null; error: string | null } {
+  const trimmed = input.trim();
+  if (!trimmed) return { iso: null, error: null };
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!m) return { iso: null, error: 'Use format YYYY-MM-DD.' };
+  const date = new Date(`${trimmed}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return { iso: null, error: 'Invalid date.' };
+  if (date.getTime() <= Date.now()) return { iso: null, error: 'Date must be in the future.' };
+  return { iso: date.toISOString(), error: null };
 }
 
 export default function DocumentsScreen() {
@@ -54,6 +76,7 @@ export default function DocumentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expiryInputs, setExpiryInputs] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -78,6 +101,17 @@ export default function DocumentsScreen() {
   const handlePick = async (docType: string) => {
     if (uploadingType) return;
     setError(null);
+
+    let expiryIso: string | null = null;
+    if (TRACK_EXPIRY[docType]) {
+      const raw = expiryInputs[docType] ?? '';
+      const parsed = parseExpiry(raw);
+      if (parsed.error) {
+        Alert.alert('Expiry date', parsed.error);
+        return;
+      }
+      expiryIso = parsed.iso;
+    }
 
     let pickResult: DocumentPicker.DocumentPickerResult;
     try {
@@ -139,12 +173,14 @@ export default function DocumentsScreen() {
           originalFilename: asset.name,
           mimeType,
           sizeBytes,
+          ...(expiryIso ? { expiresAt: expiryIso } : {}),
         }),
       });
       const regJson = await regRes.json();
       if (!regRes.ok) throw new Error(regJson.error || 'Failed to save document');
 
       await load();
+      setExpiryInputs((prev) => ({ ...prev, [docType]: '' }));
       if (regJson.evaluation?.complete) {
         Alert.alert(
           'Documents submitted',
@@ -229,6 +265,23 @@ export default function DocumentsScreen() {
           </Text>
         </View>
 
+        {evaluation?.hasExpiredRequired && (
+          <View style={styles.alertBox}>
+            <Feather name="alert-triangle" size={14} color={Colors.light.error} />
+            <Text style={styles.alertText}>
+              A required document has expired. Your profile has been hidden — upload a fresh copy below to restore it.
+            </Text>
+          </View>
+        )}
+        {!evaluation?.hasExpiredRequired && evaluation?.hasExpiringSoonRequired && (
+          <View style={styles.warnBox}>
+            <Feather name="clock" size={14} color="#B45309" />
+            <Text style={styles.warnText}>
+              A required document expires within the next 30 days. Upload a replacement to avoid going offline.
+            </Text>
+          </View>
+        )}
+
         {DOCUMENT_TYPES.map((dt) => {
           const evalRow = evaluation?.byType.find(b => b.type === dt.type);
           const myDocs = docs.filter(d => d.type === dt.type);
@@ -257,30 +310,60 @@ export default function DocumentsScreen() {
 
               {myDocs.length > 0 && (
                 <View style={styles.docList}>
-                  {myDocs.map(d => (
-                    <View key={d.id} style={styles.docRow}>
-                      <Feather
-                        name={d.mimeType === 'application/pdf' ? 'file-text' : 'image'}
-                        size={14}
-                        color={Colors.light.textMuted}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.docName} numberOfLines={1}>{d.originalFilename}</Text>
-                        <View style={styles.docMetaRow}>
-                          <StatusPill status={d.status} />
-                          <Text style={styles.docMeta}>{formatSize(d.sizeBytes)}</Text>
+                  {myDocs.map(d => {
+                    const expiryDate = d.expiresAt ? new Date(d.expiresAt) : null;
+                    const expired = expiryDate ? expiryDate.getTime() <= Date.now() : d.status === 'EXPIRED';
+                    const daysToExpiry = expiryDate ? Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+                    const expiringSoon = daysToExpiry != null && daysToExpiry > 0 && daysToExpiry <= 30;
+                    return (
+                      <View key={d.id} style={styles.docRow}>
+                        <Feather
+                          name={d.mimeType === 'application/pdf' ? 'file-text' : 'image'}
+                          size={14}
+                          color={Colors.light.textMuted}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.docName} numberOfLines={1}>{d.originalFilename}</Text>
+                          <View style={styles.docMetaRow}>
+                            <StatusPill status={expired ? 'EXPIRED' : d.status} />
+                            <Text style={styles.docMeta}>{formatSize(d.sizeBytes)}</Text>
+                          </View>
+                          {expiryDate && (
+                            <Text style={[styles.expiryText, expired && { color: Colors.light.error }, expiringSoon && { color: '#B45309' }]}>
+                              {expired
+                                ? `Expired ${expiryDate.toLocaleDateString('en-GB')}`
+                                : `Expires ${expiryDate.toLocaleDateString('en-GB')}${expiringSoon ? ` (in ${daysToExpiry}d)` : ''}`}
+                            </Text>
+                          )}
+                          {d.status === 'REJECTED' && d.rejectionReason && (
+                            <Text style={styles.rejectionText}>{d.rejectionReason}</Text>
+                          )}
                         </View>
-                        {d.status === 'REJECTED' && d.rejectionReason && (
-                          <Text style={styles.rejectionText}>{d.rejectionReason}</Text>
+                        {d.status !== 'APPROVED' && (
+                          <Pressable onPress={() => handleDelete(d)} hitSlop={10}>
+                            <Feather name="x" size={16} color={Colors.light.textMuted} />
+                          </Pressable>
                         )}
                       </View>
-                      {d.status !== 'APPROVED' && (
-                        <Pressable onPress={() => handleDelete(d)} hitSlop={10}>
-                          <Feather name="x" size={16} color={Colors.light.textMuted} />
-                        </Pressable>
-                      )}
-                    </View>
-                  ))}
+                    );
+                  })}
+                </View>
+              )}
+
+              {TRACK_EXPIRY[dt.type] && (
+                <View style={styles.expiryInputRow}>
+                  <Feather name="calendar" size={13} color={Colors.light.textMuted} />
+                  <TextInput
+                    style={styles.expiryInput}
+                    placeholder="Expiry date (YYYY-MM-DD, optional)"
+                    placeholderTextColor={Colors.light.textMuted}
+                    value={expiryInputs[dt.type] ?? ''}
+                    onChangeText={(v) => setExpiryInputs((prev) => ({ ...prev, [dt.type]: v }))}
+                    keyboardType="numbers-and-punctuation"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    maxLength={10}
+                  />
                 </View>
               )}
 
@@ -384,6 +467,15 @@ const styles = StyleSheet.create({
   docMetaRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 4 },
   docMeta: { fontSize: 10, color: Colors.light.textMuted },
   rejectionText: { fontSize: 11, color: Colors.light.error, marginTop: 4, fontStyle: 'italic' },
+  expiryText: { fontSize: 10, color: Colors.light.textMuted, marginTop: 4 },
+
+  expiryInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, height: 38, borderRadius: 10, borderWidth: 1, borderColor: Colors.light.border, backgroundColor: Colors.light.surface },
+  expiryInput: { flex: 1, color: Colors.light.text, fontSize: 12, paddingVertical: 0 },
+
+  alertBox: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: Colors.light.errorMuted, borderColor: Colors.light.error, borderWidth: 1, padding: 10, borderRadius: 10, marginBottom: 12 },
+  alertText: { flex: 1, fontSize: 11, color: Colors.light.error, lineHeight: 16 },
+  warnBox: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: 'rgba(245, 158, 11, 0.10)', borderColor: 'rgba(245, 158, 11, 0.3)', borderWidth: 1, padding: 10, borderRadius: 10, marginBottom: 12 },
+  warnText: { flex: 1, fontSize: 11, color: '#B45309', lineHeight: 16 },
 
   pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   pillText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },

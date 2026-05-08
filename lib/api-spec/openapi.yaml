@@ -690,6 +690,12 @@ components:
           type: boolean
         isActive:
           type: boolean
+        isVerified:
+          type: boolean
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
         rating:
           type: number
           nullable: true
@@ -710,6 +716,7 @@ components:
         - postcode
         - isFeatured
         - isActive
+        - isVerified
         - reviewCount
 
     UpdateTraderProfileRequest:
