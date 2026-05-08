@@ -8,6 +8,7 @@ import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewEnquiryEmail } from "../lib/email";
 import { sendPushToUser } from "../lib/push-notifications";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
+import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
 
 const router: IRouter = Router();
 
@@ -27,6 +28,13 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       detectContactInfo(serviceRequired) ??
       (preferredDate ? detectContactInfo(preferredDate) : null);
     if (violation) {
+      void recordContactBlockAttempt({
+        userId,
+        conversationId: null,
+        violationKind: violation,
+        source: "enquiry",
+        snippet: `${serviceRequired}\n${message}`,
+      });
       res.status(400).json({
         error: contactViolationMessage(violation),
         code: "CONTACT_INFO_BLOCKED",

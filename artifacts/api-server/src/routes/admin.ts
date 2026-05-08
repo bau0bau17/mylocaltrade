@@ -22,6 +22,12 @@ import {
   logAudit,
 } from "../lib/trader-status";
 import {
+  getAttemptCountsByConversation,
+  getConversationAttemptStats,
+  listRecentAttemptsForConversation,
+  CONTACT_BYPASS_THRESHOLD,
+} from "../lib/contact-block-tracker";
+import {
   sendDocumentApprovedEmail,
   sendDocumentRejectedEmail,
   sendTraderApprovedEmail,
@@ -1036,21 +1042,30 @@ router.get("/admin/conversation-reports", authMiddleware, adminOnly, async (req,
       .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
       .where(where)
       .orderBy(desc(conversationReportsTable.createdAt));
+    const attemptCounts = await getAttemptCountsByConversation(
+      Array.from(new Set(rows.map((r) => r.conv.id))),
+    );
     res.json({
-      reports: rows.map(({ report, conv, traderBusinessName, customerFullName }) => ({
-        id: report.id,
-        conversationId: report.conversationId,
-        reportedByUserId: report.reportedByUserId,
-        reportedByRole: report.reportedByRole,
-        reason: report.reason,
-        status: report.status,
-        resolutionNotes: report.resolutionNotes,
-        resolvedAt: report.resolvedAt?.toISOString() ?? null,
-        createdAt: report.createdAt.toISOString(),
-        traderBusinessName,
-        customerFullName,
-        conversationStatus: conv.status,
-      })),
+      contactBypassThreshold: CONTACT_BYPASS_THRESHOLD,
+      reports: rows.map(({ report, conv, traderBusinessName, customerFullName }) => {
+        const counts = attemptCounts.get(conv.id) ?? { total: 0, recent: 0 };
+        return {
+          id: report.id,
+          conversationId: report.conversationId,
+          reportedByUserId: report.reportedByUserId,
+          reportedByRole: report.reportedByRole,
+          reason: report.reason,
+          status: report.status,
+          resolutionNotes: report.resolutionNotes,
+          resolvedAt: report.resolvedAt?.toISOString() ?? null,
+          createdAt: report.createdAt.toISOString(),
+          traderBusinessName,
+          customerFullName,
+          conversationStatus: conv.status,
+          contactBypassAttempts: counts.total,
+          contactBypassAttemptsRecent: counts.recent,
+        };
+      }),
     });
   } catch (error) {
     req.log.error({ err: error }, "Admin list conversation reports failed");
@@ -1110,6 +1125,11 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
       details: { conversationId: id, messagesAccessed: canReadMessages },
     });
 
+    const attemptStats = await getConversationAttemptStats(id);
+    const recentAttempts = canReadMessages
+      ? await listRecentAttemptsForConversation(id, 20)
+      : [];
+
     res.json({
       conversation: {
         id: row.conv.id,
@@ -1124,6 +1144,20 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
         lastMessageAt: row.conv.lastMessageAt.toISOString(),
       },
       messagesAccessible: canReadMessages,
+      contactBypass: {
+        threshold: CONTACT_BYPASS_THRESHOLD,
+        total: attemptStats.total,
+        recent: attemptStats.recent,
+        lastAt: attemptStats.lastAt,
+        attempts: recentAttempts.map((a) => ({
+          id: a.id,
+          userId: a.userId,
+          violationKind: a.violationKind,
+          source: a.source,
+          snippet: a.snippet,
+          createdAt: a.createdAt.toISOString(),
+        })),
+      },
       messages: messages.map((m) => ({
         id: m.id,
         senderUserId: m.senderUserId,

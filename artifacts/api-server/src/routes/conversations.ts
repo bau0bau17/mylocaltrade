@@ -15,6 +15,7 @@ import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewMessageEmail } from "../lib/email";
 import { sendPushToUser } from "../lib/push-notifications";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
+import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
 
 const router: IRouter = Router();
 
@@ -279,16 +280,8 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
       return;
     }
     const body = SendMessageBody.parse(req.body);
-    const violation = detectContactInfo(body.body);
-    if (violation) {
-      res.status(400).json({
-        error: contactViolationMessage(violation),
-        code: "CONTACT_INFO_BLOCKED",
-        violation,
-      });
-      return;
-    }
     const { userId, userRole } = req as AuthenticatedRequest;
+    const violation = detectContactInfo(body.body);
     const actor = await getActorContext(userId, userRole);
 
     const [conv] = await db
@@ -309,6 +302,25 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
     }
     if (conv.status === "CLOSED" || conv.status === "BLOCKED") {
       res.status(409).json({ error: "This conversation is closed" });
+      return;
+    }
+
+    // Attempt logging happens AFTER existence + participant authorization, so
+    // a non-participant cannot pollute the moderation queue by hitting random
+    // conversation ids with blocked content.
+    if (violation) {
+      void recordContactBlockAttempt({
+        userId,
+        conversationId: id,
+        violationKind: violation,
+        source: "conversation_message",
+        snippet: body.body,
+      });
+      res.status(400).json({
+        error: contactViolationMessage(violation),
+        code: "CONTACT_INFO_BLOCKED",
+        violation,
+      });
       return;
     }
 
