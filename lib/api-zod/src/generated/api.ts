@@ -199,9 +199,14 @@ export const GetLeadReminderSettingsResponse = zod
     defaultMinutes: zod
       .number()
       .describe("The platform default used when leadReminderMinutes is null."),
+    leadReminderEmailEnabled: zod
+      .boolean()
+      .describe(
+        "When false, suppress the lead-reminder email regardless of the push setting.",
+      ),
   })
   .describe(
-    "Lead-reminder delay preference for a trader. `leadReminderMinutes` is\nthe chosen delay in minutes; `null` means use the platform default\n(60 minutes); `0` means disabled (no nudge will be sent).\n",
+    "Lead-reminder preferences for a trader. `leadReminderMinutes` is the\nchosen push-reminder delay in minutes; `null` means use the platform\ndefault (60 minutes); `0` means the push reminder is disabled.\n`leadReminderEmailEnabled` controls the companion email independently:\nwhen false, no reminder email is sent even if the push reminder fires.\n",
   );
 
 /**
@@ -216,7 +221,8 @@ export const UpdateLeadReminderSettingsBody = zod.object({
       zod.literal(180),
       zod.literal(null),
     ])
-    .nullable(),
+    .nullish(),
+  leadReminderEmailEnabled: zod.boolean().optional(),
 });
 
 export const UpdateLeadReminderSettingsResponse = zod
@@ -233,9 +239,14 @@ export const UpdateLeadReminderSettingsResponse = zod
     defaultMinutes: zod
       .number()
       .describe("The platform default used when leadReminderMinutes is null."),
+    leadReminderEmailEnabled: zod
+      .boolean()
+      .describe(
+        "When false, suppress the lead-reminder email regardless of the push setting.",
+      ),
   })
   .describe(
-    "Lead-reminder delay preference for a trader. `leadReminderMinutes` is\nthe chosen delay in minutes; `null` means use the platform default\n(60 minutes); `0` means disabled (no nudge will be sent).\n",
+    "Lead-reminder preferences for a trader. `leadReminderMinutes` is the\nchosen push-reminder delay in minutes; `null` means use the platform\ndefault (60 minutes); `0` means the push reminder is disabled.\n`leadReminderEmailEnabled` controls the companion email independently:\nwhen false, no reminder email is sent even if the push reminder fires.\n",
   );
 
 /**

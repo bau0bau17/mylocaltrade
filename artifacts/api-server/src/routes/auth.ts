@@ -403,7 +403,10 @@ router.get("/trader/lead-reminder-settings", authMiddleware, async (req, res) =>
       return;
     }
     const [profile] = await db
-      .select({ leadReminderMinutes: traderProfilesTable.leadReminderMinutes })
+      .select({
+        leadReminderMinutes: traderProfilesTable.leadReminderMinutes,
+        leadReminderEmailEnabled: traderProfilesTable.leadReminderEmailEnabled,
+      })
       .from(traderProfilesTable)
       .where(eq(traderProfilesTable.userId, userId))
       .limit(1);
@@ -414,6 +417,7 @@ router.get("/trader/lead-reminder-settings", authMiddleware, async (req, res) =>
     res.json({
       leadReminderMinutes: profile.leadReminderMinutes,
       defaultMinutes: DEFAULT_REMINDER_MINUTES,
+      leadReminderEmailEnabled: profile.leadReminderEmailEnabled,
     });
   } catch (error) {
     req.log.error({ err: error }, "Get lead-reminder settings failed");
@@ -429,11 +433,32 @@ router.patch("/trader/lead-reminder-settings", authMiddleware, async (req, res) 
       return;
     }
     const body = UpdateLeadReminderSettingsBody.parse(req.body);
+    const updates: {
+      leadReminderMinutes?: number | null;
+      leadReminderEmailEnabled?: boolean;
+      updatedAt: Date;
+    } = { updatedAt: new Date() };
+    if (Object.prototype.hasOwnProperty.call(body, "leadReminderMinutes")) {
+      updates.leadReminderMinutes = body.leadReminderMinutes ?? null;
+    }
+    if (typeof body.leadReminderEmailEnabled === "boolean") {
+      updates.leadReminderEmailEnabled = body.leadReminderEmailEnabled;
+    }
+    if (
+      updates.leadReminderMinutes === undefined &&
+      updates.leadReminderEmailEnabled === undefined
+    ) {
+      res.status(400).json({ error: "No settings provided." });
+      return;
+    }
     const [updated] = await db
       .update(traderProfilesTable)
-      .set({ leadReminderMinutes: body.leadReminderMinutes, updatedAt: new Date() })
+      .set(updates)
       .where(eq(traderProfilesTable.userId, userId))
-      .returning({ leadReminderMinutes: traderProfilesTable.leadReminderMinutes });
+      .returning({
+        leadReminderMinutes: traderProfilesTable.leadReminderMinutes,
+        leadReminderEmailEnabled: traderProfilesTable.leadReminderEmailEnabled,
+      });
     if (!updated) {
       res.status(404).json({ error: "Trader profile not found." });
       return;
@@ -441,6 +466,7 @@ router.patch("/trader/lead-reminder-settings", authMiddleware, async (req, res) 
     res.json({
       leadReminderMinutes: updated.leadReminderMinutes,
       defaultMinutes: DEFAULT_REMINDER_MINUTES,
+      leadReminderEmailEnabled: updated.leadReminderEmailEnabled,
     });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "ZodError") {

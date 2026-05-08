@@ -1817,9 +1817,11 @@ components:
     LeadReminderSettings:
       type: object
       description: |
-        Lead-reminder delay preference for a trader. `leadReminderMinutes` is
-        the chosen delay in minutes; `null` means use the platform default
-        (60 minutes); `0` means disabled (no nudge will be sent).
+        Lead-reminder preferences for a trader. `leadReminderMinutes` is the
+        chosen push-reminder delay in minutes; `null` means use the platform
+        default (60 minutes); `0` means the push reminder is disabled.
+        `leadReminderEmailEnabled` controls the companion email independently:
+        when false, no reminder email is sent even if the push reminder fires.
       properties:
         leadReminderMinutes:
           type: integer
@@ -1828,7 +1830,10 @@ components:
         defaultMinutes:
           type: integer
           description: The platform default used when leadReminderMinutes is null.
-      required: [leadReminderMinutes, defaultMinutes]
+        leadReminderEmailEnabled:
+          type: boolean
+          description: When false, suppress the lead-reminder email regardless of the push setting.
+      required: [leadReminderMinutes, defaultMinutes, leadReminderEmailEnabled]
 
     UpdateLeadReminderSettingsRequest:
       type: object
@@ -1837,7 +1842,8 @@ components:
           type: integer
           nullable: true
           enum: [0, 30, 60, 180, null]
-      required: [leadReminderMinutes]
+        leadReminderEmailEnabled:
+          type: boolean
 
     TraderProfile:
       type: object

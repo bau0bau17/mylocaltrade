@@ -8,5 +8,6 @@
 import type { UpdateLeadReminderSettingsRequestLeadReminderMinutes } from "./updateLeadReminderSettingsRequestLeadReminderMinutes";
 
 export interface UpdateLeadReminderSettingsRequest {
-  leadReminderMinutes: UpdateLeadReminderSettingsRequestLeadReminderMinutes;
+  leadReminderMinutes?: UpdateLeadReminderSettingsRequestLeadReminderMinutes;
+  leadReminderEmailEnabled?: boolean;
 }
