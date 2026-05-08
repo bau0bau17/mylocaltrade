@@ -216,10 +216,19 @@ export default function AdminIndexScreen() {
                 </Text>
               </View>
               <View style={styles.checkRow}>
-                <Check label="Email" ok={item.emailVerified} />
-                <Check label="Phone" ok={item.phoneVerified} />
-                <Check label="Profile" ok={item.businessProfileCompleted} />
-                <Check label="Docs" ok={item.documentsSubmitted} />
+                <Check label="Email" state={item.emailVerified ? 'ok' : 'missing'} />
+                <Check label="Phone" state={item.phoneVerified ? 'ok' : 'missing'} />
+                <Check label="Profile" state={item.businessProfileCompleted ? 'ok' : 'missing'} />
+                <Check
+                  label="Docs"
+                  state={
+                    item.verificationStatus === 'VERIFIED'
+                      ? 'ok'
+                      : item.documentsSubmitted
+                      ? 'pending'
+                      : 'missing'
+                  }
+                />
               </View>
               {item.submittedForReviewAt && (
                 <Text style={styles.submittedText}>
@@ -234,15 +243,17 @@ export default function AdminIndexScreen() {
   );
 }
 
-function Check({ label, ok }: { label: string; ok: boolean }) {
+function Check({ label, state }: { label: string; state: 'ok' | 'pending' | 'missing' }) {
+  const cfg =
+    state === 'ok'
+      ? { icon: 'check' as const, color: Colors.light.success, bg: undefined }
+      : state === 'pending'
+      ? { icon: 'clock' as const, color: '#B45309', bg: 'rgba(245, 158, 11, 0.14)' }
+      : { icon: 'x' as const, color: Colors.light.textMuted, bg: undefined };
   return (
-    <View style={styles.checkChip}>
-      <Feather
-        name={ok ? 'check' : 'x'}
-        size={10}
-        color={ok ? Colors.light.success : Colors.light.textMuted}
-      />
-      <Text style={[styles.checkText, ok && { color: Colors.light.success }]}>{label}</Text>
+    <View style={[styles.checkChip, cfg.bg ? { backgroundColor: cfg.bg } : null]}>
+      <Feather name={cfg.icon} size={10} color={cfg.color} />
+      <Text style={[styles.checkText, { color: cfg.color }]}>{label}</Text>
     </View>
   );
 }
