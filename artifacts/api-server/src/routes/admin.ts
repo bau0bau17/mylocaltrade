@@ -10,6 +10,7 @@ import {
   conversationsTable,
   messagesTable,
   conversationReportsTable,
+  reviewsTable,
 } from "@workspace/db/schema";
 import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, asc } from "drizzle-orm";
 import { z } from "zod";
@@ -47,6 +48,161 @@ const REVIEWABLE_STATUSES = [
   TRADER_STATUS.SUSPENDED,
   TRADER_STATUS.EXPIRED_DOCUMENTS,
 ] as const;
+
+// GET /api/admin/stats — live platform metrics for admin dashboard
+router.get("/admin/stats", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const fifteenMinAgo = new Date(now.getTime() - 15 * 60 * 1000);
+
+    const [
+      usersByRole,
+      newUsersToday,
+      newUsersWeek,
+      tradersByStatus,
+      tradersActive,
+      enquiriesByStatus,
+      enquiriesToday,
+      enquiriesWeek,
+      conversationsByStatus,
+      messagesToday,
+      messagesWeek,
+      messagesLive,
+      reviewsByStatus,
+      openReports,
+      activeSubs,
+    ] = await Promise.all([
+      db
+        .select({ role: usersTable.role, count: sql<number>`count(*)::int` })
+        .from(usersTable)
+        .groupBy(usersTable.role),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(usersTable)
+        .where(gte(usersTable.createdAt, startOfDay)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(usersTable)
+        .where(gte(usersTable.createdAt, sevenDaysAgo)),
+      db
+        .select({
+          status: traderProfilesTable.verificationStatus,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(traderProfilesTable)
+        .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
+        .where(eq(usersTable.role, "trader"))
+        .groupBy(traderProfilesTable.verificationStatus),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.isActive, true)),
+      db
+        .select({ status: enquiriesTable.status, count: sql<number>`count(*)::int` })
+        .from(enquiriesTable)
+        .groupBy(enquiriesTable.status),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(enquiriesTable)
+        .where(gte(enquiriesTable.createdAt, startOfDay)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(enquiriesTable)
+        .where(gte(enquiriesTable.createdAt, sevenDaysAgo)),
+      db
+        .select({ status: conversationsTable.status, count: sql<number>`count(*)::int` })
+        .from(conversationsTable)
+        .groupBy(conversationsTable.status),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messagesTable)
+        .where(gte(messagesTable.createdAt, startOfDay)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messagesTable)
+        .where(gte(messagesTable.createdAt, sevenDaysAgo)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messagesTable)
+        .where(gte(messagesTable.createdAt, fifteenMinAgo)),
+      db
+        .select({ status: reviewsTable.status, count: sql<number>`count(*)::int` })
+        .from(reviewsTable)
+        .groupBy(reviewsTable.status),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(conversationReportsTable)
+        .where(eq(conversationReportsTable.status, "OPEN")),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.status, "active")),
+    ]);
+
+    const sumByKey = (rows: { count: number }[]) =>
+      rows.reduce((s, r) => s + (r.count ?? 0), 0);
+    const mapRows = (rows: { count: number; status?: string | null; role?: string | null }[]) => {
+      const out: Record<string, number> = {};
+      for (const r of rows) {
+        const k = (r.status ?? r.role ?? "UNKNOWN") || "UNKNOWN";
+        out[k] = r.count ?? 0;
+      }
+      return out;
+    };
+
+    res.json({
+      generatedAt: now.toISOString(),
+      windows: {
+        last30dStart: thirtyDaysAgo.toISOString(),
+        last7dStart: sevenDaysAgo.toISOString(),
+        startOfDay: startOfDay.toISOString(),
+        last15minStart: fifteenMinAgo.toISOString(),
+      },
+      users: {
+        total: sumByKey(usersByRole),
+        byRole: mapRows(usersByRole),
+        newToday: newUsersToday[0]?.count ?? 0,
+        newLast7d: newUsersWeek[0]?.count ?? 0,
+      },
+      traders: {
+        byStatus: mapRows(tradersByStatus),
+        activeOnPlatform: tradersActive[0]?.count ?? 0,
+      },
+      enquiries: {
+        total: sumByKey(enquiriesByStatus),
+        byStatus: mapRows(enquiriesByStatus),
+        today: enquiriesToday[0]?.count ?? 0,
+        last7d: enquiriesWeek[0]?.count ?? 0,
+      },
+      conversations: {
+        total: sumByKey(conversationsByStatus),
+        byStatus: mapRows(conversationsByStatus),
+      },
+      messages: {
+        today: messagesToday[0]?.count ?? 0,
+        last7d: messagesWeek[0]?.count ?? 0,
+        last15min: messagesLive[0]?.count ?? 0,
+      },
+      reviews: {
+        total: sumByKey(reviewsByStatus),
+        byStatus: mapRows(reviewsByStatus),
+      },
+      moderation: {
+        openConversationReports: openReports[0]?.count ?? 0,
+      },
+      subscriptions: {
+        active: activeSubs[0]?.count ?? 0,
+      },
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin stats failed");
+    res.status(500).json({ error: "Failed to load stats" });
+  }
+});
 
 // GET /api/admin/traders?status=&q=&limit=
 router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {

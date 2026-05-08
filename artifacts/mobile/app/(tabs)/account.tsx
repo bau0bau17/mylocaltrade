@@ -175,6 +175,8 @@ export default function AccountScreen() {
         <>
           <Text style={styles.sectionLabel}>Admin</Text>
           <View style={[styles.group, { marginHorizontal: 16 }]}>
+            <MenuRow icon="activity" label="Live Dashboard" sub="Platform stats & live activity" onPress={() => router.push('/admin/stats')} accent />
+            <View style={styles.separator} />
             <MenuRow icon="shield" label="Trader Review Queue" sub="Approve or reject trader applications" onPress={() => router.push('/admin')} accent />
           </View>
         </>
