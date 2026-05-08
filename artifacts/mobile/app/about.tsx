@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
-const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
+const CONTACT_EMAIL = 'lucian.sabau@serviceproviderltd.co.uk';
 
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
