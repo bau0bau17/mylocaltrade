@@ -15,9 +15,13 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { View } from "react-native";
+import { usePathname } from "expo-router";
+
 import Colors from "@/constants/colors";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { BottomNav } from "@/components/BottomNav";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -81,8 +85,19 @@ function useNotificationDeepLinks() {
 
 function RootLayoutNav() {
   useNotificationDeepLinks();
+  const pathname = usePathname() || "";
+  // Tab routes (Home, Search, Traders, Account, Saved) already render the
+  // native Tabs bar. Everywhere else we render a persistent BottomNav so
+  // the user can always jump back to the main sections.
+  const isTabRoute = pathname === "/" || pathname.startsWith("/(tabs)") ||
+    pathname === "/search" || pathname === "/traders" ||
+    pathname === "/account" || pathname === "/saved";
+  // Hide on the standalone admin surfaces — they are a separate workflow.
+  const isAdminRoute = pathname.startsWith("/admin");
+
   return (
-    <Stack
+    <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
+      <Stack
       screenOptions={{
         header: ({ options, navigation, back }) => (
           <ScreenHeader
@@ -91,6 +106,7 @@ function RootLayoutNav() {
             onBack={() => navigation.goBack()}
           />
         ),
+        contentStyle: { paddingBottom: !isTabRoute && !isAdminRoute ? 68 : 0 },
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -126,6 +142,8 @@ function RootLayoutNav() {
       <Stack.Screen name="admin/[traderId]" options={{ headerShown: false }} />
       <Stack.Screen name="admin/stats" options={{ headerShown: false }} />
     </Stack>
+      {!isTabRoute && !isAdminRoute ? <BottomNav /> : null}
+    </View>
   );
 }
 
