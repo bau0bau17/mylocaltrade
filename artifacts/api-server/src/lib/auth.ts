@@ -1,6 +1,9 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { eq } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
+import { db } from "@workspace/db";
+import { usersTable } from "@workspace/db/schema";
 import type { AuthenticatedRequest } from "./types";
 
 function getJwtSecret(): string {
@@ -69,21 +72,58 @@ export function verifyUnsubscribeToken(token: string): {
   return { traderProfileId: decoded.traderProfileId, kind: decoded.kind };
 }
 
-export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+async function loadActiveUser(userId: number): Promise<{
+  id: number;
+  role: "customer" | "trader" | "admin";
+} | null> {
+  const [user] = await db
+    .select({
+      id: usersTable.id,
+      role: usersTable.role,
+      isActive: usersTable.isActive,
+      deletedAt: usersTable.deletedAt,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (!user) return null;
+  if (user.deletedAt) return null;
+  if (!user.isActive) return null;
+  return { id: user.id, role: user.role as "customer" | "trader" | "admin" };
+}
+
+export async function authMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
 
+  let decoded: { userId: number; role: string };
   try {
     const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    (req as AuthenticatedRequest).userId = decoded.userId;
-    (req as AuthenticatedRequest).userRole = decoded.role as "customer" | "trader" | "admin";
-    next();
+    decoded = verifyToken(token);
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });
+    return;
+  }
+
+  try {
+    const user = await loadActiveUser(decoded.userId);
+    if (!user) {
+      res.status(401).json({ error: "Account is no longer active" });
+      return;
+    }
+    (req as AuthenticatedRequest).userId = user.id;
+    (req as AuthenticatedRequest).userRole = user.role;
+    next();
+  } catch (err) {
+    req.log?.error({ err }, "authMiddleware account lookup failed");
+    res.status(500).json({ error: "Authentication check failed" });
   }
 }
 
@@ -111,16 +151,23 @@ export function customerOnly(req: Request, res: Response, next: NextFunction): v
   next();
 }
 
-export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+export async function optionalAuth(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): Promise<void> {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     try {
       const token = authHeader.substring(7);
       const decoded = verifyToken(token);
-      (req as AuthenticatedRequest).userId = decoded.userId;
-      (req as AuthenticatedRequest).userRole = decoded.role as "customer" | "trader" | "admin";
+      const user = await loadActiveUser(decoded.userId);
+      if (user) {
+        (req as AuthenticatedRequest).userId = user.id;
+        (req as AuthenticatedRequest).userRole = user.role;
+      }
     } catch {
-      // ignore
+      // ignore — treat as anonymous
     }
   }
   next();
