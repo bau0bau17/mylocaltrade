@@ -93,7 +93,8 @@ export async function sendContactEmail(opts: {
   subject: string;
   message: string;
 }): Promise<void> {
-  const SUPPORT_EMAIL = "support@mylocaltrade.co.uk";
+  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
+  const CONTACT_FROM_EMAIL = "noreply@mylocaltradeltd.co.uk";
   const html = `
 <!DOCTYPE html>
 <html>
@@ -124,14 +125,14 @@ export async function sendContactEmail(opts: {
   const transporter = createTransport();
   if (transporter) {
     await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      from: `"${FROM_NAME}" <${CONTACT_FROM_EMAIL}>`,
       to: SUPPORT_EMAIL,
       cc: opts.fromEmail,
       replyTo: `"${opts.fromName}" <${opts.fromEmail}>`,
       subject: `[Support] ${opts.subject}`,
       html,
     });
-    console.log(`[email] Contact email sent to ${SUPPORT_EMAIL} from ${opts.fromEmail}`);
+    console.log(`[email] Contact email sent to ${SUPPORT_EMAIL} from ${CONTACT_FROM_EMAIL}`);
   } else {
     console.log(`[email] SMTP not configured — contact message from ${opts.fromEmail}: ${opts.message}`);
   }
