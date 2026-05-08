@@ -47,13 +47,13 @@ export default function RegisterCustomerScreen() {
 
     setIsLoading(true);
     try {
-      const { email } = await registerCustomer({
+      const { email, pollToken } = await registerCustomer({
         fullName: formData.fullName.trim(),
         email: formData.email.trim(),
         password: formData.password,
         phone: formData.phone.trim() || undefined,
       });
-      router.replace({ pathname: '/auth/verify-email', params: { email } });
+      router.replace({ pathname: '/auth/verify-email', params: { email, pollToken } });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Could not create account. Please try again.';
       setErrorMsg(message);

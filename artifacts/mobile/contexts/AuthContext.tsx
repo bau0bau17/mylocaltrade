@@ -19,8 +19,8 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (data: LoginRequest) => Promise<void>;
-  registerCustomer: (data: RegisterCustomerRequest) => Promise<{ email: string }>;
-  registerTrader: (data: RegisterTraderRequest) => Promise<{ email: string }>;
+  registerCustomer: (data: RegisterCustomerRequest) => Promise<{ email: string; pollToken: string }>;
+  registerTrader: (data: RegisterTraderRequest) => Promise<{ email: string; pollToken: string }>;
   resendVerification: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const registerCustomer = async (data: RegisterCustomerRequest): Promise<{ email: string }> => {
+  const registerCustomer = async (data: RegisterCustomerRequest): Promise<{ email: string; pollToken: string }> => {
     const base = getApiUrl();
     const res = await fetch(`${base}/api/auth/register/customer`, {
       method: 'POST',
@@ -81,10 +81,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'Registration failed');
-    return { email: json.email as string };
+    return { email: json.email as string, pollToken: json.pollToken as string };
   };
 
-  const registerTrader = async (data: RegisterTraderRequest): Promise<{ email: string }> => {
+  const registerTrader = async (data: RegisterTraderRequest): Promise<{ email: string; pollToken: string }> => {
     const base = getApiUrl();
     const res = await fetch(`${base}/api/auth/register/trader`, {
       method: 'POST',
@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'Registration failed');
-    return { email: json.email as string };
+    return { email: json.email as string, pollToken: json.pollToken as string };
   };
 
   const resendVerification = async (email: string): Promise<void> => {

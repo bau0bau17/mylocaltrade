@@ -22,6 +22,18 @@ export function verifyToken(token: string): { userId: number; role: string } {
   return jwt.verify(token, JWT_SECRET) as { userId: number; role: string };
 }
 
+export function generatePollToken(userId: number): string {
+  return jwt.sign({ userId, purpose: "verify-poll" }, JWT_SECRET, { expiresIn: "24h" });
+}
+
+export function verifyPollToken(token: string): { userId: number } {
+  const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; purpose?: string };
+  if (decoded.purpose !== "verify-poll") {
+    throw new Error("Invalid token purpose");
+  }
+  return { userId: decoded.userId };
+}
+
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
