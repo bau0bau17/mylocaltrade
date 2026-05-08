@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { pushTokensTable } from "@workspace/db/schema";
+import { pushTokensTable, usersTable } from "@workspace/db/schema";
 import { eq, sql, inArray } from "drizzle-orm";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
@@ -57,6 +57,13 @@ export async function sendPushToUser(
   userId: number,
   payload: { title: string; body: string; data?: Record<string, unknown> },
 ): Promise<void> {
+  const [user] = await db
+    .select({ enabled: usersTable.pushNotificationsEnabled })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  if (!user || user.enabled === false) return;
+
   const rows = await db
     .select({ token: pushTokensTable.token })
     .from(pushTokensTable)

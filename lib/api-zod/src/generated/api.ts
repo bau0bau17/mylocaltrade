@@ -98,6 +98,12 @@ export const LoginResponse = zod.object({
     role: zod.enum(["customer", "trader", "admin"]),
     isActive: zod.boolean(),
     plan: zod.string().nullish(),
+    pushNotificationsEnabled: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Global toggle for push notifications across all conversations",
+      ),
     createdAt: zod.date().optional(),
   }),
 });
@@ -157,7 +163,23 @@ export const GetMeResponse = zod.object({
   role: zod.enum(["customer", "trader", "admin"]),
   isActive: zod.boolean(),
   plan: zod.string().nullish(),
+  pushNotificationsEnabled: zod
+    .boolean()
+    .optional()
+    .describe("Global toggle for push notifications across all conversations"),
   createdAt: zod.date().optional(),
+});
+
+/**
+ * @summary Update the current user's global notification preferences
+ */
+export const UpdateNotificationSettingsBody = zod.object({
+  pushNotificationsEnabled: zod.boolean(),
+});
+
+export const UpdateNotificationSettingsResponse = zod.object({
+  ok: zod.boolean(),
+  pushNotificationsEnabled: zod.boolean(),
 });
 
 /**

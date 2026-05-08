@@ -14,5 +14,7 @@ export interface UserProfile {
   role: UserProfileRole;
   isActive: boolean;
   plan?: string | null;
+  /** Global toggle for push notifications across all conversations */
+  pushNotificationsEnabled?: boolean;
   createdAt?: Date;
 }

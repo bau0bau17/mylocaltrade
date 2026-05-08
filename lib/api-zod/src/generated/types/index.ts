@@ -98,6 +98,8 @@ export * from "./traderProfileSocialLinks";
 export * from "./traderReviewsResponse";
 export * from "./unreadCountResponse";
 export * from "./unregisterPushTokenRequest";
+export * from "./updateNotificationSettingsRequest";
+export * from "./updateNotificationSettingsResponse";
 export * from "./updateTraderProfileRequest";
 export * from "./updateTraderProfileRequestSocialLinks";
 export * from "./updateTraderStatusRequest";

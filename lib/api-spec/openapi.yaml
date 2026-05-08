@@ -234,6 +234,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/me/notification-settings:
+    patch:
+      operationId: updateNotificationSettings
+      tags: [auth]
+      summary: Update the current user's global notification preferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationSettingsRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateNotificationSettingsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /traders:
     get:
       operationId: listTraders
@@ -1673,6 +1700,9 @@ components:
         plan:
           type: string
           nullable: true
+        pushNotificationsEnabled:
+          type: boolean
+          description: Global toggle for push notifications across all conversations
         createdAt:
           type: string
           format: date-time
@@ -1682,6 +1712,22 @@ components:
         - fullName
         - role
         - isActive
+
+    UpdateNotificationSettingsRequest:
+      type: object
+      properties:
+        pushNotificationsEnabled:
+          type: boolean
+      required: [pushNotificationsEnabled]
+
+    UpdateNotificationSettingsResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        pushNotificationsEnabled:
+          type: boolean
+      required: [ok, pushNotificationsEnabled]
 
     TraderProfile:
       type: object

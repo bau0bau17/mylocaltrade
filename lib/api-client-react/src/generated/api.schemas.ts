@@ -143,12 +143,23 @@ export interface UserProfile {
   role: UserProfileRole;
   isActive: boolean;
   plan?: string | null;
+  /** Global toggle for push notifications across all conversations */
+  pushNotificationsEnabled?: boolean;
   createdAt?: string;
 }
 
 export interface AuthResponse {
   token: string;
   user: UserProfile;
+}
+
+export interface UpdateNotificationSettingsRequest {
+  pushNotificationsEnabled: boolean;
+}
+
+export interface UpdateNotificationSettingsResponse {
+  ok: boolean;
+  pushNotificationsEnabled: boolean;
 }
 
 export type TraderProfileSocialLinks = {

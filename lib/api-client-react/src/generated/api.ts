@@ -74,6 +74,8 @@ import type {
   TraderReviewsResponse,
   UnreadCountResponse,
   UnregisterPushTokenRequest,
+  UpdateNotificationSettingsRequest,
+  UpdateNotificationSettingsResponse,
   UpdateTraderProfileRequest,
   UpdateTraderStatusRequest,
   UpdateTraderStatusResponse,
@@ -669,6 +671,96 @@ export function useGetMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update the current user's global notification preferences
+ */
+export const getUpdateNotificationSettingsUrl = () => {
+  return `/api/auth/me/notification-settings`;
+};
+
+export const updateNotificationSettings = async (
+  updateNotificationSettingsRequest: UpdateNotificationSettingsRequest,
+  options?: RequestInit,
+): Promise<UpdateNotificationSettingsResponse> => {
+  return customFetch<UpdateNotificationSettingsResponse>(
+    getUpdateNotificationSettingsUrl(),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateNotificationSettingsRequest),
+    },
+  );
+};
+
+export const getUpdateNotificationSettingsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNotificationSettings>>,
+    TError,
+    { data: BodyType<UpdateNotificationSettingsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateNotificationSettings>>,
+  TError,
+  { data: BodyType<UpdateNotificationSettingsRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateNotificationSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateNotificationSettings>>,
+    { data: BodyType<UpdateNotificationSettingsRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateNotificationSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateNotificationSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateNotificationSettings>>
+>;
+export type UpdateNotificationSettingsMutationBody =
+  BodyType<UpdateNotificationSettingsRequest>;
+export type UpdateNotificationSettingsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update the current user's global notification preferences
+ */
+export const useUpdateNotificationSettings = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNotificationSettings>>,
+    TError,
+    { data: BodyType<UpdateNotificationSettingsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateNotificationSettings>>,
+  TError,
+  { data: BodyType<UpdateNotificationSettingsRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateNotificationSettingsMutationOptions(options));
+};
 
 /**
  * @summary List traders with optional search/filter

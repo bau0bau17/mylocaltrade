@@ -1,20 +1,25 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import type { FeatherIconName } from '@/types/feather-icons';
 import {
   useGetConversationsUnreadCount,
   getGetConversationsUnreadCountQueryKey,
+  useGetMe,
+  getGetMeQueryKey,
+  useUpdateNotificationSettings,
 } from '@workspace/api-client-react';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, isAuthenticated, isTrader, isAdmin, logout } = useAuth();
+  const qc = useQueryClient();
   const { data: unreadData } = useGetConversationsUnreadCount({
     query: {
       queryKey: getGetConversationsUnreadCountQueryKey(),
@@ -22,6 +27,24 @@ export default function AccountScreen() {
     },
   });
   const unreadCount = unreadData?.unreadCount ?? 0;
+
+  const { data: me } = useGetMe({
+    query: {
+      queryKey: getGetMeQueryKey(),
+      enabled: isAuthenticated,
+    },
+  });
+  const updateNotificationSettings = useUpdateNotificationSettings({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      },
+    },
+  });
+  const pushEnabled = me?.pushNotificationsEnabled ?? true;
+  const togglePush = (next: boolean) => {
+    updateNotificationSettings.mutate({ data: { pushNotificationsEnabled: next } });
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -150,6 +173,30 @@ export default function AccountScreen() {
           </View>
         </>
       )}
+
+      <Text style={styles.sectionLabel}>Notifications</Text>
+      <View style={[styles.group, { marginHorizontal: 16 }]}>
+        <View style={styles.menuRow}>
+          <View style={[styles.menuIconWrap, styles.menuIconAccent]}>
+            <Feather name="bell" size={16} color={Colors.light.primary} />
+          </View>
+          <View style={styles.menuText}>
+            <Text style={[styles.menuLabel, styles.menuLabelAccent]}>Push notifications</Text>
+            <Text style={styles.menuSub} numberOfLines={2}>
+              {pushEnabled
+                ? 'On for all chats and enquiries'
+                : 'Off — you won’t get push alerts on this account'}
+            </Text>
+          </View>
+          <Switch
+            value={pushEnabled}
+            onValueChange={togglePush}
+            disabled={updateNotificationSettings.isPending}
+            trackColor={{ false: Colors.light.border, true: Colors.light.primary }}
+            thumbColor={Colors.light.white}
+          />
+        </View>
+      </View>
 
       <Text style={styles.sectionLabel}>Support & Legal</Text>
       <View style={[styles.group, { marginHorizontal: 16 }]}>
