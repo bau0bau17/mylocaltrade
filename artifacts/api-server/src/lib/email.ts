@@ -132,7 +132,6 @@ export async function sendContactEmail(opts: {
     await transporter.sendMail({
       from: `"MyLocalTrade Contact Form" <${CONTACT_FROM_EMAIL}>`,
       to: SUPPORT_EMAIL,
-      cc: opts.fromEmail,
       replyTo: `"${opts.fromName}" <${opts.fromEmail}>`,
       subject: `[CONTACT - Reply within 48h] ${opts.subject}`,
       html,
@@ -146,6 +145,58 @@ export async function sendContactEmail(opts: {
       },
     });
     console.log(`[email] Contact email sent to ${SUPPORT_EMAIL} from ${CONTACT_FROM_EMAIL}`);
+
+    const ackHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Thanks for contacting MyLocalTrade</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <div style="display: inline-block; background: #0E2A3A; border-radius: 16px; padding: 16px; margin-bottom: 16px;">
+        <span style="font-size: 32px;">🔧</span>
+      </div>
+      <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 8px;">Thank you for contacting MyLocalTrade</h1>
+    </div>
+    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.7; margin: 0 0 16px;">Hi ${opts.fromName},</p>
+    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.7; margin: 0 0 16px;">
+      Thanks for reaching out — we've received your message and our support team will get back to you as soon as possible.
+    </p>
+    <div style="background: #0E2A3A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 24px;">
+      <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">
+        We aim to reply within <strong style="color: #00B4D8;">48 working hours</strong>, though occasionally it may take a little longer during busy periods. Thank you for your patience.
+      </p>
+    </div>
+    <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 32px;">
+      There's no need to reply to this email — we already have your message and will respond to you directly.
+    </p>
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 16px;">
+    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
+      MyLocalTrade · Service Provider LTD · Company No: 15830141<br>
+      71-75 Shelton Street, Covent Garden, London, WC2H 9JQ
+    </p>
+  </div>
+</body>
+</html>`;
+
+    try {
+      await transporter.sendMail({
+        from: `"MyLocalTrade" <${CONTACT_FROM_EMAIL}>`,
+        to: opts.fromEmail,
+        subject: "Thanks for contacting MyLocalTrade — we've received your message",
+        html: ackHtml,
+        headers: {
+          "X-MyLocalTrade-Type": "contact-acknowledgement",
+          "Auto-Submitted": "auto-replied",
+        },
+      });
+      console.log(`[email] Acknowledgement sent to ${opts.fromEmail}`);
+    } catch (err) {
+      console.error(`[email] Failed to send acknowledgement to ${opts.fromEmail}:`, err);
+    }
   } else {
     console.log(`[email] SMTP not configured — contact message from ${opts.fromEmail}: ${opts.message}`);
   }
