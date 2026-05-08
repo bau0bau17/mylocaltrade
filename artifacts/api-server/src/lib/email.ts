@@ -234,7 +234,16 @@ function escapeHtml(input: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function emailShell(opts: { title: string; preheader?: string; bodyHtml: string }): string {
+function emailShell(opts: {
+  title: string;
+  preheader?: string;
+  bodyHtml: string;
+  /** Optional one-click unsubscribe link rendered in the footer (CAN-SPAM/PECR). */
+  unsubscribe?: { url: string; label: string };
+}): string {
+  const unsubscribeLine = opts.unsubscribe
+    ? `<br><a href="${opts.unsubscribe.url}" style="color: #6B7280; text-decoration: underline;">${escapeHtml(opts.unsubscribe.label)}</a>`
+    : "";
   return `
 <!DOCTYPE html>
 <html>
@@ -253,7 +262,7 @@ function emailShell(opts: { title: string; preheader?: string; bodyHtml: string 
     ${opts.bodyHtml}
     <hr style="border: none; border-top: 1px solid #1F2937; margin: 32px 0 16px;">
     <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      You are receiving this email because you have an account on MyLocalTrade.
+      You are receiving this email because you have an account on MyLocalTrade.${unsubscribeLine}
     </p>
   </div>
 </body>
@@ -328,6 +337,8 @@ export async function sendLeadReminderEmail(opts: {
   toName: string;
   customerName: string;
   serviceRequired: string;
+  /** Signed one-click unsubscribe URL scoped to this trader + reminder kind. */
+  unsubscribeUrl: string;
 }): Promise<boolean> {
   const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
   const safeName = escapeHtml(opts.toName);
@@ -336,6 +347,7 @@ export async function sendLeadReminderEmail(opts: {
   const html = emailShell({
     title: "Unanswered lead on MyLocalTrade",
     preheader: `You haven't opened ${safeCustomer}'s enquiry yet`,
+    unsubscribe: { url: opts.unsubscribeUrl, label: "Unsubscribe from these reminders" },
     bodyHtml: `
       <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
       <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
@@ -358,6 +370,12 @@ export async function sendLeadReminderEmail(opts: {
       to: opts.toEmail,
       subject: `Unanswered lead from ${opts.customerName}`,
       html,
+      // RFC 8058 one-click + RFC 2369 list headers so Gmail/Outlook surface
+      // a native unsubscribe button alongside our footer link.
+      headers: {
+        "List-Unsubscribe": `<${opts.unsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
       attachments: [logoAttachment()],
     });
     console.log(`[email] Lead-reminder email sent to ${opts.toEmail}`);

@@ -9,6 +9,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendPushToUser } from "./push-notifications";
 import { sendLeadReminderEmail } from "./email";
+import { generateUnsubscribeToken } from "./auth";
 
 /** Default delay used when a trader has not picked a value (`leadReminderMinutes IS NULL`). */
 export const DEFAULT_REMINDER_MINUTES = 60;
@@ -41,9 +42,11 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
       conv: conversationsTable,
       customerName: usersTable.fullName,
       traderReminderMinutes: traderProfilesTable.leadReminderMinutes,
+      traderProfileId: traderProfilesTable.id,
       traderEmail: traderProfilesTable.email,
       traderContactName: traderProfilesTable.contactName,
       traderBusinessName: traderProfilesTable.businessName,
+      traderEmailEnabled: traderProfilesTable.leadReminderEmailEnabled,
     })
     .from(enquiriesTable)
     .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
@@ -130,12 +133,18 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
 
   const emailPromise = (async () => {
     if (!row.traderEmail) return;
+    if (row.traderEmailEnabled === false) return;
+    if (row.traderProfileId == null) return;
     try {
+      const apiBase = (process.env.API_BASE_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080"}`).replace(/\/$/, "");
+      const token = generateUnsubscribeToken(row.traderProfileId, "lead_reminder");
+      const unsubscribeUrl = `${apiBase}/api/email/unsubscribe?token=${encodeURIComponent(token)}`;
       emailOk = await sendLeadReminderEmail({
         toEmail: row.traderEmail,
         toName: row.traderContactName?.trim() || row.traderBusinessName?.trim() || "there",
         customerName,
         serviceRequired: row.enquiry.serviceRequired,
+        unsubscribeUrl,
       });
     } catch (err) {
       logger.warn({ err, enquiryId }, "Failed to send lead reminder email");

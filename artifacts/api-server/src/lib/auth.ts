@@ -34,6 +34,41 @@ export function verifyPollToken(token: string): { userId: number } {
   return { userId: decoded.userId };
 }
 
+/** Token kinds used for one-click email unsubscribe links. Each kind is
+ *  scoped: a token issued for one kind cannot be replayed against another. */
+export type UnsubscribeKind = "lead_reminder";
+
+/** Issue a long-lived signed token that lets the recipient of a transactional
+ *  email turn off a specific notification kind without logging in. */
+export function generateUnsubscribeToken(traderProfileId: number, kind: UnsubscribeKind): string {
+  return jwt.sign(
+    { traderProfileId, kind, purpose: "email-unsubscribe" },
+    JWT_SECRET,
+    { expiresIn: "365d" },
+  );
+}
+
+export function verifyUnsubscribeToken(token: string): {
+  traderProfileId: number;
+  kind: UnsubscribeKind;
+} {
+  const decoded = jwt.verify(token, JWT_SECRET) as {
+    traderProfileId?: number;
+    kind?: string;
+    purpose?: string;
+  };
+  if (decoded.purpose !== "email-unsubscribe") {
+    throw new Error("Invalid token purpose");
+  }
+  if (typeof decoded.traderProfileId !== "number") {
+    throw new Error("Invalid token payload");
+  }
+  if (decoded.kind !== "lead_reminder") {
+    throw new Error("Unknown unsubscribe kind");
+  }
+  return { traderProfileId: decoded.traderProfileId, kind: decoded.kind };
+}
+
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {

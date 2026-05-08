@@ -14,6 +14,7 @@ import reviewsRouter from "./reviews";
 import conversationsRouter from "./conversations";
 import pushTokensRouter from "./push-tokens";
 import adminRouter from "./admin";
+import emailUnsubscribeRouter from "./email-unsubscribe";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(reviewsRouter);
 router.use(conversationsRouter);
 router.use(pushTokensRouter);
 router.use(adminRouter);
+router.use(emailUnsubscribeRouter);
 
 export default router;
