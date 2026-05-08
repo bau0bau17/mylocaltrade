@@ -78,12 +78,20 @@ export type TraderStatus = (typeof TRADER_STATUS)[keyof typeof TRADER_STATUS];
  * Single source of truth for whether a trader profile is publicly visible.
  * As later phases land (subscription gating, document expiry checks), tighten this.
  */
-export function isTraderProfilePublic(user: Pick<User, "emailVerified" | "isActive" | "role">, profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive">): boolean {
+export function isTraderProfilePublic(
+  user: Pick<User, "emailVerified" | "isActive" | "role">,
+  profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive">,
+  subscription?: { status: string | null } | null,
+): boolean {
   if (user.role !== "trader") return false;
   if (!user.emailVerified) return false;
   if (profile.verificationStatus !== TRADER_STATUS.VERIFIED) return false;
   if (!profile.isActive) return false;
-  // Phase 2+: phoneVerified, businessProfileCompleted, documents approved, subscription ACTIVE.
+  // Phase 6: subscription must be active for the profile to be public.
+  // If a caller doesn't pass subscription info, fall back on profile.isActive — the
+  // subscription activation flow flips that flag on, and cancellation flips it off,
+  // so the field stays in sync. The explicit check is preferred when available.
+  if (subscription !== undefined && subscription?.status !== "active") return false;
   return true;
 }
 
@@ -193,6 +201,7 @@ export interface ChecklistStep {
 export function buildOnboardingChecklist(
   user: Pick<User, "emailVerified">,
   profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "documentsSubmitted" | "isActive" | "rejectionReason" | "adminNotes">,
+  subscription?: { status: string | null; planId?: string | null; cancelAtPeriodEnd?: boolean } | null,
 ): ChecklistStep[] {
   const status = profile.verificationStatus as TraderStatus;
   const emailDone = user.emailVerified;
@@ -202,6 +211,8 @@ export function buildOnboardingChecklist(
   const verified = status === TRADER_STATUS.VERIFIED;
   const rejected = status === TRADER_STATUS.REJECTED;
   const underReview = status === TRADER_STATUS.UNDER_REVIEW;
+  const subActive = subscription?.status === "active";
+  const subCancelling = subActive && subscription?.cancelAtPeriodEnd === true;
 
   return [
     {
@@ -256,13 +267,28 @@ export function buildOnboardingChecklist(
     {
       key: "subscription",
       label: "Subscription active",
-      state: !verified ? "locked" : "pending",
-      comingSoon: verified, // Phase 6
+      state: !verified
+        ? "locked"
+        : subActive
+          ? "completed"
+          : "action_required",
+      description: !verified
+        ? "Get verified first."
+        : subActive
+          ? subCancelling
+            ? `${(subscription?.planId ?? "Plan").toString().toUpperCase()} — cancels at period end.`
+            : `${(subscription?.planId ?? "Plan").toString().toUpperCase()} plan active.`
+          : "Choose a plan to make your profile live.",
     },
     {
       key: "live",
       label: "Profile live",
-      state: profile.isActive && verified ? "completed" : "locked",
+      state: profile.isActive && verified && subActive ? "completed" : "locked",
+      description: profile.isActive && verified && subActive
+        ? "Your profile is visible to customers."
+        : verified && !subActive
+          ? "Activate a subscription to publish."
+          : undefined,
     },
   ];
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -9,14 +9,32 @@ import type { CreateCheckoutRequestPlanId } from '@workspace/api-client-react';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
+import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 
 export default function PricingScreen() {
   const insets = useSafeAreaInsets();
   const { data: plansData, isLoading: isLoadingPlans } = useGetSubscriptionPlans();
   const { mutateAsync: createCheckout } = useCreateCheckoutSession();
-  const { token } = useAuth();
-  
+  const { token, isTrader } = useAuth();
+  const router = useRouter();
+
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [verifiedStatus, setVerifiedStatus] = useState<'unknown' | 'verified' | 'not_verified'>('unknown');
+
+  useEffect(() => {
+    if (!isTrader || !token) { setVerifiedStatus('not_verified'); return; }
+    (async () => {
+      try {
+        const r = await fetch(`${getApiUrl()}/api/trader/onboarding-status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) { setVerifiedStatus('not_verified'); return; }
+        const json = await r.json();
+        setVerifiedStatus(json.verificationStatus === 'VERIFIED' ? 'verified' : 'not_verified');
+      } catch { setVerifiedStatus('not_verified'); }
+    })();
+  }, [isTrader, token]);
 
   const handleSelectPlan = async (planId: string) => {
     setSelectedPlanId(planId);
@@ -52,7 +70,7 @@ export default function PricingScreen() {
     }
   };
 
-  if (isLoadingPlans) {
+  if (isLoadingPlans || verifiedStatus === 'unknown') {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -82,12 +100,52 @@ export default function PricingScreen() {
         </Text>
       </View>
 
+      {!isTrader && (
+        <View style={styles.gateBanner}>
+          <Feather name="briefcase" size={18} color={Colors.light.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.gateTitle}>Plans are for trade businesses</Text>
+            <Text style={styles.gateBody}>
+              These subscriptions are for tradespeople who want to be listed on MyLocalTrade. Customers browse and contact traders for free.
+            </Text>
+            <Pressable style={styles.gateBtn} onPress={() => router.push('/auth/register')}>
+              <Text style={styles.gateBtnText}>Register as a trader</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {isTrader && verifiedStatus !== 'verified' && (
+        <View style={styles.gateBanner}>
+          <Feather name="lock" size={18} color={Colors.light.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.gateTitle}>Verification required</Text>
+            <Text style={styles.gateBody}>
+              You can browse plans, but you'll need to finish verification before subscribing and going live.
+            </Text>
+            <Pressable style={styles.gateBtn} onPress={() => router.push('/trader-dashboard')}>
+              <Text style={styles.gateBtnText}>Go to dashboard</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       <View style={styles.plansContainer}>
         {plansData?.plans.map(plan => (
-          <PlanCard 
-            key={plan.id} 
-            plan={plan} 
-            onSelect={handleSelectPlan}
+          <PlanCard
+            key={plan.id}
+            plan={plan}
+            onSelect={(planId) => {
+              if (!isTrader) {
+                Alert.alert('Trade account needed', 'Register as a tradesperson to subscribe to a plan.');
+                return;
+              }
+              if (verifiedStatus !== 'verified') {
+                Alert.alert('Get verified first', 'Finish your trader verification before subscribing.');
+                return;
+              }
+              handleSelectPlan(planId);
+            }}
             isLoading={selectedPlanId === plan.id}
           />
         ))}
@@ -155,6 +213,20 @@ const styles = StyleSheet.create({
   plansContainer: {
     marginBottom: 32,
   },
+  gateBanner: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: Colors.light.primaryMuted,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  gateTitle: { fontSize: 14, fontWeight: '700', color: Colors.light.text, marginBottom: 4 },
+  gateBody: { fontSize: 13, color: Colors.light.textSecondary, lineHeight: 18, marginBottom: 10 },
+  gateBtn: { alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 8, backgroundColor: Colors.light.primary, borderRadius: 10 },
+  gateBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
   faqSection: {
     paddingHorizontal: 8,
   },
