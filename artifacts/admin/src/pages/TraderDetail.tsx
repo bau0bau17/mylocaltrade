@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, downloadAuthed, viewAuthed, ApiError } from "@/lib/api";
@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate, formatDateTime, daysUntil } from "@/lib/format";
+import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -100,6 +101,8 @@ export default function TraderDetail({ userId }: Props) {
   const [actionDialog, setActionDialog] = useState<ActionDialogState | null>(null);
   const [docDialog, setDocDialog] = useState<DocActionDialogState | null>(null);
   const [reason, setReason] = useState("");
+  const reasonViolation = useMemo(() => detectContactInfo(reason), [reason]);
+  const reasonViolationText = reasonViolation ? contactViolationMessage(reasonViolation) : null;
 
   const traderActionMutation = useMutation({
     mutationFn: async ({ type, reason }: { type: ActionType; reason: string }) => {
@@ -190,6 +193,14 @@ export default function TraderDetail({ userId }: Props) {
       toast({ title: "A reason is required", variant: "destructive" });
       return;
     }
+    if (cfg.needsReason !== "none" && reasonViolation) {
+      toast({
+        title: "Message blocked",
+        description: contactViolationMessage(reasonViolation),
+        variant: "destructive",
+      });
+      return;
+    }
     traderActionMutation.mutate({ type: actionDialog.type, reason: reason.trim() });
   }
 
@@ -197,6 +208,14 @@ export default function TraderDetail({ userId }: Props) {
     if (!docDialog) return;
     if (docDialog.type === "reject" && !reason.trim()) {
       toast({ title: "A reason is required", variant: "destructive" });
+      return;
+    }
+    if (docDialog.type === "reject" && reasonViolation) {
+      toast({
+        title: "Message blocked",
+        description: contactViolationMessage(reasonViolation),
+        variant: "destructive",
+      });
       return;
     }
     docActionMutation.mutate({
@@ -471,8 +490,15 @@ export default function TraderDetail({ userId }: Props) {
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     rows={4}
+                    className={reasonViolationText ? "border-destructive focus-visible:ring-destructive" : undefined}
                     data-testid="textarea-action-reason"
                   />
+                  {reasonViolationText ? (
+                    <Alert variant="destructive" data-testid="violation-action-reason">
+                      <AlertTriangle className="w-4 h-4" />
+                      <AlertDescription>{reasonViolationText}</AlertDescription>
+                    </Alert>
+                  ) : null}
                 </div>
               )}
               <DialogFooter>
@@ -480,7 +506,10 @@ export default function TraderDetail({ userId }: Props) {
                 <Button
                   variant={ACTION_LABELS[actionDialog.type].variant ?? "default"}
                   onClick={submitAction}
-                  disabled={traderActionMutation.isPending}
+                  disabled={
+                    traderActionMutation.isPending ||
+                    (ACTION_LABELS[actionDialog.type].needsReason !== "none" && !!reasonViolation)
+                  }
                   data-testid="button-confirm-action"
                 >
                   {traderActionMutation.isPending ? "Working…" : ACTION_LABELS[actionDialog.type].verb}
@@ -511,8 +540,15 @@ export default function TraderDetail({ userId }: Props) {
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     rows={3}
+                    className={reasonViolationText ? "border-destructive focus-visible:ring-destructive" : undefined}
                     data-testid="textarea-doc-reason"
                   />
+                  {reasonViolationText ? (
+                    <Alert variant="destructive" data-testid="violation-doc-reason">
+                      <AlertTriangle className="w-4 h-4" />
+                      <AlertDescription>{reasonViolationText}</AlertDescription>
+                    </Alert>
+                  ) : null}
                 </div>
               )}
               <DialogFooter>
@@ -520,7 +556,10 @@ export default function TraderDetail({ userId }: Props) {
                 <Button
                   variant={docDialog.type === "reject" ? "destructive" : "default"}
                   onClick={submitDocAction}
-                  disabled={docActionMutation.isPending}
+                  disabled={
+                    docActionMutation.isPending ||
+                    (docDialog.type === "reject" && !!reasonViolation)
+                  }
                   data-testid="button-confirm-doc-action"
                 >
                   {docActionMutation.isPending

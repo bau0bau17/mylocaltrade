@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { Star, Check, X, Flag } from "lucide-react";
+import { Star, Check, X, Flag, AlertTriangle } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
+import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 
 type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED" | "FLAGGED";
 
@@ -140,6 +141,10 @@ export default function ReviewsPage() {
             <ul className="divide-y">
               {data.reviews.map((r) => {
                 const pending = moderate.isPending && moderate.variables?.id === r.id;
+                const noteText = notes[r.id] ?? "";
+                const violation = detectContactInfo(noteText);
+                const violationText = violation ? contactViolationMessage(violation) : null;
+                const blocked = pending || !!violation;
                 return (
                   <li key={r.id} className="p-4 space-y-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -177,18 +182,24 @@ export default function ReviewsPage() {
                       <div className="space-y-2">
                         <Textarea
                           placeholder="Optional moderation notes (only visible to admins and in the audit log)"
-                          value={notes[r.id] ?? ""}
+                          value={noteText}
                           onChange={(e) => setNotes((prev) => ({ ...prev, [r.id]: e.target.value }))}
                           rows={2}
-                          className="text-xs"
+                          className={`text-xs ${violationText ? "border-destructive focus-visible:ring-destructive" : ""}`}
                           data-testid={`notes-${r.id}`}
                         />
+                        {violationText ? (
+                          <Alert variant="destructive" data-testid={`violation-${r.id}`}>
+                            <AlertTriangle className="w-4 h-4" />
+                            <AlertDescription>{violationText}</AlertDescription>
+                          </Alert>
+                        ) : null}
                         <div className="flex flex-wrap gap-2">
                           <Button
                             size="sm"
-                            disabled={pending}
+                            disabled={blocked}
                             onClick={() =>
-                              moderate.mutate({ id: r.id, action: "approve", notes: notes[r.id] })
+                              moderate.mutate({ id: r.id, action: "approve", notes: noteText })
                             }
                             data-testid={`approve-${r.id}`}
                           >
@@ -197,9 +208,9 @@ export default function ReviewsPage() {
                           <Button
                             size="sm"
                             variant="destructive"
-                            disabled={pending}
+                            disabled={blocked}
                             onClick={() =>
-                              moderate.mutate({ id: r.id, action: "reject", notes: notes[r.id] })
+                              moderate.mutate({ id: r.id, action: "reject", notes: noteText })
                             }
                             data-testid={`reject-${r.id}`}
                           >
@@ -208,9 +219,9 @@ export default function ReviewsPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={pending}
+                            disabled={blocked}
                             onClick={() =>
-                              moderate.mutate({ id: r.id, action: "flag", notes: notes[r.id] })
+                              moderate.mutate({ id: r.id, action: "flag", notes: noteText })
                             }
                             data-testid={`flag-${r.id}`}
                           >

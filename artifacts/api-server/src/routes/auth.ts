@@ -8,7 +8,9 @@ import {
   RegisterTraderBody,
   LoginBody,
   UpdateNotificationSettingsBody,
+  UpdateLeadReminderSettingsBody,
 } from "@workspace/api-zod";
+import { DEFAULT_REMINDER_MINUTES } from "../lib/lead-reminders";
 import { generateToken, authMiddleware, generatePollToken, verifyPollToken } from "../lib/auth";
 import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
@@ -390,6 +392,63 @@ router.patch("/auth/me/notification-settings", authMiddleware, async (req, res) 
     }
     req.log.error({ err: error }, "Update notification settings failed");
     res.status(500).json({ error: "Failed to update notification settings" });
+  }
+});
+
+router.get("/trader/lead-reminder-settings", authMiddleware, async (req, res) => {
+  try {
+    const { userId, userRole } = req as AuthenticatedRequest;
+    if (userRole !== "trader") {
+      res.status(403).json({ error: "Only traders can view lead-reminder settings." });
+      return;
+    }
+    const [profile] = await db
+      .select({ leadReminderMinutes: traderProfilesTable.leadReminderMinutes })
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile) {
+      res.status(404).json({ error: "Trader profile not found." });
+      return;
+    }
+    res.json({
+      leadReminderMinutes: profile.leadReminderMinutes,
+      defaultMinutes: DEFAULT_REMINDER_MINUTES,
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Get lead-reminder settings failed");
+    res.status(500).json({ error: "Failed to get lead-reminder settings" });
+  }
+});
+
+router.patch("/trader/lead-reminder-settings", authMiddleware, async (req, res) => {
+  try {
+    const { userId, userRole } = req as AuthenticatedRequest;
+    if (userRole !== "trader") {
+      res.status(403).json({ error: "Only traders can update lead-reminder settings." });
+      return;
+    }
+    const body = UpdateLeadReminderSettingsBody.parse(req.body);
+    const [updated] = await db
+      .update(traderProfilesTable)
+      .set({ leadReminderMinutes: body.leadReminderMinutes, updatedAt: new Date() })
+      .where(eq(traderProfilesTable.userId, userId))
+      .returning({ leadReminderMinutes: traderProfilesTable.leadReminderMinutes });
+    if (!updated) {
+      res.status(404).json({ error: "Trader profile not found." });
+      return;
+    }
+    res.json({
+      leadReminderMinutes: updated.leadReminderMinutes,
+      defaultMinutes: DEFAULT_REMINDER_MINUTES,
+    });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "ZodError") {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    req.log.error({ err: error }, "Update lead-reminder settings failed");
+    res.status(500).json({ error: "Failed to update lead-reminder settings" });
   }
 });
 

@@ -162,6 +162,44 @@ export interface UpdateNotificationSettingsResponse {
   pushNotificationsEnabled: boolean;
 }
 
+export type LeadReminderSettingsLeadReminderMinutes =
+  | (typeof LeadReminderSettingsLeadReminderMinutes)[keyof typeof LeadReminderSettingsLeadReminderMinutes]
+  | null;
+
+export const LeadReminderSettingsLeadReminderMinutes = {
+  NUMBER_0: 0,
+  NUMBER_30: 30,
+  NUMBER_60: 60,
+  NUMBER_180: 180,
+} as const;
+
+/**
+ * Lead-reminder delay preference for a trader. `leadReminderMinutes` is
+the chosen delay in minutes; `null` means use the platform default
+(60 minutes); `0` means disabled (no nudge will be sent).
+
+ */
+export interface LeadReminderSettings {
+  leadReminderMinutes: LeadReminderSettingsLeadReminderMinutes;
+  /** The platform default used when leadReminderMinutes is null. */
+  defaultMinutes: number;
+}
+
+export type UpdateLeadReminderSettingsRequestLeadReminderMinutes =
+  | (typeof UpdateLeadReminderSettingsRequestLeadReminderMinutes)[keyof typeof UpdateLeadReminderSettingsRequestLeadReminderMinutes]
+  | null;
+
+export const UpdateLeadReminderSettingsRequestLeadReminderMinutes = {
+  NUMBER_0: 0,
+  NUMBER_30: 30,
+  NUMBER_60: 60,
+  NUMBER_180: 180,
+} as const;
+
+export interface UpdateLeadReminderSettingsRequest {
+  leadReminderMinutes: UpdateLeadReminderSettingsRequestLeadReminderMinutes;
+}
+
 export type TraderProfileSocialLinks = {
   facebook?: string;
   twitter?: string;

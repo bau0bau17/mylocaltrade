@@ -13,6 +13,10 @@ import {
   useGetMe,
   getGetMeQueryKey,
   useUpdateNotificationSettings,
+  useGetLeadReminderSettings,
+  getGetLeadReminderSettingsQueryKey,
+  useUpdateLeadReminderSettings,
+  UpdateLeadReminderSettingsRequestLeadReminderMinutes,
 } from '@workspace/api-client-react';
 
 export default function AccountScreen() {
@@ -44,6 +48,32 @@ export default function AccountScreen() {
   const pushEnabled = me?.pushNotificationsEnabled ?? true;
   const togglePush = (next: boolean) => {
     updateNotificationSettings.mutate({ data: { pushNotificationsEnabled: next } });
+  };
+
+  const { data: reminderSettings } = useGetLeadReminderSettings({
+    query: {
+      queryKey: getGetLeadReminderSettingsQueryKey(),
+      enabled: isAuthenticated && isTrader,
+    },
+  });
+  const updateLeadReminder = useUpdateLeadReminderSettings({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetLeadReminderSettingsQueryKey() });
+      },
+    },
+  });
+  const reminderValue: number | null =
+    reminderSettings?.leadReminderMinutes ?? reminderSettings?.defaultMinutes ?? 60;
+  const reminderOptions = [
+    { label: '30 min', value: UpdateLeadReminderSettingsRequestLeadReminderMinutes.NUMBER_30 },
+    { label: '1 hr', value: UpdateLeadReminderSettingsRequestLeadReminderMinutes.NUMBER_60 },
+    { label: '3 hr', value: UpdateLeadReminderSettingsRequestLeadReminderMinutes.NUMBER_180 },
+    { label: 'Off', value: UpdateLeadReminderSettingsRequestLeadReminderMinutes.NUMBER_0 },
+  ] as const;
+  const setReminder = (value: typeof reminderOptions[number]['value']) => {
+    if (value === reminderValue) return;
+    updateLeadReminder.mutate({ data: { leadReminderMinutes: value } });
   };
 
   const handleLogout = async () => {
@@ -196,6 +226,41 @@ export default function AccountScreen() {
             thumbColor={Colors.light.white}
           />
         </View>
+        {isTrader ? (
+          <>
+            <View style={styles.separator} />
+            <View style={styles.reminderRow}>
+              <View style={[styles.menuIconWrap, styles.menuIconAccent]}>
+                <Feather name="clock" size={16} color={Colors.light.primary} />
+              </View>
+              <View style={styles.menuText}>
+                <Text style={[styles.menuLabel, styles.menuLabelAccent]}>Lead reminder</Text>
+                <Text style={styles.menuSub} numberOfLines={2}>
+                  {reminderValue === 0
+                    ? 'Off — we won’t nudge you about unopened leads'
+                    : `Nudge me ${reminderOptions.find((o) => o.value === reminderValue)?.label ?? `${reminderValue} min`} after a new lead I haven’t opened`}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.segmentWrap}>
+              {reminderOptions.map((opt) => {
+                const selected = opt.value === reminderValue;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    onPress={() => setReminder(opt.value)}
+                    disabled={updateLeadReminder.isPending}
+                    style={[styles.segment, selected && styles.segmentSelected]}
+                  >
+                    <Text style={[styles.segmentLabel, selected && styles.segmentLabelSelected]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
       </View>
 
       <Text style={styles.sectionLabel}>Support & Legal</Text>
@@ -531,5 +596,40 @@ const styles = StyleSheet.create({
     color: Colors.light.error,
     fontSize: 15,
     fontWeight: '600',
+  },
+  reminderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    paddingBottom: 8,
+    gap: 12,
+  },
+  segmentWrap: {
+    flexDirection: 'row',
+    marginHorizontal: 14,
+    marginBottom: 12,
+    backgroundColor: Colors.light.surface,
+    borderRadius: 10,
+    padding: 3,
+    gap: 3,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentSelected: {
+    backgroundColor: Colors.light.primary,
+  },
+  segmentLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+  },
+  segmentLabelSelected: {
+    color: Colors.light.white,
   },
 });

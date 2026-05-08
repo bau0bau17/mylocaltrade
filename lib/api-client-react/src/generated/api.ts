@@ -41,6 +41,7 @@ import type {
   GetFeaturedTradersParams,
   HandleStripeWebhookBody,
   HealthStatus,
+  LeadReminderSettings,
   ListTradersParams,
   LoginRequest,
   MessageResponse,
@@ -75,6 +76,7 @@ import type {
   TraderReviewsResponse,
   UnreadCountResponse,
   UnregisterPushTokenRequest,
+  UpdateLeadReminderSettingsRequest,
   UpdateNotificationSettingsRequest,
   UpdateNotificationSettingsResponse,
   UpdateTraderProfileRequest,
@@ -761,6 +763,169 @@ export const useUpdateNotificationSettings = <
   TContext
 > => {
   return useMutation(getUpdateNotificationSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Get the current trader's lead-reminder delay preference
+ */
+export const getGetLeadReminderSettingsUrl = () => {
+  return `/api/trader/lead-reminder-settings`;
+};
+
+export const getLeadReminderSettings = async (
+  options?: RequestInit,
+): Promise<LeadReminderSettings> => {
+  return customFetch<LeadReminderSettings>(getGetLeadReminderSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLeadReminderSettingsQueryKey = () => {
+  return [`/api/trader/lead-reminder-settings`] as const;
+};
+
+export const getGetLeadReminderSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLeadReminderSettings>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getLeadReminderSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetLeadReminderSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getLeadReminderSettings>>
+  > = ({ signal }) => getLeadReminderSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLeadReminderSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetLeadReminderSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getLeadReminderSettings>>
+>;
+export type GetLeadReminderSettingsQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get the current trader's lead-reminder delay preference
+ */
+
+export function useGetLeadReminderSettings<
+  TData = Awaited<ReturnType<typeof getLeadReminderSettings>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getLeadReminderSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLeadReminderSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update the current trader's lead-reminder delay preference
+ */
+export const getUpdateLeadReminderSettingsUrl = () => {
+  return `/api/trader/lead-reminder-settings`;
+};
+
+export const updateLeadReminderSettings = async (
+  updateLeadReminderSettingsRequest: UpdateLeadReminderSettingsRequest,
+  options?: RequestInit,
+): Promise<LeadReminderSettings> => {
+  return customFetch<LeadReminderSettings>(getUpdateLeadReminderSettingsUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateLeadReminderSettingsRequest),
+  });
+};
+
+export const getUpdateLeadReminderSettingsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLeadReminderSettings>>,
+    TError,
+    { data: BodyType<UpdateLeadReminderSettingsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateLeadReminderSettings>>,
+  TError,
+  { data: BodyType<UpdateLeadReminderSettingsRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateLeadReminderSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateLeadReminderSettings>>,
+    { data: BodyType<UpdateLeadReminderSettingsRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateLeadReminderSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateLeadReminderSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateLeadReminderSettings>>
+>;
+export type UpdateLeadReminderSettingsMutationBody =
+  BodyType<UpdateLeadReminderSettingsRequest>;
+export type UpdateLeadReminderSettingsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update the current trader's lead-reminder delay preference
+ */
+export const useUpdateLeadReminderSettings = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLeadReminderSettings>>,
+    TError,
+    { data: BodyType<UpdateLeadReminderSettingsRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateLeadReminderSettings>>,
+  TError,
+  { data: BodyType<UpdateLeadReminderSettingsRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateLeadReminderSettingsMutationOptions(options));
 };
 
 /**

@@ -183,6 +183,62 @@ export const UpdateNotificationSettingsResponse = zod.object({
 });
 
 /**
+ * @summary Get the current trader's lead-reminder delay preference
+ */
+export const GetLeadReminderSettingsResponse = zod
+  .object({
+    leadReminderMinutes: zod
+      .union([
+        zod.literal(0),
+        zod.literal(30),
+        zod.literal(60),
+        zod.literal(180),
+        zod.literal(null),
+      ])
+      .nullable(),
+    defaultMinutes: zod
+      .number()
+      .describe("The platform default used when leadReminderMinutes is null."),
+  })
+  .describe(
+    "Lead-reminder delay preference for a trader. `leadReminderMinutes` is\nthe chosen delay in minutes; `null` means use the platform default\n(60 minutes); `0` means disabled (no nudge will be sent).\n",
+  );
+
+/**
+ * @summary Update the current trader's lead-reminder delay preference
+ */
+export const UpdateLeadReminderSettingsBody = zod.object({
+  leadReminderMinutes: zod
+    .union([
+      zod.literal(0),
+      zod.literal(30),
+      zod.literal(60),
+      zod.literal(180),
+      zod.literal(null),
+    ])
+    .nullable(),
+});
+
+export const UpdateLeadReminderSettingsResponse = zod
+  .object({
+    leadReminderMinutes: zod
+      .union([
+        zod.literal(0),
+        zod.literal(30),
+        zod.literal(60),
+        zod.literal(180),
+        zod.literal(null),
+      ])
+      .nullable(),
+    defaultMinutes: zod
+      .number()
+      .describe("The platform default used when leadReminderMinutes is null."),
+  })
+  .describe(
+    "Lead-reminder delay preference for a trader. `leadReminderMinutes` is\nthe chosen delay in minutes; `null` means use the platform default\n(60 minutes); `0` means disabled (no nudge will be sent).\n",
+  );
+
+/**
  * @summary List traders with optional search/filter
  */
 export const listTradersQueryPageDefault = 1;

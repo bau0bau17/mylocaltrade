@@ -64,6 +64,10 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   phoneOtpAttempts: integer("phone_otp_attempts").notNull().default(0),
   phoneOtpLastSentAt: timestamp("phone_otp_last_sent_at"),
 
+  // --- Lead reminder preferences (Phase 22) ---
+  // null = use default (60 min); 0 = off; otherwise delay in minutes (e.g. 30, 60, 180).
+  leadReminderMinutes: integer("lead_reminder_minutes"),
+
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
