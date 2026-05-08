@@ -23,6 +23,7 @@ export default function ContactSupportScreen() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [rateLimited, setRateLimited] = useState<{ nextAllowedAt: string } | null>(null);
 
   const handleSend = async () => {
     if (!form.name || !form.email || !form.subject || !form.message) {
@@ -42,6 +43,10 @@ export default function ContactSupportScreen() {
         body: JSON.stringify(form),
       });
       const data = await res.json();
+      if (res.status === 429 && data?.code === 'CONTACT_RATE_LIMIT') {
+        setRateLimited({ nextAllowedAt: data.nextAllowedAt });
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'Failed to send');
       setSent(true);
     } catch (err: unknown) {
@@ -50,6 +55,17 @@ export default function ContactSupportScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const formatRelative = (iso: string) => {
+    const ms = new Date(iso).getTime() - Date.now();
+    if (ms <= 0) return 'shortly';
+    const hours = Math.ceil(ms / (60 * 60 * 1000));
+    if (hours >= 24) {
+      const days = Math.ceil(hours / 24);
+      return `in about ${days} day${days > 1 ? 's' : ''}`;
+    }
+    return `in about ${hours} hour${hours > 1 ? 's' : ''}`;
   };
 
   return (
@@ -61,7 +77,33 @@ export default function ContactSupportScreen() {
         <Text style={styles.title}>Contact Support</Text>
       </View>
 
-      {sent ? (
+      {rateLimited ? (
+        <ScrollView
+          contentContainerStyle={[styles.successContainer, { paddingBottom: insets.bottom + 32 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.successIcon, { backgroundColor: '#3A2A0E' }]}>
+            <Feather name="alert-circle" size={48} color="#F59E0B" />
+          </View>
+          <Text style={styles.successTitle}>We're On It</Text>
+          <Text style={styles.successSub}>
+            We're already working on a reply to your previous messages — thank you
+            for your patience.
+          </Text>
+          <View style={[styles.slaCard, { borderColor: '#F59E0B' }]}>
+            <Feather name="info" size={18} color="#F59E0B" />
+            <Text style={styles.slaText}>
+              To prevent misuse, contact messages are limited to{' '}
+              <Text style={styles.slaBold}>2 per 48 hours</Text>. You can send a
+              new message <Text style={styles.slaBold}>{formatRelative(rateLimited.nextAllowedAt)}</Text>.
+              We're working hard to get back to you as soon as possible.
+            </Text>
+          </View>
+          <Pressable style={styles.doneBtn} onPress={() => router.back()}>
+            <Text style={styles.doneBtnText}>Done</Text>
+          </Pressable>
+        </ScrollView>
+      ) : sent ? (
         <ScrollView
           contentContainerStyle={[styles.successContainer, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
