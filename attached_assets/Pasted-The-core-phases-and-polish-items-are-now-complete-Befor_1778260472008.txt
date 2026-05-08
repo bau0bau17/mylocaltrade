@@ -1,0 +1,158 @@
+The core phases and polish items are now complete. Before publishing, I want a full launch readiness pass.
+
+Please perform a final launch readiness review for MyLocalTrade.
+
+Check the following areas:
+
+1. End-to-end user flows
+
+Please test and confirm these flows work from start to finish:
+
+* Customer signup/login
+* Trader signup/login
+* Trader email verification
+* Trader phone verification
+* Trader business profile completion
+* Trader document upload
+* Admin document review
+* Admin trader approval/rejection/suspension
+* Subscription gating
+* Public trader visibility
+* Customer enquiry submission
+* Trader receives enquiry
+* Customer review submission
+* Admin review moderation
+* Trader reply to review
+* Public profile shows approved reviews and replies only
+
+2. Public visibility rules
+
+Please verify backend enforcement for:
+
+* Unverified traders are hidden publicly
+* Suspended traders are hidden publicly
+* Traders with expired required documents are hidden publicly
+* Traders without active subscription are hidden publicly
+* Rejected traders are hidden publicly
+* Only VERIFIED + ACTIVE subscription traders appear in search/profile pages
+
+3. Security review
+
+Please check:
+
+* Admin routes are admin-only
+* Trader routes are trader-only
+* Customer routes are customer-only
+* Sensitive documents are not publicly accessible
+* Direct document URLs cannot be accessed without permission
+* ID documents, insurance documents and certificates are private
+* Rate limits are active
+* Security headers are active
+* CSP is not breaking the app
+* No sensitive data is logged
+* No OTP is exposed in production mode
+* No test/mock data is visible in production
+
+4. Legal/trust pages
+
+Please confirm public website has:
+
+* Terms and Conditions
+* Privacy Policy
+* Cookie Policy
+* Contact page
+* About page
+* Complaints Procedure
+* Report a Trader
+* Customer Safety Advice
+* Trader Code of Conduct
+* How Verification Works
+
+Important wording:
+
+Do not claim that all traders are fully vetted unless the process actually supports that. Use safer wording such as:
+
+“Verified profiles where applicable”
+“Information checked where required”
+“Independent local tradespeople”
+“MyLocalTrade connects customers with independent traders”
+
+5. SEO and public website
+
+Please check:
+
+* Homepage has proper title and meta description
+* Public pages have SEO titles and descriptions
+* Local service pages are prepared
+* Sitemap exists
+* robots.txt exists
+* Admin pages are noindex/nofollow
+* Admin pages are not linked in public navigation
+* Public pages load properly on mobile
+
+6. Emails
+
+Please confirm transactional emails work for:
+
+* Email verification
+* Password reset, if implemented
+* Trader approval
+* Trader rejection / request more info
+* New enquiry
+* Review approved
+* Trader reply to review
+* Insurance/document expiry reminders, if implemented
+
+7. Stripe/payment readiness
+
+If Stripe is still in mock/demo mode, please clearly mark it as mock/demo and prevent real launch confusion.
+
+If Stripe is live, please verify:
+
+* Correct live keys are used only in production
+* Webhooks are configured
+* Subscription status updates correctly
+* Failed payments hide public profile
+* Cancelled subscriptions hide public profile
+* Billing portal works if implemented
+* Test mode keys are not used in production
+
+8. Production environment checklist
+
+Please identify all required environment variables for production.
+
+Include:
+
+* Database URL
+* Email provider settings
+* Stripe keys
+* Stripe webhook secret
+* JWT/session secret
+* Storage settings
+* Admin seed/setup details
+* App URL / website URL
+* Any SMS/Twilio settings if used later
+
+9. Remove development leftovers
+
+Please check and remove or disable:
+
+* Mock OTP display in UI
+* Test users visible publicly
+* Console logs with sensitive data
+* Fake trader data unless marked as demo
+* Debug banners
+* Temporary admin shortcuts
+* Any hardcoded emails/passwords/API keys
+
+10. Final report
+
+Please provide a clear final report with:
+
+* What is ready
+* What is still mock/demo
+* What must be configured before launch
+* Any risks
+* Recommended next step before publishing
+
+Do not publish yet. First provide the launch readiness report.
