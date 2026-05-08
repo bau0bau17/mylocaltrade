@@ -52,24 +52,30 @@ async function sendExpoPushBatch(messages: ExpoPushMessage[]): Promise<ExpoPushT
  * Send a push notification to every registered device for the given user.
  * Tokens that the Expo service reports as invalid/unregistered are deleted.
  * Failures are logged but never thrown — push is a best-effort signal.
+ *
+ * Returns `true` when at least one device was successfully accepted by Expo
+ * (ticket `status === "ok"`). Returns `false` when the user opted out, has no
+ * valid tokens, the Expo batch failed, or every ticket came back as an error.
+ * Callers that gate retry/fallback behaviour on actual delivery should use
+ * the boolean rather than relying on "no exception".
  */
 export async function sendPushToUser(
   userId: number,
   payload: { title: string; body: string; data?: Record<string, unknown> },
-): Promise<void> {
+): Promise<boolean> {
   const [user] = await db
     .select({ enabled: usersTable.pushNotificationsEnabled })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
-  if (!user || user.enabled === false) return;
+  if (!user || user.enabled === false) return false;
 
   const rows = await db
     .select({ token: pushTokensTable.token })
     .from(pushTokensTable)
     .where(eq(pushTokensTable.userId, userId));
   const tokens = rows.map((r) => r.token).filter(looksLikeExpoToken);
-  if (tokens.length === 0) return;
+  if (tokens.length === 0) return false;
 
   const messages: ExpoPushMessage[] = tokens.map((to) => ({
     to,
@@ -85,12 +91,15 @@ export async function sendPushToUser(
     tickets = await sendExpoPushBatch(messages);
   } catch (err) {
     console.warn("[push] Expo push batch failed:", err);
-    return;
+    return false;
   }
 
   const invalid: string[] = [];
+  let okCount = 0;
   tickets.forEach((t, i) => {
-    if (t.status === "error") {
+    if (t.status === "ok") {
+      okCount += 1;
+    } else if (t.status === "error") {
       const code = t.details?.error;
       if (code === "DeviceNotRegistered" || code === "InvalidCredentials") {
         invalid.push(tokens[i]);
@@ -106,6 +115,7 @@ export async function sendPushToUser(
       console.warn("[push] failed to delete invalid tokens:", err);
     }
   }
+  return okCount > 0;
 }
 
 /**
