@@ -10,7 +10,7 @@ import type { FeatherIconName } from '@/types/feather-icons';
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, isAuthenticated, isTrader, logout } = useAuth();
+  const { user, isAuthenticated, isTrader, isAdmin, logout } = useAuth();
 
   const handleLogout = async () => {
     await logout();
@@ -98,6 +98,15 @@ export default function AccountScreen() {
           </View>
         </View>
       </View>
+
+      {isAdmin ? (
+        <>
+          <Text style={styles.sectionLabel}>Admin</Text>
+          <View style={[styles.group, { marginHorizontal: 16 }]}>
+            <MenuRow icon="shield" label="Trader Review Queue" sub="Approve or reject trader applications" onPress={() => router.push('/admin')} accent />
+          </View>
+        </>
+      ) : null}
 
       {isTrader ? (
         <>

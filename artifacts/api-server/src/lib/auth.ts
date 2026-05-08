@@ -45,11 +45,19 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     const token = authHeader.substring(7);
     const decoded = verifyToken(token);
     (req as AuthenticatedRequest).userId = decoded.userId;
-    (req as AuthenticatedRequest).userRole = decoded.role as "customer" | "trader";
+    (req as AuthenticatedRequest).userRole = decoded.role as "customer" | "trader" | "admin";
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });
   }
+}
+
+export function adminOnly(req: Request, res: Response, next: NextFunction): void {
+  if ((req as AuthenticatedRequest).userRole !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  next();
 }
 
 export function traderOnly(req: Request, res: Response, next: NextFunction): void {
@@ -75,7 +83,7 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
       const token = authHeader.substring(7);
       const decoded = verifyToken(token);
       (req as AuthenticatedRequest).userId = decoded.userId;
-      (req as AuthenticatedRequest).userRole = decoded.role as "customer" | "trader";
+      (req as AuthenticatedRequest).userRole = decoded.role as "customer" | "trader" | "admin";
     } catch {
       // ignore
     }

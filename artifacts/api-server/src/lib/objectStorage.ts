@@ -161,6 +161,20 @@ export class ObjectStorageService {
     return objectFile;
   }
 
+  async getObjectEntityReadURL(objectPath: string, ttlSec = 300): Promise<string> {
+    if (!objectPath.startsWith("/objects/")) {
+      throw new ObjectNotFoundError();
+    }
+    const parts = objectPath.slice(1).split("/");
+    if (parts.length < 2) throw new ObjectNotFoundError();
+    const entityId = parts.slice(1).join("/");
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith("/")) entityDir = `${entityDir}/`;
+    const fullPath = `${entityDir}${entityId}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    return signObjectURL({ bucketName, objectName, method: "GET", ttlSec });
+  }
+
   normalizeObjectEntityPath(rawPath: string): string {
     if (!rawPath.startsWith("https://storage.googleapis.com/")) {
       return rawPath;
