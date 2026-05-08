@@ -4,14 +4,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import Colors from '@/constants/colors';
 import { EnquiryCard } from '@/components/EnquiryCard';
-import { useGetEnquiries, useGetNewLeadCount } from '@workspace/api-client-react';
+import { useGetEnquiries, useGetNewLeadCount, getGetEnquiriesQueryKey } from '@workspace/api-client-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
+  const { isTrader } = useAuth();
 
-  const { data, isLoading, refetch, isRefetching } = useGetEnquiries();
+  const { data, isLoading, refetch, isRefetching } = useGetEnquiries({
+    query: { enabled: isTrader, queryKey: getGetEnquiriesQueryKey() },
+  });
   const { data: newCountData, refetch: refetchNewCount } = useGetNewLeadCount({
-    query: { queryKey: ['/api/enquiries/new-count'] },
+    query: { queryKey: ['/api/enquiries/new-count'], enabled: isTrader },
   });
   const newCount = newCountData?.newCount ?? 0;
 
@@ -27,6 +31,17 @@ export default function LeadsScreen() {
     void refetch();
     void refetchNewCount();
   }, [refetch, refetchNewCount]);
+
+  if (!isTrader) {
+    return (
+      <View style={[styles.centerContainer, { padding: 32 }]}>
+        <Text style={styles.title}>Traders only</Text>
+        <Text style={styles.subtitle}>
+          Customer enquiries are only visible to verified trader accounts.
+        </Text>
+      </View>
+    );
+  }
 
   if (isLoading && !isRefetching) {
     return (

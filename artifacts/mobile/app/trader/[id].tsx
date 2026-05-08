@@ -21,7 +21,10 @@ export default function TraderProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isAuthenticated, user } = useAuth();
-  const canSave = isAuthenticated && user?.role !== 'trader';
+  const isAdmin = user?.role === 'admin';
+  const isTraderViewer = user?.role === 'trader';
+  const canSave = isAuthenticated && !isTraderViewer && !isAdmin;
+  const canMessage = !isAuthenticated || (!isTraderViewer && !isAdmin);
 
   const { data: trader, isLoading, error } = useGetTrader(Number(id));
 
@@ -66,7 +69,7 @@ export default function TraderProfileScreen() {
       );
       return;
     }
-    if (user?.role === 'trader') {
+    if (isTraderViewer || isAdmin) {
       Alert.alert('Customers only', 'Saving traders is a customer-only feature.');
       return;
     }
@@ -264,15 +267,17 @@ export default function TraderProfileScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom || 24 }]}>
-        <Pressable
-          style={styles.contactButton}
-          onPress={() => router.push(`/enquiry/${trader.id}`)}
-        >
-          <Feather name="message-square" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
-          <Text style={styles.contactButtonText}>Message this trader</Text>
-        </Pressable>
-      </View>
+      {canMessage ? (
+        <View style={[styles.bottomBar, { paddingBottom: insets.bottom || 24 }]}>
+          <Pressable
+            style={styles.contactButton}
+            onPress={() => router.push(`/enquiry/${trader.id}`)}
+          >
+            <Feather name="message-square" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
+            <Text style={styles.contactButtonText}>Message this trader</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </View>
   );
 }

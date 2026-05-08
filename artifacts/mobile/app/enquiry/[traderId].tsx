@@ -7,11 +7,14 @@ import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useCreateEnquiry, useGetTrader } from '@workspace/api-client-react';
 import { detectContactInfo, contactViolationMessage } from '@/lib/content-filter';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function EnquiryScreen() {
   const { traderId } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
+  const blockedRole = user?.role === 'admin' || user?.role === 'trader';
 
   const { data: trader } = useGetTrader(Number(traderId));
   const { mutateAsync: createEnquiry, isPending } = useCreateEnquiry();
@@ -56,6 +59,28 @@ export default function EnquiryScreen() {
       Alert.alert('Error', message);
     }
   };
+
+  if (blockedRole) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + 80, paddingHorizontal: 24, alignItems: 'center' }]}>
+        <View style={styles.headerIconWrap}>
+          <Feather name="lock" size={24} color={Colors.light.primary} />
+        </View>
+        <Text style={[styles.title, { textAlign: 'center' }]}>Customers only</Text>
+        <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 24 }]}>
+          {user?.role === 'admin'
+            ? "Admin accounts can't send enquiries to traders. Use a customer account for this."
+            : "Trader accounts can't send enquiries. Use a customer account for this."}
+        </Text>
+        <Pressable
+          style={{ backgroundColor: Colors.light.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 }}
+          onPress={() => router.back()}
+        >
+          <Text style={{ color: Colors.light.white, fontWeight: '700' }}>Go Back</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAwareScrollViewCompat

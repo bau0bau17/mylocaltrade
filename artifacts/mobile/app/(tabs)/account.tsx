@@ -196,7 +196,7 @@ export default function AccountScreen() {
             <MenuRow icon="credit-card" label="Billing & Plan" onPress={() => router.push('/trader-dashboard/billing')} accent />
           </View>
         </>
-      ) : (
+      ) : isAdmin ? null : (
         <>
           <Text style={styles.sectionLabel}>My Activity</Text>
           <View style={[styles.group, { marginHorizontal: 16 }]}>

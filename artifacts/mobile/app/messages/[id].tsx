@@ -44,10 +44,15 @@ export default function ConversationThreadScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
-  const { isTrader, user } = useAuth();
+  const { isTrader, isAdmin, user } = useAuth();
   const listRef = useRef<FlatList>(null);
 
-  const { data, isLoading, error, refetch } = useGetConversation(conversationId);
+  const { data, isLoading, error, refetch } = useGetConversation(conversationId, {
+    query: {
+      enabled: !isAdmin,
+      queryKey: getGetConversationQueryKey(conversationId),
+    },
+  });
 
   const sendMutation = useSendConversationMessage({
     mutation: {
@@ -90,6 +95,20 @@ export default function ConversationThreadScreen() {
 
   const [text, setText] = useState("");
   const [showStatus, setShowStatus] = useState(false);
+
+  if (isAdmin) {
+    return (
+      <View style={[styles.centered, { paddingTop: insets.top + 80 }]}>
+        <Text style={styles.errorText}>Not available for admins</Text>
+        <Text style={[styles.errorText, { fontSize: 13, opacity: 0.8 }]}>
+          Admin accounts can't open customer/trader conversations.
+        </Text>
+        <Pressable style={styles.cta} onPress={() => router.replace('/(tabs)/account')}>
+          <Text style={styles.ctaText}>Back to Account</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   const conv = data?.conversation;
   const messages = data?.messages ?? [];
