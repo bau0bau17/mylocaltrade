@@ -16,6 +16,8 @@ tags:
     description: Trader listing operations
   - name: profile
     description: Trader profile management
+  - name: trader
+    description: Trader onboarding and self-service
   - name: subscriptions
     description: Subscription and billing
   - name: saved
@@ -44,6 +46,10 @@ paths:
       operationId: registerCustomer
       tags: [auth]
       summary: Register a new customer
+      description: |
+        Creates an inactive customer account and emails a verification link.
+        The account cannot sign in until the email is verified. The response
+        is a pending-registration acknowledgement, NOT a session.
       requestBody:
         required: true
         content:
@@ -52,11 +58,11 @@ paths:
               $ref: "#/components/schemas/RegisterCustomerRequest"
       responses:
         "201":
-          description: Customer registered
+          description: Account created — verification email sent
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthResponse"
+                $ref: "#/components/schemas/RegisterPendingResponse"
         "400":
           description: Validation error
           content:
@@ -75,6 +81,12 @@ paths:
       operationId: registerTrader
       tags: [auth]
       summary: Register a new trader
+      description: |
+        Creates an inactive trader account and an associated trader profile,
+        then emails a verification link. The trader account becomes
+        publicly visible only after a successful subscription payment
+        webhook (see /subscriptions/checkout). The response is a
+        pending-registration acknowledgement, NOT a session.
       requestBody:
         required: true
         content:
@@ -83,11 +95,11 @@ paths:
               $ref: "#/components/schemas/RegisterTraderRequest"
       responses:
         "201":
-          description: Trader registered
+          description: Account created — verification email sent
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthResponse"
+                $ref: "#/components/schemas/RegisterPendingResponse"
         "400":
           description: Validation error
           content:
@@ -100,6 +112,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/resend-verification:
+    post:
+      operationId: resendVerificationEmail
+      tags: [auth]
+      summary: Resend the email verification link
+      description: |
+        Resends the email-verification link for an unverified account.
+        Always responds 200 with a generic message when the email is unknown
+        (to avoid leaking which addresses are registered). Rate-limited to
+        one request per 60 seconds per account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendVerificationRequest"
+      responses:
+        "200":
+          description: Resend handled (success or already-verified)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Missing email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Cooldown still active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetryAfterErrorResponse"
 
   /auth/login:
     post:
@@ -121,6 +169,39 @@ paths:
                 $ref: "#/components/schemas/AuthResponse"
         "401":
           description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trader/onboarding-status:
+    get:
+      operationId: getTraderOnboardingStatus
+      tags: [trader]
+      summary: Get the signed-in trader's onboarding/verification status
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Onboarding status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraderOnboardingStatus"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Caller is not a trader
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Trader profile not found
           content:
             application/json:
               schema:
@@ -550,6 +631,16 @@ components:
         password:
           type: string
           minLength: 8
+        confirmPassword:
+          type: string
+          minLength: 8
+          description: Must match `password` exactly. Validated server-side.
+        termsAccepted:
+          type: boolean
+          description: User explicitly accepted the current Terms of Service.
+        privacyAccepted:
+          type: boolean
+          description: User explicitly accepted the current Privacy Policy.
         contactName:
           type: string
         businessName:
@@ -565,12 +656,157 @@ components:
       required:
         - email
         - password
+        - confirmPassword
+        - termsAccepted
+        - privacyAccepted
         - contactName
         - businessName
         - phone
         - mainCategory
         - town
         - postcode
+
+    RegisterPendingResponse:
+      type: object
+      description: |
+        Returned by /auth/register/customer and /auth/register/trader. The
+        account is created but inactive until the email-verification link is
+        followed; for traders, full activation also requires a successful
+        subscription payment webhook. No JWT is issued in this response.
+      properties:
+        message:
+          type: string
+        email:
+          type: string
+          format: email
+        pollToken:
+          type: string
+          description: Short-lived token clients may poll with to check verification status.
+      required:
+        - message
+        - email
+        - pollToken
+
+    ResendVerificationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+        - email
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+
+    RetryAfterErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        retryAfterSeconds:
+          type: integer
+          minimum: 0
+      required:
+        - error
+
+    TraderOnboardingChecklistStep:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        state:
+          type: string
+          enum: [completed, pending, action_required, locked, rejected, expired]
+        description:
+          type: string
+        comingSoon:
+          type: boolean
+      required:
+        - key
+        - label
+        - state
+
+    TraderLegalAcceptance:
+      type: object
+      properties:
+        termsCurrent:
+          type: string
+        termsAccepted:
+          type: string
+          nullable: true
+        termsNeedsReaccept:
+          type: boolean
+        privacyCurrent:
+          type: string
+        privacyAccepted:
+          type: string
+          nullable: true
+        privacyNeedsReaccept:
+          type: boolean
+        needsReaccept:
+          type: boolean
+      required:
+        - termsCurrent
+        - termsNeedsReaccept
+        - privacyCurrent
+        - privacyNeedsReaccept
+        - needsReaccept
+
+    TraderOnboardingStatus:
+      type: object
+      properties:
+        verificationStatus:
+          type: string
+        message:
+          type: string
+        isPublic:
+          type: boolean
+        emailVerified:
+          type: boolean
+        phoneVerified:
+          type: boolean
+        businessProfileCompleted:
+          type: boolean
+        documentsSubmitted:
+          type: boolean
+        isActive:
+          type: boolean
+        rejectionReason:
+          type: string
+          nullable: true
+        adminNotes:
+          type: string
+          nullable: true
+        checklist:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraderOnboardingChecklistStep"
+        legal:
+          $ref: "#/components/schemas/TraderLegalAcceptance"
+        email:
+          type: string
+        businessName:
+          type: string
+      required:
+        - verificationStatus
+        - message
+        - isPublic
+        - emailVerified
+        - phoneVerified
+        - businessProfileCompleted
+        - documentsSubmitted
+        - isActive
+        - checklist
+        - email
+        - businessName
 
     LoginRequest:
       type: object

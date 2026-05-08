@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
-const CONTACT_EMAIL = 'lucian.dpd@gmail.com';
+const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
 
 export default function RefundScreen() {
   const insets = useSafeAreaInsets();
@@ -22,7 +22,7 @@ export default function RefundScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          This policy is issued by Service Provider LTD (trading as "MyLocalTrade"), a company registered in England and Wales (Company No. 15830141), and outlines the terms regarding refunds and cancellations for trader subscriptions on the MyLocalTrade platform.
+          This policy is issued by MyLocalTrade (a company registered in England and Wales — full company details will be published before launch) and outlines the terms regarding refunds and cancellations for trader subscriptions on the MyLocalTrade platform.
         </Text>
       </View>
 

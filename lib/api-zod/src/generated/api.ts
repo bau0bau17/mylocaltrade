@@ -16,6 +16,10 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * Creates an inactive customer account and emails a verification link.
+The account cannot sign in until the email is verified. The response
+is a pending-registration acknowledgement, NOT a session.
+
  * @summary Register a new customer
  */
 export const registerCustomerBodyPasswordMin = 8;
@@ -28,19 +32,53 @@ export const RegisterCustomerBody = zod.object({
 });
 
 /**
+ * Creates an inactive trader account and an associated trader profile,
+then emails a verification link. The trader account becomes
+publicly visible only after a successful subscription payment
+webhook (see /subscriptions/checkout). The response is a
+pending-registration acknowledgement, NOT a session.
+
  * @summary Register a new trader
  */
 export const registerTraderBodyPasswordMin = 8;
 
+export const registerTraderBodyConfirmPasswordMin = 8;
+
 export const RegisterTraderBody = zod.object({
   email: zod.string().email(),
   password: zod.string().min(registerTraderBodyPasswordMin),
+  confirmPassword: zod
+    .string()
+    .min(registerTraderBodyConfirmPasswordMin)
+    .describe("Must match `password` exactly. Validated server-side."),
+  termsAccepted: zod
+    .boolean()
+    .describe("User explicitly accepted the current Terms of Service."),
+  privacyAccepted: zod
+    .boolean()
+    .describe("User explicitly accepted the current Privacy Policy."),
   contactName: zod.string(),
   businessName: zod.string(),
   phone: zod.string(),
   mainCategory: zod.string(),
   town: zod.string(),
   postcode: zod.string(),
+});
+
+/**
+ * Resends the email-verification link for an unverified account.
+Always responds 200 with a generic message when the email is unknown
+(to avoid leaking which addresses are registered). Rate-limited to
+one request per 60 seconds per account.
+
+ * @summary Resend the email verification link
+ */
+export const ResendVerificationEmailBody = zod.object({
+  email: zod.string().email(),
+});
+
+export const ResendVerificationEmailResponse = zod.object({
+  message: zod.string(),
 });
 
 /**
@@ -62,6 +100,51 @@ export const LoginResponse = zod.object({
     plan: zod.string().nullish(),
     createdAt: zod.date().optional(),
   }),
+});
+
+/**
+ * @summary Get the signed-in trader's onboarding/verification status
+ */
+export const GetTraderOnboardingStatusResponse = zod.object({
+  verificationStatus: zod.string(),
+  message: zod.string(),
+  isPublic: zod.boolean(),
+  emailVerified: zod.boolean(),
+  phoneVerified: zod.boolean(),
+  businessProfileCompleted: zod.boolean(),
+  documentsSubmitted: zod.boolean(),
+  isActive: zod.boolean(),
+  rejectionReason: zod.string().nullish(),
+  adminNotes: zod.string().nullish(),
+  checklist: zod.array(
+    zod.object({
+      key: zod.string(),
+      label: zod.string(),
+      state: zod.enum([
+        "completed",
+        "pending",
+        "action_required",
+        "locked",
+        "rejected",
+        "expired",
+      ]),
+      description: zod.string().optional(),
+      comingSoon: zod.boolean().optional(),
+    }),
+  ),
+  legal: zod
+    .object({
+      termsCurrent: zod.string(),
+      termsAccepted: zod.string().nullish(),
+      termsNeedsReaccept: zod.boolean(),
+      privacyCurrent: zod.string(),
+      privacyAccepted: zod.string().nullish(),
+      privacyNeedsReaccept: zod.boolean(),
+      needsReaccept: zod.boolean(),
+    })
+    .optional(),
+  email: zod.string(),
+  businessName: zod.string(),
 });
 
 /**

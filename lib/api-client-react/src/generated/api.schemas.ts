@@ -30,12 +30,96 @@ export interface RegisterTraderRequest {
   email: string;
   /** @minLength 8 */
   password: string;
+  /**
+   * Must match `password` exactly. Validated server-side.
+   * @minLength 8
+   */
+  confirmPassword: string;
+  /** User explicitly accepted the current Terms of Service. */
+  termsAccepted: boolean;
+  /** User explicitly accepted the current Privacy Policy. */
+  privacyAccepted: boolean;
   contactName: string;
   businessName: string;
   phone: string;
   mainCategory: string;
   town: string;
   postcode: string;
+}
+
+/**
+ * Returned by /auth/register/customer and /auth/register/trader. The
+account is created but inactive until the email-verification link is
+followed; for traders, full activation also requires a successful
+subscription payment webhook. No JWT is issued in this response.
+
+ */
+export interface RegisterPendingResponse {
+  message: string;
+  email: string;
+  /** Short-lived token clients may poll with to check verification status. */
+  pollToken: string;
+}
+
+export interface ResendVerificationRequest {
+  email: string;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+export interface RetryAfterErrorResponse {
+  error: string;
+  /** @minimum 0 */
+  retryAfterSeconds?: number;
+}
+
+export type TraderOnboardingChecklistStepState =
+  (typeof TraderOnboardingChecklistStepState)[keyof typeof TraderOnboardingChecklistStepState];
+
+export const TraderOnboardingChecklistStepState = {
+  completed: "completed",
+  pending: "pending",
+  action_required: "action_required",
+  locked: "locked",
+  rejected: "rejected",
+  expired: "expired",
+} as const;
+
+export interface TraderOnboardingChecklistStep {
+  key: string;
+  label: string;
+  state: TraderOnboardingChecklistStepState;
+  description?: string;
+  comingSoon?: boolean;
+}
+
+export interface TraderLegalAcceptance {
+  termsCurrent: string;
+  termsAccepted?: string | null;
+  termsNeedsReaccept: boolean;
+  privacyCurrent: string;
+  privacyAccepted?: string | null;
+  privacyNeedsReaccept: boolean;
+  needsReaccept: boolean;
+}
+
+export interface TraderOnboardingStatus {
+  verificationStatus: string;
+  message: string;
+  isPublic: boolean;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  businessProfileCompleted: boolean;
+  documentsSubmitted: boolean;
+  isActive: boolean;
+  rejectionReason?: string | null;
+  adminNotes?: string | null;
+  checklist: TraderOnboardingChecklistStep[];
+  legal?: TraderLegalAcceptance;
+  email: string;
+  businessName: string;
 }
 
 export interface LoginRequest {

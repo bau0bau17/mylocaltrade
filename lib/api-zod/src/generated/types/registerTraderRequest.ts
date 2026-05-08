@@ -10,6 +10,15 @@ export interface RegisterTraderRequest {
   email: string;
   /** @minLength 8 */
   password: string;
+  /**
+   * Must match `password` exactly. Validated server-side.
+   * @minLength 8
+   */
+  confirmPassword: string;
+  /** User explicitly accepted the current Terms of Service. */
+  termsAccepted: boolean;
+  /** User explicitly accepted the current Privacy Policy. */
+  privacyAccepted: boolean;
   contactName: string;
   businessName: string;
   phone: string;

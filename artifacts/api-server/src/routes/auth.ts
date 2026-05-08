@@ -67,18 +67,15 @@ router.post("/auth/register/trader", async (req, res) => {
   try {
     const body = RegisterTraderBody.parse(req.body);
 
-    // Phase 1: extra fields not yet in OpenAPI spec — validate ad-hoc.
-    const extra = req.body as {
-      confirmPassword?: string;
-      termsAccepted?: boolean;
-      privacyAccepted?: boolean;
-    };
-
-    if (!extra.confirmPassword || extra.confirmPassword !== body.password) {
+    // confirmPassword / termsAccepted / privacyAccepted are now part of the
+    // OpenAPI contract and validated by the generated zod schema above. We
+    // still need the cross-field equality + truthiness checks here, since
+    // those aren't expressible in the field-level schema.
+    if (body.confirmPassword !== body.password) {
       res.status(400).json({ error: "Passwords do not match" });
       return;
     }
-    if (extra.termsAccepted !== true || extra.privacyAccepted !== true) {
+    if (body.termsAccepted !== true || body.privacyAccepted !== true) {
       res.status(400).json({ error: "You must accept the Terms and Privacy Policy to continue." });
       return;
     }
@@ -223,11 +220,20 @@ router.get("/auth/verify-email", async (req, res) => {
       return;
     }
 
+    // Customers are activated immediately upon email verification.
+    // Traders are NOT activated here — trader activation only happens after
+    // a successful subscription payment webhook (see /api/subscriptions/webhook
+    // and the demo-activate endpoint in routes/subscriptions.ts). Until then,
+    // their account exists and they can sign in to complete onboarding, but
+    // `users.isActive` and `trader_profiles.isActive` stay false so their
+    // profile is not publicly listed.
+    const activateOnVerify = user.role === "customer";
+
     await db.update(usersTable)
       .set({
         emailVerified: true,
         emailVerificationToken: null,
-        isActive: true,
+        ...(activateOnVerify ? { isActive: true } : {}),
         updatedAt: new Date(),
       })
       .where(eq(usersTable.id, user.id));
