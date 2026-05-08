@@ -18,6 +18,7 @@ import {
   evaluateDocumentsComplete,
   logAudit,
 } from "../lib/trader-status";
+import { sendDocumentApprovedEmail, sendDocumentRejectedEmail } from "../lib/email";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -257,6 +258,24 @@ router.post("/admin/documents/:id/approve", authMiddleware, adminOnly, async (re
       performedBy: adminId,
       details: { documentId: doc.id, type: doc.type },
     });
+    void (async () => {
+      try {
+        const [trader] = await db
+          .select({ email: usersTable.email, fullName: usersTable.fullName })
+          .from(usersTable)
+          .where(eq(usersTable.id, doc.userId))
+          .limit(1);
+        if (trader?.email) {
+          await sendDocumentApprovedEmail({
+            toEmail: trader.email,
+            toName: trader.fullName || "there",
+            documentType: doc.type,
+          });
+        }
+      } catch (notifyErr) {
+        req.log.warn({ err: notifyErr, docId: doc.id }, "Failed to send document-approved email");
+      }
+    })();
     res.json({ document: doc });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -294,6 +313,25 @@ router.post("/admin/documents/:id/reject", authMiddleware, adminOnly, async (req
       details: { documentId: doc.id, type: doc.type },
       notes: body.reason,
     });
+    void (async () => {
+      try {
+        const [trader] = await db
+          .select({ email: usersTable.email, fullName: usersTable.fullName })
+          .from(usersTable)
+          .where(eq(usersTable.id, doc.userId))
+          .limit(1);
+        if (trader?.email) {
+          await sendDocumentRejectedEmail({
+            toEmail: trader.email,
+            toName: trader.fullName || "there",
+            documentType: doc.type,
+            reason: body.reason,
+          });
+        }
+      } catch (notifyErr) {
+        req.log.warn({ err: notifyErr, docId: doc.id }, "Failed to send document-rejected email");
+      }
+    })();
     res.json({ document: doc });
   } catch (error) {
     if (error instanceof z.ZodError) {
