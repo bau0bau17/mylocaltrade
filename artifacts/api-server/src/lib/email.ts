@@ -22,8 +22,8 @@ function createTransport() {
 function getApiBaseUrl() {
   if (process.env.API_BASE_URL) return process.env.API_BASE_URL;
   const domain = process.env.REPLIT_DEV_DOMAIN;
-  if (domain) return `https://${domain}/api-server`;
-  return "http://localhost:3000";
+  if (domain) return `https://${domain}`;
+  return "http://localhost:8080";
 }
 
 export async function sendVerificationEmail(

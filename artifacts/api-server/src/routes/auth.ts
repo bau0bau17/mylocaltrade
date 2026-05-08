@@ -8,7 +8,7 @@ import {
   RegisterTraderBody,
   LoginBody,
 } from "@workspace/api-zod";
-import { generateToken, authMiddleware } from "../lib/auth";
+import { generateToken, authMiddleware, generatePollToken, verifyPollToken } from "../lib/auth";
 import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
 
@@ -45,6 +45,7 @@ router.post("/auth/register/customer", async (req, res) => {
     res.status(201).json({
       message: "Account created. Please check your email to verify your address before logging in.",
       email: user.email,
+      pollToken: generatePollToken(user.id),
     });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "ZodError") {
@@ -103,6 +104,7 @@ router.post("/auth/register/trader", async (req, res) => {
     res.status(201).json({
       message: "Account created. Please check your email to verify your address before logging in.",
       email: result.email,
+      pollToken: generatePollToken(result.id),
     });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "ZodError") {
@@ -234,6 +236,32 @@ router.post("/auth/resend-verification", async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, "Resend verification failed");
     res.status(500).json({ error: "Failed to resend verification email" });
+  }
+});
+
+router.get("/auth/verification-status", async (req, res) => {
+  try {
+    const { token } = req.query as { token?: string };
+    if (!token) {
+      res.status(400).json({ error: "Token is required" });
+      return;
+    }
+    let userId: number;
+    try {
+      ({ userId } = verifyPollToken(token));
+    } catch {
+      res.status(401).json({ error: "Invalid or expired token" });
+      return;
+    }
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!user) {
+      res.json({ verified: false });
+      return;
+    }
+    res.json({ verified: !!user.emailVerified });
+  } catch (error) {
+    req.log.error({ err: error }, "Check verification status failed");
+    res.status(500).json({ error: "Failed to check status" });
   }
 });
 

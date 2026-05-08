@@ -1,18 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { getApiUrl } from '@/lib/api-url';
 
 export default function VerifyEmailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { email } = useLocalSearchParams<{ email: string }>();
+  const { email, pollToken } = useLocalSearchParams<{ email: string; pollToken?: string }>();
   const { resendVerification } = useAuth();
   const [isSending, setIsSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!pollToken) return;
+    const check = async () => {
+      try {
+        const res = await fetch(`${getApiUrl()}/api/auth/verification-status?token=${encodeURIComponent(pollToken)}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json?.verified) {
+          setVerified(true);
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          setTimeout(() => router.replace('/auth/login'), 2000);
+        }
+      } catch {
+        // silent retry
+      }
+    };
+    check();
+    intervalRef.current = setInterval(check, 3000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [pollToken, router]);
 
   const handleResend = async () => {
     if (!email) return;
@@ -28,6 +54,20 @@ export default function VerifyEmailScreen() {
       setIsSending(false);
     }
   };
+
+  if (verified) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+        <View style={[styles.iconWrap, { backgroundColor: '#0E2A1F', borderColor: Colors.light.secondary }]}>
+          <Feather name="check-circle" size={40} color={Colors.light.secondary} />
+        </View>
+        <Text style={styles.title}>Email Verified!</Text>
+        <Text style={styles.subtitle}>Your account has been activated.</Text>
+        <Text style={[styles.subtitle, { marginTop: 12 }]}>Redirecting to login…</Text>
+        <ActivityIndicator size="small" color={Colors.light.primary} style={{ marginTop: 24 }} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
