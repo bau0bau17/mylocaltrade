@@ -6,8 +6,6 @@ import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import type { FeatherIconName } from '@/types/feather-icons';
 
-const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
-
 export default function LegalSupportScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -115,20 +113,6 @@ export default function LegalSupportScreen() {
           />
         </View>
 
-        <Text style={styles.sectionLabel}>Company Information</Text>
-        <View style={styles.companyCard}>
-          <View style={styles.companyRow}>
-            <Feather name="briefcase" size={14} color={Colors.light.primary} />
-            <Text style={styles.companyName}>Service Provider LTD</Text>
-          </View>
-          <View style={styles.companyDivider} />
-          <CompanyDetail label="Registration" value="Registered in England and Wales" />
-          <CompanyDetail label="Company Number" value="15830141" />
-          <CompanyDetail label="Registered Address" value={"71-75 Shelton Street\nCovent Garden, London\nWC2H 9JQ"} />
-          <CompanyDetail label="Support Email" value={CONTACT_EMAIL} />
-          <CompanyDetail label="ICO Registration" value="ZB724124 (Data Protection)" />
-        </View>
-
         <Text style={styles.copyright}>
           © {new Date().getFullYear()} MyLocalTrade. All rights reserved.
         </Text>
@@ -161,15 +145,6 @@ function MenuRow({
       </View>
       <Feather name="chevron-right" size={16} color={Colors.light.textMuted} />
     </Pressable>
-  );
-}
-
-function CompanyDetail({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.companyDetailRow}>
-      <Text style={styles.companyDetailLabel}>{label}</Text>
-      <Text style={styles.companyDetailValue}>{value}</Text>
-    </View>
   );
 }
 
@@ -262,52 +237,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.textMuted,
     marginTop: 1,
-  },
-  companyCard: {
-    backgroundColor: Colors.light.card,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    padding: 16,
-  },
-  companyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  companyName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.light.text,
-    letterSpacing: 0.2,
-  },
-  companyDivider: {
-    height: 1,
-    backgroundColor: Colors.light.border,
-    marginBottom: 12,
-  },
-  companyDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-    gap: 12,
-  },
-  companyDetailLabel: {
-    fontSize: 12,
-    color: Colors.light.textMuted,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-    flexShrink: 0,
-    minWidth: 100,
-  },
-  companyDetailValue: {
-    fontSize: 12,
-    color: Colors.light.textSecondary,
-    flex: 1,
-    textAlign: 'right',
-    lineHeight: 18,
   },
   copyright: {
     fontSize: 11,
