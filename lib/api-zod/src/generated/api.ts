@@ -59,6 +59,12 @@ export const RegisterTraderBody = zod.object({
     .describe("User explicitly accepted the current Privacy Policy."),
   contactName: zod.string(),
   businessName: zod.string(),
+  companyNumber: zod
+    .string()
+    .optional()
+    .describe(
+      'Optional UK Companies House registration number. If present, the\nbackend treats the trader as having selected a confirmed match\nfrom the Companies House live search and skips the manual\n\"under review\" step for the business identity check.\n',
+    ),
   phone: zod.string(),
   mainCategory: zod.string(),
   town: zod.string(),
@@ -1372,4 +1378,30 @@ export const ResolveAdminConversationReportResponse = zod.object({
   ok: zod.boolean(),
   status: zod.string(),
   action: zod.string(),
+});
+
+/**
+ * Public, unauthenticated lookup used during trader registration to
+let the trader pick a confirmed match (which auto-populates address
+and town). Returns up to 6 best matches. Queries shorter than 3
+characters return an empty list.
+
+ * @summary Search the UK Companies House register by name
+ */
+export const SearchCompaniesHouseQueryParams = zod.object({
+  q: zod.coerce.string().describe("Company name fragment to search for."),
+});
+
+export const SearchCompaniesHouseResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      companyNumber: zod.string(),
+      companyName: zod.string(),
+      status: zod.string().nullish(),
+      addressLine: zod.string().nullish(),
+      town: zod.string().nullish(),
+      postcode: zod.string().nullish(),
+      addressSnippet: zod.string().nullish(),
+    }),
+  ),
 });

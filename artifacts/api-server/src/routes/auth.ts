@@ -16,6 +16,8 @@ import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, logAudit, buildOnboardingChecklist, statusMessage, isTraderProfilePublic, evaluateBusinessProfileComplete, evaluateDocumentsComplete } from "../lib/trader-status";
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, evaluateLegalAcceptance } from "../lib/legal";
+import { getCompanyProfile, formatChAddress } from "../lib/companies-house";
+import type { AiVerificationResult } from "../lib/trader-ai-verification";
 import { traderDocumentsTable } from "@workspace/db/schema";
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -93,6 +95,61 @@ router.post("/auth/register/trader", async (req, res) => {
     const verificationToken = generateVerificationToken();
     const now = new Date();
 
+    // If the trader picked a confirmed match from the Companies House live
+    // search, server-side re-verify against Companies House before persisting
+    // any "MATCH" signal. We trust nothing from the client beyond the company
+    // number itself, and we reject obviously malformed numbers.
+    let aiVerificationStatus: string | null = null;
+    let aiVerificationData: AiVerificationResult | null = null;
+    let aiVerificationCheckedAt: Date | null = null;
+    let companyNumber: string | null = null;
+    const rawCompanyNumber = body.companyNumber?.trim().toUpperCase() ?? "";
+    if (rawCompanyNumber && /^[A-Z0-9]{6,10}$/.test(rawCompanyNumber)) {
+      try {
+        const ch = await getCompanyProfile(rawCompanyNumber);
+        if (ch?.company_number) {
+          // Require the submitted business name to look like the registered
+          // name; otherwise we store the company number for the admin to see
+          // but do NOT assign a MATCH verdict (avoids spoofing).
+          const norm = (s: string | undefined | null) =>
+            (s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+          const submittedNorm = norm(body.businessName);
+          const chNorm = norm(ch.company_name);
+          const namesAlign =
+            submittedNorm.length > 0 &&
+            chNorm.length > 0 &&
+            (submittedNorm === chNorm ||
+              chNorm.startsWith(submittedNorm) ||
+              submittedNorm.startsWith(chNorm));
+
+          companyNumber = ch.company_number;
+          aiVerificationCheckedAt = now;
+          aiVerificationData = {
+            verdict: namesAlign ? "MATCH" : "PARTIAL_MATCH",
+            reasoning: namesAlign
+              ? "Trader selected this company from the live Companies House search during signup. Server re-verified the company number against Companies House and the submitted business name aligns with the registered name."
+              : "Trader supplied a Companies House number that resolves to a real record, but the submitted business name does not align with the registered name. Flagged for manual review.",
+            submitted: {
+              businessName: body.businessName,
+              address: body.town,
+              postcode: body.postcode,
+            },
+            companiesHouse: {
+              companyNumber: ch.company_number,
+              companyName: ch.company_name,
+              address: formatChAddress(ch),
+              postcode: ch.registered_office_address?.postal_code,
+              status: ch.company_status,
+              sicCodes: ch.sic_codes,
+            },
+          };
+          aiVerificationStatus = aiVerificationData.verdict;
+        }
+      } catch (err) {
+        req.log.warn({ err, rawCompanyNumber }, "Companies House confirmation lookup failed at signup");
+      }
+    }
+
     const result = await db.transaction(async (tx) => {
       const [user] = await tx.insert(usersTable).values({
         email: body.email,
@@ -109,6 +166,7 @@ router.post("/auth/register/trader", async (req, res) => {
       await tx.insert(traderProfilesTable).values({
         userId: user.id,
         businessName: body.businessName,
+        companyNumber,
         contactName: body.contactName,
         email: body.email,
         phone: body.phone,
@@ -121,6 +179,9 @@ router.post("/auth/register/trader", async (req, res) => {
         termsVersion: CURRENT_TERMS_VERSION,
         privacyAcceptedAt: now,
         privacyVersion: CURRENT_PRIVACY_VERSION,
+        aiVerificationStatus,
+        aiVerificationData,
+        aiVerificationCheckedAt,
       });
 
       return user;
@@ -129,7 +190,13 @@ router.post("/auth/register/trader", async (req, res) => {
     logAudit({
       userId: result.id,
       action: "TRADER_ACCOUNT_CREATED",
-      details: { email: result.email, businessName: body.businessName, mainCategory: body.mainCategory },
+      details: {
+        email: result.email,
+        businessName: body.businessName,
+        mainCategory: body.mainCategory,
+        companyNumber: companyNumber ?? undefined,
+        autoVerifiedByCompaniesHouse: aiVerificationStatus === "MATCH",
+      },
     });
 
     sendVerificationEmail(result.email, result.fullName, verificationToken).catch((err) =>

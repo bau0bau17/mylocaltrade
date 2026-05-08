@@ -32,6 +32,8 @@ tags:
     description: Customer-trader conversations and messages
   - name: push-tokens
     description: Mobile push notification token registration
+  - name: companies-house
+    description: UK Companies House lookups (public)
 paths:
   /healthz:
     get:
@@ -1507,6 +1509,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ResolveReportResponse"
 
+  /companies-house/search:
+    get:
+      operationId: searchCompaniesHouse
+      tags: [companies-house]
+      summary: Search the UK Companies House register by name
+      description: |
+        Public, unauthenticated lookup used during trader registration to
+        let the trader pick a confirmed match (which auto-populates address
+        and town). Returns up to 6 best matches. Queries shorter than 3
+        characters return an empty list.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Company name fragment to search for.
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompaniesHouseSearchResponse"
+        "502":
+          description: Companies House upstream error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1582,6 +1615,13 @@ components:
           type: string
         businessName:
           type: string
+        companyNumber:
+          type: string
+          description: |
+            Optional UK Companies House registration number. If present, the
+            backend treats the trader as having selected a confirmed match
+            from the Companies House live search and skips the manual
+            "under review" step for the business identity check.
         phone:
           type: string
         mainCategory:
@@ -2598,6 +2638,39 @@ components:
         action:
           type: string
       required: [ok, status, action]
+
+    CompaniesHouseSearchHit:
+      type: object
+      properties:
+        companyNumber:
+          type: string
+        companyName:
+          type: string
+        status:
+          type: string
+          nullable: true
+        addressLine:
+          type: string
+          nullable: true
+        town:
+          type: string
+          nullable: true
+        postcode:
+          type: string
+          nullable: true
+        addressSnippet:
+          type: string
+          nullable: true
+      required: [companyNumber, companyName]
+
+    CompaniesHouseSearchResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompaniesHouseSearchHit"
+      required: [items]
 
     CategoriesResponse:
       type: object

@@ -15,6 +15,7 @@ import conversationsRouter from "./conversations";
 import pushTokensRouter from "./push-tokens";
 import adminRouter from "./admin";
 import emailUnsubscribeRouter from "./email-unsubscribe";
+import companiesHouseRouter from "./companies-house";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(conversationsRouter);
 router.use(pushTokensRouter);
 router.use(adminRouter);
 router.use(emailUnsubscribeRouter);
+router.use(companiesHouseRouter);
 
 export default router;
