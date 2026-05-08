@@ -5,6 +5,7 @@ import { eq, desc } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
+import { sendNewEnquiryEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -48,6 +49,31 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
         status: "pending",
       })
       .returning();
+
+    // Notify the trader — fire-and-forget so the API response is never
+    // blocked on SMTP latency. Failures are logged, never surfaced.
+    void (async () => {
+      try {
+        const [traderUser] = await db
+          .select({ email: usersTable.email, fullName: usersTable.fullName })
+          .from(usersTable)
+          .where(eq(usersTable.id, trader.userId))
+          .limit(1);
+        if (traderUser?.email) {
+          await sendNewEnquiryEmail({
+            toEmail: traderUser.email,
+            toName: traderUser.fullName || trader.businessName,
+            customerName: customer?.fullName || "A customer",
+            serviceRequired,
+            message,
+            preferredDate: preferredDate || null,
+            phone: phone || null,
+          });
+        }
+      } catch (notifyErr) {
+        req.log.warn({ err: notifyErr, enquiryId: enquiry.id }, "Failed to send new-enquiry email");
+      }
+    })();
 
     res.status(201).json({
       id: enquiry.id,

@@ -225,6 +225,180 @@ export async function sendContactEmail(opts: {
   }
 }
 
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function emailShell(opts: { title: string; preheader?: string; bodyHtml: string }): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${opts.title}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
+  ${opts.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${opts.preheader}</div>` : ""}
+  <div style="max-width: 560px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
+    <div style="text-align: center; margin-bottom: 28px;">
+      <div style="margin-bottom: 12px;">${LOGO_IMG_HTML}</div>
+      <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0;">MyLocalTrade</h1>
+    </div>
+    ${opts.bodyHtml}
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 32px 0 16px;">
+    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
+      You are receiving this email because you have an account on MyLocalTrade.
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendNewEnquiryEmail(opts: {
+  toEmail: string;
+  toName: string;
+  customerName: string;
+  serviceRequired: string;
+  message: string;
+  preferredDate?: string | null;
+  phone?: string | null;
+}): Promise<void> {
+  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
+  const safeName = escapeHtml(opts.toName);
+  const safeCustomer = escapeHtml(opts.customerName);
+  const safeService = escapeHtml(opts.serviceRequired);
+  const safeMessage = escapeHtml(opts.message);
+  const detailsRows = [
+    ["From", safeCustomer],
+    ["Service required", safeService],
+    opts.preferredDate ? ["Preferred date", escapeHtml(opts.preferredDate)] : null,
+    opts.phone ? ["Phone", escapeHtml(opts.phone)] : null,
+  ].filter(Boolean) as [string, string][];
+  const rowsHtml = detailsRows
+    .map(
+      ([k, v]) => `
+      <tr>
+        <td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 130px;">${k}</td>
+        <td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${v}</td>
+      </tr>`,
+    )
+    .join("");
+  const html = emailShell({
+    title: "New enquiry on MyLocalTrade",
+    preheader: `New enquiry from ${safeCustomer} for ${safeService}`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+        You have a new lead on MyLocalTrade. Reply quickly to win the job.
+      </p>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">${rowsHtml}</table>
+      <div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 24px;">
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeMessage}</p>
+      </div>
+      <div style="text-align: center; margin-bottom: 8px;">
+        <a href="${dashboardUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
+          Open my leads
+        </a>
+      </div>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: `New enquiry: ${opts.serviceRequired}`,
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] New-enquiry email sent to ${opts.toEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — new enquiry for ${opts.toEmail} from ${opts.customerName}`);
+  }
+}
+
+export async function sendDocumentApprovedEmail(opts: {
+  toEmail: string;
+  toName: string;
+  documentType: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeType = escapeHtml(opts.documentType);
+  const html = emailShell({
+    title: "Document approved",
+    preheader: `Your ${safeType} has been approved`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+        Good news — your <strong style="color: #06D6A0;">${safeType}</strong> document has been approved by our team.
+      </p>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
+        Once all required documents are approved you will be eligible to go live on the marketplace.
+      </p>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: `Document approved: ${opts.documentType}`,
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] Document-approved email sent to ${opts.toEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — doc approved (${opts.documentType}) for ${opts.toEmail}`);
+  }
+}
+
+export async function sendDocumentRejectedEmail(opts: {
+  toEmail: string;
+  toName: string;
+  documentType: string;
+  reason: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeType = escapeHtml(opts.documentType);
+  const safeReason = escapeHtml(opts.reason);
+  const html = emailShell({
+    title: "Document needs your attention",
+    preheader: `Your ${safeType} could not be approved`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        Your <strong style="color: #F59E0B;">${safeType}</strong> document could not be approved.
+      </p>
+      <div style="background: #2A1810; border-left: 3px solid #F59E0B; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #FCD34D; font-size: 13px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Reviewer note</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
+      </div>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
+        Please open the trader dashboard, address the issue above, and re-upload the document.
+      </p>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: `Action required: ${opts.documentType} not approved`,
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] Document-rejected email sent to ${opts.toEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — doc rejected (${opts.documentType}) for ${opts.toEmail}: ${opts.reason}`);
+  }
+}
+
 export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
