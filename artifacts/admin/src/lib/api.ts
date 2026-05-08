@@ -1,0 +1,154 @@
+const TOKEN_KEY = "mlt_admin_token";
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export class ApiError extends Error {
+  status: number;
+  details?: unknown;
+  constructor(message: string, status: number, details?: unknown) {
+    super(message);
+    this.status = status;
+    this.details = details;
+  }
+}
+
+export interface ApiOptions {
+  method?: string;
+  body?: unknown;
+  signal?: AbortSignal;
+  query?: Record<string, string | number | boolean | undefined | null>;
+}
+
+function buildUrl(path: string, query?: ApiOptions["query"]): string {
+  const url = new URL(path.startsWith("/") ? path : `/${path}`, window.location.origin);
+  if (query) {
+    for (const [k, v] of Object.entries(query)) {
+      if (v === undefined || v === null || v === "") continue;
+      url.searchParams.set(k, String(v));
+    }
+  }
+  return url.pathname + url.search;
+}
+
+export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+
+  const res = await fetch(buildUrl(path, opts.query), {
+    method: opts.method ?? "GET",
+    headers,
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    signal: opts.signal,
+  });
+
+  if (res.status === 401) {
+    setToken(null);
+    try {
+      window.dispatchEvent(new CustomEvent("mlt-admin:unauthorized"));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  let data: unknown = null;
+  const text = await res.text();
+  if (text.length > 0) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
+
+  if (!res.ok) {
+    const errMessage =
+      (data && typeof data === "object" && "error" in data
+        ? String((data as { error: unknown }).error)
+        : null) ?? res.statusText ?? "Request failed";
+    throw new ApiError(errMessage, res.status, data);
+  }
+
+  return data as T;
+}
+
+/**
+ * Authenticated browser-side download for files that require Authorization.
+ * Streams the response into a blob and triggers a save dialog.
+ */
+export async function downloadAuthed(path: string, suggestedName: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(buildUrl(path), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      setToken(null);
+      try {
+        window.dispatchEvent(new CustomEvent("mlt-admin:unauthorized"));
+      } catch {
+        /* ignore */
+      }
+    }
+    throw new ApiError("Download failed", res.status);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = suggestedName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Authenticated browser-side preview: fetches a file with the admin token,
+ * turns it into a blob URL, and opens it in a new tab. Avoids exposing
+ * server-issued signed URLs to the browser.
+ */
+export async function viewAuthed(path: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(buildUrl(path), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      setToken(null);
+      try {
+        window.dispatchEvent(new CustomEvent("mlt-admin:unauthorized"));
+      } catch {
+        /* ignore */
+      }
+    }
+    throw new ApiError("Preview failed", res.status);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    // Popup blocked — fall back to navigating the current tab.
+    window.location.assign(url);
+  }
+  // Revoke after a generous delay so the new tab has time to render the blob.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}

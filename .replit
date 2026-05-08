@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "python-3.11"]
+modules = ["nodejs-24", "python-3.11", "postgresql-16"]
 
 [[artifacts]]
 id = "artifacts/api-server"
@@ -32,3 +32,6 @@ SMTP_HOST = "smtp.office365.com"
 SMTP_PORT = "587"
 SMTP_FROM = "noreply@mylocaltrade.co.uk"
 SMTP_USER = "noreply@mylocaltrade.co.uk"
+
+[nix]
+channel = "stable-25_05"

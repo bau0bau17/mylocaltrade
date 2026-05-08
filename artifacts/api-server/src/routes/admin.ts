@@ -6,8 +6,9 @@ import {
   traderDocumentsTable,
   traderAuditLogTable,
   subscriptionsTable,
+  enquiriesTable,
 } from "@workspace/db/schema";
-import { and, eq, ilike, or, desc, sql } from "drizzle-orm";
+import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, asc } from "drizzle-orm";
 import { z } from "zod";
 import { authMiddleware, adminOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
@@ -616,6 +617,285 @@ router.post("/admin/traders/:userId/suspend", authMiddleware, adminOnly, async (
     }
     req.log.error({ err: error }, "Suspend trader failed");
     res.status(500).json({ error: "Failed to suspend trader" });
+  }
+});
+
+// POST /api/admin/traders/:userId/unsuspend — revert a suspended trader.
+// New status is recomputed from current documents (UNDER_REVIEW if docs incomplete,
+// EXPIRED_DOCUMENTS if any required doc is expired, otherwise VERIFIED).
+router.post("/admin/traders/:userId/unsuspend", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { userId: adminId } = req as AuthenticatedRequest;
+    const userId = Number.parseInt(req.params.userId, 10);
+    if (!Number.isFinite(userId)) {
+      res.status(400).json({ error: "Invalid user id" });
+      return;
+    }
+    const [profile] = await db
+      .select()
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile) {
+      res.status(404).json({ error: "Trader not found" });
+      return;
+    }
+    if (profile.verificationStatus !== TRADER_STATUS.SUSPENDED) {
+      res.status(400).json({ error: "Trader is not suspended" });
+      return;
+    }
+
+    const docs = await db
+      .select()
+      .from(traderDocumentsTable)
+      .where(eq(traderDocumentsTable.userId, userId));
+    const evaluation = evaluateDocumentsComplete(docs);
+
+    // Mirror approve()'s subscription-gating: only restore public visibility if
+    // the trader currently holds an active subscription.
+    const [sub] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, userId))
+      .limit(1);
+    const subActive = sub?.status === "active";
+
+    let nextStatus: string = TRADER_STATUS.UNDER_REVIEW;
+    let nextActive = false;
+    if (evaluation.hasExpiredRequired) {
+      nextStatus = TRADER_STATUS.EXPIRED_DOCUMENTS;
+    } else if (!evaluation.complete) {
+      nextStatus = TRADER_STATUS.PENDING_DOCUMENTS;
+    } else if (profile.verifiedAt) {
+      nextStatus = TRADER_STATUS.VERIFIED;
+      nextActive = subActive;
+    } else {
+      nextStatus = TRADER_STATUS.UNDER_REVIEW;
+    }
+
+    const [updated] = await db
+      .update(traderProfilesTable)
+      .set({
+        verificationStatus: nextStatus,
+        isActive: nextActive,
+        adminNotes: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(traderProfilesTable.userId, userId))
+      .returning();
+    await logAudit({
+      userId,
+      action: "TRADER_UNSUSPENDED",
+      performedBy: adminId,
+      details: { newStatus: nextStatus },
+    });
+    res.json({ profile: updated });
+  } catch (error) {
+    req.log.error({ err: error }, "Unsuspend trader failed");
+    res.status(500).json({ error: "Failed to unsuspend trader" });
+  }
+});
+
+// GET /api/admin/dashboard — high-level operational summary
+router.get("/admin/dashboard", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const [statusCounts, recentAudit, totals, expiringDocs, recentEnquiries] = await Promise.all([
+      db
+        .select({
+          status: traderProfilesTable.verificationStatus,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(traderProfilesTable)
+        .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
+        .where(eq(usersTable.role, "trader"))
+        .groupBy(traderProfilesTable.verificationStatus),
+      db
+        .select({
+          id: traderAuditLogTable.id,
+          action: traderAuditLogTable.action,
+          createdAt: traderAuditLogTable.createdAt,
+          userId: traderAuditLogTable.userId,
+          businessName: traderProfilesTable.businessName,
+          userEmail: usersTable.email,
+        })
+        .from(traderAuditLogTable)
+        .leftJoin(usersTable, eq(usersTable.id, traderAuditLogTable.userId))
+        .leftJoin(traderProfilesTable, eq(traderProfilesTable.userId, traderAuditLogTable.userId))
+        .orderBy(desc(traderAuditLogTable.createdAt))
+        .limit(15),
+      db
+        .select({
+          totalTraders: sql<number>`count(*) filter (where ${usersTable.role} = 'trader')::int`,
+          totalCustomers: sql<number>`count(*) filter (where ${usersTable.role} = 'customer')::int`,
+        })
+        .from(usersTable),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(traderDocumentsTable)
+        .where(
+          and(
+            isNotNull(traderDocumentsTable.expiresAt),
+            lte(
+              traderDocumentsTable.expiresAt,
+              sql`now() + interval '30 days'`,
+            ),
+            sql`${traderDocumentsTable.expiresAt} > now()`,
+            inArray(traderDocumentsTable.status, ["APPROVED", "PENDING_REVIEW"]),
+          ),
+        ),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(enquiriesTable)
+        .where(gte(enquiriesTable.createdAt, sql`now() - interval '7 days'`)),
+    ]);
+
+    res.json({
+      counts: statusCounts,
+      totals: totals[0],
+      expiringSoonCount: expiringDocs[0]?.count ?? 0,
+      enquiriesLast7d: recentEnquiries[0]?.count ?? 0,
+      recentActivity: recentAudit.map((r) => ({
+        ...r,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin dashboard failed");
+    res.status(500).json({ error: "Failed to load dashboard" });
+  }
+});
+
+// GET /api/admin/expiring-documents?withinDays=30
+router.get("/admin/expiring-documents", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const within = Math.min(Math.max(Number(req.query.withinDays) || 30, 1), 365);
+    const rows = await db
+      .select({
+        documentId: traderDocumentsTable.id,
+        userId: traderDocumentsTable.userId,
+        type: traderDocumentsTable.type,
+        status: traderDocumentsTable.status,
+        expiresAt: traderDocumentsTable.expiresAt,
+        originalFilename: traderDocumentsTable.originalFilename,
+        businessName: traderProfilesTable.businessName,
+        contactName: traderProfilesTable.contactName,
+        userEmail: usersTable.email,
+      })
+      .from(traderDocumentsTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderDocumentsTable.userId))
+      .innerJoin(traderProfilesTable, eq(traderProfilesTable.userId, traderDocumentsTable.userId))
+      .where(
+        and(
+          isNotNull(traderDocumentsTable.expiresAt),
+          lte(
+            traderDocumentsTable.expiresAt,
+            sql`now() + (${within} || ' days')::interval`,
+          ),
+          inArray(traderDocumentsTable.status, ["APPROVED", "PENDING_REVIEW", "EXPIRED"]),
+        ),
+      )
+      .orderBy(asc(traderDocumentsTable.expiresAt));
+
+    res.json({
+      withinDays: within,
+      documents: rows.map((r) => ({
+        ...r,
+        expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Expiring documents failed");
+    res.status(500).json({ error: "Failed to load expiring documents" });
+  }
+});
+
+// GET /api/admin/enquiries?limit=&q=
+router.get("/admin/enquiries", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+
+    const conds: ReturnType<typeof eq>[] = [];
+    if (q.length > 0) {
+      const like = `%${q}%`;
+      const search = or(
+        ilike(traderProfilesTable.businessName, like),
+        ilike(usersTable.email, like),
+        ilike(enquiriesTable.serviceRequired, like),
+      );
+      if (search) conds.push(search as ReturnType<typeof eq>);
+    }
+
+    const rows = await db
+      .select({
+        id: enquiriesTable.id,
+        traderId: enquiriesTable.traderId,
+        traderUserId: traderProfilesTable.userId,
+        traderBusinessName: traderProfilesTable.businessName,
+        customerId: enquiriesTable.customerId,
+        customerEmail: usersTable.email,
+        customerName: usersTable.fullName,
+        message: enquiriesTable.message,
+        serviceRequired: enquiriesTable.serviceRequired,
+        preferredDate: enquiriesTable.preferredDate,
+        phone: enquiriesTable.phone,
+        status: enquiriesTable.status,
+        createdAt: enquiriesTable.createdAt,
+      })
+      .from(enquiriesTable)
+      .leftJoin(traderProfilesTable, eq(traderProfilesTable.id, enquiriesTable.traderId))
+      .leftJoin(usersTable, eq(usersTable.id, enquiriesTable.customerId))
+      .where(conds.length ? and(...conds) : undefined)
+      .orderBy(desc(enquiriesTable.createdAt))
+      .limit(limit);
+
+    res.json({
+      enquiries: rows.map((r) => ({
+        ...r,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin enquiries failed");
+    res.status(500).json({ error: "Failed to load enquiries" });
+  }
+});
+
+// GET /api/admin/subscriptions — list active subscriptions joined with trader info
+router.get("/admin/subscriptions", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const rows = await db
+      .select({
+        id: subscriptionsTable.id,
+        userId: subscriptionsTable.userId,
+        plan: subscriptionsTable.planId,
+        status: subscriptionsTable.status,
+        currentPeriodEnd: subscriptionsTable.currentPeriodEnd,
+        cancelAtPeriodEnd: subscriptionsTable.cancelAtPeriodEnd,
+        createdAt: subscriptionsTable.createdAt,
+        updatedAt: subscriptionsTable.updatedAt,
+        businessName: traderProfilesTable.businessName,
+        contactName: traderProfilesTable.contactName,
+        email: usersTable.email,
+        verificationStatus: traderProfilesTable.verificationStatus,
+        isActive: traderProfilesTable.isActive,
+      })
+      .from(subscriptionsTable)
+      .leftJoin(usersTable, eq(usersTable.id, subscriptionsTable.userId))
+      .leftJoin(traderProfilesTable, eq(traderProfilesTable.userId, subscriptionsTable.userId))
+      .orderBy(desc(subscriptionsTable.updatedAt));
+
+    res.json({
+      subscriptions: rows.map((r) => ({
+        ...r,
+        currentPeriodEnd: r.currentPeriodEnd ? r.currentPeriodEnd.toISOString() : null,
+        createdAt: r.createdAt ? r.createdAt.toISOString() : null,
+        updatedAt: r.updatedAt ? r.updatedAt.toISOString() : null,
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin subscriptions failed");
+    res.status(500).json({ error: "Failed to load subscriptions" });
   }
 });
 
