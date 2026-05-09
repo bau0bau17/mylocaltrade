@@ -2,17 +2,15 @@ import nodemailer from "nodemailer";
 import crypto from "crypto";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
 
 const FROM_NAME = "MyLocalTrade";
 const FROM_EMAIL = process.env.SMTP_FROM ?? "noreply@mylocaltrade.co.uk";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGO_CANDIDATES = [
-  path.resolve(__dirname, "../assets/logo.png"),
-  path.resolve(__dirname, "./assets/logo.png"),
-  path.resolve(process.cwd(), "src/assets/logo.png"),
   path.resolve(process.cwd(), "dist/assets/logo.png"),
+  path.resolve(process.cwd(), "src/assets/logo.png"),
+  path.resolve(process.cwd(), "artifacts/api-server/dist/assets/logo.png"),
+  path.resolve(process.cwd(), "artifacts/api-server/src/assets/logo.png"),
 ];
 const LOGO_PATH = LOGO_CANDIDATES.find((p) => fs.existsSync(p)) ?? LOGO_CANDIDATES[0];
 const LOGO_CID = "mylocaltrade-logo";
