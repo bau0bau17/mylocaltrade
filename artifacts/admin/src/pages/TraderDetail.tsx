@@ -229,7 +229,9 @@ export default function TraderDetail({ userId }: Props) {
     try {
       // Stream the file through the authenticated endpoint and open it as a
       // blob so we never hand a signed URL to the browser address bar.
-      await viewAuthed(`/api/admin/documents/${doc.id}/file`);
+      // viewAuthed checks the Content-Type and only opens safe types inline;
+      // anything else falls back to a forced download.
+      await viewAuthed(`/api/admin/documents/${doc.id}/file`, doc.originalFilename);
     } catch (err) {
       toast({
         title: "Could not open document",

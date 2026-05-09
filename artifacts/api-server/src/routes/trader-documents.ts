@@ -171,7 +171,12 @@ router.post("/trader/documents/upload-url", authMiddleware, traderOnly, async (r
       return;
     }
     // Scope uploads to the authenticated user so other traders cannot claim the upload.
-    const { uploadURL, objectPath } = await storage.getObjectEntityUploadURL(`trader-documents/${userId}`);
+    // Pass the declared mimeType so the presigned PUT URL is bound to that Content-Type —
+    // GCS will reject any PUT request whose Content-Type header does not match.
+    const { uploadURL, objectPath } = await storage.getObjectEntityUploadURL(
+      `trader-documents/${userId}`,
+      body.mimeType
+    );
     res.json({ uploadURL, objectPath, method: "PUT", expectedHeaders: { "Content-Type": body.mimeType } });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
@@ -200,11 +205,27 @@ router.post("/trader/documents", authMiddleware, traderOnly, async (req, res) =>
     }
     // Verify the object exists and validate the size against what GCS actually has,
     // so the client cannot under-report size to bypass MAX_UPLOAD_BYTES.
+    // Also verify the stored Content-Type matches the allowlist so a trader cannot
+    // claim an allowed MIME type in the API request but upload HTML/JS bytes.
     let storedSize = 0;
     try {
       const file = await storage.getObjectEntityFile(normalized);
       const [meta] = await file.getMetadata();
       storedSize = typeof meta.size === "string" ? Number.parseInt(meta.size, 10) : Number(meta.size ?? 0);
+      const storedContentType = (meta.contentType as string | undefined) ?? "";
+      // Strip any parameters (e.g. "image/jpeg; charset=utf-8") before checking.
+      const storedMime = storedContentType.split(";")[0].trim().toLowerCase();
+      if (!storedMime || !ALLOWED_MIMES.has(storedMime)) {
+        res.status(400).json({ error: "Uploaded file type is not permitted. Only JPEG, PNG, WEBP, HEIC and PDF are accepted." });
+        return;
+      }
+      // Enforce that the stored Content-Type exactly matches what the client declared.
+      // This catches any attempt to claim one allowed type while uploading another.
+      const declaredMime = body.mimeType.split(";")[0].trim().toLowerCase();
+      if (storedMime !== declaredMime) {
+        res.status(400).json({ error: "Uploaded file type does not match the declared type." });
+        return;
+      }
     } catch (e) {
       if (e instanceof ObjectNotFoundError) {
         res.status(400).json({ error: "Uploaded file not found in storage. Please retry." });

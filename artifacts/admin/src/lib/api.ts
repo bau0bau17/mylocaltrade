@@ -122,11 +122,30 @@ export async function downloadAuthed(path: string, suggestedName: string): Promi
 }
 
 /**
- * Authenticated browser-side preview: fetches a file with the admin token,
- * turns it into a blob URL, and opens it in a new tab. Avoids exposing
- * server-issued signed URLs to the browser.
+ * MIME types that are safe to open as inline blob URLs in a new tab.
+ * HTML, SVG, XML, and other active content types are excluded because a blob
+ * URL inherits the admin application's origin and could execute scripts with
+ * access to admin localStorage (including the bearer token).
+ * PDFs are rendered by the browser's sandboxed PDF plugin (no JS execution).
+ * Images are inert — they cannot execute code.
  */
-export async function viewAuthed(path: string): Promise<void> {
+const SAFE_INLINE_BLOB_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+]);
+
+/**
+ * Authenticated browser-side preview: fetches a file with the admin token,
+ * turns it into a blob URL, and opens it in a new tab only when the content
+ * type is known-safe (image or PDF). Any other type triggers a forced download
+ * to prevent stored-XSS via attacker-controlled blob content executing at the
+ * admin origin.
+ */
+export async function viewAuthed(path: string, suggestedName?: string): Promise<void> {
   const token = getToken();
   const res = await fetch(buildUrl(path), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -142,13 +161,31 @@ export async function viewAuthed(path: string): Promise<void> {
     }
     throw new ApiError("Preview failed", res.status);
   }
+  // Derive the MIME type from the response Content-Type header (strip parameters).
+  const rawContentType = res.headers.get("Content-Type") ?? "";
+  const mimeType = rawContentType.split(";")[0].trim().toLowerCase();
+
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-  if (!opened) {
-    // Popup blocked — fall back to navigating the current tab.
-    window.location.assign(url);
+
+  if (SAFE_INLINE_BLOB_TYPES.has(mimeType)) {
+    // Safe to open inline — images and PDFs cannot run scripts.
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      // Popup blocked — fall back to navigating the current tab.
+      window.location.assign(url);
+    }
+    // Revoke after a generous delay so the new tab has time to render the blob.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } else {
+    // Unknown or potentially executable type — force a download instead of
+    // rendering inline so it cannot run as the admin origin.
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = suggestedName ?? "document";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  // Revoke after a generous delay so the new tab has time to render the blob.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

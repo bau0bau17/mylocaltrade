@@ -392,8 +392,17 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
     try {
       const file = await storage.getObjectEntityFile(doc.objectPath);
       const [meta] = await file.getMetadata();
-      res.setHeader("Content-Type", (meta.contentType as string) || doc.mimeType || "application/octet-stream");
+      // Use the MIME type recorded in the database (validated against the allowlist
+      // at upload-registration time) rather than the value stored in object metadata,
+      // which an attacker could have set to text/html or another executable type.
+      const safeMime = doc.mimeType || "application/octet-stream";
+      res.setHeader("Content-Type", safeMime);
       res.setHeader("Cache-Control", "private, max-age=0");
+      // Force download disposition so the browser never renders the content inline,
+      // even if the blob URL is opened in a new tab by the admin UI. This prevents
+      // stored-XSS execution if an attacker managed to upload non-PDF/image content.
+      const safeFilename = (doc.originalFilename || "document").replace(/[^\w.\-]/g, "_");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"`);
       if (meta.size) res.setHeader("Content-Length", String(meta.size));
       await new Promise<void>((resolve, reject) => {
         file.createReadStream().on("error", reject).on("end", resolve).pipe(res);
