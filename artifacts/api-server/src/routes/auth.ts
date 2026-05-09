@@ -351,26 +351,25 @@ router.post("/auth/resend-verification", async (req, res) => {
       return;
     }
 
+    const GENERIC_RESPONSE = { message: "If an account exists with that email, a verification email has been sent." };
+
     const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
     if (!user) {
-      res.json({ message: "If an account exists, a verification email has been sent." });
+      res.json(GENERIC_RESPONSE);
       return;
     }
 
     if (user.emailVerified) {
-      res.json({ message: "Your email is already verified. You can log in." });
+      res.json(GENERIC_RESPONSE);
       return;
     }
 
-    // Rate limit: 60s cooldown between resends
+    // Rate limit: 60s cooldown between resends — enforced server-side but not
+    // exposed to the caller to avoid leaking account/verification state.
     if (user.emailVerificationSentAt) {
       const elapsed = Date.now() - new Date(user.emailVerificationSentAt).getTime();
       if (elapsed < RESEND_COOLDOWN_MS) {
-        const retryIn = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000);
-        res.status(429).json({
-          error: `Please wait ${retryIn}s before requesting another email.`,
-          retryAfterSeconds: retryIn,
-        });
+        res.json(GENERIC_RESPONSE);
         return;
       }
     }
@@ -386,7 +385,7 @@ router.post("/auth/resend-verification", async (req, res) => {
 
     logAudit({ userId: user.id, action: "EMAIL_VERIFICATION_RESENT" });
 
-    res.json({ message: "Verification email sent. Please check your inbox." });
+    res.json(GENERIC_RESPONSE);
   } catch (error) {
     req.log.error({ err: error }, "Resend verification failed");
     res.status(500).json({ error: "Failed to resend verification email" });
