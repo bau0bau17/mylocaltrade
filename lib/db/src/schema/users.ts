@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, varchar, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -17,6 +17,7 @@ export const usersTable = pgTable("users", {
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   plan: varchar("plan", { length: 20 }),
   pushNotificationsEnabled: boolean("push_notifications_enabled").notNull().default(true),
+  tokenVersion: integer("token_version").notNull().default(1),
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

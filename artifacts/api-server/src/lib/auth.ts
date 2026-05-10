@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
@@ -17,12 +17,17 @@ function getJwtSecret(): string {
 
 const JWT_SECRET = getJwtSecret();
 
-export function generateToken(userId: number, role: string): string {
-  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "7d" });
+export function generateToken(userId: number, role: string, tokenVersion = 1): string {
+  return jwt.sign({ userId, role, tokenVersion }, JWT_SECRET, { expiresIn: "7d" });
 }
 
-export function verifyToken(token: string): { userId: number; role: string } {
-  return jwt.verify(token, JWT_SECRET) as { userId: number; role: string };
+export function verifyToken(token: string): { userId: number; role: string; tokenVersion: number } {
+  const decoded = jwt.verify(token, JWT_SECRET) as { userId: number; role: string; tokenVersion?: number };
+  return {
+    userId: decoded.userId,
+    role: decoded.role,
+    tokenVersion: decoded.tokenVersion ?? 1,
+  };
 }
 
 export function generatePollToken(userId: number): string {
@@ -73,13 +78,26 @@ export function verifyUnsubscribeToken(token: string): {
 }
 
 /**
- * Load the user backing a bearer token and return null if the account
- * should no longer be trusted. We only reject on `deletedAt` here:
- * `users.isActive` tracks subscription state for traders (false during
- * onboarding before payment, and after cancellation) and is intentionally
- * allowed to log in — see /auth/login, which mirrors this rule.
+ * Load the user backing a bearer token and verify the token is still valid
+ * against the current database state. Returns null if the account should no
+ * longer be trusted.
+ *
+ * Rejection rules:
+ *  - Account not found (hard-deleted or never existed).
+ *  - `deletedAt` is set (soft-deleted account).
+ *  - Admin account with `isActive = false` (deactivated staff).
+ *  - `tokenVersion` in the JWT does not match the DB value — this is the
+ *    revocation mechanism: incrementing the column immediately invalidates
+ *    all previously issued tokens for that user.
+ *
+ * Note: `isActive = false` for non-admin roles (trader, customer) reflects
+ * subscription / onboarding state and is intentionally allowed, mirroring
+ * the login route behaviour.
  */
-async function loadActiveUser(userId: number): Promise<{
+async function loadActiveUser(
+  userId: number,
+  tokenVersion: number,
+): Promise<{
   id: number;
   role: "customer" | "trader" | "admin";
 } | null> {
@@ -87,13 +105,19 @@ async function loadActiveUser(userId: number): Promise<{
     .select({
       id: usersTable.id,
       role: usersTable.role,
+      isActive: usersTable.isActive,
+      tokenVersion: usersTable.tokenVersion,
       deletedAt: usersTable.deletedAt,
     })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
+
   if (!user) return null;
   if (user.deletedAt) return null;
+  if (user.role === "admin" && !user.isActive) return null;
+  if (user.tokenVersion !== tokenVersion) return null;
+
   return { id: user.id, role: user.role as "customer" | "trader" | "admin" };
 }
 
@@ -108,7 +132,7 @@ export async function authMiddleware(
     return;
   }
 
-  let decoded: { userId: number; role: string };
+  let decoded: { userId: number; role: string; tokenVersion: number };
   try {
     const token = authHeader.substring(7);
     decoded = verifyToken(token);
@@ -118,7 +142,7 @@ export async function authMiddleware(
   }
 
   try {
-    const user = await loadActiveUser(decoded.userId);
+    const user = await loadActiveUser(decoded.userId, decoded.tokenVersion);
     if (!user) {
       res.status(401).json({ error: "Account is no longer active" });
       return;
@@ -156,6 +180,25 @@ export function customerOnly(req: Request, res: Response, next: NextFunction): v
   next();
 }
 
+/**
+ * Immediately revoke all currently issued tokens for a user by incrementing
+ * their `tokenVersion`. Any token carrying the old version will be rejected
+ * on the next authenticated request, even if the JWT itself has not expired.
+ *
+ * Pass a Drizzle transaction `tx` when calling inside an existing transaction
+ * so the version bump is atomic with the surrounding state change.
+ */
+export async function revokeUserSessions(
+  userId: number,
+  tx?: typeof db,
+): Promise<void> {
+  const executor = tx ?? db;
+  await executor
+    .update(usersTable)
+    .set({ tokenVersion: sql`${usersTable.tokenVersion} + 1` })
+    .where(eq(usersTable.id, userId));
+}
+
 export async function optionalAuth(
   req: Request,
   _res: Response,
@@ -166,7 +209,7 @@ export async function optionalAuth(
     try {
       const token = authHeader.substring(7);
       const decoded = verifyToken(token);
-      const user = await loadActiveUser(decoded.userId);
+      const user = await loadActiveUser(decoded.userId, decoded.tokenVersion);
       if (user) {
         (req as AuthenticatedRequest).userId = user.id;
         (req as AuthenticatedRequest).userRole = user.role;

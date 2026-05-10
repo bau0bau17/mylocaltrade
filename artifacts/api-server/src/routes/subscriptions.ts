@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { db } from "@workspace/db";
 import { usersTable, traderProfilesTable, subscriptionsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { authMiddleware, traderOnly } from "../lib/auth";
+import { authMiddleware, traderOnly, revokeUserSessions } from "../lib/auth";
 import { CreateCheckoutSessionBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
@@ -521,6 +521,8 @@ async function deactivateSubscription(customerId: string) {
       .update(usersTable)
       .set({ isActive: false, plan: null })
       .where(eq(usersTable.id, user.id));
+
+    await revokeUserSessions(user.id, tx as unknown as typeof db);
 
     await tx
       .update(traderProfilesTable)

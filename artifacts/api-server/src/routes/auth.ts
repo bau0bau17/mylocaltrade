@@ -249,7 +249,7 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
-    const token = generateToken(user.id, user.role);
+    const token = generateToken(user.id, user.role, user.tokenVersion);
 
     res.json({
       token,
