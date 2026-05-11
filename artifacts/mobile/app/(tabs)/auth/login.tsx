@@ -26,8 +26,8 @@ export default function LoginScreen() {
 
     const missingEmail = !email.trim();
     const missingPassword = !password;
-    setEmailError(missingEmail ? 'Introdu adresa de email.' : null);
-    setPasswordError(missingPassword ? 'Introdu parola.' : null);
+    setEmailError(missingEmail ? 'Enter your email address.' : null);
+    setPasswordError(missingPassword ? 'Enter your password.' : null);
     if (missingEmail || missingPassword) return;
 
     setIsLoading(true);
@@ -42,7 +42,7 @@ export default function LoginScreen() {
       // Server doesn't tell us which field is wrong (good security
       // practice), so we mark both fields as invalid and show a single
       // message under the form.
-      const msg = 'Email sau parolă incorecte. Verifică datele și încearcă din nou.';
+      const msg = 'Incorrect email or password. Please check your details and try again.';
       setEmailError(msg);
       setPasswordError(' ');
       setFormError(msg);
