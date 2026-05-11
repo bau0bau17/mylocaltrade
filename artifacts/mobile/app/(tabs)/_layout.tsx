@@ -1,7 +1,7 @@
 import { BlurView } from "expo-blur";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Tabs } from "expo-router";
+import { router, Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
@@ -14,12 +14,12 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 // Inner routes that live inside the (tabs) group so they inherit the same
 // bottom tab bar as the four primary tabs. They are hidden from the bar
 // (href: null) and use the shared ScreenHeader as their top bar.
-const INNER_ROUTES: { name: string; title: string }[] = [
+const INNER_ROUTES: { name: string; title: string; parent?: string }[] = [
   { name: "legal-support", title: "Legal & Support" },
-  { name: "auth/login", title: "Log In" },
-  { name: "auth/register-customer", title: "Register" },
-  { name: "auth/register-trader", title: "Join as Trader" },
-  { name: "auth/verify-email", title: "Verify Email" },
+  { name: "auth/login", title: "Log In", parent: "/account" },
+  { name: "auth/register-customer", title: "Register", parent: "/account" },
+  { name: "auth/register-trader", title: "Join as Trader", parent: "/account" },
+  { name: "auth/verify-email", title: "Verify Email", parent: "/account" },
   { name: "pricing", title: "Subscription Plans" },
   { name: "enquiry/[traderId]", title: "Send Enquiry" },
   { name: "trader-dashboard/index", title: "Trader Onboarding" },
@@ -185,7 +185,22 @@ function ClassicTabLayout() {
               <ScreenHeader
                 title={(options.title as string) ?? r.title}
                 showBack
-                onBack={() => navigation.goBack()}
+                onBack={() => {
+                  // For routes with an explicit parent (e.g. auth screens
+                  // launched from the Account tab), always return to that
+                  // parent rather than the root tab. The default
+                  // navigation.goBack() inside a Tabs navigator falls back
+                  // to the first tab when there is no stack history.
+                  if (r.parent) {
+                    router.replace(r.parent as Parameters<typeof router.replace>[0]);
+                    return;
+                  }
+                  if (navigation.canGoBack()) {
+                    navigation.goBack();
+                  } else {
+                    router.replace("/");
+                  }
+                }}
               />
             ),
           }}
