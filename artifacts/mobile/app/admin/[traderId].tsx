@@ -120,6 +120,7 @@ export default function AdminTraderDetail() {
   const [preview, setPreview] = useState<{
     doc: TraderDoc;
     status: 'loading' | 'ready' | 'error' | 'unsupported';
+    dataUri?: string;
     error?: string;
   } | null>(null);
 
@@ -187,36 +188,43 @@ export default function AdminTraderDetail() {
       return;
     }
     setPreview({ doc, status: 'loading' });
-    if (isImage) {
-      // <Image> will fetch with the auth header itself; we only need to flip
-      // to 'ready' so the image is rendered. onLoad/onError below handle the
-      // actual outcome.
-      setPreview({ doc, status: 'ready' });
-    } else {
-      // For PDFs we need an HTTP(S) URL the in-app browser can open. Use the
-      // existing presigned-URL endpoint, then open it in WebBrowser (Safari
-      // View Controller / Chrome Custom Tab) — that stays inside the app.
-      (async () => {
-        try {
-          const res = await fetch(`${apiUrl}/api/admin/documents/${doc.id}/view-url`, {
+
+    (async () => {
+      try {
+        // Always fetch the file ourselves with the Authorization header. This
+        // both (a) triggers the server-side audit-log entry with the access
+        // reason and (b) works on web — where <Image source.headers> is a
+        // no-op because the browser <img> tag can't carry custom headers.
+        const res = await fetch(fileUrl(doc.id, 'view'), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(text || `HTTP ${res.status}`);
+        }
+        if (isImage) {
+          const blob = await res.blob();
+          const dataUri = await blobToDataUri(blob);
+          setPreview({ doc, status: 'ready', dataUri });
+          // Refresh so the new audit-log entry shows up right away.
+          load();
+        } else {
+          // PDF: ask the server for a presigned URL and open it in the
+          // in-app browser tab (Safari View Controller / Chrome Custom Tab).
+          // The /file fetch above already produced the audit entry.
+          const r2 = await fetch(`${apiUrl}/api/admin/documents/${doc.id}/view-url`, {
             headers: { Authorization: `Bearer ${token}` },
           });
-          const json = await res.json();
-          if (!res.ok) throw new Error(json.error || 'Failed to open document');
-          // Best-effort audit hit so the access also lands on the new audit
-          // action with the supplied reason. We ignore the body.
-          fetch(fileUrl(doc.id, 'view'), {
-            method: 'GET',
-            headers: { Authorization: `Bearer ${token}` },
-          }).catch(() => {});
+          const j = await r2.json();
+          if (!r2.ok) throw new Error(j.error || 'Failed to open document');
           setPreview(null);
-          await WebBrowser.openBrowserAsync(json.url);
+          await WebBrowser.openBrowserAsync(j.url);
           await load();
-        } catch (e) {
-          setPreview({ doc, status: 'error', error: e instanceof Error ? e.message : 'Try again.' });
         }
-      })();
-    }
+      } catch (e) {
+        setPreview({ doc, status: 'error', error: e instanceof Error ? e.message : 'Try again.' });
+      }
+    })();
   };
 
   const openDocExternal = async (docId: number) => {
@@ -661,18 +669,14 @@ export default function AdminTraderDetail() {
               {preview?.status === 'loading' && (
                 <ActivityIndicator color={Colors.light.primary} />
               )}
-              {preview?.status === 'ready' && preview.doc.mimeType.startsWith('image/') && (
+              {preview?.status === 'ready' && preview.dataUri && preview.doc.mimeType.startsWith('image/') && (
                 <Image
-                  source={{
-                    uri: fileUrl(preview.doc.id, 'view'),
-                    headers: { Authorization: `Bearer ${token}` },
-                  }}
+                  source={{ uri: preview.dataUri }}
                   style={styles.previewImage}
                   resizeMode="contain"
                   onError={() =>
                     setPreview({ doc: preview.doc, status: 'error', error: 'Could not load image inline.' })
                   }
-                  onLoad={() => { load(); }}
                 />
               )}
               {preview?.status === 'error' && (
@@ -760,6 +764,20 @@ const DOC_LABEL: Record<string, string> = {
   QUALIFICATION: 'Trade qualification',
   OTHER: 'Other document',
 };
+
+// Convert a fetched Blob into a data: URI usable by <Image source={{ uri }}>.
+// Works on both web (FileReader) and React Native (which polyfills FileReader).
+function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('Could not read file.'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('Read failed.'));
+    reader.readAsDataURL(blob);
+  });
+}
 
 function formatAction(a: string): string {
   return a.replace(/_/g, ' ').toLowerCase().replace(/^./, c => c.toUpperCase());
