@@ -173,33 +173,40 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen name="saved" options={{ href: null }} />
-      {INNER_ROUTES.map((r) => (
-        <Tabs.Screen
-          key={r.name}
-          name={r.name}
-          options={{
-            href: null,
-            title: r.title,
-            headerShown: true,
-            header: ({ navigation, options }) => (
-              <ScreenHeader
-                title={(options.title as string) ?? r.title}
-                showBack
-                onBack={() => {
-                  // Inner routes are registered as hidden Tabs.Screen
-                  // entries, which means expo-router treats them as tabs
-                  // rather than stack pushes — router.back() (and the
-                  // underlying navigation.goBack()) returns to the
-                  // previously active tab (Home) instead of the screen
-                  // the user came from. So we always navigate to the
-                  // explicit parent declared for the route.
-                  router.replace(r.parent as Parameters<typeof router.replace>[0]);
-                }}
-              />
-            ),
-          }}
-        />
-      ))}
+      {INNER_ROUTES.map((r) => {
+        // Some inner screens own their own bottom UI (chat composer, etc.)
+        // and the absolutely-positioned tab bar would cover it. Hide the
+        // tab bar on those routes so the bottom controls are visible.
+        const hideTabBar = r.name === "messages/[id]";
+        return (
+          <Tabs.Screen
+            key={r.name}
+            name={r.name}
+            options={{
+              href: null,
+              title: r.title,
+              headerShown: true,
+              ...(hideTabBar ? { tabBarStyle: { display: "none" } } : {}),
+              header: ({ navigation, options }) => (
+                <ScreenHeader
+                  title={(options.title as string) ?? r.title}
+                  showBack
+                  onBack={() => {
+                    // Inner routes are registered as hidden Tabs.Screen
+                    // entries, which means expo-router treats them as tabs
+                    // rather than stack pushes — router.back() (and the
+                    // underlying navigation.goBack()) returns to the
+                    // previously active tab (Home) instead of the screen
+                    // the user came from. So we always navigate to the
+                    // explicit parent declared for the route.
+                    router.replace(r.parent as Parameters<typeof router.replace>[0]);
+                  }}
+                />
+              ),
+            }}
+          />
+        );
+      })}
     </Tabs>
   );
 }
