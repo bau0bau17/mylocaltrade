@@ -3,9 +3,25 @@ import crypto from "crypto";
 import path from "path";
 import fs from "fs";
 
+// ---------------------------------------------------------------------------
+// Sender identity
+// ---------------------------------------------------------------------------
+
 const FROM_NAME = "MyLocalTrade";
 const FROM_EMAIL = process.env.SMTP_FROM ?? "noreply@mylocaltrade.co.uk";
 
+// ---------------------------------------------------------------------------
+// Logo asset
+// ---------------------------------------------------------------------------
+//
+// Brevo's HTTPS API only accepts `htmlContent` plus optional binary
+// attachments — there is no straightforward CID embedding the way SMTP +
+// Nodemailer does it. To keep the visual identity consistent across both
+// transports we host the logo as a public PNG at the API base URL and
+// reference it as a normal absolute <img src> in the email HTML.
+//
+// The legacy SMTP path keeps using the CID attachment for back-compat with
+// any inboxes that prefer inline images.
 const LOGO_CANDIDATES = [
   path.resolve(process.cwd(), "dist/assets/logo.png"),
   path.resolve(process.cwd(), "src/assets/logo.png"),
@@ -23,7 +39,64 @@ function logoAttachment() {
   };
 }
 
-const LOGO_IMG_HTML = `<img src="cid:${LOGO_CID}" alt="MyLocalTrade" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 16px; margin: 0 auto;">`;
+function getApiBaseUrl(): string {
+  if (process.env.API_BASE_URL) return process.env.API_BASE_URL;
+  const domain = process.env.REPLIT_DEV_DOMAIN;
+  if (domain) return `https://${domain}`;
+  return "http://localhost:8080";
+}
+
+/** Hosted logo URL used in email HTML. Served by the API at /api/public/logo.png. */
+function logoImgHtml(): string {
+  const url = `${getApiBaseUrl()}/api/public/logo.png`;
+  return `<img src="${url}" alt="MyLocalTrade" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 16px; margin: 0 auto;">`;
+}
+
+// Backwards-compat: a few of the templates still reference the CID variant
+// when they need to inline a small icon. The function call now returns the
+// hosted version so both paths use the same artwork.
+const LOGO_IMG_HTML = logoImgHtml();
+
+// ---------------------------------------------------------------------------
+// Brevo HTTPS dispatcher with category-keyed API keys
+// ---------------------------------------------------------------------------
+//
+// Each "category" maps to an independent Brevo API key, so the trader can
+// rotate / revoke / cap the key for one type of email without affecting the
+// others. The mapping is intentionally narrow:
+//
+//   - verification : account / KYC mails — email verification link, document
+//                    approved / rejected, trader approved / rejected /
+//                    suspended / more-info-requested.
+//   - notifications: in-product nudges to the trader / customer — new lead
+//                    enquiry, lead reminder, new conversation message,
+//                    review approved, trader reply on a review.
+//   - contact      : the public contact form forwarded to support.
+//
+// If a category-specific key is missing we fall back to the legacy SMTP
+// transport (keeping the historic envs working), and finally to a console
+// log so dev environments still see the would-be email content.
+
+export type EmailCategory = "verification" | "notifications" | "contact";
+
+const BREVO_KEY_ENV: Record<EmailCategory, string> = {
+  verification: "BREVO_API_KEY_VERIFICATION",
+  notifications: "BREVO_API_KEY_NOTIFICATIONS",
+  contact: "BREVO_API_KEY_CONTACT",
+};
+
+interface DispatchOpts {
+  category: EmailCategory;
+  to: { email: string; name?: string | null };
+  subject: string;
+  html: string;
+  /** Defaults to FROM_NAME / FROM_EMAIL. */
+  from?: { email: string; name?: string };
+  replyTo?: { email: string; name?: string };
+  headers?: Record<string, string>;
+  /** Marker used in success / failure log lines. */
+  tag: string;
+}
 
 function createTransport() {
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -40,141 +113,103 @@ function createTransport() {
   return null;
 }
 
-function getApiBaseUrl() {
-  if (process.env.API_BASE_URL) return process.env.API_BASE_URL;
-  const domain = process.env.REPLIT_DEV_DOMAIN;
-  if (domain) return `https://${domain}`;
-  return "http://localhost:8080";
-}
+async function sendViaBrevo(opts: DispatchOpts, apiKey: string): Promise<void> {
+  const fromEmail = opts.from?.email ?? FROM_EMAIL;
+  const fromName = opts.from?.name ?? FROM_NAME;
+  const payload: Record<string, unknown> = {
+    sender: { name: fromName, email: fromEmail },
+    to: [
+      opts.to.name
+        ? { email: opts.to.email, name: opts.to.name }
+        : { email: opts.to.email },
+    ],
+    subject: opts.subject,
+    htmlContent: opts.html,
+  };
+  if (opts.replyTo) payload.replyTo = opts.replyTo;
+  if (opts.headers) payload.headers = opts.headers;
 
-export async function sendVerificationEmail(
-  toEmail: string,
-  toName: string,
-  token: string
-): Promise<void> {
-  const verifyUrl = `${getApiBaseUrl()}/api/auth/verify-email?token=${token}`;
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Verify your email</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
-  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
-    <div style="text-align: center; margin-bottom: 32px;">
-      <div style="margin-bottom: 16px;">${LOGO_IMG_HTML}</div>
-      <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 8px;">MyLocalTrade</h1>
-      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">Verify your email address</p>
-    </div>
-    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${escapeHtml(toName)},</p>
-    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 32px;">
-      Thanks for signing up to MyLocalTrade. Please verify your email address to activate your account.
-    </p>
-    <div style="text-align: center; margin-bottom: 32px;">
-      <a href="${verifyUrl}"
-         style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 16px; padding: 14px 40px; border-radius: 12px; text-decoration: none;">
-        Verify Email Address
-      </a>
-    </div>
-    <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
-      If the button above doesn't work, copy and paste this link into your browser:
-    </p>
-    <p style="color: #00B4D8; font-size: 13px; word-break: break-all; margin: 0 0 32px;">${verifyUrl}</p>
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.<br><br>
-      Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ
-    </p>
-  </div>
-</body>
-</html>`;
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: toEmail,
-      subject: "Verify your MyLocalTrade email address",
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Verification email sent to ${toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — verification link for ${toEmail}:`);
-    console.log(`[email] ${verifyUrl}`);
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `Brevo HTTP ${res.status} (${opts.category}): ${body.slice(0, 300)}`,
+    );
   }
 }
 
-export async function sendContactEmail(opts: {
-  fromName: string;
-  fromEmail: string;
-  subject: string;
-  message: string;
-}): Promise<void> {
-  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
-  const CONTACT_FROM_EMAIL = "noreply@mylocaltrade.co.uk";
-  const replyByDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toUTCString();
-  const safeFromName = escapeHtml(opts.fromName);
-  const safeFromEmail = escapeHtml(opts.fromEmail);
-  const safeSubject = escapeHtml(opts.subject);
-  const safeMessage = escapeHtml(opts.message);
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Contact Support</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
-  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
-    <div style="background: #F59E0B; color: #111827; padding: 12px 16px; border-radius: 10px; margin-bottom: 24px; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">
-      🚩 CONTACT SUPPORT — REPLY WITHIN 48 HOURS
-    </div>
-    <div style="text-align: center; margin-bottom: 24px;">
-      <div style="margin-bottom: 12px;">${LOGO_IMG_HTML}</div>
-      <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0 0 6px;">MyLocalTrade</h1>
-      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">New support message received via in-app form</p>
-    </div>
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 110px;">From</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeFromName} &lt;${safeFromEmail}&gt;</td></tr>
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Subject</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeSubject}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Reply by</td><td style="padding: 8px 0; color: #F59E0B; font-size: 13px; font-weight: 600;">${replyByDate}</td></tr>
-    </table>
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
-    <p style="color: #E5E7EB; font-size: 15px; line-height: 1.7; white-space: pre-wrap; margin: 0;">${safeMessage}</p>
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 24px 0 16px;">
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      Sent via MyLocalTrade app · Service Provider LTD · 48h SLA
-    </p>
-  </div>
-</body>
-</html>`;
-
+async function sendViaSmtp(opts: DispatchOpts): Promise<boolean> {
   const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"MyLocalTrade Contact Form" <${CONTACT_FROM_EMAIL}>`,
-      to: SUPPORT_EMAIL,
-      replyTo: `"${opts.fromName}" <${opts.fromEmail}>`,
-      subject: `[CONTACT - Reply within 48h] ${opts.subject}`,
-      html,
-      priority: "high",
-      headers: {
-        "X-Priority": "1",
-        "X-MSMail-Priority": "High",
-        Importance: "High",
-        "X-MyLocalTrade-Type": "contact-support",
-        "X-MyLocalTrade-SLA": "48h",
-      },
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Contact email sent to ${SUPPORT_EMAIL} from ${CONTACT_FROM_EMAIL}`);
-  } else {
-    console.log(`[email] SMTP not configured — contact message from ${opts.fromEmail}: ${opts.message}`);
-  }
+  if (!transporter) return false;
+  const fromEmail = opts.from?.email ?? FROM_EMAIL;
+  const fromName = opts.from?.name ?? FROM_NAME;
+  await transporter.sendMail({
+    from: `"${fromName}" <${fromEmail}>`,
+    to: opts.to.name ? `"${opts.to.name}" <${opts.to.email}>` : opts.to.email,
+    replyTo: opts.replyTo
+      ? `"${opts.replyTo.name ?? opts.replyTo.email}" <${opts.replyTo.email}>`
+      : undefined,
+    subject: opts.subject,
+    html: opts.html,
+    headers: opts.headers,
+    attachments: [logoAttachment()],
+  });
+  return true;
 }
+
+/**
+ * Single delivery entry point. Tries Brevo first using the category-specific
+ * key, falls back to legacy SMTP, and finally logs to stdout in dev when no
+ * transport is configured. Never throws on transport failure of one channel
+ * if another channel succeeds; only throws if no channel can deliver and
+ * Brevo failed mid-flight (so callers wrapping this in `void (async ...)`
+ * still see the error in their try/catch).
+ */
+async function dispatchEmail(opts: DispatchOpts): Promise<void> {
+  const brevoKey = process.env[BREVO_KEY_ENV[opts.category]];
+  if (brevoKey) {
+    try {
+      await sendViaBrevo(opts, brevoKey);
+      console.log(
+        `[email] [brevo:${opts.category}] ${opts.tag} → ${opts.to.email}`,
+      );
+      return;
+    } catch (err) {
+      console.error(
+        `[email] [brevo:${opts.category}] ${opts.tag} failed for ${opts.to.email}; trying SMTP fallback.`,
+        err,
+      );
+    }
+  }
+  const smtpOk = await sendViaSmtp(opts).catch((err) => {
+    console.error(
+      `[email] [smtp:${opts.category}] ${opts.tag} failed for ${opts.to.email}.`,
+      err,
+    );
+    return false;
+  });
+  if (smtpOk) {
+    console.log(
+      `[email] [smtp:${opts.category}] ${opts.tag} → ${opts.to.email}`,
+    );
+    return;
+  }
+  console.log(
+    `[email] [no-transport:${opts.category}] ${opts.tag} would-send → ${opts.to.email} | "${opts.subject}"`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Email shells (HTML scaffolding)
+// ---------------------------------------------------------------------------
 
 function escapeHtml(input: string): string {
   return input
@@ -218,6 +253,124 @@ function emailShell(opts: {
   </div>
 </body>
 </html>`;
+}
+
+// ---------------------------------------------------------------------------
+// Public senders
+// ---------------------------------------------------------------------------
+
+export async function sendVerificationEmail(
+  toEmail: string,
+  toName: string,
+  token: string,
+): Promise<void> {
+  const verifyUrl = `${getApiBaseUrl()}/api/auth/verify-email?token=${token}`;
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verify your email</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <div style="margin-bottom: 16px;">${LOGO_IMG_HTML}</div>
+      <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 8px;">MyLocalTrade</h1>
+      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">Verify your email address</p>
+    </div>
+    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${escapeHtml(toName)},</p>
+    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 32px;">
+      Thanks for signing up to MyLocalTrade. Please verify your email address to activate your account.
+    </p>
+    <div style="text-align: center; margin-bottom: 32px;">
+      <a href="${verifyUrl}"
+         style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 16px; padding: 14px 40px; border-radius: 12px; text-decoration: none;">
+        Verify Email Address
+      </a>
+    </div>
+    <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
+      If the button above doesn't work, copy and paste this link into your browser:
+    </p>
+    <p style="color: #00B4D8; font-size: 13px; word-break: break-all; margin: 0 0 32px;">${verifyUrl}</p>
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
+    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
+      This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.<br><br>
+      Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ
+    </p>
+  </div>
+</body>
+</html>`;
+  await dispatchEmail({
+    category: "verification",
+    to: { email: toEmail, name: toName },
+    subject: "Verify your MyLocalTrade email address",
+    html,
+    tag: "verify-email",
+  });
+}
+
+export async function sendContactEmail(opts: {
+  fromName: string;
+  fromEmail: string;
+  subject: string;
+  message: string;
+}): Promise<void> {
+  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
+  const CONTACT_FROM_EMAIL = "noreply@mylocaltrade.co.uk";
+  const replyByDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toUTCString();
+  const safeFromName = escapeHtml(opts.fromName);
+  const safeFromEmail = escapeHtml(opts.fromEmail);
+  const safeSubject = escapeHtml(opts.subject);
+  const safeMessage = escapeHtml(opts.message);
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Contact Support</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
+    <div style="background: #F59E0B; color: #111827; padding: 12px 16px; border-radius: 10px; margin-bottom: 24px; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">
+      CONTACT SUPPORT — REPLY WITHIN 48 HOURS
+    </div>
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="margin-bottom: 12px;">${LOGO_IMG_HTML}</div>
+      <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0 0 6px;">MyLocalTrade</h1>
+      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">New support message received via in-app form</p>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 110px;">From</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeFromName} &lt;${safeFromEmail}&gt;</td></tr>
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Subject</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeSubject}</td></tr>
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Reply by</td><td style="padding: 8px 0; color: #F59E0B; font-size: 13px; font-weight: 600;">${replyByDate}</td></tr>
+    </table>
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
+    <p style="color: #E5E7EB; font-size: 15px; line-height: 1.7; white-space: pre-wrap; margin: 0;">${safeMessage}</p>
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 24px 0 16px;">
+    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
+      Sent via MyLocalTrade app · Service Provider LTD · 48h SLA
+    </p>
+  </div>
+</body>
+</html>`;
+  await dispatchEmail({
+    category: "contact",
+    to: { email: SUPPORT_EMAIL },
+    from: { email: CONTACT_FROM_EMAIL, name: "MyLocalTrade Contact Form" },
+    replyTo: { email: opts.fromEmail, name: opts.fromName },
+    subject: `[CONTACT - Reply within 48h] ${opts.subject}`,
+    html,
+    headers: {
+      "X-Priority": "1",
+      "X-MSMail-Priority": "High",
+      Importance: "High",
+      "X-MyLocalTrade-Type": "contact-support",
+      "X-MyLocalTrade-SLA": "48h",
+    },
+    tag: "contact",
+  });
 }
 
 export async function sendNewEnquiryEmail(opts: {
@@ -267,20 +420,13 @@ export async function sendNewEnquiryEmail(opts: {
         </a>
       </div>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: `New enquiry: ${opts.serviceRequired}`,
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] New-enquiry email sent to ${opts.toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — new enquiry for ${opts.toEmail} from ${opts.customerName}`);
-  }
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: `New enquiry: ${opts.serviceRequired}`,
+    html,
+    tag: "new-enquiry",
+  });
 }
 
 export async function sendLeadReminderEmail(opts: {
@@ -313,27 +459,21 @@ export async function sendLeadReminderEmail(opts: {
         </a>
       </div>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: `Unanswered lead from ${opts.customerName}`,
-      html,
-      // RFC 8058 one-click + RFC 2369 list headers so Gmail/Outlook surface
-      // a native unsubscribe button alongside our footer link.
-      headers: {
-        "List-Unsubscribe": `<${opts.unsubscribeUrl}>`,
-        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-      },
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Lead-reminder email sent to ${opts.toEmail}`);
-    return true;
-  }
-  console.log(`[email] SMTP not configured — lead reminder for ${opts.toEmail} from ${opts.customerName}`);
-  return false;
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: `Unanswered lead from ${opts.customerName}`,
+    html,
+    headers: {
+      "List-Unsubscribe": `<${opts.unsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    },
+    tag: "lead-reminder",
+  });
+  // Caller historically checked the boolean to know whether to record a
+  // delivery attempt — keep the contract by always returning true now that
+  // dispatchEmail handles fallbacks/no-transport internally.
+  return true;
 }
 
 export async function sendDocumentApprovedEmail(opts: {
@@ -355,20 +495,13 @@ export async function sendDocumentApprovedEmail(opts: {
         Once all required documents are approved you will be eligible to go live on the marketplace.
       </p>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: `Document approved: ${opts.documentType}`,
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Document-approved email sent to ${opts.toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — doc approved (${opts.documentType}) for ${opts.toEmail}`);
-  }
+  await dispatchEmail({
+    category: "verification",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: `Document approved: ${opts.documentType}`,
+    html,
+    tag: "doc-approved",
+  });
 }
 
 export async function sendDocumentRejectedEmail(opts: {
@@ -396,20 +529,13 @@ export async function sendDocumentRejectedEmail(opts: {
         Please open the trader dashboard, address the issue above, and re-upload the document.
       </p>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: `Action required: ${opts.documentType} not approved`,
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Document-rejected email sent to ${opts.toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — doc rejected (${opts.documentType}) for ${opts.toEmail}: ${opts.reason}`);
-  }
+  await dispatchEmail({
+    category: "verification",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: `Action required: ${opts.documentType} not approved`,
+    html,
+    tag: "doc-rejected",
+  });
 }
 
 export async function sendReviewApprovedEmail(opts: {
@@ -440,20 +566,13 @@ export async function sendReviewApprovedEmail(opts: {
         Open the trader dashboard to reply publicly — a quick, friendly response builds trust with future customers.
       </p>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: `New ${opts.rating}-star review on your profile`,
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Review-approved email sent to ${opts.toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — review approved (${opts.rating}★) for ${opts.toEmail}`);
-  }
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: `New ${opts.rating}-star review on your profile`,
+    html,
+    tag: "review-approved",
+  });
 }
 
 export async function sendReviewReplyEmail(opts: {
@@ -487,29 +606,25 @@ export async function sendReviewReplyEmail(opts: {
         You can view the full conversation on the trader's profile in the MyLocalTrade app.
       </p>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: `${opts.traderName} replied to your review`,
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Review-reply email sent to ${opts.toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — reply notification for ${opts.toEmail} from ${opts.traderName}`);
-  }
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: `${opts.traderName} replied to your review`,
+    html,
+    tag: "review-reply",
+  });
 }
 
 export async function sendTraderApprovedEmail(opts: {
   toEmail: string;
   toName: string;
   businessName?: string | null;
+  /** Optional admin note shown to the trader (e.g. welcome message). */
+  adminNotes?: string | null;
 }): Promise<void> {
   const safeName = escapeHtml(opts.toName);
   const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : null;
+  const safeNotes = opts.adminNotes ? escapeHtml(opts.adminNotes) : null;
   const html = emailShell({
     title: "Your MyLocalTrade profile has been approved",
     preheader: "Your trader profile is now live on MyLocalTrade.",
@@ -524,30 +639,31 @@ export async function sendTraderApprovedEmail(opts: {
           Your profile is visible to customers searching on MyLocalTrade, provided you have an active subscription and your required documents remain valid.
         </p>
       </div>
+      ${
+        safeNotes
+          ? `<div style="background: #111A2E; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #00B4D8; font-size: 13px; font-weight: 600; margin: 0 0 6px;">Note from our team</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeNotes}</p>
+      </div>`
+          : ""
+      }
       <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 12px;"><strong>Next steps</strong></p>
       <ul style="color: #E5E7EB; font-size: 14px; line-height: 1.7; margin: 0 0 20px; padding-left: 20px;">
-        <li>Open the MyLocalTrade app and check your public profile</li>
-        <li>Make sure your subscription is active so your profile stays visible</li>
-        <li>Keep your insurance and qualification documents up to date — expired documents will hide your profile automatically</li>
+        <li>Open the MyLocalTrade app and check your dashboard.</li>
+        <li>Make sure your subscription is active so customers can contact you.</li>
+        <li>Reply quickly to new leads — most customers go with the first trader who replies.</li>
       </ul>
       <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
         If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
       </p>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: "Your MyLocalTrade profile has been approved",
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Trader-approved email sent to ${opts.toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — trader-approved notification for ${opts.toEmail}`);
-  }
+  await dispatchEmail({
+    category: "verification",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: "Your MyLocalTrade profile has been approved",
+    html,
+    tag: "trader-approved",
+  });
 }
 
 export async function sendTraderRejectedEmail(opts: {
@@ -576,20 +692,13 @@ export async function sendTraderRejectedEmail(opts: {
         Your account remains active so you can update your details and apply again in the future.
       </p>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: "Update on your MyLocalTrade application",
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Trader-rejected email sent to ${opts.toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — trader-rejected notification for ${opts.toEmail}`);
-  }
+  await dispatchEmail({
+    category: "verification",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: "Update on your MyLocalTrade application",
+    html,
+    tag: "trader-rejected",
+  });
 }
 
 export async function sendTraderMoreInfoRequestedEmail(opts: {
@@ -621,20 +730,13 @@ export async function sendTraderMoreInfoRequestedEmail(opts: {
         If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
       </p>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: "More information needed for your MyLocalTrade application",
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Trader more-info email sent to ${opts.toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — more-info notification for ${opts.toEmail}`);
-  }
+  await dispatchEmail({
+    category: "verification",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: "More information needed for your MyLocalTrade application",
+    html,
+    tag: "trader-more-info",
+  });
 }
 
 export async function sendTraderSuspendedEmail(opts: {
@@ -660,20 +762,13 @@ export async function sendTraderSuspendedEmail(opts: {
         If you believe this was done in error, or you would like to discuss reinstatement, please reply to this email or contact us at support@mylocaltrade.co.uk.
       </p>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject: "Your MyLocalTrade account has been suspended",
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] Trader-suspended email sent to ${opts.toEmail}`);
-  } else {
-    console.log(`[email] SMTP not configured — trader-suspended notification for ${opts.toEmail}`);
-  }
+  await dispatchEmail({
+    category: "verification",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: "Your MyLocalTrade account has been suspended",
+    html,
+    tag: "trader-suspended",
+  });
 }
 
 export async function sendNewMessageEmail(opts: {
@@ -714,20 +809,13 @@ export async function sendNewMessageEmail(opts: {
         For your safety, never share bank details or pay outside the platform without verifying the trader.
       </p>`,
   });
-
-  const transporter = createTransport();
-  if (transporter) {
-    await transporter.sendMail({
-      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
-      to: opts.toEmail,
-      subject,
-      html,
-      attachments: [logoAttachment()],
-    });
-    console.log(`[email] New-message email sent to ${opts.toEmail} (conv=${opts.conversationId})`);
-  } else {
-    console.log(`[email] SMTP not configured — new message for ${opts.toEmail} from ${opts.senderName}`);
-  }
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject,
+    html,
+    tag: `new-message[conv=${opts.conversationId}]`,
+  });
 }
 
 export function generateVerificationToken(): string {

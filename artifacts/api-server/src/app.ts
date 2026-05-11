@@ -1,6 +1,8 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import path from "path";
+import fs from "fs";
 import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -161,6 +163,26 @@ app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);
 app.use(/^\/api\/conversations\/\d+\/report$/, reportsLimiter);
 app.use("/api/trader/documents/upload-url", documentUploadLimiter);
 app.use("/api", apiLimiter);
+
+// Public, unauthenticated logo endpoint used by transactional emails. Brevo
+// only renders <img src="..."> from absolute URLs (no CID embedding), so we
+// host the brand logo here and reference it in every email shell.
+const PUBLIC_LOGO_CANDIDATES = [
+  path.resolve(process.cwd(), "dist/assets/logo.png"),
+  path.resolve(process.cwd(), "src/assets/logo.png"),
+  path.resolve(process.cwd(), "artifacts/api-server/dist/assets/logo.png"),
+  path.resolve(process.cwd(), "artifacts/api-server/src/assets/logo.png"),
+];
+const PUBLIC_LOGO_PATH = PUBLIC_LOGO_CANDIDATES.find((p) => fs.existsSync(p));
+app.get("/api/public/logo.png", (_req, res) => {
+  if (!PUBLIC_LOGO_PATH) {
+    res.status(404).end();
+    return;
+  }
+  res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+  res.setHeader("Content-Type", "image/png");
+  res.sendFile(PUBLIC_LOGO_PATH);
+});
 
 app.use("/api", router);
 

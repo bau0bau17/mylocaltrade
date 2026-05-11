@@ -727,6 +727,9 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
             toEmail: user.email,
             toName: user.fullName,
             businessName: updated?.businessName ?? null,
+            // Pass through the optional admin notes so the trader sees the
+            // welcome message that was typed in the approve modal.
+            adminNotes: body.notes ?? null,
           });
         }
       } catch (err) {
@@ -737,7 +740,14 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
     res.json({ profile: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: "Invalid request", details: error.issues });
+      // Surface a human-readable hint instead of just "Invalid request".
+      // The most common cause of a 400 here is the admin pasting a notes
+      // string longer than the 500-character cap.
+      const first = error.issues[0];
+      const msg = first
+        ? `${first.path.join(".") || "request"}: ${first.message}`
+        : "Invalid request";
+      res.status(400).json({ error: msg, code: "VALIDATION_ERROR", details: error.issues });
       return;
     }
     req.log.error({ err: error }, "Approve trader failed");
