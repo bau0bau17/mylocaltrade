@@ -12,3 +12,5 @@ export * from "./messages";
 export * from "./conversation-reports";
 export * from "./push-tokens";
 export * from "./contact-block-attempts";
+export * from "./promo-codes";
+export * from "./promo-redemptions";

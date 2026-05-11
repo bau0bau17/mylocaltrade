@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -14,6 +14,16 @@ import type { CreateCheckoutRequestPlanId, DemoActivateSubscriptionParams } from
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import { getApiUrl } from '@/lib/api-url';
+
+interface PromoPreview {
+  code: string;
+  discountGbp: number;
+  slotsRemaining: number;
+  maxRedemptions: number;
+  validForDays: number;
+  applicablePlans?: string[];
+}
 
 export default function PricingScreen() {
   const insets = useSafeAreaInsets();
@@ -24,6 +34,10 @@ export default function PricingScreen() {
   const router = useRouter();
 
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [promoInput, setPromoInput] = useState('');
+  const [promoApplied, setPromoApplied] = useState<PromoPreview | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
 
   const { data: onboardingStatus, isLoading: isLoadingOnboarding } = useGetTraderOnboardingStatus({
     query: {
@@ -40,11 +54,62 @@ export default function PricingScreen() {
       ? 'verified'
       : 'not_verified';
 
+  const handleApplyPromo = async (planIdHint?: string) => {
+    const code = promoInput.trim();
+    if (!code) {
+      setPromoError('Enter a code first.');
+      return;
+    }
+    if (!token) return;
+    // We need a planId to validate against — pick the first plan the code
+    // could apply to. For UX the user clicks Apply BEFORE choosing a plan,
+    // so default to "premium" (£20 → £15) which is the launch promo target.
+    const planId = planIdHint || 'premium';
+    setPromoChecking(true);
+    setPromoError(null);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/promo/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code, planId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Could not validate code');
+      if (!json.valid) {
+        setPromoApplied(null);
+        setPromoError(json.reason || 'This code is not valid.');
+        return;
+      }
+      setPromoApplied({
+        code: json.code,
+        discountGbp: json.discountGbp,
+        slotsRemaining: json.slotsRemaining,
+        maxRedemptions: json.maxRedemptions,
+        validForDays: json.validForDays,
+      });
+    } catch (e) {
+      setPromoError(e instanceof Error ? e.message : 'Could not validate code');
+    } finally {
+      setPromoChecking(false);
+    }
+  };
+
+  const handleClearPromo = () => {
+    setPromoApplied(null);
+    setPromoInput('');
+    setPromoError(null);
+  };
+
   const handleSelectPlan = async (planId: string) => {
     setSelectedPlanId(planId);
     try {
+      const promoCode = promoApplied?.code;
       const response = await createCheckout({
-        data: { planId: planId as CreateCheckoutRequestPlanId },
+        data: {
+          planId: planId as CreateCheckoutRequestPlanId,
+          // promoCode isn't in the OpenAPI type yet — cast through unknown.
+          ...(promoCode ? ({ promoCode } as Record<string, unknown>) : {}),
+        } as Parameters<typeof createCheckout>[0]['data'],
       });
 
       // Demo mode: backend returns the sentinel `url: "DEMO_MODE"` and a
@@ -57,7 +122,13 @@ export default function PricingScreen() {
         };
         const activateData = await demoActivate({ params });
         if (activateData.success) {
-          Alert.alert('Success', `Your ${planId} plan has been activated! (Demo Mode)`);
+          const promoNote = (response as { promo?: { discountGbp: number; validForDays: number } }).promo;
+          const baseMsg = `Your ${planId} plan has been activated! (Demo Mode)`;
+          const promoMsg = promoNote
+            ? `\n\n£${promoNote.discountGbp} OFF applied for ${promoNote.validForDays} days.`
+            : '';
+          Alert.alert('Success', baseMsg + promoMsg);
+          handleClearPromo();
         } else {
           Alert.alert('Error', activateData.error || 'Activation failed');
         }
@@ -129,6 +200,54 @@ export default function PricingScreen() {
               <Text style={styles.gateBtnText}>Go to dashboard</Text>
             </Pressable>
           </View>
+        </View>
+      )}
+
+      {isTrader && verifiedStatus === 'verified' && (
+        <View style={styles.promoCard}>
+          <Text style={styles.promoLabel}>Have a promo code?</Text>
+          {promoApplied ? (
+            <View style={styles.promoApplied}>
+              <Feather name="check-circle" size={16} color={Colors.light.success ?? '#0a7e3d'} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.promoAppliedTitle}>
+                  {promoApplied.code} — £{promoApplied.discountGbp} OFF
+                </Text>
+                <Text style={styles.promoAppliedBody}>
+                  Applies for {promoApplied.validForDays} days. {promoApplied.slotsRemaining} of {promoApplied.maxRedemptions} slots left.
+                </Text>
+              </View>
+              <Pressable onPress={handleClearPromo} hitSlop={8}>
+                <Feather name="x" size={16} color={Colors.light.textMuted} />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.promoRow}>
+              <TextInput
+                value={promoInput}
+                onChangeText={(v) => { setPromoInput(v); setPromoError(null); }}
+                placeholder="Enter code"
+                placeholderTextColor={Colors.light.textMuted}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={styles.promoInput}
+                maxLength={50}
+                editable={!promoChecking}
+              />
+              <Pressable
+                style={[styles.promoBtn, (promoChecking || !promoInput.trim()) && { opacity: 0.5 }]}
+                onPress={() => handleApplyPromo()}
+                disabled={promoChecking || !promoInput.trim()}
+              >
+                {promoChecking ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.promoBtnText}>Apply</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
+          {promoError && <Text style={styles.promoErrorText}>{promoError}</Text>}
         </View>
       )}
 
@@ -215,6 +334,53 @@ const styles = StyleSheet.create({
   plansContainer: {
     marginBottom: 32,
   },
+  promoCard: {
+    marginBottom: 20,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
+  },
+  promoLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: Colors.light.textMuted,
+    marginBottom: 10,
+  },
+  promoRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  promoInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.background,
+    fontSize: 14,
+    color: Colors.light.text,
+    letterSpacing: 1,
+  },
+  promoBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+    minWidth: 72,
+    alignItems: 'center',
+  },
+  promoBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  promoApplied: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  promoAppliedTitle: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
+  promoAppliedBody: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
+  promoErrorText: { fontSize: 12, color: Colors.light.error, marginTop: 8 },
   gateBanner: {
     flexDirection: 'row',
     gap: 12,

@@ -15,6 +15,7 @@ import {
   LogOut,
   Shield,
   ShieldAlert,
+  Tag,
 } from "lucide-react";
 
 interface NavItem {
@@ -32,6 +33,7 @@ const NAV: NavItem[] = [
   { href: "/reviews", label: "Reviews", icon: Star },
   { href: "/conversation-reports", label: "Conversation reports", icon: ShieldAlert },
   { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
+  { href: "/promo-codes", label: "Promo codes", icon: Tag },
 ];
 
 function isActive(itemHref: string, location: string): boolean {
