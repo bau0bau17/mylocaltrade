@@ -186,20 +186,21 @@ function ClassicTabLayout() {
                 title={(options.title as string) ?? r.title}
                 showBack
                 onBack={() => {
-                  // For routes with an explicit parent (e.g. auth screens
-                  // launched from the Account tab), always return to that
-                  // parent rather than the root tab. The default
-                  // navigation.goBack() inside a Tabs navigator falls back
-                  // to the first tab when there is no stack history.
+                  // expo-router's router tracks the actual navigation
+                  // history (independent from the underlying Tabs
+                  // navigator), so prefer router.back() — otherwise a
+                  // navigation.goBack() inside a Tabs navigator simply
+                  // falls back to the first tab (Home) when the stack
+                  // history is empty.
+                  if (router.canGoBack()) {
+                    router.back();
+                    return;
+                  }
                   if (r.parent) {
                     router.replace(r.parent as Parameters<typeof router.replace>[0]);
                     return;
                   }
-                  if (navigation.canGoBack()) {
-                    navigation.goBack();
-                  } else {
-                    router.replace("/");
-                  }
+                  router.replace("/account");
                 }}
               />
             ),
