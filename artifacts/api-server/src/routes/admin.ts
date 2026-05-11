@@ -34,6 +34,7 @@ import {
   sendTraderApprovedEmail,
   sendTraderRejectedEmail,
   sendTraderMoreInfoRequestedEmail,
+  sendTraderSuspendedEmail,
 } from "../lib/email";
 
 const router: IRouter = Router();
@@ -939,6 +940,28 @@ router.post("/admin/traders/:userId/suspend", authMiddleware, adminOnly, async (
       performedBy: adminId,
       notes: body.reason,
     });
+
+    // Best-effort, non-blocking notification email to the trader.
+    // body.reason is shown to the trader in the email so they understand why.
+    void (async () => {
+      try {
+        const [user] = await db
+          .select({ email: usersTable.email, fullName: usersTable.fullName })
+          .from(usersTable)
+          .where(eq(usersTable.id, userId))
+          .limit(1);
+        if (user?.email) {
+          await sendTraderSuspendedEmail({
+            toEmail: user.email,
+            toName: user.fullName,
+            reason: body.reason,
+          });
+        }
+      } catch (err) {
+        req.log.warn({ err }, "Failed to send trader-suspended email");
+      }
+    })();
+
     res.json({ profile: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
