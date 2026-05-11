@@ -123,7 +123,7 @@ export default function BusinessProfileScreen() {
           additionalServices: form.additionalServices,
           serviceAreas: form.serviceAreas,
           openingHours: form.openingHours.trim(),
-          website: form.website.trim() || null,
+          website: form.website.trim() || undefined,
         }),
       });
       const json = await res.json();
