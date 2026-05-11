@@ -18,9 +18,9 @@ export default function SavedScreen() {
   return (
     <View style={styles.container}>
       <ScreenHeader
-        variant="tab"
-        title="Saved"
-        subtitle="Your saved tradespeople"
+        title="Saved Traders"
+        showBack
+        onBack={() => router.replace('/account')}
       />
 
       {!isAuthenticated ? (
