@@ -108,6 +108,25 @@ router.post("/auth/register/trader", async (req, res) => {
       try {
         const ch = await getCompanyProfile(rawCompanyNumber);
         if (ch?.company_number) {
+          // Reject signup if Companies House reports the company is not
+          // currently trading. Only "active" companies may onboard. Any
+          // other state (dissolved, liquidation, administration, etc.)
+          // means the business cannot legally operate and must not be
+          // listed on the marketplace.
+          const status = (ch.company_status ?? "").toLowerCase();
+          if (status && status !== "active") {
+            res.status(400).json({
+              error:
+                `This business cannot create a trader account because Companies House lists it as "${ch.company_status}". ` +
+                `Only companies with status "active" can be onboarded. ` +
+                `If you believe this is incorrect, please update your status with Companies House first, or contact support@mylocaltrade.co.uk.`,
+              code: "COMPANY_NOT_ACTIVE",
+              companyStatus: ch.company_status,
+              companyName: ch.company_name,
+              companyNumber: ch.company_number,
+            });
+            return;
+          }
           // Require the submitted business name to look like the registered
           // name; otherwise we store the company number for the admin to see
           // but do NOT assign a MATCH verdict (avoids spoofing).

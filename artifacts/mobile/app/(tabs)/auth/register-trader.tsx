@@ -106,6 +106,18 @@ export default function RegisterTraderScreen() {
   }, [formData.businessName]);
 
   const pickSuggestion = (hit: ChHit) => {
+    // Block selection of any company that isn't actively trading on
+    // Companies House. The server enforces the same rule on signup, but
+    // catching it here gives the user immediate feedback before they
+    // fill in the rest of the form.
+    const status = (hit.status ?? '').toLowerCase();
+    if (status && status !== 'active') {
+      setErrorMsg(
+        `"${hit.companyName}" cannot be selected because Companies House lists it as "${hit.status}". ` +
+        `Only companies with status "active" can register on MyLocalTrade.`,
+      );
+      return;
+    }
     // Prefer the structured first address line; fall back to the snippet
     // (which is the full registered office address joined with commas).
     const addressLine = hit.addressLine ?? hit.addressSnippet ?? '';
@@ -120,6 +132,7 @@ export default function RegisterTraderScreen() {
     setConfirmedName(hit.companyName);
     setChSuggestions([]);
     setChOpen(false);
+    setErrorMsg(null);
   };
 
   const handleRegister = async () => {
@@ -259,25 +272,42 @@ export default function RegisterTraderScreen() {
                 nestedScrollEnabled
               >
                 {chSuggestions.map((hit) => {
+                  const status = (hit.status ?? '').toLowerCase();
+                  const isInactive = !!status && status !== 'active';
                   const subline = [hit.addressSnippet, hit.status ? `Status: ${hit.status}` : null]
                     .filter(Boolean)
                     .join(' · ');
                   return (
                     <Pressable
                       key={hit.companyNumber}
-                      style={styles.suggestionItem}
+                      style={[styles.suggestionItem, isInactive && styles.suggestionItemDisabled]}
                       onPress={() => pickSuggestion(hit)}
+                      disabled={isInactive}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.suggestionName}>{hit.companyName}</Text>
+                        <Text style={[styles.suggestionName, isInactive && styles.suggestionNameDisabled]}>
+                          {hit.companyName}
+                        </Text>
                         {subline ? (
-                          <Text style={styles.suggestionSub} numberOfLines={2}>
+                          <Text
+                            style={[styles.suggestionSub, isInactive && styles.suggestionSubDisabled]}
+                            numberOfLines={2}
+                          >
                             {subline}
                           </Text>
                         ) : null}
                         <Text style={styles.suggestionMeta}>Co. No. {hit.companyNumber}</Text>
+                        {isInactive ? (
+                          <Text style={styles.suggestionBlocked}>
+                            Not eligible — only "active" companies can register.
+                          </Text>
+                        ) : null}
                       </View>
-                      <Feather name="chevron-right" size={18} color={Colors.light.textMuted} />
+                      <Feather
+                        name={isInactive ? 'x-circle' : 'chevron-right'}
+                        size={18}
+                        color={isInactive ? Colors.light.error : Colors.light.textMuted}
+                      />
                     </Pressable>
                   );
                 })}
@@ -610,6 +640,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.light.textMuted,
     marginTop: 2,
+  },
+  suggestionItemDisabled: {
+    opacity: 0.6,
+    backgroundColor: Colors.light.errorMuted,
+  },
+  suggestionNameDisabled: {
+    textDecorationLine: 'line-through',
+    color: Colors.light.textSecondary,
+  },
+  suggestionSubDisabled: {
+    color: Colors.light.error,
+  },
+  suggestionBlocked: {
+    fontSize: 11,
+    color: Colors.light.error,
+    fontWeight: '600',
+    marginTop: 4,
   },
   suggestionEmpty: {
     fontSize: 12,
