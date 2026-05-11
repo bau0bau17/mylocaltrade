@@ -68,9 +68,14 @@ export default function DocumentsScreen() {
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expiryInputs, setExpiryInputs] = useState<Record<string, string>>({});
+  // Optimistic fallback: when the register call returns evaluation.complete
+  // we flip this immediately so the "Submit for review" CTA enables without
+  // waiting for the documents list refetch to land.
+  const [optimisticComplete, setOptimisticComplete] = useState(false);
 
   const docs: TraderDocument[] = docsData?.documents ?? [];
   const evaluation = docsData?.evaluation;
+  const isComplete = evaluation?.complete || optimisticComplete;
 
   const handlePick = useCallback(async (docType: string) => {
     if (uploadingType) return;
@@ -151,14 +156,15 @@ export default function DocumentsScreen() {
         },
       });
 
+      if (regResp.evaluation?.complete) {
+        setOptimisticComplete(true);
+      }
       await refetch();
       setExpiryInputs((prev) => ({ ...prev, [docType]: '' }));
-      if (regResp.evaluation?.complete) {
-        Alert.alert(
-          'Documents submitted',
-          'Your account is now under review. We\'ll notify you once an admin has checked your documents.',
-        );
-      }
+      // Note: when evaluation.complete becomes true, the "Submit for review"
+      // button at the bottom of the screen enables. We no longer show a
+      // native Alert here because Alert.alert does not render reliably
+      // inside the web preview iframe.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -364,6 +370,16 @@ export default function DocumentsScreen() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
+
+        <Pressable
+          style={[styles.submitBtn, !isComplete && styles.btnDisabled]}
+          onPress={() => router.replace('/trader-dashboard')}
+          disabled={!isComplete}
+        >
+          <Text style={styles.submitBtnText}>
+            {isComplete ? 'Submit for review' : 'Upload required documents to continue'}
+          </Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -450,6 +466,9 @@ const styles = StyleSheet.create({
   uploadBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 40, borderRadius: 10, borderWidth: 1, borderColor: Colors.light.primary, borderStyle: 'dashed', backgroundColor: 'rgba(59, 130, 246, 0.04)' },
   uploadBtnText: { color: Colors.light.primary, fontSize: 13, fontWeight: '700' },
   btnDisabled: { opacity: 0.5 },
+
+  submitBtn: { backgroundColor: Colors.light.secondary, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 22 },
+  submitBtnText: { color: Colors.light.white, fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
 
   footerNote: { fontSize: 11, color: Colors.light.textMuted, lineHeight: 16, marginTop: 4, textAlign: 'center' },
 
