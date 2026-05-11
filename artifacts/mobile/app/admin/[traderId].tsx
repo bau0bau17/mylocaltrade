@@ -807,24 +807,36 @@ function modalTitle(k?: ActionKind): string {
 function modalHint(k?: ActionKind): string {
   switch (k) {
     case 'approve': return 'Optional admin note (visible to the trader). All pending documents will be marked Approved.';
-    case 'reject': return 'The trader will see this reason and their profile will not go live.';
-    case 'request_info': return 'The trader returns to "awaiting documents" with this message visible to them.';
-    case 'suspend': return 'The trader will be hidden and unable to operate. Reason is recorded in the audit log.';
-    case 'reject_doc': return 'Tell the trader why this specific document was rejected so they can re-upload.';
+    case 'reject': return 'The trader will receive an email with this reason and their profile will not go live.';
+    case 'request_info': return 'The trader returns to "awaiting documents" and is emailed your message — describe exactly what you need (e.g. clearer photo of ID, updated insurance certificate).';
+    case 'suspend': return 'The trader will be hidden, unable to operate, and emailed this reason. It is also recorded in the audit log.';
+    case 'reject_doc': return 'The trader is emailed this reason and can re-upload the document. Be specific (e.g. "ID is blurry — please send a clearer scan").';
     default: return '';
   }
 }
 function modalPlaceholder(k?: ActionKind): string {
-  if (k === 'approve') return 'Welcome to MyLocalTrade…';
-  return 'Enter a clear, helpful reason (5+ characters)…';
+  switch (k) {
+    case 'approve':
+      return 'Welcome to MyLocalTrade…';
+    case 'request_info':
+      return 'e.g. Please upload a clearer photo of your driving licence (both sides) and a recent utility bill from the last 3 months.';
+    case 'reject_doc':
+      return 'e.g. The ID photo is blurry and the expiry date is not legible. Please re-upload a clear scan.';
+    case 'reject':
+      return 'e.g. Insurance certificate has expired and trade qualification could not be verified.';
+    case 'suspend':
+      return 'e.g. Multiple complaints from customers — account suspended pending investigation.';
+    default:
+      return 'Enter a clear, helpful message (5+ characters)…';
+  }
 }
 function modalConfirm(k?: ActionKind): string {
   switch (k) {
     case 'approve': return 'Approve';
-    case 'reject': return 'Reject';
-    case 'request_info': return 'Send';
-    case 'suspend': return 'Suspend';
-    case 'reject_doc': return 'Reject document';
+    case 'reject': return 'Reject & email trader';
+    case 'request_info': return 'Send email';
+    case 'suspend': return 'Suspend & email trader';
+    case 'reject_doc': return 'Reject & email trader';
     default: return 'Confirm';
   }
 }

@@ -637,6 +637,45 @@ export async function sendTraderMoreInfoRequestedEmail(opts: {
   }
 }
 
+export async function sendTraderSuspendedEmail(opts: {
+  toEmail: string;
+  toName: string;
+  reason: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeReason = escapeHtml(opts.reason);
+  const html = emailShell({
+    title: "Your MyLocalTrade account has been suspended",
+    preheader: "Your trader profile is no longer visible on MyLocalTrade.",
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        Your MyLocalTrade trader profile has been suspended by our team and is no longer visible to customers.
+      </p>
+      <div style="background: #0E1A2A; border-left: 3px solid #EF4444; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #EF4444; font-size: 13px; font-weight: 600; margin: 0 0 6px;">Reason</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
+      </div>
+      <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0 0 12px;">
+        If you believe this was done in error, or you would like to discuss reinstatement, please reply to this email or contact us at support@mylocaltrade.co.uk.
+      </p>`,
+  });
+
+  const transporter = createTransport();
+  if (transporter) {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: opts.toEmail,
+      subject: "Your MyLocalTrade account has been suspended",
+      html,
+      attachments: [logoAttachment()],
+    });
+    console.log(`[email] Trader-suspended email sent to ${opts.toEmail}`);
+  } else {
+    console.log(`[email] SMTP not configured — trader-suspended notification for ${opts.toEmail}`);
+  }
+}
+
 export async function sendNewMessageEmail(opts: {
   toEmail: string;
   toName: string;

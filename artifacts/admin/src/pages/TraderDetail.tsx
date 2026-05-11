@@ -83,23 +83,23 @@ const ACTION_LABELS: Record<ActionType, { title: string; description: string; ne
   },
   reject: {
     title: "Reject trader",
-    description: "Provide a reason — this will be visible to the trader.",
+    description: "The trader will be emailed this reason and their profile will not go live. Be specific so they understand the decision.",
     needsReason: "required",
-    verb: "Reject",
+    verb: "Reject & email trader",
     variant: "destructive",
   },
   suspend: {
     title: "Suspend trader",
-    description: "Temporarily disable this trader's account. Provide a reason for the audit log.",
+    description: "Temporarily disable this trader's account. The trader will be emailed this reason and it is recorded in the audit log.",
     needsReason: "required",
-    verb: "Suspend",
+    verb: "Suspend & email trader",
     variant: "destructive",
   },
   "request-info": {
     title: "Request more information",
-    description: "Ask the trader for additional details. Notes are required.",
+    description: "The trader is emailed your message and returned to \"awaiting documents\". Describe exactly what you need (e.g. clearer ID photo, updated insurance certificate).",
     needsReason: "required",
-    verb: "Send request",
+    verb: "Send email",
   },
   unsuspend: {
     title: "Lift suspension",
@@ -632,15 +632,19 @@ export default function TraderDetail({ userId }: Props) {
               </DialogHeader>
               {docDialog.type === "reject" && (
                 <div className="space-y-2">
-                  <Label htmlFor="doc-reason">Reason (visible to trader)</Label>
+                  <Label htmlFor="doc-reason">Reason (emailed to trader)</Label>
                   <Textarea
                     id="doc-reason"
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     rows={3}
+                    placeholder='e.g. The ID photo is blurry and the expiry date is not legible. Please re-upload a clear scan of both sides.'
                     className={reasonViolationText ? "border-destructive focus-visible:ring-destructive" : undefined}
                     data-testid="textarea-doc-reason"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    The trader will receive an email with this reason and can re-upload the document.
+                  </p>
                   {reasonViolationText ? (
                     <Alert variant="destructive" data-testid="violation-doc-reason">
                       <AlertTriangle className="w-4 h-4" />
@@ -664,7 +668,7 @@ export default function TraderDetail({ userId }: Props) {
                     ? "Working…"
                     : docDialog.type === "approve"
                       ? "Approve"
-                      : "Reject"}
+                      : "Reject & email trader"}
                 </Button>
               </DialogFooter>
             </>
