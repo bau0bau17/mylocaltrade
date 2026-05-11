@@ -11,10 +11,13 @@ import {
   Modal,
   TextInput,
   Linking,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
@@ -111,6 +114,15 @@ export default function AdminTraderDetail() {
   const [modal, setModal] = useState<{ kind: ActionKind; documentId?: number } | null>(null);
   const [reason, setReason] = useState('');
 
+  // GDPR/ICO: optional reason captured before opening any document. Sent to
+  // the server so it lands in the audit log next to the access record.
+  const [accessReason, setAccessReason] = useState('');
+  const [preview, setPreview] = useState<{
+    doc: TraderDoc;
+    status: 'loading' | 'ready' | 'error' | 'unsupported';
+    error?: string;
+  } | null>(null);
+
   const apiUrl = getApiUrl();
   const [aiBusy, setAiBusy] = useState(false);
 
@@ -156,17 +168,80 @@ export default function AdminTraderDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openDoc = async (docId: number) => {
+  // Build the URL for the authenticated /file endpoint. The server logs an
+  // ADMIN_VIEWED_DOCUMENT or ADMIN_DOWNLOADED_DOCUMENT audit entry on every
+  // hit (including the optional reason for ICO/GDPR auditability).
+  const fileUrl = (docId: number, mode: 'view' | 'download') => {
+    const u = new URL(`${apiUrl}/api/admin/documents/${docId}/file`);
+    u.searchParams.set('mode', mode);
+    const trimmed = accessReason.trim();
+    if (trimmed) u.searchParams.set('reason', trimmed.slice(0, 500));
+    return u.toString();
+  };
+
+  const openDocInline = (doc: TraderDoc) => {
+    const isImage = doc.mimeType.startsWith('image/');
+    const isPdf = doc.mimeType === 'application/pdf';
+    if (!isImage && !isPdf) {
+      setPreview({ doc, status: 'unsupported' });
+      return;
+    }
+    setPreview({ doc, status: 'loading' });
+    if (isImage) {
+      // <Image> will fetch with the auth header itself; we only need to flip
+      // to 'ready' so the image is rendered. onLoad/onError below handle the
+      // actual outcome.
+      setPreview({ doc, status: 'ready' });
+    } else {
+      // For PDFs we need an HTTP(S) URL the in-app browser can open. Use the
+      // existing presigned-URL endpoint, then open it in WebBrowser (Safari
+      // View Controller / Chrome Custom Tab) — that stays inside the app.
+      (async () => {
+        try {
+          const res = await fetch(`${apiUrl}/api/admin/documents/${doc.id}/view-url`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || 'Failed to open document');
+          // Best-effort audit hit so the access also lands on the new audit
+          // action with the supplied reason. We ignore the body.
+          fetch(fileUrl(doc.id, 'view'), {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => {});
+          setPreview(null);
+          await WebBrowser.openBrowserAsync(json.url);
+          await load();
+        } catch (e) {
+          setPreview({ doc, status: 'error', error: e instanceof Error ? e.message : 'Try again.' });
+        }
+      })();
+    }
+  };
+
+  const openDocExternal = async (docId: number) => {
     try {
       const res = await fetch(`${apiUrl}/api/admin/documents/${docId}/view-url`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to open document');
+      // Audit the access with the access reason via the /file endpoint.
+      fetch(fileUrl(docId, 'view'), {
+        method: 'HEAD',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
       await Linking.openURL(json.url);
+      await load();
     } catch (e) {
       Alert.alert('Could not open', e instanceof Error ? e.message : 'Try again.');
     }
+  };
+
+  const closePreview = () => {
+    setPreview(null);
+    // Refresh so the new audit-log entry shows up.
+    load();
   };
 
   const submitAction = async () => {
@@ -413,6 +488,27 @@ export default function AdminTraderDetail() {
 
         {/* Documents */}
         <Text style={styles.sectionLabel}>Documents</Text>
+        {documents.length > 0 && (
+          <View style={styles.icoBox}>
+            <Feather name="shield" size={14} color="#B45309" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.icoTitle}>UK GDPR / ICO notice</Text>
+              <Text style={styles.icoText}>
+                Documents contain personal data. Each open and download is recorded in the audit
+                log with your admin ID, time, IP and (if provided) the reason below. Only access
+                what you need for this verification.
+              </Text>
+              <TextInput
+                value={accessReason}
+                onChangeText={setAccessReason}
+                style={styles.icoInput}
+                placeholder="Optional reason (e.g. ICO request ref. 123)"
+                placeholderTextColor={Colors.light.textMuted}
+                maxLength={500}
+              />
+            </View>
+          </View>
+        )}
         <View style={styles.card}>
           {documents.length === 0 ? (
             <Text style={styles.muted}>No documents uploaded yet.</Text>
@@ -437,8 +533,11 @@ export default function AdminTraderDetail() {
                   ) : null}
                 </View>
                 <View style={styles.docActions}>
-                  <Pressable style={styles.iconBtn} onPress={() => openDoc(doc.id)}>
-                    <Feather name="external-link" size={14} color={Colors.light.primary} />
+                  <Pressable
+                    style={[styles.iconBtn, { backgroundColor: 'rgba(234,88,12,0.12)', borderColor: 'rgba(234,88,12,0.3)' }]}
+                    onPress={() => openDocInline(doc)}
+                  >
+                    <Feather name="eye" size={14} color={Colors.light.primary} />
                   </Pressable>
                   {doc.status === 'PENDING_REVIEW' && (
                     <>
@@ -539,6 +638,78 @@ export default function AdminTraderDetail() {
           </Pressable>
         )}
       </View>
+
+      {/* Document preview (inline) */}
+      <Modal visible={!!preview} transparent animationType="fade" onRequestClose={closePreview}>
+        <View style={styles.previewBackdrop}>
+          <View style={styles.previewSheet}>
+            <View style={styles.previewHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.previewTitle} numberOfLines={1}>
+                  {preview?.doc.originalFilename}
+                </Text>
+                <Text style={styles.previewMeta} numberOfLines={1}>
+                  {preview ? `${DOC_LABEL[preview.doc.type] ?? preview.doc.type} · ${preview.doc.mimeType}` : ''}
+                </Text>
+              </View>
+              <Pressable onPress={closePreview} style={styles.previewClose} hitSlop={10}>
+                <Feather name="x" size={20} color={Colors.light.text} />
+              </Pressable>
+            </View>
+
+            <View style={styles.previewBody}>
+              {preview?.status === 'loading' && (
+                <ActivityIndicator color={Colors.light.primary} />
+              )}
+              {preview?.status === 'ready' && preview.doc.mimeType.startsWith('image/') && (
+                <Image
+                  source={{
+                    uri: fileUrl(preview.doc.id, 'view'),
+                    headers: { Authorization: `Bearer ${token}` },
+                  }}
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                  onError={() =>
+                    setPreview({ doc: preview.doc, status: 'error', error: 'Could not load image inline.' })
+                  }
+                  onLoad={() => { load(); }}
+                />
+              )}
+              {preview?.status === 'error' && (
+                <View style={{ alignItems: 'center', gap: 8 }}>
+                  <Feather name="alert-circle" size={24} color={Colors.light.error} />
+                  <Text style={styles.errorText}>{preview.error ?? 'Failed to load.'}</Text>
+                </View>
+              )}
+              {preview?.status === 'unsupported' && (
+                <View style={{ alignItems: 'center', gap: 8, paddingHorizontal: 24 }}>
+                  <Feather name="file" size={28} color={Colors.light.textMuted} />
+                  <Text style={styles.muted}>
+                    Inline preview is not available for this file type. Use “Open external”.
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.previewFooter}>
+              <Pressable
+                style={[styles.previewBtn, styles.previewBtnGhost]}
+                onPress={() => preview && openDocExternal(preview.doc.id)}
+              >
+                <Feather name="external-link" size={14} color={Colors.light.text} />
+                <Text style={styles.previewBtnGhostText}>Open external</Text>
+              </Pressable>
+              <Pressable style={styles.previewBtn} onPress={closePreview}>
+                <Text style={styles.previewBtnText}>Done</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.icoFooter}>
+              This access is recorded in the audit log.
+            </Text>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={!!modal} transparent animationType="fade" onRequestClose={() => setModal(null)}>
         <View style={styles.modalBackdrop}>
@@ -809,4 +980,36 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 13, color: Colors.light.error, textAlign: 'center' },
   retryBtn: { paddingHorizontal: 14, height: 36, borderRadius: 10, backgroundColor: Colors.light.primary, alignItems: 'center', justifyContent: 'center' },
   retryText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
+  icoBox: {
+    flexDirection: 'row', gap: 10, alignItems: 'flex-start',
+    borderWidth: 1, borderColor: 'rgba(245,158,11,0.4)',
+    backgroundColor: 'rgba(245,158,11,0.08)',
+    borderRadius: 12, padding: 12, marginBottom: 8,
+  },
+  icoTitle: { fontSize: 12, fontWeight: '700', color: '#B45309', marginBottom: 4 },
+  icoText: { fontSize: 11, color: '#92400E', lineHeight: 16 },
+  icoInput: {
+    marginTop: 8, borderWidth: 1, borderColor: 'rgba(245,158,11,0.4)',
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8,
+    backgroundColor: '#fff', fontSize: 12, color: Colors.light.text,
+  },
+  icoFooter: { fontSize: 10, color: Colors.light.textMuted, textAlign: 'center', marginTop: 4 },
+
+  previewBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: 12 },
+  previewSheet: {
+    width: '100%', maxWidth: 520, maxHeight: Dimensions.get('window').height - 80,
+    backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden',
+  },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderBottomWidth: 1, borderBottomColor: Colors.light.border },
+  previewTitle: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
+  previewMeta: { fontSize: 11, color: Colors.light.textMuted, marginTop: 2 },
+  previewClose: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.light.surface },
+  previewBody: { minHeight: 280, maxHeight: Dimensions.get('window').height - 280, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000', padding: 8 },
+  previewImage: { width: '100%', height: '100%', minHeight: 280 },
+  previewFooter: { flexDirection: 'row', gap: 10, padding: 12, borderTopWidth: 1, borderTopColor: Colors.light.border },
+  previewBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 42, borderRadius: 10, backgroundColor: Colors.light.primary },
+  previewBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  previewBtnGhost: { backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border },
+  previewBtnGhostText: { color: Colors.light.text, fontWeight: '700', fontSize: 13 },
 });
