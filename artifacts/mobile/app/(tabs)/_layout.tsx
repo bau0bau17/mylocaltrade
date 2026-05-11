@@ -14,41 +14,41 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 // Inner routes that live inside the (tabs) group so they inherit the same
 // bottom tab bar as the four primary tabs. They are hidden from the bar
 // (href: null) and use the shared ScreenHeader as their top bar.
-const INNER_ROUTES: { name: string; title: string; parent?: string }[] = [
-  { name: "legal-support", title: "Legal & Support" },
+const INNER_ROUTES: { name: string; title: string; parent: string }[] = [
+  { name: "legal-support", title: "Legal & Support", parent: "/account" },
   { name: "auth/login", title: "Log In", parent: "/account" },
   { name: "auth/register-customer", title: "Register", parent: "/account" },
   { name: "auth/register-trader", title: "Join as Trader", parent: "/account" },
   { name: "auth/verify-email", title: "Verify Email", parent: "/account" },
-  { name: "pricing", title: "Subscription Plans" },
-  { name: "enquiry/[traderId]", title: "Send Enquiry" },
-  { name: "trader-dashboard/index", title: "Trader Onboarding" },
-  { name: "trader-dashboard/edit-profile", title: "Edit Profile" },
-  { name: "trader-dashboard/leads", title: "My Leads" },
-  { name: "trader-dashboard/billing", title: "Billing & Plan" },
-  { name: "trader-dashboard/services", title: "My Services" },
-  { name: "trader-dashboard/gallery", title: "Gallery" },
-  { name: "trader-dashboard/business-profile", title: "Business Profile" },
-  { name: "trader-dashboard/documents", title: "Documents" },
-  { name: "trader-dashboard/reviews", title: "Reviews" },
-  { name: "trader-dashboard/verify-phone", title: "Verify Phone" },
-  { name: "saved-traders", title: "Saved Traders" },
-  { name: "my-enquiries", title: "My Enquiries" },
-  { name: "compare-offers", title: "Compare Offers" },
-  { name: "messages/index", title: "Messages" },
-  { name: "messages/[id]", title: "Conversation" },
-  { name: "about", title: "About Us" },
-  { name: "privacy", title: "Privacy Policy" },
-  { name: "terms", title: "Terms & Conditions" },
-  { name: "refund", title: "Refund Policy" },
-  { name: "cookie-policy", title: "Cookie Policy" },
-  { name: "complaints", title: "Complaints Procedure" },
-  { name: "report-trader", title: "Report a Trader" },
-  { name: "safety-advice", title: "Customer Safety Advice" },
-  { name: "code-of-conduct", title: "Trader Code of Conduct" },
-  { name: "how-verification-works", title: "How Verification Works" },
-  { name: "contact-support", title: "Contact Support" },
-  { name: "write-review/[traderId]", title: "Write a Review" },
+  { name: "pricing", title: "Subscription Plans", parent: "/account" },
+  { name: "enquiry/[traderId]", title: "Send Enquiry", parent: "/traders" },
+  { name: "trader-dashboard/index", title: "Trader Onboarding", parent: "/account" },
+  { name: "trader-dashboard/edit-profile", title: "Edit Profile", parent: "/account" },
+  { name: "trader-dashboard/leads", title: "My Leads", parent: "/account" },
+  { name: "trader-dashboard/billing", title: "Billing & Plan", parent: "/account" },
+  { name: "trader-dashboard/services", title: "My Services", parent: "/account" },
+  { name: "trader-dashboard/gallery", title: "Gallery", parent: "/account" },
+  { name: "trader-dashboard/business-profile", title: "Business Profile", parent: "/account" },
+  { name: "trader-dashboard/documents", title: "Documents", parent: "/account" },
+  { name: "trader-dashboard/reviews", title: "Reviews", parent: "/account" },
+  { name: "trader-dashboard/verify-phone", title: "Verify Phone", parent: "/account" },
+  { name: "saved-traders", title: "Saved Traders", parent: "/account" },
+  { name: "my-enquiries", title: "My Enquiries", parent: "/account" },
+  { name: "compare-offers", title: "Compare Offers", parent: "/account" },
+  { name: "messages/index", title: "Messages", parent: "/account" },
+  { name: "messages/[id]", title: "Conversation", parent: "/messages" },
+  { name: "about", title: "About Us", parent: "/legal-support" },
+  { name: "privacy", title: "Privacy Policy", parent: "/legal-support" },
+  { name: "terms", title: "Terms & Conditions", parent: "/legal-support" },
+  { name: "refund", title: "Refund Policy", parent: "/legal-support" },
+  { name: "cookie-policy", title: "Cookie Policy", parent: "/legal-support" },
+  { name: "complaints", title: "Complaints Procedure", parent: "/legal-support" },
+  { name: "report-trader", title: "Report a Trader", parent: "/legal-support" },
+  { name: "safety-advice", title: "Customer Safety Advice", parent: "/legal-support" },
+  { name: "code-of-conduct", title: "Trader Code of Conduct", parent: "/legal-support" },
+  { name: "how-verification-works", title: "How Verification Works", parent: "/legal-support" },
+  { name: "contact-support", title: "Contact Support", parent: "/account" },
+  { name: "write-review/[traderId]", title: "Write a Review", parent: "/traders" },
 ];
 
 function NativeTabLayout() {
@@ -186,21 +186,14 @@ function ClassicTabLayout() {
                 title={(options.title as string) ?? r.title}
                 showBack
                 onBack={() => {
-                  // expo-router's router tracks the actual navigation
-                  // history (independent from the underlying Tabs
-                  // navigator), so prefer router.back() — otherwise a
-                  // navigation.goBack() inside a Tabs navigator simply
-                  // falls back to the first tab (Home) when the stack
-                  // history is empty.
-                  if (router.canGoBack()) {
-                    router.back();
-                    return;
-                  }
-                  if (r.parent) {
-                    router.replace(r.parent as Parameters<typeof router.replace>[0]);
-                    return;
-                  }
-                  router.replace("/account");
+                  // Inner routes are registered as hidden Tabs.Screen
+                  // entries, which means expo-router treats them as tabs
+                  // rather than stack pushes — router.back() (and the
+                  // underlying navigation.goBack()) returns to the
+                  // previously active tab (Home) instead of the screen
+                  // the user came from. So we always navigate to the
+                  // explicit parent declared for the route.
+                  router.replace(r.parent as Parameters<typeof router.replace>[0]);
                 }}
               />
             ),
