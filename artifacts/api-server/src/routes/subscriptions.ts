@@ -1,12 +1,20 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
+import { z } from "zod";
 import { db } from "@workspace/db";
-import { usersTable, traderProfilesTable, subscriptionsTable } from "@workspace/db/schema";
+import {
+  usersTable,
+  traderProfilesTable,
+  subscriptionsTable,
+  promoCodesTable,
+  promoRedemptionsTable,
+} from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware, traderOnly, revokeUserSessions } from "../lib/auth";
 import { CreateCheckoutSessionBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
+import { claimPromoForUser } from "./promo";
 
 const router: IRouter = Router();
 
@@ -81,8 +89,29 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
     const body = CreateCheckoutSessionBody.parse(req.body);
     const planId = body.planId;
 
+    // Optional promo code piggy-backed on the same request body. Not part of
+    // CreateCheckoutSessionBody yet (would require an OpenAPI/codegen
+    // change) so we parse it separately.
+    const promoCodeRaw = z
+      .string()
+      .trim()
+      .min(1)
+      .max(50)
+      .optional()
+      .parse((req.body as { promoCode?: unknown })?.promoCode);
+
     if (!["basic", "premium", "elite"].includes(planId)) {
       res.status(400).json({ error: "Invalid plan selected" });
+      return;
+    }
+
+    // Promo codes are demo-mode only for now — the live Stripe Coupon flow
+    // is intentionally out of scope until Stripe is configured properly.
+    if (promoCodeRaw && !IS_DEMO_MODE) {
+      res.status(400).json({
+        error:
+          "Promo codes are temporarily unavailable. Please subscribe at the standard price; the discount will return shortly.",
+      });
       return;
     }
 
@@ -106,6 +135,24 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
     if (IS_DEMO_MODE) {
       const demoSessionId = "demo_session_" + Date.now();
       const demoCustomerId = user.stripeCustomerId || "demo_cus_" + userId;
+
+      // Claim the promo (if supplied) inside the same transaction that
+      // marks the subscription pending — keeps slot accounting consistent.
+      // We use a wrapper object so TypeScript's control-flow analysis doesn't
+      // narrow this `let` to `null` after the closure (assignments inside
+      // the transaction callback aren't tracked otherwise).
+      const promoState: {
+        result: {
+          code: string;
+          discountGbp: number;
+          originalPriceGbp: number;
+          discountedPriceGbp: number;
+          expiresAt: Date;
+          validForDays: number;
+        } | null;
+      } = { result: null };
+      let promoErrorStatus = 0;
+      let promoErrorMsg: string | null = null;
 
       await db.transaction(async (tx) => {
         await tx
@@ -139,12 +186,44 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
             stripeSubscriptionId: demoSessionId,
           });
         }
+
+        if (promoCodeRaw) {
+          const result = await claimPromoForUser(tx as unknown as typeof db, {
+            userId,
+            code: promoCodeRaw,
+            planId,
+          });
+          if (!result.ok) {
+            promoErrorStatus = result.status;
+            promoErrorMsg = result.reason;
+            // Abort the transaction — the trader explicitly tried to use a
+            // promo, so failing silently would be misleading.
+            throw new Error("PROMO_FAILED");
+          }
+          promoState.result = {
+            code: result.code,
+            discountGbp: result.discountGbp,
+            originalPriceGbp: result.originalPriceGbp,
+            discountedPriceGbp: result.discountedPriceGbp,
+            expiresAt: result.expiresAt,
+            validForDays: result.validForDays,
+          };
+        }
+      }).catch((err) => {
+        if (err instanceof Error && err.message === "PROMO_FAILED") return;
+        throw err;
       });
+
+      if (promoErrorMsg) {
+        res.status(promoErrorStatus || 400).json({ error: promoErrorMsg });
+        return;
+      }
 
       res.json({
         sessionId: demoSessionId,
         url: "DEMO_MODE",
         demoActivationUrl: `/api/subscriptions/demo-activate?sessionId=${demoSessionId}&planId=${planId}`,
+        promo: promoState.result,
       });
       return;
     }
@@ -393,12 +472,37 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
       .where(eq(subscriptionsTable.userId, userId))
       .limit(1);
 
+    // Enrich with promo redemption (if any) — drives the "£X OFF expires
+    // in Yd Zh" countdown badge in the trader dashboard.
+    const promoRows = await db
+      .select({
+        id: promoRedemptionsTable.id,
+        code: promoCodesTable.code,
+        discountGbp: promoRedemptionsTable.discountGbp,
+        originalPriceGbp: promoRedemptionsTable.originalPriceGbp,
+        discountedPriceGbp: promoRedemptionsTable.discountedPriceGbp,
+        redeemedAt: promoRedemptionsTable.redeemedAt,
+        expiresAt: promoRedemptionsTable.expiresAt,
+      })
+      .from(promoRedemptionsTable)
+      .innerJoin(promoCodesTable, eq(promoCodesTable.id, promoRedemptionsTable.promoCodeId))
+      .where(eq(promoRedemptionsTable.userId, userId))
+      .limit(1);
+
+    const promo = promoRows[0]
+      ? {
+          ...promoRows[0],
+          isActive: promoRows[0].expiresAt.getTime() > Date.now(),
+        }
+      : null;
+
     res.json({
       plan: sub?.planId ?? user.plan,
       status: sub?.status ?? (user.isActive ? "active" : "inactive"),
       currentPeriodStart: sub?.currentPeriodStart || null,
       currentPeriodEnd: sub?.currentPeriodEnd || null,
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd || false,
+      promoRedemption: promo,
     });
   } catch (error) {
     req.log.error({ err: error }, "Get subscription status failed");

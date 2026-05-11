@@ -113,7 +113,9 @@ export default function AdminIndexScreen() {
           <Feather name="arrow-left" size={20} color={Colors.light.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Trader Review</Text>
-        <View style={{ width: 36 }} />
+        <Pressable onPress={() => router.push('/admin/promo-codes')} style={styles.backBtn}>
+          <Feather name="tag" size={20} color={Colors.light.text} />
+        </Pressable>
       </View>
 
       <View style={styles.searchWrap}>

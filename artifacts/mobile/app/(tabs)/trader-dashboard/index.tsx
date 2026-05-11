@@ -7,6 +7,7 @@ import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
 import type { FeatherIconName } from '@/types/feather-icons';
+import { PromoCountdownBadge } from '@/components/PromoCountdownBadge';
 import {
   useGetTraderOnboardingStatus,
   useGetMyTraderReviews,
@@ -159,6 +160,8 @@ export default function TraderOnboardingDashboard() {
       contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 80, paddingHorizontal: 20 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStatus(); }} tintColor={Colors.light.primary} />}
     >
+
+      <PromoCountdownBadge />
 
       {/* Greeting card */}
       <View style={styles.greetingCard}>
