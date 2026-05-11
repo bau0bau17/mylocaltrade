@@ -127,7 +127,9 @@ const styles = StyleSheet.create({
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
+    rowGap: 6,
   },
   categoryBadge: {
     backgroundColor: Colors.light.primaryMuted,
