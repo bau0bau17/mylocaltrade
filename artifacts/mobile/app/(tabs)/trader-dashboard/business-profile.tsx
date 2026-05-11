@@ -46,6 +46,7 @@ export default function BusinessProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const [attemptedSave, setAttemptedSave] = useState(false);
 
   useEffect(() => {
     if (!error) return;
@@ -103,8 +104,18 @@ export default function BusinessProfileScreen() {
 
   const requirements = computeRequirements(form);
   const allMet = requirements.every(r => r.satisfied);
+  const fieldErrors = computeFieldErrors(form);
+  const showFieldErrors = attemptedSave && !allMet;
+  const fieldErr = (key: keyof typeof fieldErrors): string | null =>
+    showFieldErrors ? fieldErrors[key] : null;
 
   const handleSave = async () => {
+    if (!allMet) {
+      setAttemptedSave(true);
+      setError('Completează câmpurile marcate cu roșu înainte de a salva.');
+      return;
+    }
+    setAttemptedSave(true);
     setSaving(true);
     setError(null);
     try {
@@ -211,7 +222,7 @@ export default function BusinessProfileScreen() {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Main trade *</Text>
-          <View style={styles.inputWrap}>
+          <View style={[styles.inputWrap, fieldErr('mainCategory') && styles.inputWrapError]}>
             <Feather name="tag" size={16} color={Colors.light.textMuted} />
             <TextInput
               style={styles.input}
@@ -221,12 +232,18 @@ export default function BusinessProfileScreen() {
               onChangeText={(t) => setForm(p => ({ ...p, mainCategory: t }))}
             />
           </View>
+          {fieldErr('mainCategory') && <Text style={styles.fieldError}>{fieldErr('mainCategory')}</Text>}
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>About your business *</Text>
           <TextInput
-            style={[styles.input, styles.textArea, { paddingHorizontal: 14 }]}
+            style={[
+              styles.input,
+              styles.textArea,
+              { paddingHorizontal: 14 },
+              fieldErr('businessDescription') && styles.inputWrapError,
+            ]}
             placeholder="What do you do, what makes you different, and who do you typically work with?"
             placeholderTextColor={Colors.light.textMuted}
             value={form.businessDescription}
@@ -237,6 +254,7 @@ export default function BusinessProfileScreen() {
           <Text style={[styles.helper, form.businessDescription.trim().length >= MIN_DESCRIPTION_LEN && { color: Colors.light.success }]}>
             {form.businessDescription.trim().length} / {MIN_DESCRIPTION_LEN} characters minimum
           </Text>
+          {fieldErr('businessDescription') && <Text style={styles.fieldError}>{fieldErr('businessDescription')}</Text>}
         </View>
 
         <Text style={styles.sectionTitle}>Services offered *</Text>
@@ -259,6 +277,7 @@ export default function BusinessProfileScreen() {
             </Pressable>
           </View>
           <ChipList items={form.additionalServices} onRemove={(v) => removeChip('services', v)} />
+          {fieldErr('additionalServices') && <Text style={styles.fieldError}>{fieldErr('additionalServices')}</Text>}
         </View>
 
         <Text style={styles.sectionTitle}>Service areas *</Text>
@@ -281,12 +300,13 @@ export default function BusinessProfileScreen() {
             </Pressable>
           </View>
           <ChipList items={form.serviceAreas} onRemove={(v) => removeChip('areas', v)} />
+          {fieldErr('serviceAreas') && <Text style={styles.fieldError}>{fieldErr('serviceAreas')}</Text>}
         </View>
 
         <Text style={styles.sectionTitle}>Business address *</Text>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Street address</Text>
-          <View style={styles.inputWrap}>
+          <View style={[styles.inputWrap, fieldErr('businessAddress') && styles.inputWrapError]}>
             <Feather name="home" size={16} color={Colors.light.textMuted} />
             <TextInput
               style={styles.input}
@@ -296,11 +316,12 @@ export default function BusinessProfileScreen() {
               onChangeText={(t) => setForm(p => ({ ...p, businessAddress: t }))}
             />
           </View>
+          {fieldErr('businessAddress') && <Text style={styles.fieldError}>{fieldErr('businessAddress')}</Text>}
         </View>
         <View style={styles.row}>
           <View style={[styles.inputGroup, { flex: 2, marginRight: 10 }]}>
             <Text style={styles.label}>Town/City</Text>
-            <View style={styles.inputWrap}>
+            <View style={[styles.inputWrap, fieldErr('town') && styles.inputWrapError]}>
               <TextInput
                 style={[styles.input, { marginLeft: 0 }]}
                 placeholder="London"
@@ -309,10 +330,11 @@ export default function BusinessProfileScreen() {
                 onChangeText={(t) => setForm(p => ({ ...p, town: t }))}
               />
             </View>
+            {fieldErr('town') && <Text style={styles.fieldError}>{fieldErr('town')}</Text>}
           </View>
           <View style={[styles.inputGroup, { flex: 1 }]}>
             <Text style={styles.label}>Postcode</Text>
-            <View style={styles.inputWrap}>
+            <View style={[styles.inputWrap, fieldErr('postcode') && styles.inputWrapError]}>
               <TextInput
                 style={[styles.input, { marginLeft: 0 }]}
                 placeholder="EC1A 1BB"
@@ -322,13 +344,19 @@ export default function BusinessProfileScreen() {
                 autoCapitalize="characters"
               />
             </View>
+            {fieldErr('postcode') && <Text style={styles.fieldError}>{fieldErr('postcode')}</Text>}
           </View>
         </View>
 
         <Text style={styles.sectionTitle}>Opening hours *</Text>
         <View style={styles.inputGroup}>
           <TextInput
-            style={[styles.input, styles.textArea, { paddingHorizontal: 14, height: 90 }]}
+            style={[
+              styles.input,
+              styles.textArea,
+              { paddingHorizontal: 14, height: 90 },
+              fieldErr('openingHours') && styles.inputWrapError,
+            ]}
             placeholder={'Mon–Fri: 8am – 6pm\nSat: 9am – 1pm\nSun: closed'}
             placeholderTextColor={Colors.light.textMuted}
             value={form.openingHours}
@@ -336,6 +364,7 @@ export default function BusinessProfileScreen() {
             multiline
             textAlignVertical="top"
           />
+          {fieldErr('openingHours') && <Text style={styles.fieldError}>{fieldErr('openingHours')}</Text>}
         </View>
 
         <Text style={styles.sectionTitle}>Website (optional)</Text>
@@ -362,20 +391,20 @@ export default function BusinessProfileScreen() {
         ) : null}
 
         <Pressable
-          style={[styles.saveBtn, saving && styles.btnDisabled]}
+          style={[styles.saveBtn, (saving || !allMet) && styles.btnDisabled]}
           onPress={handleSave}
-          disabled={saving}
+          disabled={saving || !allMet}
         >
           {saving ? (
             <ActivityIndicator color={Colors.light.white} />
           ) : (
-            <Text style={styles.saveBtnText}>{allMet ? 'Save & continue' : 'Save progress'}</Text>
+            <Text style={styles.saveBtnText}>Save & continue</Text>
           )}
         </Pressable>
 
         {!allMet && (
           <Text style={styles.footerHint}>
-            You can save your progress at any time and finish later.
+            Completează toate câmpurile obligatorii pentru a putea salva.
           </Text>
         )}
       </KeyboardAwareScrollViewCompat>
@@ -397,6 +426,25 @@ function ChipList({ items, onRemove }: { items: string[]; onRemove: (v: string) 
       ))}
     </ScrollView>
   );
+}
+
+function computeFieldErrors(form: ProfileForm) {
+  const desc = form.businessDescription.trim();
+  return {
+    mainCategory: form.mainCategory.trim().length === 0 ? 'Câmp obligatoriu.' : null,
+    businessDescription:
+      desc.length === 0
+        ? 'Câmp obligatoriu.'
+        : desc.length < MIN_DESCRIPTION_LEN
+          ? `Minim ${MIN_DESCRIPTION_LEN} de caractere (ai ${desc.length}).`
+          : null,
+    businessAddress: form.businessAddress.trim().length === 0 ? 'Câmp obligatoriu.' : null,
+    town: form.town.trim().length === 0 ? 'Câmp obligatoriu.' : null,
+    postcode: form.postcode.trim().length === 0 ? 'Câmp obligatoriu.' : null,
+    additionalServices: form.additionalServices.length === 0 ? 'Adaugă cel puțin un serviciu.' : null,
+    serviceAreas: form.serviceAreas.length === 0 ? 'Adaugă cel puțin o zonă deservită.' : null,
+    openingHours: form.openingHours.trim().length === 0 ? 'Câmp obligatoriu.' : null,
+  };
 }
 
 function computeRequirements(form: ProfileForm) {
@@ -439,6 +487,8 @@ const styles = StyleSheet.create({
   input: { flex: 1, height: '100%', fontSize: 15, color: Colors.light.text },
   textArea: { height: 110, paddingVertical: 12, alignSelf: 'stretch', backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 12, fontSize: 15, color: Colors.light.text },
   helper: { fontSize: 11, color: Colors.light.textMuted, marginLeft: 4, marginTop: 2 },
+  inputWrapError: { borderColor: Colors.light.error, borderWidth: 1.5 },
+  fieldError: { fontSize: 11, color: Colors.light.error, marginLeft: 4, marginTop: 4, fontWeight: '600' },
 
   chipInputRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   addChipBtn: { backgroundColor: Colors.light.secondary, height: 50, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
