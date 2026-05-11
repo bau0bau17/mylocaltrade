@@ -21,6 +21,7 @@ import * as WebBrowser from 'expo-web-browser';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
+import PinchZoomImage from '@/components/PinchZoomImage';
 
 interface TraderDoc {
   id: number;
@@ -670,10 +671,8 @@ export default function AdminTraderDetail() {
                 <ActivityIndicator color={Colors.light.primary} />
               )}
               {preview?.status === 'ready' && preview.dataUri && preview.doc.mimeType.startsWith('image/') && (
-                <Image
+                <PinchZoomImage
                   source={{ uri: preview.dataUri }}
-                  style={styles.previewImage}
-                  resizeMode="contain"
                   onError={() =>
                     setPreview({ doc: preview.doc, status: 'error', error: 'Could not load image inline.' })
                   }
