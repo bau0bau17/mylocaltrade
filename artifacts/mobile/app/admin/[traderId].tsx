@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -170,80 +170,103 @@ export default function AdminTraderDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Build the URL for the authenticated /file endpoint. The server logs an
-  // ADMIN_VIEWED_DOCUMENT or ADMIN_DOWNLOADED_DOCUMENT audit entry on every
-  // hit (including the optional reason for ICO/GDPR auditability).
-  const fileUrl = (docId: number, mode: 'view' | 'download') => {
-    const u = new URL(`${apiUrl}/api/admin/documents/${docId}/file`);
+  // Build URLs for the authenticated /file and /view-url endpoints. Both
+  // produce a server-side audit entry (ADMIN_VIEWED_DOCUMENT or
+  // ADMIN_DOWNLOADED_DOCUMENT) tagged with the optional reason. Each open
+  // uses exactly one of the two endpoints to guarantee a single log entry.
+  const buildUrl = (path: string, mode: 'view' | 'download') => {
+    const u = new URL(`${apiUrl}${path}`);
     u.searchParams.set('mode', mode);
     const trimmed = accessReason.trim();
     if (trimmed) u.searchParams.set('reason', trimmed.slice(0, 500));
     return u.toString();
   };
+  const fileUrl = (docId: number, mode: 'view' | 'download') =>
+    buildUrl(`/api/admin/documents/${docId}/file`, mode);
+  const viewUrlUrl = (docId: number) =>
+    buildUrl(`/api/admin/documents/${docId}/view-url`, 'view');
+
+  // Re-entrancy guard: avoid double-firing the open handler if the user
+  // taps twice quickly. Without this, two simultaneous fetches each create
+  // an audit entry — the bug the user reported as "two logs per open".
+  const openingDocIdRef = useRef<number | null>(null);
 
   const openDocInline = (doc: TraderDoc) => {
+    if (openingDocIdRef.current === doc.id) return;
+    openingDocIdRef.current = doc.id;
+
     const isImage = doc.mimeType.startsWith('image/');
     const isPdf = doc.mimeType === 'application/pdf';
     if (!isImage && !isPdf) {
       setPreview({ doc, status: 'unsupported' });
+      openingDocIdRef.current = null;
       return;
     }
     setPreview({ doc, status: 'loading' });
 
     (async () => {
       try {
-        // Always fetch the file ourselves with the Authorization header. This
-        // both (a) triggers the server-side audit-log entry with the access
-        // reason and (b) works on web — where <Image source.headers> is a
-        // no-op because the browser <img> tag can't carry custom headers.
-        const res = await fetch(fileUrl(doc.id, 'view'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error(text || `HTTP ${res.status}`);
-        }
         if (isImage) {
+          // Stream the image bytes through /file so we can render them in a
+          // sandboxed <Image>. /file produces ONE audit entry.
+          const res = await fetch(fileUrl(doc.id, 'view'), {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) {
+            const t = await res.text().catch(() => '');
+            let msg = `HTTP ${res.status}`;
+            try {
+              const parsed = JSON.parse(t);
+              if (parsed?.error) msg = parsed.error;
+            } catch {
+              if (t) msg = t;
+            }
+            throw new Error(msg);
+          }
           const blob = await res.blob();
           const dataUri = await blobToDataUri(blob);
           setPreview({ doc, status: 'ready', dataUri });
-          // Refresh so the new audit-log entry shows up right away.
           load();
         } else {
-          // PDF: ask the server for a presigned URL and open it in the
-          // in-app browser tab (Safari View Controller / Chrome Custom Tab).
-          // The /file fetch above already produced the audit entry.
-          const r2 = await fetch(`${apiUrl}/api/admin/documents/${doc.id}/view-url`, {
+          // PDF: just hit /view-url — it both audits AND returns the
+          // presigned URL we hand to the in-app browser. No /file pre-fetch
+          // here, so opening a PDF produces ONE audit entry (was two).
+          const r2 = await fetch(viewUrlUrl(doc.id), {
             headers: { Authorization: `Bearer ${token}` },
           });
-          const j = await r2.json();
-          if (!r2.ok) throw new Error(j.error || 'Failed to open document');
+          const j = await r2.json().catch(() => ({}));
+          if (!r2.ok) throw new Error(j.error || `Failed to open document (HTTP ${r2.status})`);
           setPreview(null);
           await WebBrowser.openBrowserAsync(j.url);
           await load();
         }
       } catch (e) {
         setPreview({ doc, status: 'error', error: e instanceof Error ? e.message : 'Try again.' });
+      } finally {
+        openingDocIdRef.current = null;
       }
     })();
   };
 
   const openDocExternal = async (docId: number) => {
+    // Same re-entrancy guard as openDocInline — rapid double-taps would
+    // otherwise produce two /view-url calls and two audit rows.
+    if (openingDocIdRef.current === docId) return;
+    openingDocIdRef.current = docId;
     try {
-      const res = await fetch(`${apiUrl}/api/admin/documents/${docId}/view-url`, {
+      // /view-url audits AND returns the presigned URL — single round-trip,
+      // single audit entry.
+      const res = await fetch(viewUrlUrl(docId), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to open document');
-      // Audit the access with the access reason via the /file endpoint.
-      fetch(fileUrl(docId, 'view'), {
-        method: 'HEAD',
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Failed to open document (HTTP ${res.status})`);
       await Linking.openURL(json.url);
       await load();
     } catch (e) {
       Alert.alert('Could not open', e instanceof Error ? e.message : 'Try again.');
+    } finally {
+      openingDocIdRef.current = null;
     }
   };
 
@@ -511,7 +534,7 @@ export default function AdminTraderDetail() {
                 value={accessReason}
                 onChangeText={setAccessReason}
                 style={styles.icoInput}
-                placeholder="Optional reason (e.g. ICO request ref. 123)"
+                placeholder="Reason (e.g. ICO request ref. 123) — required to re-open approved docs"
                 placeholderTextColor={Colors.light.textMuted}
                 maxLength={500}
               />
@@ -522,53 +545,75 @@ export default function AdminTraderDetail() {
           {documents.length === 0 ? (
             <Text style={styles.muted}>No documents uploaded yet.</Text>
           ) : (
-            documents.map((doc) => (
-              <View key={doc.id} style={styles.docRow}>
-                <Feather
-                  name={doc.mimeType === 'application/pdf' ? 'file-text' : 'image'}
-                  size={16}
-                  color={Colors.light.textMuted}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.docTitle} numberOfLines={1}>{doc.originalFilename}</Text>
-                  <Text style={styles.docMeta}>
-                    {DOC_LABEL[doc.type] ?? doc.type} · {formatSize(doc.sizeBytes)}
-                  </Text>
-                  <View style={styles.docPills}>
-                    <DocPill status={doc.status} />
+            documents.map((doc) => {
+              // Approved docs are "locked" — re-opening them requires a
+              // written reason in the ICO field above (server enforces with
+              // 403 REVIEW_REASON_REQUIRED). The lock auto-unlocks when the
+              // reason has at least 3 characters.
+              const isLocked =
+                doc.status === 'APPROVED' && accessReason.trim().length < 3;
+              return (
+                <View key={doc.id} style={styles.docRow}>
+                  <Feather
+                    name={doc.mimeType === 'application/pdf' ? 'file-text' : 'image'}
+                    size={16}
+                    color={Colors.light.textMuted}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.docTitle} numberOfLines={1}>{doc.originalFilename}</Text>
+                    <Text style={styles.docMeta}>
+                      {DOC_LABEL[doc.type] ?? doc.type} · {formatSize(doc.sizeBytes)}
+                    </Text>
+                    <View style={styles.docPills}>
+                      <DocPill status={doc.status} />
+                    </View>
+                    {doc.rejectionReason ? (
+                      <Text style={styles.rejectionText}>{doc.rejectionReason}</Text>
+                    ) : null}
+                    {isLocked ? (
+                      <Text style={styles.lockedHint}>
+                        Approved — type a reason above to re-open.
+                      </Text>
+                    ) : null}
                   </View>
-                  {doc.rejectionReason ? (
-                    <Text style={styles.rejectionText}>{doc.rejectionReason}</Text>
-                  ) : null}
+                  <View style={styles.docActions}>
+                    <Pressable
+                      style={[
+                        styles.iconBtn,
+                        { backgroundColor: 'rgba(234,88,12,0.12)', borderColor: 'rgba(234,88,12,0.3)' },
+                        isLocked && styles.iconBtnDisabled,
+                      ]}
+                      onPress={() => openDocInline(doc)}
+                      disabled={isLocked}
+                    >
+                      <Feather
+                        name={isLocked ? 'lock' : 'eye'}
+                        size={14}
+                        color={isLocked ? Colors.light.textMuted : Colors.light.primary}
+                      />
+                    </Pressable>
+                    {doc.status === 'PENDING_REVIEW' && (
+                      <>
+                        <Pressable
+                          style={[styles.iconBtn, { backgroundColor: 'rgba(16,185,129,0.12)' }]}
+                          onPress={() => approveDocument(doc.id)}
+                          disabled={busy}
+                        >
+                          <Feather name="check" size={14} color={Colors.light.success} />
+                        </Pressable>
+                        <Pressable
+                          style={[styles.iconBtn, { backgroundColor: 'rgba(239,68,68,0.12)' }]}
+                          onPress={() => { setReason(''); setModal({ kind: 'reject_doc', documentId: doc.id }); }}
+                          disabled={busy}
+                        >
+                          <Feather name="x" size={14} color={Colors.light.error} />
+                        </Pressable>
+                      </>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.docActions}>
-                  <Pressable
-                    style={[styles.iconBtn, { backgroundColor: 'rgba(234,88,12,0.12)', borderColor: 'rgba(234,88,12,0.3)' }]}
-                    onPress={() => openDocInline(doc)}
-                  >
-                    <Feather name="eye" size={14} color={Colors.light.primary} />
-                  </Pressable>
-                  {doc.status === 'PENDING_REVIEW' && (
-                    <>
-                      <Pressable
-                        style={[styles.iconBtn, { backgroundColor: 'rgba(16,185,129,0.12)' }]}
-                        onPress={() => approveDocument(doc.id)}
-                        disabled={busy}
-                      >
-                        <Feather name="check" size={14} color={Colors.light.success} />
-                      </Pressable>
-                      <Pressable
-                        style={[styles.iconBtn, { backgroundColor: 'rgba(239,68,68,0.12)' }]}
-                        onPress={() => { setReason(''); setModal({ kind: 'reject_doc', documentId: doc.id }); }}
-                        disabled={busy}
-                      >
-                        <Feather name="x" size={14} color={Colors.light.error} />
-                      </Pressable>
-                    </>
-                  )}
-                </View>
-              </View>
-            ))
+              );
+            })
           )}
           <View style={styles.evalRow}>
             <Feather
@@ -950,6 +995,8 @@ const styles = StyleSheet.create({
   rejectionText: { fontSize: 11, color: Colors.light.error, marginTop: 4, fontStyle: 'italic' },
   docActions: { flexDirection: 'row', gap: 6 },
   iconBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.light.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.light.border },
+  iconBtnDisabled: { opacity: 0.5, backgroundColor: Colors.light.surface, borderColor: Colors.light.border },
+  lockedHint: { fontSize: 11, color: Colors.light.textMuted, marginTop: 4, fontStyle: 'italic' },
 
   evalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 10 },
   evalText: { flex: 1, fontSize: 12, color: Colors.light.text },

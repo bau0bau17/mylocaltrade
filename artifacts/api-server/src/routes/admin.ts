@@ -341,8 +341,13 @@ router.get("/admin/traders/:userId", authMiddleware, adminOnly, async (req, res)
 });
 
 // GET /api/admin/documents/:id/view-url — short-lived signed URL for in-browser preview
+//
+// Audits every access (just like /file) so a single open produces ONE audit
+// entry regardless of whether the client streams via /file (images) or
+// follows a presigned URL (PDFs / external open).
 router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (req, res) => {
   try {
+    const { userId: adminId } = req as AuthenticatedRequest;
     const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {
       res.status(400).json({ error: "Invalid id" });
@@ -357,6 +362,50 @@ router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (re
       res.status(404).json({ error: "Document not found" });
       return;
     }
+
+    const mode = String(req.query.mode ?? "view").toLowerCase() === "download" ? "download" : "view";
+    const rawReason = typeof req.query.reason === "string" ? req.query.reason.trim() : "";
+    const reason = rawReason.slice(0, 500) || null;
+
+    // Re-review gate: once a document is APPROVED, every subsequent open
+    // must include a written justification in the ICO/audit reason field.
+    // This enforces UK GDPR data-minimisation + ICO accountability — the
+    // verification job is done, so any further look at the personal data
+    // requires a documented purpose. PENDING_REVIEW / REJECTED / EXPIRED
+    // docs are still part of the active verification flow and don't need
+    // a reason.
+    if (doc.status === "APPROVED" && (!reason || reason.length < 3)) {
+      res.status(403).json({
+        error:
+          "This document is already approved. To re-open it, type a short reason " +
+          "(e.g. an ICO subject-access request reference) in the audit reason field.",
+        code: "REVIEW_REASON_REQUIRED",
+      });
+      return;
+    }
+
+    const ip =
+      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      null;
+    const userAgent = (req.headers["user-agent"] as string | undefined) ?? null;
+
+    await logAudit({
+      userId: doc.userId,
+      action: mode === "download" ? "ADMIN_DOWNLOADED_DOCUMENT" : "ADMIN_VIEWED_DOCUMENT",
+      performedBy: adminId,
+      notes: reason ?? undefined,
+      details: {
+        documentId: doc.id,
+        documentType: doc.type,
+        filename: doc.originalFilename,
+        mode,
+        ip,
+        userAgent,
+        via: "view-url",
+      },
+    });
+
     try {
       const url = await storage.getObjectEntityReadURL(doc.objectPath, 300);
       res.json({ url, expiresInSec: 300, mimeType: doc.mimeType, filename: doc.originalFilename });
@@ -369,7 +418,7 @@ router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (re
     }
   } catch (error) {
     req.log.error({ err: error }, "View URL failed");
-    res.status(500).json({ error: "Failed to create view URL" });
+    if (!res.headersSent) res.status(500).json({ error: "Failed to create view URL" });
   }
 });
 
@@ -399,6 +448,19 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
     const mode = String(req.query.mode ?? "view").toLowerCase() === "download" ? "download" : "view";
     const rawReason = typeof req.query.reason === "string" ? req.query.reason.trim() : "";
     const reason = rawReason.slice(0, 500) || null;
+
+    // Re-review gate (mirror of /view-url): once APPROVED, a written reason
+    // is required to re-open. See /view-url for the rationale.
+    if (doc.status === "APPROVED" && (!reason || reason.length < 3)) {
+      res.status(403).json({
+        error:
+          "This document is already approved. To re-open it, type a short reason " +
+          "(e.g. an ICO subject-access request reference) in the audit reason field.",
+        code: "REVIEW_REASON_REQUIRED",
+      });
+      return;
+    }
+
     const ip =
       (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
       req.socket.remoteAddress ||
@@ -419,6 +481,7 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
         mode,
         ip,
         userAgent,
+        via: "file",
       },
     });
 
