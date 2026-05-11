@@ -135,3 +135,4 @@ Utility scripts. Run via `pnpm --filter @workspace/scripts run <script>`.
 ## User preferences
 
 - All user-facing copy in the app (mobile, admin, etc.) must be in English. Never use Romanian (or any other language) in UI strings, error messages, validation messages, banners, placeholders, etc. Chat replies to the user can stay in Romanian, but everything that ends up on screen for end users is English-only.
+- Admin parity across surfaces: anything implemented for the admin web panel (`artifacts/admin`) must also be implemented and adapted for the admin section of the mobile app (`artifacts/mobile/app/admin`). Treat admin-web work as half-done until the equivalent screen/flow exists on mobile too. Adapt the UX to mobile (modals, native components, touch targets) — do not just copy the web layout.
