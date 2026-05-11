@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, downloadAuthed, viewAuthed, ApiError } from "@/lib/api";
+import { api, downloadAuthed, fetchAuthedBlob, ApiError } from "@/lib/api";
 import { queryClient as qc } from "@/lib/queryClient";
 import type { TraderDetailResponse, TraderDocument } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +33,9 @@ import {
   MessageSquare,
   Download,
   ExternalLink,
+  Eye,
+  Loader2,
+  ShieldAlert,
   AlertTriangle,
 } from "lucide-react";
 
@@ -52,6 +55,24 @@ interface DocActionDialogState {
   doc: TraderDocument;
   open: boolean;
 }
+
+interface PreviewState {
+  doc: TraderDocument;
+  status: "loading" | "ready" | "error" | "unsupported";
+  url: string | null;
+  mimeType: string | null;
+  error: string | null;
+  revoke: (() => void) | null;
+}
+
+const SAFE_INLINE_PREVIEW_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+]);
 
 const ACTION_LABELS: Record<ActionType, { title: string; description: string; needsReason: "required" | "optional" | "none"; verb: string; variant?: "destructive" }> = {
   approve: {
@@ -100,7 +121,18 @@ export default function TraderDetail({ userId }: Props) {
 
   const [actionDialog, setActionDialog] = useState<ActionDialogState | null>(null);
   const [docDialog, setDocDialog] = useState<DocActionDialogState | null>(null);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [accessReason, setAccessReason] = useState("");
   const [reason, setReason] = useState("");
+
+  // Release the blob URL when the component unmounts so we don't leak memory
+  // if the admin closes the page while a preview is still open.
+  useEffect(() => {
+    return () => {
+      if (preview?.revoke) preview.revoke();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const reasonViolation = useMemo(() => detectContactInfo(reason), [reason]);
   const reasonViolationText = reasonViolation ? contactViolationMessage(reasonViolation) : null;
 
@@ -225,25 +257,67 @@ export default function TraderDetail({ userId }: Props) {
     });
   }
 
-  async function handleViewDocument(doc: TraderDocument) {
+  async function openPreview(doc: TraderDocument) {
+    // Revoke any previously-loaded blob so we don't leak memory if the admin
+    // opens a second document without first closing the dialog.
+    if (preview?.revoke) preview.revoke();
+    setPreview({
+      doc,
+      status: "loading",
+      url: null,
+      mimeType: null,
+      error: null,
+      revoke: null,
+    });
     try {
-      // Stream the file through the authenticated endpoint and open it as a
-      // blob so we never hand a signed URL to the browser address bar.
-      // viewAuthed checks the Content-Type and only opens safe types inline;
-      // anything else falls back to a forced download.
-      await viewAuthed(`/api/admin/documents/${doc.id}/file`, doc.originalFilename);
+      const blob = await fetchAuthedBlob(`/api/admin/documents/${doc.id}/file`, {
+        mode: "view",
+        reason: accessReason.trim() || undefined,
+      });
+      // Refresh the audit-log tab so the new ADMIN_VIEWED_DOCUMENT entry shows up.
+      queryClient.invalidateQueries({ queryKey: detailKey });
+      const supported = SAFE_INLINE_PREVIEW_TYPES.has(blob.mimeType);
+      setPreview({
+        doc,
+        status: supported ? "ready" : "unsupported",
+        url: blob.url,
+        mimeType: blob.mimeType,
+        error: null,
+        revoke: blob.revoke,
+      });
     } catch (err) {
-      toast({
-        title: "Could not open document",
-        description: err instanceof Error ? err.message : "Unknown error",
-        variant: "destructive",
+      setPreview({
+        doc,
+        status: "error",
+        url: null,
+        mimeType: null,
+        error: err instanceof Error ? err.message : "Unknown error",
+        revoke: null,
       });
     }
   }
 
-  async function handleDownloadDocument(doc: TraderDocument) {
+  function closePreview() {
+    if (preview?.revoke) preview.revoke();
+    setPreview(null);
+  }
+
+  function openInNewTab() {
+    if (!preview?.url) return;
+    // Blob URL inherits the admin origin; only open when MIME is in the safe
+    // allowlist (already enforced by `status === 'ready'`).
+    window.open(preview.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function handleDownloadDocument(doc: TraderDocument, reasonOverride?: string) {
     try {
-      await downloadAuthed(`/api/admin/documents/${doc.id}/file`, doc.originalFilename);
+      const reasonText = (reasonOverride ?? accessReason).trim();
+      await downloadAuthed(
+        `/api/admin/documents/${doc.id}/file`,
+        doc.originalFilename,
+        { reason: reasonText || undefined },
+      );
+      queryClient.invalidateQueries({ queryKey: detailKey });
     } catch (err) {
       const status = err instanceof ApiError ? err.status : undefined;
       toast({
@@ -363,7 +437,29 @@ export default function TraderDetail({ userId }: Props) {
             <CardHeader>
               <CardTitle className="text-base">Verification documents</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+                <ShieldAlert className="w-4 h-4" />
+                <AlertDescription className="text-xs leading-relaxed">
+                  These files contain personal data. Every preview and download is recorded in
+                  the audit log under UK GDPR (Article 5(2) — accountability). Only access them
+                  when necessary for verification or to respond to an ICO / data-protection
+                  request. Optionally record the reason below so it is attached to the audit entry.
+                </AlertDescription>
+              </Alert>
+              <div className="space-y-1.5">
+                <Label htmlFor="access-reason" className="text-xs">
+                  Reason for access (optional — e.g. "ICO subject access request ref. 123")
+                </Label>
+                <Textarea
+                  id="access-reason"
+                  value={accessReason}
+                  onChange={(e) => setAccessReason(e.target.value.slice(0, 500))}
+                  rows={2}
+                  placeholder="Routine verification review"
+                  data-testid="textarea-access-reason"
+                />
+              </div>
               {documents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No documents uploaded.</p>
               ) : (
@@ -398,8 +494,8 @@ export default function TraderDetail({ userId }: Props) {
                           )}
                         </div>
                         <div className="flex gap-2 flex-wrap">
-                          <Button size="sm" variant="ghost" onClick={() => handleViewDocument(doc)} data-testid={`button-view-${doc.id}`}>
-                            <ExternalLink className="w-4 h-4 mr-1" /> View
+                          <Button size="sm" variant="default" onClick={() => openPreview(doc)} data-testid={`button-view-${doc.id}`}>
+                            <Eye className="w-4 h-4 mr-1" /> View
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => handleDownloadDocument(doc)} data-testid={`button-download-${doc.id}`}>
                             <Download className="w-4 h-4 mr-1" /> Download
@@ -569,6 +665,101 @@ export default function TraderDetail({ userId }: Props) {
                     : docDialog.type === "approve"
                       ? "Approve"
                       : "Reject"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!preview}
+        onOpenChange={(o) => {
+          if (!o) closePreview();
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          {preview && (
+            <>
+              <DialogHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <DialogTitle className="truncate">
+                      {labelForDocType(preview.doc.type)}
+                    </DialogTitle>
+                    <DialogDescription className="truncate">
+                      {preview.doc.originalFilename}
+                    </DialogDescription>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={openInNewTab}
+                      disabled={preview.status !== "ready"}
+                      data-testid="button-preview-external"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-1" /> Open in new tab
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDownloadDocument(preview.doc)}
+                      data-testid="button-preview-download"
+                    >
+                      <Download className="w-4 h-4 mr-1" /> Download
+                    </Button>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="bg-muted/40 rounded-md min-h-[60vh] flex items-center justify-center overflow-hidden">
+                {preview.status === "loading" && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading secure preview…
+                  </div>
+                )}
+                {preview.status === "error" && (
+                  <Alert variant="destructive" className="m-4">
+                    <AlertTriangle className="w-4 h-4" />
+                    <AlertDescription>
+                      Could not load document: {preview.error}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {preview.status === "unsupported" && (
+                  <div className="text-sm text-muted-foreground p-6 text-center">
+                    This file type ({preview.mimeType ?? "unknown"}) cannot be previewed in the
+                    browser. Use Download to inspect it locally.
+                  </div>
+                )}
+                {preview.status === "ready" && preview.url && preview.mimeType?.startsWith("image/") && (
+                  <img
+                    src={preview.url}
+                    alt={preview.doc.originalFilename}
+                    className="max-h-[70vh] max-w-full object-contain"
+                    data-testid="img-doc-preview"
+                  />
+                )}
+                {preview.status === "ready" && preview.url && preview.mimeType === "application/pdf" && (
+                  <iframe
+                    src={preview.url}
+                    title={preview.doc.originalFilename}
+                    className="w-full h-[70vh] border-0 bg-white"
+                    sandbox=""
+                    data-testid="iframe-doc-preview"
+                  />
+                )}
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                This access has been recorded in the audit log
+                {accessReason.trim() ? ` with reason: "${accessReason.trim()}"` : ""}.
+              </p>
+
+              <DialogFooter>
+                <Button variant="ghost" onClick={closePreview} data-testid="button-preview-close">
+                  Close
                 </Button>
               </DialogFooter>
             </>

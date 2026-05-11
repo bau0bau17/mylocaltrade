@@ -90,15 +90,37 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
   return data as T;
 }
 
+export interface AuthedFetchOptions {
+  /** Optional human-readable reason recorded in the server-side audit log. */
+  reason?: string;
+  /** view (default for previews) or download — recorded in the audit log and controls Content-Disposition. */
+  mode?: "view" | "download";
+}
+
+export interface AuthedBlob {
+  url: string;
+  mimeType: string;
+  /** Call when the consumer is done with the blob URL to release memory. */
+  revoke: () => void;
+}
+
 /**
  * Authenticated browser-side download for files that require Authorization.
  * Streams the response into a blob and triggers a save dialog.
+ *
+ * `opts.reason` is forwarded to the server-side audit log so the admin can
+ * record why a download was performed (e.g. ICO subject access request).
  */
-export async function downloadAuthed(path: string, suggestedName: string): Promise<void> {
+export async function downloadAuthed(
+  path: string,
+  suggestedName: string,
+  opts: AuthedFetchOptions = {},
+): Promise<void> {
   const token = getToken();
-  const res = await fetch(buildUrl(path), {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  const res = await fetch(
+    buildUrl(path, { mode: opts.mode ?? "download", reason: opts.reason || undefined }),
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  );
   if (!res.ok) {
     if (res.status === 401) {
       setToken(null);
@@ -139,6 +161,48 @@ const SAFE_INLINE_BLOB_TYPES = new Set([
 ]);
 
 /**
+ * Authenticated browser-side fetch returning a blob URL for in-app preview
+ * (rendered inside <img>/<iframe> in a Dialog). The caller is responsible
+ * for calling `revoke()` when the preview closes.
+ */
+export async function fetchAuthedBlob(
+  path: string,
+  opts: AuthedFetchOptions = {},
+): Promise<AuthedBlob> {
+  const token = getToken();
+  const res = await fetch(
+    buildUrl(path, { mode: opts.mode ?? "view", reason: opts.reason || undefined }),
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  );
+  if (!res.ok) {
+    if (res.status === 401) {
+      setToken(null);
+      try {
+        window.dispatchEvent(new CustomEvent("mlt-admin:unauthorized"));
+      } catch {
+        /* ignore */
+      }
+    }
+    throw new ApiError("Preview failed", res.status);
+  }
+  const rawContentType = res.headers.get("Content-Type") ?? "";
+  const mimeType = rawContentType.split(";")[0].trim().toLowerCase();
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  return {
+    url,
+    mimeType,
+    revoke: () => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        /* ignore */
+      }
+    },
+  };
+}
+
+/**
  * Authenticated browser-side preview: fetches a file with the admin token,
  * turns it into a blob URL, and opens it in a new tab only when the content
  * type is known-safe (image or PDF). Any other type triggers a forced download
@@ -147,7 +211,7 @@ const SAFE_INLINE_BLOB_TYPES = new Set([
  */
 export async function viewAuthed(path: string, suggestedName?: string): Promise<void> {
   const token = getToken();
-  const res = await fetch(buildUrl(path), {
+  const res = await fetch(buildUrl(path, { mode: "view" }), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
