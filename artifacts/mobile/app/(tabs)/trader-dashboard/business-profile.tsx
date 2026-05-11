@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
@@ -139,16 +139,12 @@ export default function BusinessProfileScreen() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to save');
-      if (allMet) {
-        setCompleted(true);
-        Alert.alert(
-          'Business profile complete',
-          'You can now upload your verification documents.',
-          [{ text: 'Continue', onPress: () => router.replace('/trader-dashboard') }],
-        );
-      } else {
-        Alert.alert('Saved', 'Profile updated. Complete the remaining items to move to the next step.');
-      }
+      setCompleted(true);
+      // Navigate straight to the trader dashboard. We previously used
+      // Alert.alert as a confirmation, but native alerts do not render
+      // reliably inside the web preview iframe — the save succeeds on
+      // the server but the user sees no feedback and assumes it failed.
+      router.replace('/trader-dashboard');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
