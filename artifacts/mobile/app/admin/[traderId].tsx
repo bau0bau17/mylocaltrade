@@ -788,7 +788,15 @@ export default function AdminTraderDetail() {
               placeholder={modalPlaceholder(modal?.kind)}
               placeholderTextColor={Colors.light.textMuted}
               autoFocus
+              // Server caps every notes/reason field at 500 characters
+              // (z.string().max(500)). Without this cap the user could
+              // paste a long welcome template, hit "Approve", and get a
+              // confusing "Invalid request" error from the backend.
+              maxLength={500}
             />
+            <Text style={styles.modalCounter}>
+              {reason.length} / 500
+            </Text>
             <View style={styles.modalRow}>
               <Pressable
                 style={[styles.modalBtn, styles.modalCancel]}
@@ -1061,6 +1069,7 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
   modalHint: { fontSize: 12, color: Colors.light.textMuted, lineHeight: 17 },
   modalInput: { borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, minHeight: 90, fontSize: 13, color: Colors.light.text, textAlignVertical: 'top' },
+  modalCounter: { fontSize: 11, color: Colors.light.textMuted, textAlign: 'right', marginTop: 4, marginBottom: 8 },
   modalRow: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
   modalBtn: { paddingHorizontal: 18, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   modalCancel: { backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border },
