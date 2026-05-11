@@ -167,13 +167,13 @@ async function sendViaSmtp(opts: DispatchOpts): Promise<boolean> {
 
 /**
  * Single delivery entry point. Tries Brevo first using the category-specific
- * key, falls back to legacy SMTP, and finally logs to stdout in dev when no
- * transport is configured. Never throws on transport failure of one channel
- * if another channel succeeds; only throws if no channel can deliver and
- * Brevo failed mid-flight (so callers wrapping this in `void (async ...)`
- * still see the error in their try/catch).
+ * key, falls back to legacy SMTP, and finally logs to stdout when no
+ * transport is configured. Returns the channel that actually delivered the
+ * message (or `"none"` when nothing was sent) so callers — for example the
+ * lead-reminder retry logic in `lib/lead-reminders.ts` — can keep accurate
+ * delivery state.
  */
-async function dispatchEmail(opts: DispatchOpts): Promise<void> {
+async function dispatchEmail(opts: DispatchOpts): Promise<"brevo" | "smtp" | "none"> {
   const brevoKey = process.env[BREVO_KEY_ENV[opts.category]];
   if (brevoKey) {
     try {
@@ -181,7 +181,7 @@ async function dispatchEmail(opts: DispatchOpts): Promise<void> {
       console.log(
         `[email] [brevo:${opts.category}] ${opts.tag} → ${opts.to.email}`,
       );
-      return;
+      return "brevo";
     } catch (err) {
       console.error(
         `[email] [brevo:${opts.category}] ${opts.tag} failed for ${opts.to.email}; trying SMTP fallback.`,
@@ -200,11 +200,12 @@ async function dispatchEmail(opts: DispatchOpts): Promise<void> {
     console.log(
       `[email] [smtp:${opts.category}] ${opts.tag} → ${opts.to.email}`,
     );
-    return;
+    return "smtp";
   }
   console.log(
     `[email] [no-transport:${opts.category}] ${opts.tag} would-send → ${opts.to.email} | "${opts.subject}"`,
   );
+  return "none";
 }
 
 // ---------------------------------------------------------------------------
@@ -459,7 +460,7 @@ export async function sendLeadReminderEmail(opts: {
         </a>
       </div>`,
   });
-  await dispatchEmail({
+  const channel = await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: `Unanswered lead from ${opts.customerName}`,
@@ -470,10 +471,10 @@ export async function sendLeadReminderEmail(opts: {
     },
     tag: "lead-reminder",
   });
-  // Caller historically checked the boolean to know whether to record a
-  // delivery attempt — keep the contract by always returning true now that
-  // dispatchEmail handles fallbacks/no-transport internally.
-  return true;
+  // The reminder scheduler uses this boolean to decide whether to keep the
+  // claim (so it isn't retried) or release it for another attempt. Only
+  // report success when a real transport actually delivered the message.
+  return channel !== "none";
 }
 
 export async function sendDocumentApprovedEmail(opts: {
