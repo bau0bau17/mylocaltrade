@@ -112,7 +112,7 @@ export default function BusinessProfileScreen() {
   const handleSave = async () => {
     if (!allMet) {
       setAttemptedSave(true);
-      setError('Completează câmpurile marcate cu roșu înainte de a salva.');
+      setError('Please fill in the fields highlighted in red before saving.');
       return;
     }
     setAttemptedSave(true);
@@ -404,7 +404,7 @@ export default function BusinessProfileScreen() {
 
         {!allMet && (
           <Text style={styles.footerHint}>
-            Completează toate câmpurile obligatorii pentru a putea salva.
+            Fill in all required fields to enable saving.
           </Text>
         )}
       </KeyboardAwareScrollViewCompat>
@@ -431,19 +431,19 @@ function ChipList({ items, onRemove }: { items: string[]; onRemove: (v: string) 
 function computeFieldErrors(form: ProfileForm) {
   const desc = form.businessDescription.trim();
   return {
-    mainCategory: form.mainCategory.trim().length === 0 ? 'Câmp obligatoriu.' : null,
+    mainCategory: form.mainCategory.trim().length === 0 ? 'This field is required.' : null,
     businessDescription:
       desc.length === 0
-        ? 'Câmp obligatoriu.'
+        ? 'This field is required.'
         : desc.length < MIN_DESCRIPTION_LEN
-          ? `Minim ${MIN_DESCRIPTION_LEN} de caractere (ai ${desc.length}).`
+          ? `At least ${MIN_DESCRIPTION_LEN} characters required (you have ${desc.length}).`
           : null,
-    businessAddress: form.businessAddress.trim().length === 0 ? 'Câmp obligatoriu.' : null,
-    town: form.town.trim().length === 0 ? 'Câmp obligatoriu.' : null,
-    postcode: form.postcode.trim().length === 0 ? 'Câmp obligatoriu.' : null,
-    additionalServices: form.additionalServices.length === 0 ? 'Adaugă cel puțin un serviciu.' : null,
-    serviceAreas: form.serviceAreas.length === 0 ? 'Adaugă cel puțin o zonă deservită.' : null,
-    openingHours: form.openingHours.trim().length === 0 ? 'Câmp obligatoriu.' : null,
+    businessAddress: form.businessAddress.trim().length === 0 ? 'This field is required.' : null,
+    town: form.town.trim().length === 0 ? 'This field is required.' : null,
+    postcode: form.postcode.trim().length === 0 ? 'This field is required.' : null,
+    additionalServices: form.additionalServices.length === 0 ? 'Add at least one service.' : null,
+    serviceAreas: form.serviceAreas.length === 0 ? 'Add at least one service area.' : null,
+    openingHours: form.openingHours.trim().length === 0 ? 'This field is required.' : null,
   };
 }
 

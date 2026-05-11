@@ -131,3 +131,7 @@ Utility scripts. Run via `pnpm --filter @workspace/scripts run <script>`.
 - Basic: £10/month — standard listing, 3 gallery images
 - Premium: £20/month — enhanced profile, 10 images, priority search, premium badge
 - Elite: £30/month — featured placement, unlimited images, top visibility, star badge
+
+## User preferences
+
+- All user-facing copy in the app (mobile, admin, etc.) must be in English. Never use Romanian (or any other language) in UI strings, error messages, validation messages, banners, placeholders, etc. Chat replies to the user can stay in Romanian, but everything that ends up on screen for end users is English-only.
