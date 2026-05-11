@@ -40,6 +40,7 @@ interface AuditEntry {
   action: string;
   notes: string | null;
   createdAt: string;
+  details?: Record<string, unknown> | null;
 }
 
 interface TraderDetail {
@@ -635,16 +636,30 @@ export default function AdminTraderDetail() {
           {auditLog.length === 0 ? (
             <Text style={styles.muted}>No activity yet.</Text>
           ) : (
-            auditLog.map((entry) => (
-              <View key={entry.id} style={styles.auditRow}>
-                <View style={styles.auditDot} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.auditAction}>{formatAction(entry.action)}</Text>
-                  {entry.notes && <Text style={styles.auditNotes}>{entry.notes}</Text>}
-                  <Text style={styles.auditTime}>{formatDate(entry.createdAt)}</Text>
+            auditLog.map((entry) => {
+              // Surface WHICH document section was opened (e.g. "Public
+              // liability insurance") instead of just the filename. The
+              // backend stores doc.type in details.documentType for every
+              // ADMIN_VIEWED_DOCUMENT / ADMIN_DOWNLOADED_DOCUMENT entry.
+              const docType =
+                typeof entry.details?.documentType === 'string'
+                  ? (entry.details.documentType as string)
+                  : null;
+              const sectionLabel = docType ? (DOC_LABEL[docType] ?? docType) : null;
+              return (
+                <View key={entry.id} style={styles.auditRow}>
+                  <View style={styles.auditDot} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.auditAction}>
+                      {formatAction(entry.action)}
+                      {sectionLabel ? ` — ${sectionLabel}` : ''}
+                    </Text>
+                    {entry.notes && <Text style={styles.auditNotes}>{entry.notes}</Text>}
+                    <Text style={styles.auditTime}>{formatDate(entry.createdAt)}</Text>
+                  </View>
                 </View>
-              </View>
-            ))
+              );
+            })
           )}
         </View>
       </ScrollView>

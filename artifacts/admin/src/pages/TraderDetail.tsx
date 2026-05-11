@@ -587,24 +587,35 @@ export default function TraderDetail({ userId }: Props) {
                 <p className="text-sm text-muted-foreground">No audit entries.</p>
               ) : (
                 <ul className="divide-y">
-                  {auditLog.map((e) => (
-                    <li key={e.id} className="py-2.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium">{e.action.replace(/_/g, " ")}</div>
-                          {e.notes && <div className="text-xs text-muted-foreground mt-0.5">{e.notes}</div>}
-                          {e.details && Object.keys(e.details).length > 0 && (
-                            <pre className="text-[11px] bg-muted/60 rounded p-2 mt-1 overflow-x-auto">
-                              {JSON.stringify(e.details, null, 2)}
-                            </pre>
-                          )}
+                  {auditLog.map((e) => {
+                    // Pull the document section (doc.type) out of the JSON
+                    // details so the activity line tells the admin WHICH
+                    // section was opened, not just the filename.
+                    const details = (e.details ?? {}) as Record<string, unknown>;
+                    const docType = typeof details.documentType === "string" ? details.documentType : null;
+                    const sectionLabel = docType ? labelForDocType(docType) : null;
+                    return (
+                      <li key={e.id} className="py-2.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium">
+                              {e.action.replace(/_/g, " ")}
+                              {sectionLabel ? ` — ${sectionLabel}` : ""}
+                            </div>
+                            {e.notes && <div className="text-xs text-muted-foreground mt-0.5">{e.notes}</div>}
+                            {e.details && Object.keys(e.details).length > 0 && (
+                              <pre className="text-[11px] bg-muted/60 rounded p-2 mt-1 overflow-x-auto">
+                                {JSON.stringify(e.details, null, 2)}
+                              </pre>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatDateTime(e.createdAt)}
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(e.createdAt)}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardContent>
