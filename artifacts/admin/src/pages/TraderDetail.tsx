@@ -746,7 +746,12 @@ export default function TraderDetail({ userId }: Props) {
                     src={preview.url}
                     title={preview.doc.originalFilename}
                     className="w-full h-[70vh] border-0 bg-white"
-                    sandbox=""
+                    // allow-same-origin is required so the iframe can fetch the
+                    // blob URL we created in the parent document; scripts and
+                    // forms remain disabled, and the embedded PDF is rendered
+                    // by the browser's built-in viewer (no inline script
+                    // execution from the file itself).
+                    sandbox="allow-same-origin"
                     data-testid="iframe-doc-preview"
                   />
                 )}
