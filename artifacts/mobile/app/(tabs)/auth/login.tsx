@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -16,14 +16,20 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-    
+    setFormError(null);
     setUnverifiedEmail(null);
+
+    const missingEmail = !email.trim();
+    const missingPassword = !password;
+    setEmailError(missingEmail ? 'Introdu adresa de email.' : null);
+    setPasswordError(missingPassword ? 'Introdu parola.' : null);
+    if (missingEmail || missingPassword) return;
+
     setIsLoading(true);
     try {
       await login({ email, password });
@@ -33,11 +39,27 @@ export default function LoginScreen() {
         setUnverifiedEmail(error.email);
         return;
       }
-      const message = error instanceof Error ? error.message : 'Invalid credentials';
-      Alert.alert('Login Failed', message);
+      // Server doesn't tell us which field is wrong (good security
+      // practice), so we mark both fields as invalid and show a single
+      // message under the form.
+      const msg = 'Email sau parolă incorecte. Verifică datele și încearcă din nou.';
+      setEmailError(msg);
+      setPasswordError(' ');
+      setFormError(msg);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const onEmailChange = (t: string) => {
+    setEmail(t);
+    if (emailError) setEmailError(null);
+    if (formError) setFormError(null);
+  };
+  const onPasswordChange = (t: string) => {
+    setPassword(t);
+    if (passwordError) setPasswordError(null);
+    if (formError) setFormError(null);
   };
 
   return (
@@ -61,35 +83,48 @@ export default function LoginScreen() {
       <View style={styles.form}>
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Email Address</Text>
-          <View style={styles.inputWrap}>
-            <Feather name="mail" size={16} color={Colors.light.textMuted} />
+          <View style={[styles.inputWrap, emailError && styles.inputWrapError]}>
+            <Feather name="mail" size={16} color={emailError ? Colors.light.error : Colors.light.textMuted} />
             <TextInput
               style={styles.input}
               placeholder="you@example.com"
               placeholderTextColor={Colors.light.textMuted}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={onEmailChange}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
             />
           </View>
+          {emailError && emailError.trim() ? (
+            <Text style={styles.fieldError}>{emailError}</Text>
+          ) : null}
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Password</Text>
-          <View style={styles.inputWrap}>
-            <Feather name="lock" size={16} color={Colors.light.textMuted} />
+          <View style={[styles.inputWrap, passwordError && styles.inputWrapError]}>
+            <Feather name="lock" size={16} color={passwordError ? Colors.light.error : Colors.light.textMuted} />
             <TextInput
               style={styles.input}
               placeholder="Enter your password"
               placeholderTextColor={Colors.light.textMuted}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={onPasswordChange}
               secureTextEntry
             />
           </View>
+          {passwordError && passwordError.trim() ? (
+            <Text style={styles.fieldError}>{passwordError}</Text>
+          ) : null}
         </View>
+
+        {formError ? (
+          <View style={styles.errorBanner}>
+            <Feather name="alert-circle" size={16} color={Colors.light.error} />
+            <Text style={styles.errorBannerText}>{formError}</Text>
+          </View>
+        ) : null}
 
         <Pressable 
           style={[styles.button, isLoading && styles.buttonDisabled]} 
@@ -192,6 +227,34 @@ const styles = StyleSheet.create({
     height: '100%',
     fontSize: 15,
     color: Colors.light.text,
+  },
+  inputWrapError: {
+    borderColor: Colors.light.error,
+    borderWidth: 1.5,
+  },
+  fieldError: {
+    fontSize: 12,
+    color: Colors.light.error,
+    fontWeight: '600',
+    marginLeft: 4,
+    marginTop: 2,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.light.errorMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.error,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 4,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.light.error,
+    fontWeight: '600',
   },
   button: {
     backgroundColor: Colors.light.primary,
