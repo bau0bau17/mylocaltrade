@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -24,6 +25,7 @@ interface ProfileForm {
 
 export default function BusinessProfileScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { token, isTrader } = useAuth();
 
@@ -174,10 +176,10 @@ export default function BusinessProfileScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingTop: 8,
-          paddingBottom: insets.bottom + 24,
+          paddingBottom: tabBarHeight + 24,
           paddingHorizontal: 20,
         }}
-        bottomOffset={80}
+        bottomOffset={tabBarHeight + 24}
       >
         {/* Progress Summary */}
         <View style={styles.summaryCard}>
