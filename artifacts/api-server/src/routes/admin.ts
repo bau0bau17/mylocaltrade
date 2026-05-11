@@ -373,8 +373,13 @@ router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (re
 });
 
 // GET /api/admin/documents/:id/file — admin-scoped proxy stream
+// Every access is recorded in the trader_audit_log table to satisfy the UK
+// GDPR / ICO accountability principle (Article 5(2)). The admin can supply an
+// optional `?reason=` (e.g. for an ICO/DSAR request) and `?mode=view|download`
+// is recorded so we can distinguish in-app preview from a saved copy.
 router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, res) => {
   try {
+    const { userId: adminId } = req as AuthenticatedRequest;
     const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {
       res.status(400).json({ error: "Invalid id" });
@@ -389,6 +394,33 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
       res.status(404).json({ error: "Document not found" });
       return;
     }
+
+    const mode = String(req.query.mode ?? "view").toLowerCase() === "download" ? "download" : "view";
+    const rawReason = typeof req.query.reason === "string" ? req.query.reason.trim() : "";
+    const reason = rawReason.slice(0, 500) || null;
+    const ip =
+      (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      null;
+    const userAgent = (req.headers["user-agent"] as string | undefined) ?? null;
+
+    // Audit BEFORE streaming so we record the access intent even if the stream
+    // later fails. Failure of logAudit itself is swallowed by the helper.
+    await logAudit({
+      userId: doc.userId,
+      action: mode === "download" ? "ADMIN_DOWNLOADED_DOCUMENT" : "ADMIN_VIEWED_DOCUMENT",
+      performedBy: adminId,
+      notes: reason ?? undefined,
+      details: {
+        documentId: doc.id,
+        documentType: doc.type,
+        filename: doc.originalFilename,
+        mode,
+        ip,
+        userAgent,
+      },
+    });
+
     try {
       const file = await storage.getObjectEntityFile(doc.objectPath);
       const [meta] = await file.getMetadata();
@@ -397,12 +429,16 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
       // which an attacker could have set to text/html or another executable type.
       const safeMime = doc.mimeType || "application/octet-stream";
       res.setHeader("Content-Type", safeMime);
-      res.setHeader("Cache-Control", "private, max-age=0");
-      // Force download disposition so the browser never renders the content inline,
-      // even if the blob URL is opened in a new tab by the admin UI. This prevents
-      // stored-XSS execution if an attacker managed to upload non-PDF/image content.
+      res.setHeader("Cache-Control", "private, no-store");
       const safeFilename = (doc.originalFilename || "document").replace(/[^\w.\-]/g, "_");
-      res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"`);
+      // For the in-app preview the admin UI fetches the file as a blob and renders
+      // it inside a sandboxed <img>/<iframe>, so `inline` is safe here — the
+      // MIME type is already constrained to the upload allowlist (image/* or PDF).
+      // The download button explicitly requests mode=download and we honour that
+      // with an attachment disposition so the browser saves the file instead of
+      // rendering it.
+      const disposition = mode === "download" ? "attachment" : "inline";
+      res.setHeader("Content-Disposition", `${disposition}; filename="${safeFilename}"`);
       if (meta.size) res.setHeader("Content-Length", String(meta.size));
       await new Promise<void>((resolve, reject) => {
         file.createReadStream().on("error", reject).on("end", resolve).pipe(res);
