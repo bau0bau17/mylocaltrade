@@ -1,4 +1,5 @@
 import { BlurView } from "expo-blur";
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
@@ -195,7 +196,13 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
+  // NativeTabs (expo-router/unstable-native-tabs) requires custom native code
+  // and does not work reliably inside Expo Go — the screens render but become
+  // unresponsive (taps don't fire, navigation to hidden triggers freezes).
+  // Force the classic JS-based Tabs layout whenever we're running in Expo Go.
+  const isExpoGo =
+    Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+  if (!isExpoGo && isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }
   return <ClassicTabLayout />;
