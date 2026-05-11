@@ -18,7 +18,41 @@ import {
   getGetLeadReminderSettingsQueryKey,
   useUpdateLeadReminderSettings,
   UpdateLeadReminderSettingsRequestLeadReminderMinutes,
+  useGetTraderOnboardingStatus,
+  getGetTraderOnboardingStatusQueryKey,
+  type TraderOnboardingStatus,
 } from '@workspace/api-client-react';
+
+type OnboardingPill = { label: string; bg: string; fg: string };
+
+function computeOnboardingPill(
+  status: TraderOnboardingStatus | undefined,
+): OnboardingPill | null {
+  if (!status) return null;
+  const v = status.verificationStatus;
+  if (v === 'VERIFIED') {
+    return { label: 'Verified', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' };
+  }
+  if (v === 'REJECTED' || v === 'SUSPENDED' || v === 'EXPIRED_DOCUMENTS') {
+    return { label: 'Action required', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' };
+  }
+  if (v === 'UNDER_REVIEW') {
+    return { label: 'Pending review', bg: 'rgba(245, 158, 11, 0.18)', fg: '#B45309' };
+  }
+  // Pending — show progress (e.g. "2 / 5 steps") in amber so the user knows
+  // there's still work to do. Defensive guard in case checklist is empty.
+  const checklist = status.checklist ?? [];
+  if (checklist.length === 0) {
+    return { label: 'In progress', bg: 'rgba(245, 158, 11, 0.18)', fg: '#B45309' };
+  }
+  const total = checklist.length;
+  const done = checklist.filter((s) => s.state === 'completed').length;
+  return {
+    label: `${done} / ${total} steps`,
+    bg: 'rgba(245, 158, 11, 0.18)',
+    fg: '#B45309',
+  };
+}
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
@@ -50,6 +84,14 @@ export default function AccountScreen() {
   const togglePush = (next: boolean) => {
     updateNotificationSettings.mutate({ data: { pushNotificationsEnabled: next } });
   };
+
+  const { data: onboardingStatus } = useGetTraderOnboardingStatus({
+    query: {
+      queryKey: getGetTraderOnboardingStatusQueryKey(),
+      enabled: isAuthenticated && isTrader,
+    },
+  });
+  const onboardingPill = computeOnboardingPill(onboardingStatus);
 
   const { data: reminderSettings } = useGetLeadReminderSettings({
     query: {
@@ -182,7 +224,7 @@ export default function AccountScreen() {
         <>
           <Text style={styles.sectionLabel}>Trader Dashboard</Text>
           <View style={[styles.group, { marginHorizontal: 16 }]}>
-            <MenuRow icon="check-circle" label="Onboarding & Verification" sub="Track your verification progress" onPress={() => router.push('/trader-dashboard')} accent />
+            <MenuRow icon="check-circle" label="Onboarding & Verification" sub="Track your verification progress" onPress={() => router.push('/trader-dashboard')} accent pill={onboardingPill} />
             <View style={styles.separator} />
             <MenuRow icon="user" label="Edit Profile" onPress={() => router.push('/trader-dashboard/edit-profile')} />
             <View style={styles.separator} />
@@ -327,6 +369,7 @@ function MenuRow({
   onPress,
   accent,
   badge,
+  pill,
 }: {
   icon: FeatherIconName;
   label: string;
@@ -334,6 +377,7 @@ function MenuRow({
   onPress: () => void;
   accent?: boolean;
   badge?: number;
+  pill?: OnboardingPill | null;
 }) {
   const showBadge = typeof badge === 'number' && badge > 0;
   return (
@@ -345,6 +389,11 @@ function MenuRow({
         <Text style={[styles.menuLabel, accent && styles.menuLabelAccent]}>{label}</Text>
         {sub ? <Text style={styles.menuSub} numberOfLines={1}>{sub}</Text> : null}
       </View>
+      {pill ? (
+        <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
+          <Text style={[styles.statusPillText, { color: pill.fg }]}>{pill.label}</Text>
+        </View>
+      ) : null}
       {showBadge ? (
         <View style={styles.menuBadge}>
           <Text style={styles.menuBadgeText}>{badge > 99 ? '99+' : badge}</Text>
@@ -598,6 +647,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.textMuted,
     marginTop: 1,
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 6,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   menuBadge: {
     minWidth: 22,
