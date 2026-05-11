@@ -29,11 +29,17 @@ router.get("/traders", async (req, res) => {
     }
 
     if (location && typeof location === "string") {
+      // Search by the trader's declared service areas (the locations they
+      // chose during signup / business profile), NOT by their company
+      // address — a trader can serve areas they're not based in.
+      const locLike = `%${location}%`;
       conditions.push(
-        or(
-          ilike(traderProfilesTable.town, `%${location}%`),
-          ilike(traderProfilesTable.postcode, `%${location}%`),
-        )!
+        sql`EXISTS (
+          SELECT 1 FROM json_array_elements_text(
+            COALESCE(${traderProfilesTable.serviceAreas}, '[]'::json)
+          ) AS area
+          WHERE area ILIKE ${locLike}
+        )`
       );
     }
 
@@ -42,12 +48,18 @@ router.get("/traders", async (req, res) => {
     }
 
     if (search && typeof search === "string") {
+      const searchLike = `%${search}%`;
       conditions.push(
         or(
           ilike(traderProfilesTable.businessName, `%${search}%`),
           ilike(traderProfilesTable.mainCategory, `%${search}%`),
-          ilike(traderProfilesTable.town, `%${search}%`),
           ilike(traderProfilesTable.businessDescription, `%${search}%`),
+          sql`EXISTS (
+            SELECT 1 FROM json_array_elements_text(
+              COALESCE(${traderProfilesTable.serviceAreas}, '[]'::json)
+            ) AS area
+            WHERE area ILIKE ${searchLike}
+          )`,
         )!
       );
     }
