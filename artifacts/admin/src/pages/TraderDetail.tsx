@@ -258,6 +258,17 @@ export default function TraderDetail({ userId }: Props) {
   }
 
   async function openPreview(doc: TraderDocument) {
+    // Re-review gate (mirrors the server). Once a document is APPROVED,
+    // the admin must enter a written reason before re-opening it.
+    if (doc.status === "APPROVED" && accessReason.trim().length < 3) {
+      toast({
+        title: "Reason required",
+        description:
+          'This document is already approved. Type a short reason in the "Reason for access" box (e.g. an ICO request reference) before re-opening.',
+        variant: "destructive",
+      });
+      return;
+    }
     // Revoke any previously-loaded blob so we don't leak memory if the admin
     // opens a second document without first closing the dialog.
     if (preview?.revoke) preview.revoke();
@@ -312,6 +323,18 @@ export default function TraderDetail({ userId }: Props) {
   async function handleDownloadDocument(doc: TraderDocument, reasonOverride?: string) {
     try {
       const reasonText = (reasonOverride ?? accessReason).trim();
+      // Re-review gate: same rule as preview — approved docs require a
+      // reason. Server enforces it too with HTTP 403, but failing fast in
+      // the client gives a better message.
+      if (doc.status === "APPROVED" && reasonText.length < 3) {
+        toast({
+          title: "Reason required",
+          description:
+            'This document is already approved. Type a short reason in the "Reason for access" box before downloading it.',
+          variant: "destructive",
+        });
+        return;
+      }
       await downloadAuthed(
         `/api/admin/documents/${doc.id}/file`,
         doc.originalFilename,
@@ -449,7 +472,7 @@ export default function TraderDetail({ userId }: Props) {
               </Alert>
               <div className="space-y-1.5">
                 <Label htmlFor="access-reason" className="text-xs">
-                  Reason for access (optional — e.g. "ICO subject access request ref. 123")
+                  Reason for access — required to re-open or download approved documents (e.g. "ICO subject access request ref. 123")
                 </Label>
                 <Textarea
                   id="access-reason"
@@ -468,6 +491,8 @@ export default function TraderDetail({ userId }: Props) {
                     const days = daysUntil(doc.expiresAt);
                     const expSoon = days != null && days >= 0 && days <= 30;
                     const expired = doc.status === "EXPIRED" || (days != null && days < 0);
+                    const isLocked =
+                      doc.status === "APPROVED" && accessReason.trim().length < 3;
                     return (
                       <div
                         key={doc.id}
@@ -492,12 +517,29 @@ export default function TraderDetail({ userId }: Props) {
                           {doc.rejectionReason && (
                             <div className="text-xs text-red-700 mt-1">Reason: {doc.rejectionReason}</div>
                           )}
+                          {isLocked && (
+                            <div className="text-xs text-muted-foreground mt-1 italic">
+                              Approved — enter a reason above to re-open or download.
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2 flex-wrap">
-                          <Button size="sm" variant="default" onClick={() => openPreview(doc)} data-testid={`button-view-${doc.id}`}>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => openPreview(doc)}
+                            disabled={isLocked}
+                            data-testid={`button-view-${doc.id}`}
+                          >
                             <Eye className="w-4 h-4 mr-1" /> View
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => handleDownloadDocument(doc)} data-testid={`button-download-${doc.id}`}>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDownloadDocument(doc)}
+                            disabled={isLocked}
+                            data-testid={`button-download-${doc.id}`}
+                          >
                             <Download className="w-4 h-4 mr-1" /> Download
                           </Button>
                           {doc.status === "PENDING_REVIEW" && (
