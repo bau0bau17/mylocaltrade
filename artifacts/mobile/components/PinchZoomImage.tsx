@@ -1,11 +1,14 @@
 import React from 'react';
 import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-  runOnJS,
 } from 'react-native-reanimated';
 
 interface Props {
@@ -18,13 +21,14 @@ interface Props {
 }
 
 /**
- * Cross-platform pinch-to-zoom + pan image viewer. Uses
- * react-native-gesture-handler v2 + reanimated v4 so it works on iOS,
- * Android, and react-native-web (the canvas iframe). Double-tap toggles
- * between fit-to-screen and 2.5x zoom.
+ * Cross-platform pinch-to-zoom + pan image viewer.
  *
- * Note: gestures only work when the parent tree is wrapped in
- * <GestureHandlerRootView> — the app already does this in app/_layout.tsx.
+ * Wraps its own GestureHandlerRootView so it works inside <Modal> on
+ * react-native-web (Modal renders through a portal that lives outside the
+ * app-level root) as well as on iOS/Android.
+ *
+ * All gesture callbacks are worklets that only mutate shared values — no
+ * runOnJS round-trips, which avoids reanimated v4 footguns.
  */
 export default function PinchZoomImage({ source, onError, maxScale = 6, minScale = 1 }: Props) {
   const scale = useSharedValue(1);
@@ -34,48 +38,55 @@ export default function PinchZoomImage({ source, onError, maxScale = 6, minScale
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
 
-  const reset = () => {
-    'worklet';
-    scale.value = withTiming(1);
-    savedScale.value = 1;
-    translateX.value = withTiming(0);
-    translateY.value = withTiming(0);
-    savedTranslateX.value = 0;
-    savedTranslateY.value = 0;
-  };
-
   const pinch = Gesture.Pinch()
     .onUpdate((e) => {
+      'worklet';
       const next = savedScale.value * e.scale;
-      scale.value = Math.min(Math.max(next, minScale * 0.8), maxScale);
+      scale.value = Math.min(Math.max(next, minScale * 0.6), maxScale);
     })
     .onEnd(() => {
-      savedScale.value = scale.value;
+      'worklet';
       if (scale.value < minScale) {
-        runOnJS(reset)();
+        scale.value = withTiming(minScale);
+        savedScale.value = minScale;
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        savedScale.value = scale.value;
       }
     });
 
   const pan = Gesture.Pan()
     .averageTouches(true)
     .onUpdate((e) => {
-      // Only allow panning when zoomed in, so a single-finger swipe at
-      // 1x doesn't fight with the modal/scroll.
+      'worklet';
+      // Only allow panning when zoomed in, otherwise a single-finger swipe
+      // at fit-size could feel laggy and conflict with the modal scroll.
       if (scale.value > 1) {
         translateX.value = savedTranslateX.value + e.translationX;
         translateY.value = savedTranslateY.value + e.translationY;
       }
     })
     .onEnd(() => {
+      'worklet';
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
+    .maxDuration(300)
     .onEnd(() => {
+      'worklet';
       if (scale.value > 1) {
-        runOnJS(reset)();
+        scale.value = withTiming(1);
+        savedScale.value = 1;
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
       } else {
         scale.value = withTiming(2.5);
         savedScale.value = 2.5;
@@ -93,18 +104,18 @@ export default function PinchZoomImage({ source, onError, maxScale = 6, minScale
   }));
 
   return (
-    <GestureDetector gesture={composed}>
-      <View style={styles.container} collapsable={false}>
-        <Animated.View style={[styles.inner, animatedStyle]}>
+    <GestureHandlerRootView style={styles.root}>
+      <GestureDetector gesture={composed}>
+        <Animated.View style={[styles.inner, animatedStyle]} collapsable={false}>
           <Image source={source} style={styles.image} resizeMode="contain" onError={onError} />
         </Animated.View>
-      </View>
-    </GestureDetector>
+      </GestureDetector>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  inner: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
+  root: { flex: 1, width: '100%', overflow: 'hidden' },
+  inner: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center' },
   image: { width: '100%', height: '100%' },
 });
