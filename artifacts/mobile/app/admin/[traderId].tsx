@@ -1066,10 +1066,10 @@ const styles = StyleSheet.create({
 
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   modalCard: { width: '100%', maxWidth: 420, backgroundColor: '#fff', borderRadius: 16, padding: 20, gap: 12 },
-  modalTitle: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
-  modalHint: { fontSize: 12, color: Colors.light.textMuted, lineHeight: 17 },
-  modalInput: { borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, minHeight: 90, fontSize: 13, color: Colors.light.text, textAlignVertical: 'top' },
-  modalCounter: { fontSize: 11, color: Colors.light.textMuted, textAlign: 'right', marginTop: 4, marginBottom: 8 },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
+  modalHint: { fontSize: 12, color: '#475569', lineHeight: 17 },
+  modalInput: { borderWidth: 1, borderColor: Colors.light.border, borderRadius: 10, padding: 12, minHeight: 90, fontSize: 13, color: '#0F172A', backgroundColor: '#FFFFFF', textAlignVertical: 'top' },
+  modalCounter: { fontSize: 11, color: '#475569', textAlign: 'right', marginTop: 4, marginBottom: 8 },
   modalRow: { flexDirection: 'row', gap: 10, justifyContent: 'flex-end' },
   modalBtn: { paddingHorizontal: 18, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   modalCancel: { backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border },
@@ -1092,9 +1092,9 @@ const styles = StyleSheet.create({
   icoInput: {
     marginTop: 8, borderWidth: 1, borderColor: 'rgba(245,158,11,0.4)',
     borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8,
-    backgroundColor: '#fff', fontSize: 12, color: Colors.light.text,
+    backgroundColor: '#fff', fontSize: 12, color: '#0F172A',
   },
-  icoFooter: { fontSize: 10, color: Colors.light.textMuted, textAlign: 'center', marginTop: 4 },
+  icoFooter: { fontSize: 10, color: '#475569', textAlign: 'center', marginTop: 4 },
 
   previewBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: 12 },
   previewSheet: {
