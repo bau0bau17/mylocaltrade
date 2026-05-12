@@ -30,30 +30,60 @@ export default function HowVerificationWorksScreen() {
         <Text style={styles.heading}>1. Account checks</Text>
         <Text style={styles.paragraph}>
           • Email address is verified before a trader can complete onboarding.{'\n'}
-          • Phone number is verified using a one-time code.{'\n'}
-          • Business details are completed by the trader and stored on their profile.
+          • Phone number is verified using a one-time code sent by SMS.{'\n'}
+          • Where a trader registers as a limited company, the Companies House number is checked at signup and the company must be listed as active.{'\n'}
+          • Business details (main trade, description, address, services, service areas and opening hours) are completed by the trader and stored on their profile.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>2. Document checks</Text>
         <Text style={styles.paragraph}>
-          Traders may upload documents such as ID, public liability insurance, and trade certifications. Our team reviews submitted documents and either approves them, requests a corrected document, or rejects them with a reason.
+          Traders are asked to upload supporting documents:
         </Text>
         <Text style={styles.paragraph}>
-          Where a required document expires, the trader's profile is automatically hidden from public search until a valid document is uploaded and approved.
+          • Photo ID (required){'\n'}
+          • Public liability insurance certificate (required){'\n'}
+          • Proof of address (optional){'\n'}
+          • Trade qualifications, such as NVQ or City &amp; Guilds (optional)
+        </Text>
+        <Text style={styles.paragraph}>
+          Each document is reviewed by our team and is either approved or rejected with a reason. The trader can then upload a replacement. Documents are tracked as pending review, approved, rejected or expired.
+        </Text>
+        <Text style={styles.paragraph}>
+          Where a required document expires, the trader's profile is automatically hidden from public search until a valid replacement is uploaded and approved.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>3. Subscription</Text>
+        <Text style={styles.heading}>3. Companies House cross-check</Text>
         <Text style={styles.paragraph}>
-          Trader profiles are visible publicly only while the trader has an active subscription. If a subscription is cancelled, becomes overdue, or fails to renew, the profile is hidden from public search.
+          When a trader who has provided a Companies House number submits their documents, we automatically cross-check the business name and registered address against the public Companies House register. The result (match, partial match, no match or not found) is shown to our review team to help decide whether to approve the profile.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>4. What verification is not</Text>
+        <Text style={styles.heading}>4. Subscription</Text>
+        <Text style={styles.paragraph}>
+          Trader profiles are visible publicly only while the trader has an active subscription. If a subscription is cancelled, becomes overdue, or fails to renew, the profile is hidden from public search until the subscription is active again.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>5. When a profile is hidden</Text>
+        <Text style={styles.paragraph}>
+          A trader profile may be hidden from public search for any of the following reasons:
+        </Text>
+        <Text style={styles.paragraph}>
+          • A required document has expired or has not yet been approved{'\n'}
+          • The trader's subscription is not active{'\n'}
+          • The account has been suspended by our team{'\n'}
+          • The trader has requested account deletion
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>6. What verification is not</Text>
         <Text style={styles.paragraph}>
           Our checks focus on the information traders provide to us. Verification is not:
         </Text>
@@ -65,7 +95,7 @@ export default function HowVerificationWorksScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>5. What customers should still do</Text>
+        <Text style={styles.heading}>7. What customers should still do</Text>
         <Text style={styles.paragraph}>
           • Request written quotes before work starts{'\n'}
           • For gas work, independently check the trader's Gas Safe registration at gassaferegister.co.uk{'\n'}
@@ -76,7 +106,7 @@ export default function HowVerificationWorksScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>6. Reporting concerns</Text>
+        <Text style={styles.heading}>8. Reporting concerns</Text>
         <Text style={styles.paragraph}>
           If you believe a trader has provided false information, or you have a safety concern, please use the "Report a Trader" page or email support@mylocaltrade.co.uk.
         </Text>
