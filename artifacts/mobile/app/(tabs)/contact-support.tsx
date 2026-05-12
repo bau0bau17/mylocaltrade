@@ -4,6 +4,7 @@ import {
   ActivityIndicator, ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -12,8 +13,14 @@ import { getApiUrl } from '@/lib/api-url';
 
 export default function ContactSupportScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  // When the user is signed in we always lock name + email to the values
+  // from their account — support replies must go to the verified address
+  // and we don't want users impersonating someone else from inside their
+  // own session.
+  const lockedFromAccount = isAuthenticated && !!user;
   const params = useLocalSearchParams<{ subject?: string }>();
   const initialSubject = typeof params.subject === 'string' ? params.subject : '';
 
@@ -25,12 +32,15 @@ export default function ContactSupportScreen() {
   });
 
   useEffect(() => {
+    // For signed-in users, name + email are derived from the account and
+    // should always reflect it (locked fields). For guests we only seed
+    // empty values so we don't overwrite their typing.
     setForm(p => ({
       ...p,
-      name: p.name || (user?.fullName ?? ''),
-      email: p.email || (user?.email ?? ''),
+      name: lockedFromAccount ? (user?.fullName ?? '') : (p.name || (user?.fullName ?? '')),
+      email: lockedFromAccount ? (user?.email ?? '') : (p.email || (user?.email ?? '')),
     }));
-  }, [user?.fullName, user?.email]);
+  }, [user?.fullName, user?.email, lockedFromAccount]);
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [rateLimited, setRateLimited] = useState<{ nextAllowedAt: string } | null>(null);
@@ -184,7 +194,12 @@ export default function ContactSupportScreen() {
         </ScrollView>
       ) : (
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[
+            styles.scroll,
+            // Add the absolute-positioned tab bar's height so the Send
+            // button isn't hidden behind it.
+            { paddingBottom: tabBarHeight + insets.bottom + 32 },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -196,21 +211,25 @@ export default function ContactSupportScreen() {
           </View>
 
           <View style={styles.form}>
-            <Field label="Your Name *">
+            <Field label="Your Name *" locked={lockedFromAccount}>
               <Feather name="user" size={16} color={Colors.light.textMuted} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, lockedFromAccount && styles.inputLocked]}
                 placeholder="Full name"
                 placeholderTextColor={Colors.light.textMuted}
                 value={form.name}
                 onChangeText={(t) => setForm(p => ({ ...p, name: t }))}
+                editable={!lockedFromAccount}
               />
+              {lockedFromAccount ? (
+                <Feather name="lock" size={14} color={Colors.light.textMuted} />
+              ) : null}
             </Field>
 
-            <Field label="Email Address *">
+            <Field label="Email Address *" locked={lockedFromAccount}>
               <Feather name="mail" size={16} color={Colors.light.textMuted} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, lockedFromAccount && styles.inputLocked]}
                 placeholder="your@email.com"
                 placeholderTextColor={Colors.light.textMuted}
                 value={form.email}
@@ -218,8 +237,19 @@ export default function ContactSupportScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!lockedFromAccount}
               />
+              {lockedFromAccount ? (
+                <Feather name="lock" size={14} color={Colors.light.textMuted} />
+              ) : null}
             </Field>
+
+            {lockedFromAccount ? (
+              <Text style={styles.lockedHint}>
+                Name and email are taken from your account so we can verify your
+                identity and reply to the right address.
+              </Text>
+            ) : null}
 
             <Field label="Subject *">
               <Feather name="tag" size={16} color={Colors.light.textMuted} />
@@ -277,11 +307,19 @@ export default function ContactSupportScreen() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  locked,
+}: {
+  label: string;
+  children: React.ReactNode;
+  locked?: boolean;
+}) {
   return (
     <View style={styles.fieldGroup}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.inputWrap}>{children}</View>
+      <View style={[styles.inputWrap, locked && styles.inputWrapLocked]}>{children}</View>
     </View>
   );
 }
@@ -365,6 +403,20 @@ const styles = StyleSheet.create({
     height: '100%',
     fontSize: 15,
     color: Colors.light.text,
+  },
+  inputLocked: {
+    color: Colors.light.textSecondary,
+  },
+  inputWrapLocked: {
+    backgroundColor: Colors.light.surface,
+    opacity: 0.85,
+  },
+  lockedHint: {
+    fontSize: 12,
+    color: Colors.light.textMuted,
+    lineHeight: 17,
+    marginTop: -8,
+    marginLeft: 4,
   },
   textAreaWrap: {
     backgroundColor: Colors.light.card,
