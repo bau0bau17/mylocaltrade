@@ -57,6 +57,7 @@
 }
 
 :root {
+  color-scheme: light;
   --background: 0 0% 100%;
   --foreground: 222 14% 12%;
 
