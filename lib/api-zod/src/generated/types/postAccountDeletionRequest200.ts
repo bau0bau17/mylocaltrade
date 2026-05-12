@@ -11,4 +11,11 @@ export type PostAccountDeletionRequest200 = {
   deletionStatus: string;
   deletionRequestedAt?: Date;
   message?: string;
+  /** Fresh JWT bound to the bumped tokenVersion. The mobile
+client must persist this token immediately after a
+successful deletion request so the user remains signed
+in here (other devices were revoked) and can reach the
+cancel endpoint.
+ */
+  token?: string;
 };

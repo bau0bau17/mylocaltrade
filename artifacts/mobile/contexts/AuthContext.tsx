@@ -36,6 +36,15 @@ interface AuthContextType {
   registerTrader: (data: RegisterTraderRequest) => Promise<{ email: string; pollToken: string }>;
   resendVerification: (email: string) => Promise<void>;
   logout: () => Promise<void>;
+  /**
+   * Swap the active bearer token (and optionally the cached user) without
+   * a logout/login round-trip. Used by the GDPR account-deletion flow:
+   * after a successful deletion request the server bumps `tokenVersion`
+   * (revoking every other device) and returns a fresh JWT bound to the
+   * new version so this device stays signed in and can reach the cancel
+   * route.
+   */
+  applyToken: (token: string, user?: UserProfile) => Promise<void>;
   isAuthenticated: boolean;
   isTrader: boolean;
   isCustomer: boolean;
@@ -133,6 +142,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const applyToken = async (newToken: string, newUser?: UserProfile) => {
+    await AsyncStorage.setItem('auth_token', newToken);
+    setToken(newToken);
+    if (newUser) {
+      await AsyncStorage.setItem('auth_user', JSON.stringify(newUser));
+      setUser(newUser);
+    }
+  };
+
   const logout = async () => {
     await unregisterPushNotificationsAsync();
     await AsyncStorage.removeItem('auth_token');
@@ -152,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         registerTrader,
         resendVerification,
         logout,
+        applyToken,
         isAuthenticated: !!user,
         isTrader: user?.role === 'trader',
         isCustomer: user?.role === 'customer',

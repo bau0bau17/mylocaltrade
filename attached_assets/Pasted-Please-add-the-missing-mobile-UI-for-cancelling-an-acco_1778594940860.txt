@@ -1,0 +1,98 @@
+Please add the missing mobile UI for cancelling an account deletion request.
+
+The backend endpoint /account/deletion-cancel already exists and works, but the mobile app currently only shows the deletion request form.
+
+I want full self-serve parity for users.
+
+Requirements:
+
+1. Account deletion status screen
+
+When the user is in a cancellable deletion state, show a status screen instead of the normal delete request form.
+
+Cancellable states:
+
+DELETION_REQUESTED
+DISABLED_PENDING_RETENTION
+
+Show:
+
+- Current deletion status
+- Deletion requested date
+- Message explaining that the account deletion request is pending
+- Button: Cancel Deletion Request
+
+2. Cancel deletion confirmation
+
+When user taps Cancel Deletion Request, show confirmation modal:
+
+Title:
+Cancel account deletion request?
+
+Body:
+If you cancel your deletion request, your account may be reactivated. Some features may remain unavailable until your account status, verification, subscription or document status is checked.
+
+Buttons:
+Keep Deletion Request
+Cancel Deletion Request
+
+3. Password confirmation
+
+Require password confirmation before cancelling, if the backend supports it.
+
+If backend does not currently require password for cancellation, add it if feasible. If not feasible in this pass, keep checkbox confirmation and note as follow-up.
+
+4. After successful cancellation
+
+Show success message:
+
+Your account deletion request has been cancelled.
+
+Then refresh account status.
+
+Do not automatically make a trader public unless the existing backend visibility rules allow it.
+
+Trader must still satisfy:
+
+- VERIFIED status
+- ACTIVE subscription
+- no expired required documents
+- not suspended
+- no other blocking account status
+
+5. Error states
+
+Handle:
+
+409 NOT_CANCELLABLE:
+This deletion request can no longer be cancelled.
+
+401 / password error:
+The password you entered is incorrect.
+
+Network error:
+We could not cancel your deletion request. Please try again.
+
+6. Account screen behavior
+
+If user is in DELETION_REQUESTED or DISABLED_PENDING_RETENTION, show:
+
+Account deletion request pending
+
+and a button:
+
+View deletion status
+
+7. Audit
+
+Ensure ACCOUNT_DELETION_CANCELLED audit log is created by the backend when cancellation succeeds.
+
+8. Final confirmation
+
+After implementation, confirm:
+
+- Mobile users can view deletion status
+- Mobile users can cancel deletion request while cancellable
+- Mobile users cannot cancel after ANONYMISED or COMPLETED
+- Cancellation does not bypass trader verification/subscription/public visibility rules
+- Typecheck passes
