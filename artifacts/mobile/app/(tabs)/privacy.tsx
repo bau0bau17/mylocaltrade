@@ -71,14 +71,14 @@ export default function PrivacyScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>4. Data Sharing</Text>
         <Text style={styles.paragraph}>
-          We may share your data with: payment processors (Stripe), hosting providers, and analytics services. We do not sell your personal data to third parties. When you send an enquiry to a trader, your contact details are shared with that trader to facilitate the service.
+          We may share your data with our payment processor (Stripe), our email provider, and our hosting provider. We do not sell your personal data to third parties. When you send an enquiry to a trader, the trader receives your name, the service required, your preferred date, your message and — if you choose to provide it — your phone number, so they can respond to your request. Your email address is not shared with the trader by default; replies come back through the in-app messaging system.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>5. Data Retention</Text>
         <Text style={styles.paragraph}>
-          We retain your personal data for as long as your account is active or as needed to provide services. We will retain and use your data as necessary to comply with legal obligations, resolve disputes, and enforce our agreements. You may request deletion of your account and data at any time.
+          We retain your personal data for as long as your account is active or as needed to provide services. We will retain and use your data as necessary to comply with legal obligations, resolve disputes, and enforce our agreements. You may request deletion of your account and data at any time from inside the app. When you do, your account is immediately disabled and your trader profile (if any) is hidden from public search. There is then a short retention period during which you can cancel the request from the app, after which your personal data is anonymised and removed in line with our retention obligations.
         </Text>
       </View>
 

@@ -76,7 +76,7 @@ export default function SafetyAdviceScreen() {
           Try to resolve the issue with the trader first. If you cannot, you can:
         </Text>
         <Text style={styles.paragraph}>
-          • Report the trader to us at support@mylocaltrade.co.uk{'\n'}
+          • Report the trader from the "Report a Trader" page in the app, or email support@mylocaltrade.co.uk{'\n'}
           • Contact Citizens Advice (citizensadvice.org.uk){'\n'}
           • Contact your local Trading Standards office{'\n'}
           • In an emergency, call 999

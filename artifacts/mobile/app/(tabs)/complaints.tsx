@@ -60,7 +60,7 @@ export default function ComplaintsScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>4. Our response</Text>
         <Text style={styles.paragraph}>
-          We will acknowledge your complaint within 5 working days and aim to provide a substantive response within 30 days. If we need longer to investigate, we will let you know.
+          We aim to acknowledge your complaint within 2 working days and to provide a substantive response within 30 days. If we need longer to investigate, we will let you know.
         </Text>
       </View>
 

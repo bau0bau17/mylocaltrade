@@ -53,7 +53,7 @@ export default function TermsScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>4. Trader Subscriptions</Text>
         <Text style={styles.paragraph}>
-          Tradespeople may subscribe to paid features. Subscriptions are billed on a recurring monthly basis as selected during purchase. Prices are subject to change with 30 days' notice. Your right to cancel is set out in our Refund Policy.
+          Tradespeople may subscribe to paid features (Basic, Premium or Elite). Subscriptions are billed monthly through our payment provider (Stripe) and renew automatically until cancelled. You can cancel your subscription at any time from inside the app; access continues until the end of the current billing period. Prices are subject to change with 30 days' notice. Your right to cancel is set out in our Refund &amp; Cancellation Policy.
         </Text>
       </View>
 
@@ -84,7 +84,7 @@ export default function TermsScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>8. Complaints & Dispute Resolution</Text>
         <Text style={styles.paragraph}>
-          If you have a complaint, please contact us using the Contact Us button below. We aim to resolve all complaints within 14 working days. If we cannot resolve your complaint, you may be able to use the EU Online Dispute Resolution platform or seek advice from Citizens Advice.
+          If you have a complaint, please contact us using the Contact Us button below. We aim to acknowledge complaints within 2 working days and to provide a substantive response within 30 days. If we cannot resolve your complaint, you may seek independent advice from Citizens Advice (citizensadvice.org.uk) or your local Trading Standards office.
         </Text>
       </View>
 
