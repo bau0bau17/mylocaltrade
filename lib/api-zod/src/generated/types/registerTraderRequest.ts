@@ -19,6 +19,10 @@ export interface RegisterTraderRequest {
   termsAccepted: boolean;
   /** User explicitly accepted the current Privacy Policy. */
   privacyAccepted: boolean;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
   contactName: string;
   businessName: string;
   /** Optional UK Companies House registration number. If present, the

@@ -108,6 +108,7 @@ async function loadActiveUser(
       isActive: usersTable.isActive,
       tokenVersion: usersTable.tokenVersion,
       deletedAt: usersTable.deletedAt,
+      deletionStatus: usersTable.deletionStatus,
     })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
@@ -115,6 +116,10 @@ async function loadActiveUser(
 
   if (!user) return null;
   if (user.deletedAt) return null;
+  // GDPR / account deletion: any non-null deletionStatus locks the account
+  // out, even if the soft-delete `deletedAt` flag has not been set yet.
+  // Admins go through a different code path to view those accounts.
+  if (user.deletionStatus) return null;
   if (user.role === "admin" && !user.isActive) return null;
   if (user.tokenVersion !== tokenVersion) return null;
 
@@ -152,6 +157,79 @@ export async function authMiddleware(
     next();
   } catch (err) {
     req.log?.error({ err }, "authMiddleware account lookup failed");
+    res.status(500).json({ error: "Authentication check failed" });
+  }
+}
+
+/**
+ * Variant of `authMiddleware` that ALSO accepts users whose account is in
+ * the GDPR deletion lifecycle (deletionStatus is non-null) but not yet
+ * hard/soft-deleted. Use this only on the dedicated cancel + status
+ * endpoints so a user can recover from an accidental deletion request
+ * without contacting support.
+ *
+ * Still rejects: hard-deleted accounts (`deletedAt` set), token-version
+ * mismatches, and admins flipped inactive.
+ */
+export async function authMiddlewareAllowDeletion(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  let decoded: { userId: number; role: string; tokenVersion: number };
+  try {
+    decoded = verifyToken(authHeader.substring(7));
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+    return;
+  }
+  try {
+    const [user] = await db
+      .select({
+        id: usersTable.id,
+        role: usersTable.role,
+        isActive: usersTable.isActive,
+        tokenVersion: usersTable.tokenVersion,
+        deletedAt: usersTable.deletedAt,
+        deletionStatus: usersTable.deletionStatus,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.id, decoded.userId))
+      .limit(1);
+    if (!user || user.deletedAt) {
+      res.status(401).json({ error: "Account is no longer active" });
+      return;
+    }
+    if (user.role === "admin" && !user.isActive) {
+      res.status(401).json({ error: "Account is no longer active" });
+      return;
+    }
+    if (user.tokenVersion !== decoded.tokenVersion) {
+      res.status(401).json({ error: "Account is no longer active" });
+      return;
+    }
+    // ANONYMISED / COMPLETED accounts have lost their identifying data and
+    // should not be able to act through the API at all.
+    if (
+      user.deletionStatus === "ANONYMISED" ||
+      user.deletionStatus === "COMPLETED"
+    ) {
+      res.status(401).json({ error: "Account is no longer active" });
+      return;
+    }
+    (req as AuthenticatedRequest).userId = user.id;
+    (req as AuthenticatedRequest).userRole = user.role as
+      | "customer"
+      | "trader"
+      | "admin";
+    next();
+  } catch (err) {
+    req.log?.error({ err }, "authMiddlewareAllowDeletion lookup failed");
     res.status(500).json({ error: "Authentication check failed" });
   }
 }

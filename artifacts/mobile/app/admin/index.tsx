@@ -113,9 +113,14 @@ export default function AdminIndexScreen() {
           <Feather name="arrow-left" size={20} color={Colors.light.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Trader Review</Text>
-        <Pressable onPress={() => router.push('/admin/promo-codes')} style={styles.backBtn}>
-          <Feather name="tag" size={20} color={Colors.light.text} />
-        </Pressable>
+        <View style={{ flexDirection: 'row' }}>
+          <Pressable onPress={() => router.push('/admin/account-deletions')} style={styles.backBtn}>
+            <Feather name="trash-2" size={20} color={Colors.light.text} />
+          </Pressable>
+          <Pressable onPress={() => router.push('/admin/promo-codes')} style={styles.backBtn}>
+            <Feather name="tag" size={20} color={Colors.light.text} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchWrap}>

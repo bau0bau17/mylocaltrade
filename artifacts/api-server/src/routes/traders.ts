@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { traderProfilesTable, usersTable } from "@workspace/db/schema";
 import type { TraderProfile } from "@workspace/db/schema";
-import { eq, and, ilike, or, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, ilike, or, desc, sql, inArray, isNull } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -22,6 +22,9 @@ router.get("/traders", async (req, res) => {
       eq(traderProfilesTable.isActive, true),
       inArray(traderProfilesTable.verificationStatus, VISIBLE_STATUSES as unknown as string[]),
       eq(traderProfilesTable.businessProfileCompleted, true),
+      // GDPR: hide any trader account in the deletion lifecycle.
+      isNull(usersTable.deletionStatus),
+      isNull(usersTable.deletedAt),
     ];
 
     if (category && typeof category === "string") {
@@ -86,6 +89,7 @@ router.get("/traders", async (req, res) => {
     const [countResult] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(traderProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(where);
 
     const total = countResult?.count || 0;
@@ -117,6 +121,8 @@ router.get("/traders/featured", async (req, res) => {
         eq(traderProfilesTable.isActive, true),
         eq(traderProfilesTable.verificationStatus, "VERIFIED"),
         eq(traderProfilesTable.isFeatured, true),
+        isNull(usersTable.deletionStatus),
+        isNull(usersTable.deletedAt),
       ))
       .orderBy(desc(traderProfilesTable.createdAt))
       .limit(limit);
@@ -146,6 +152,8 @@ router.get("/traders/:id", async (req, res) => {
       .select({
         profile: traderProfilesTable,
         emailVerified: usersTable.emailVerified,
+        deletionStatus: usersTable.deletionStatus,
+        deletedAt: usersTable.deletedAt,
       })
       .from(traderProfilesTable)
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
@@ -155,6 +163,8 @@ router.get("/traders/:id", async (req, res) => {
     if (
       !row ||
       !row.profile.isActive ||
+      row.deletionStatus ||
+      row.deletedAt ||
       !(VISIBLE_STATUSES as readonly string[]).includes(row.profile.verificationStatus)
     ) {
       res.status(404).json({ error: "Trader not found" });
