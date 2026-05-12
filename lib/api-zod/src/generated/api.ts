@@ -24,10 +24,12 @@ is a pending-registration acknowledgement, NOT a session.
  */
 export const registerCustomerBodyPasswordMin = 8;
 
+export const registerCustomerBodyFullNameMax = 100;
+
 export const RegisterCustomerBody = zod.object({
   email: zod.string().email(),
   password: zod.string().min(registerCustomerBodyPasswordMin),
-  fullName: zod.string().min(1).max(100),
+  fullName: zod.string().min(1).max(registerCustomerBodyFullNameMax),
   phone: zod.string().optional(),
 });
 
@@ -44,6 +46,8 @@ export const registerTraderBodyPasswordMin = 8;
 
 export const registerTraderBodyConfirmPasswordMin = 8;
 
+export const registerTraderBodyContactNameMax = 100;
+
 export const RegisterTraderBody = zod.object({
   email: zod.string().email(),
   password: zod.string().min(registerTraderBodyPasswordMin),
@@ -57,7 +61,7 @@ export const RegisterTraderBody = zod.object({
   privacyAccepted: zod
     .boolean()
     .describe("User explicitly accepted the current Privacy Policy."),
-  contactName: zod.string().min(1).max(100),
+  contactName: zod.string().min(1).max(registerTraderBodyContactNameMax),
   businessName: zod.string(),
   companyNumber: zod
     .string()
@@ -1409,4 +1413,50 @@ export const SearchCompaniesHouseResponse = zod.object({
       addressSnippet: zod.string().nullish(),
     }),
   ),
+});
+
+/**
+ * @summary Request account deletion (GDPR)
+ */
+
+export const postAccountDeletionRequestBodyReasonMax = 2000;
+
+export const PostAccountDeletionRequestBody = zod.object({
+  password: zod.string().min(1),
+  confirm: zod.literal(true),
+  reason: zod.string().max(postAccountDeletionRequestBodyReasonMax).nullish(),
+});
+
+export const PostAccountDeletionRequestResponse = zod.object({
+  ok: zod.boolean(),
+  deletionStatus: zod.string(),
+  deletionRequestedAt: zod.date().optional(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Current GDPR deletion status for the signed-in user
+ */
+export const GetAccountDeletionStatusResponse = zod.object({
+  deletionStatus: zod.string().nullish(),
+  deletionRequestedAt: zod.date().nullish(),
+  deletionReason: zod.string().nullish(),
+  scheduledHardDeleteAt: zod.date().nullish(),
+  retentionUntil: zod.date().nullish(),
+  retentionReason: zod.string().nullish(),
+  canCancel: zod.boolean().optional(),
+});
+
+/**
+ * @summary Cancel a pending account deletion request
+ */
+
+export const PostAccountDeletionCancelBody = zod.object({
+  password: zod.string().min(1),
+  confirm: zod.literal(true),
+});
+
+export const PostAccountDeletionCancelResponse = zod.object({
+  ok: zod.boolean().optional(),
+  deletionStatus: zod.string().nullish(),
 });

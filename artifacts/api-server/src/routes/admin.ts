@@ -12,9 +12,10 @@ import {
   conversationReportsTable,
   reviewsTable,
 } from "@workspace/db/schema";
+import { pushTokensTable } from "@workspace/db/schema";
 import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, isNull, asc } from "drizzle-orm";
 import { z } from "zod";
-import { authMiddleware, adminOnly } from "../lib/auth";
+import { authMiddleware, adminOnly, revokeUserSessions } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import {
@@ -1618,5 +1619,462 @@ router.post("/admin/traders/:userId/ai-verification/run", authMiddleware, adminO
     res.status(500).json({ error: "Failed to run AI verification" });
   }
 });
+
+// ===========================================================================
+// Account-deletion admin queue
+// ===========================================================================
+
+const ACCOUNT_DELETION_LIST_STATUSES = [
+  "REQUESTED",
+  "DISABLED_PENDING_RETENTION",
+  "ANONYMISED",
+  "COMPLETED",
+] as const;
+
+const RetainBody = z.object({
+  retentionReason: z.string().trim().min(3).max(2000),
+  retentionUntil: z.string().datetime().optional().nullable(),
+  notes: z.string().trim().max(2000).optional().nullable(),
+});
+
+const AnonymiseBody = z.object({
+  notes: z.string().trim().max(2000).optional().nullable(),
+});
+
+const NotesBody = z.object({
+  notes: z.string().trim().max(2000),
+});
+
+// GET /api/admin/account-deletions — list all accounts in the deletion lifecycle
+router.get(
+  "/admin/account-deletions",
+  authMiddleware,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const status = typeof req.query.status === "string" ? req.query.status : undefined;
+      const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+      const conditions = [isNotNull(usersTable.deletionStatus)];
+      if (status && (ACCOUNT_DELETION_LIST_STATUSES as readonly string[]).includes(status)) {
+        conditions.push(eq(usersTable.deletionStatus, status));
+      }
+      if (search) {
+        conditions.push(
+          or(
+            ilike(usersTable.email, `%${search}%`),
+            ilike(usersTable.fullName, `%${search}%`),
+          )!,
+        );
+      }
+      const rows = await db
+        .select({
+          id: usersTable.id,
+          email: usersTable.email,
+          fullName: usersTable.fullName,
+          role: usersTable.role,
+          deletionStatus: usersTable.deletionStatus,
+          deletionRequestedAt: usersTable.deletionRequestedAt,
+          deletionReason: usersTable.deletionReason,
+          deletionProcessedAt: usersTable.deletionProcessedAt,
+          retentionUntil: usersTable.retentionUntil,
+          retentionReason: usersTable.retentionReason,
+          anonymisedAt: usersTable.anonymisedAt,
+          accountDisabledAt: usersTable.accountDisabledAt,
+          adminDeletionNotes: usersTable.adminDeletionNotes,
+          processedByAdminId: usersTable.processedByAdminId,
+        })
+        .from(usersTable)
+        .where(and(...conditions))
+        .orderBy(desc(usersTable.deletionRequestedAt));
+      res.json({
+        items: rows.map((r) => ({
+          ...r,
+          deletionRequestedAt: r.deletionRequestedAt?.toISOString() ?? null,
+          deletionProcessedAt: r.deletionProcessedAt?.toISOString() ?? null,
+          retentionUntil: r.retentionUntil?.toISOString() ?? null,
+          anonymisedAt: r.anonymisedAt?.toISOString() ?? null,
+          accountDisabledAt: r.accountDisabledAt?.toISOString() ?? null,
+        })),
+        total: rows.length,
+      });
+    } catch (error) {
+      req.log.error({ err: error }, "List account deletions failed");
+      res.status(500).json({ error: "Failed to list account deletions" });
+    }
+  },
+);
+
+// GET /api/admin/account-deletions/:userId — full detail for one request
+router.get(
+  "/admin/account-deletions/:userId",
+  authMiddleware,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const userId = Number.parseInt(String(req.params.userId), 10);
+      if (!Number.isFinite(userId)) {
+        res.status(400).json({ error: "Invalid user id" });
+        return;
+      }
+      const [user] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1);
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      if (!user.deletionStatus) {
+        res.status(404).json({ error: "User is not in the deletion lifecycle" });
+        return;
+      }
+      const { userId: adminId } = req as AuthenticatedRequest;
+      void logAudit({
+        userId,
+        action: "ADMIN_VIEWED_DELETION_REQUEST",
+        details: { adminId },
+      });
+      const [profile] = await db
+        .select()
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.userId, userId))
+        .limit(1);
+      const audit = await db
+        .select()
+        .from(traderAuditLogTable)
+        .where(eq(traderAuditLogTable.userId, userId))
+        .orderBy(desc(traderAuditLogTable.createdAt))
+        .limit(50);
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          role: user.role,
+          deletionStatus: user.deletionStatus,
+          deletionRequestedAt: user.deletionRequestedAt?.toISOString() ?? null,
+          deletionReason: user.deletionReason,
+          deletionProcessedAt: user.deletionProcessedAt?.toISOString() ?? null,
+          scheduledHardDeleteAt: user.scheduledHardDeleteAt?.toISOString() ?? null,
+          anonymisedAt: user.anonymisedAt?.toISOString() ?? null,
+          retentionUntil: user.retentionUntil?.toISOString() ?? null,
+          retentionReason: user.retentionReason,
+          accountDisabledAt: user.accountDisabledAt?.toISOString() ?? null,
+          adminDeletionNotes: user.adminDeletionNotes,
+          processedByAdminId: user.processedByAdminId,
+          deletedAt: user.deletedAt?.toISOString() ?? null,
+        },
+        traderProfile: profile
+          ? {
+              id: profile.id,
+              businessName: profile.businessName,
+              town: profile.town,
+              postcode: profile.postcode,
+              isActive: profile.isActive,
+              verificationStatus: profile.verificationStatus,
+            }
+          : null,
+        recentAudit: audit.map((a) => ({
+          ...a,
+          createdAt: a.createdAt.toISOString(),
+        })),
+      });
+    } catch (error) {
+      req.log.error({ err: error }, "Get account deletion detail failed");
+      res.status(500).json({ error: "Failed to load deletion detail" });
+    }
+  },
+);
+
+// POST /api/admin/account-deletions/:userId/retain — apply legal-retention hold
+router.post(
+  "/admin/account-deletions/:userId/retain",
+  authMiddleware,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const userId = Number.parseInt(String(req.params.userId), 10);
+      if (!Number.isFinite(userId)) {
+        res.status(400).json({ error: "Invalid user id" });
+        return;
+      }
+      const body = RetainBody.parse(req.body);
+      const { userId: adminId } = req as AuthenticatedRequest;
+      const now = new Date();
+      const [user] = await db
+        .select({ deletionStatus: usersTable.deletionStatus, role: usersTable.role })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1);
+      if (!user || !user.deletionStatus) {
+        res.status(404).json({ error: "User not in deletion lifecycle" });
+        return;
+      }
+      // Retention may only be applied while the account is still REQUESTED or
+      // already in DISABLED_PENDING_RETENTION (e.g. updating the reason).
+      // Anonymised / completed accounts are terminal — block the transition.
+      const [updated] = await db
+        .update(usersTable)
+        .set({
+          deletionStatus: "DISABLED_PENDING_RETENTION",
+          retentionReason: body.retentionReason,
+          retentionUntil: body.retentionUntil ? new Date(body.retentionUntil) : null,
+          adminDeletionNotes: body.notes ?? null,
+          processedByAdminId: adminId,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(usersTable.id, userId),
+            inArray(usersTable.deletionStatus, [
+              "REQUESTED",
+              "DISABLED_PENDING_RETENTION",
+            ]),
+          ),
+        )
+        .returning({ id: usersTable.id });
+      if (!updated) {
+        res.status(409).json({
+          error: "Account is no longer in a state where retention can be applied.",
+          code: "INVALID_TRANSITION",
+        });
+        return;
+      }
+      void logAudit({
+        userId,
+        action: "ADMIN_MARKED_RETENTION_REQUIRED",
+        details: { adminId, retentionUntil: body.retentionUntil ?? null },
+        notes: body.retentionReason,
+      });
+      void logAudit({ userId, action: "ACCOUNT_RETENTION_APPLIED" });
+      res.json({ ok: true, deletionStatus: "DISABLED_PENDING_RETENTION" });
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid input", details: error.issues });
+        return;
+      }
+      req.log.error({ err: error }, "Retain account failed");
+      res.status(500).json({ error: "Failed to apply retention" });
+    }
+  },
+);
+
+// POST /api/admin/account-deletions/:userId/anonymise — wipe PII, keep row
+router.post(
+  "/admin/account-deletions/:userId/anonymise",
+  authMiddleware,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const userId = Number.parseInt(String(req.params.userId), 10);
+      if (!Number.isFinite(userId)) {
+        res.status(400).json({ error: "Invalid user id" });
+        return;
+      }
+      const body = AnonymiseBody.parse(req.body);
+      const { userId: adminId } = req as AuthenticatedRequest;
+      const [user] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1);
+      if (!user || !user.deletionStatus) {
+        res.status(404).json({ error: "User not in deletion lifecycle" });
+        return;
+      }
+      const now = new Date();
+      // Anonymise to a stable, non-identifying placeholder. Keep the row so
+      // FK references (reviews, conversations, audit) stay intact.
+      const anonEmail = `deleted-user-${user.id}@deleted.mylocaltrade.invalid`;
+      const anonName = `Deleted user #${user.id}`;
+      let anonOk = false;
+      await db.transaction(async (tx) => {
+        // Atomic transition guard: refuse to anonymise an account that is
+        // already ANONYMISED or COMPLETED — those states are terminal for
+        // PII and re-running would be a no-op at best, a write conflict at
+        // worst.
+        const [updated] = await tx
+          .update(usersTable)
+          .set({
+            email: anonEmail,
+            fullName: anonName,
+            phone: null,
+            passwordHash: "!disabled-anonymised!",
+            stripeCustomerId: null,
+            stripeSubscriptionId: null,
+            plan: null,
+            pushNotificationsEnabled: false,
+            isActive: false,
+            deletionStatus: "ANONYMISED",
+            anonymisedAt: now,
+            adminDeletionNotes: body.notes ?? user.adminDeletionNotes,
+            processedByAdminId: adminId,
+            tokenVersion: sql`${usersTable.tokenVersion} + 1`,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(usersTable.id, user.id),
+              inArray(usersTable.deletionStatus, [
+                "REQUESTED",
+                "DISABLED_PENDING_RETENTION",
+              ]),
+            ),
+          )
+          .returning({ id: usersTable.id });
+        if (!updated) return;
+        anonOk = true;
+        await tx.delete(pushTokensTable).where(eq(pushTokensTable.userId, user.id));
+        if (user.role === "trader") {
+          await tx
+            .update(traderProfilesTable)
+            .set({
+              isActive: false,
+              businessName: anonName,
+              contactName: anonName,
+              email: anonEmail,
+              phone: "",
+              businessAddress: null,
+              businessDescription: null,
+              website: null,
+              logoUrl: null,
+              galleryUrls: [],
+              socialLinks: null,
+              updatedAt: now,
+            })
+            .where(eq(traderProfilesTable.userId, user.id));
+        }
+      });
+      if (!anonOk) {
+        res.status(409).json({
+          error: "Account is no longer in a state where anonymisation can be applied.",
+          code: "INVALID_TRANSITION",
+        });
+        return;
+      }
+      void logAudit({
+        userId,
+        action: "CUSTOMER_DATA_ANONYMISED",
+        details: { adminId, role: user.role },
+        notes: body.notes ?? undefined,
+      });
+      void logAudit({ userId, action: "ADMIN_APPROVED_DELETION_PROCESSING" });
+      res.json({ ok: true, deletionStatus: "ANONYMISED" });
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid input", details: error.issues });
+        return;
+      }
+      req.log.error({ err: error }, "Anonymise account failed");
+      res.status(500).json({ error: "Failed to anonymise account" });
+    }
+  },
+);
+
+// POST /api/admin/account-deletions/:userId/complete — finalise (soft-delete)
+router.post(
+  "/admin/account-deletions/:userId/complete",
+  authMiddleware,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const userId = Number.parseInt(String(req.params.userId), 10);
+      if (!Number.isFinite(userId)) {
+        res.status(400).json({ error: "Invalid user id" });
+        return;
+      }
+      const { userId: adminId } = req as AuthenticatedRequest;
+      const [user] = await db
+        .select({ deletionStatus: usersTable.deletionStatus })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1);
+      if (!user || !user.deletionStatus) {
+        res.status(404).json({ error: "User not in deletion lifecycle" });
+        return;
+      }
+      const now = new Date();
+      // Atomic transition guard: COMPLETED is terminal — block re-completing.
+      const [updated] = await db
+        .update(usersTable)
+        .set({
+          deletionStatus: "COMPLETED",
+          deletionProcessedAt: now,
+          deletedAt: now,
+          isActive: false,
+          processedByAdminId: adminId,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(usersTable.id, userId),
+            inArray(usersTable.deletionStatus, [
+              "REQUESTED",
+              "DISABLED_PENDING_RETENTION",
+              "ANONYMISED",
+            ]),
+          ),
+        )
+        .returning({ id: usersTable.id });
+      if (!updated) {
+        res.status(409).json({
+          error: "Account is no longer in a state where it can be completed.",
+          code: "INVALID_TRANSITION",
+        });
+        return;
+      }
+      await revokeUserSessions(userId);
+      void logAudit({
+        userId,
+        action: "ACCOUNT_DELETION_COMPLETED",
+        details: { adminId },
+      });
+      res.json({ ok: true, deletionStatus: "COMPLETED" });
+    } catch (error) {
+      req.log.error({ err: error }, "Complete account deletion failed");
+      res.status(500).json({ error: "Failed to complete deletion" });
+    }
+  },
+);
+
+// POST /api/admin/account-deletions/:userId/notes — append admin notes
+router.post(
+  "/admin/account-deletions/:userId/notes",
+  authMiddleware,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const userId = Number.parseInt(String(req.params.userId), 10);
+      if (!Number.isFinite(userId)) {
+        res.status(400).json({ error: "Invalid user id" });
+        return;
+      }
+      const body = NotesBody.parse(req.body);
+      const { userId: adminId } = req as AuthenticatedRequest;
+      const [updated] = await db
+        .update(usersTable)
+        .set({
+          adminDeletionNotes: body.notes,
+          processedByAdminId: adminId,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(usersTable.id, userId), isNotNull(usersTable.deletionStatus)))
+        .returning({ id: usersTable.id });
+      if (!updated) {
+        res.status(404).json({ error: "User not in deletion lifecycle" });
+        return;
+      }
+      res.json({ ok: true });
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid input", details: error.issues });
+        return;
+      }
+      req.log.error({ err: error }, "Update deletion notes failed");
+      res.status(500).json({ error: "Failed to update notes" });
+    }
+  },
+);
 
 export default router;

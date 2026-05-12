@@ -38,6 +38,7 @@ import type {
   Enquiry,
   EnquiryListResponse,
   ErrorResponse,
+  GetAccountDeletionStatus200,
   GetAdminConversationReportsParams,
   GetFeaturedTradersParams,
   HandleStripeWebhookBody,
@@ -51,6 +52,10 @@ import type {
   MuteConversationResponse,
   NewLeadCountResponse,
   OkResponse,
+  PostAccountDeletionCancel200,
+  PostAccountDeletionCancelBody,
+  PostAccountDeletionRequest200,
+  PostAccountDeletionRequestBody,
   RegisterCustomerRequest,
   RegisterPendingResponse,
   RegisterPushTokenRequest,
@@ -4697,3 +4702,262 @@ export function useSearchCompaniesHouse<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Request account deletion (GDPR)
+ */
+export const getPostAccountDeletionRequestUrl = () => {
+  return `/api/account/deletion-request`;
+};
+
+export const postAccountDeletionRequest = async (
+  postAccountDeletionRequestBody: PostAccountDeletionRequestBody,
+  options?: RequestInit,
+): Promise<PostAccountDeletionRequest200> => {
+  return customFetch<PostAccountDeletionRequest200>(
+    getPostAccountDeletionRequestUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(postAccountDeletionRequestBody),
+    },
+  );
+};
+
+export const getPostAccountDeletionRequestMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAccountDeletionRequest>>,
+    TError,
+    { data: BodyType<PostAccountDeletionRequestBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof postAccountDeletionRequest>>,
+  TError,
+  { data: BodyType<PostAccountDeletionRequestBody> },
+  TContext
+> => {
+  const mutationKey = ["postAccountDeletionRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof postAccountDeletionRequest>>,
+    { data: BodyType<PostAccountDeletionRequestBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return postAccountDeletionRequest(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PostAccountDeletionRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof postAccountDeletionRequest>>
+>;
+export type PostAccountDeletionRequestMutationBody =
+  BodyType<PostAccountDeletionRequestBody>;
+export type PostAccountDeletionRequestMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request account deletion (GDPR)
+ */
+export const usePostAccountDeletionRequest = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAccountDeletionRequest>>,
+    TError,
+    { data: BodyType<PostAccountDeletionRequestBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof postAccountDeletionRequest>>,
+  TError,
+  { data: BodyType<PostAccountDeletionRequestBody> },
+  TContext
+> => {
+  return useMutation(getPostAccountDeletionRequestMutationOptions(options));
+};
+
+/**
+ * @summary Current GDPR deletion status for the signed-in user
+ */
+export const getGetAccountDeletionStatusUrl = () => {
+  return `/api/account/deletion-status`;
+};
+
+export const getAccountDeletionStatus = async (
+  options?: RequestInit,
+): Promise<GetAccountDeletionStatus200> => {
+  return customFetch<GetAccountDeletionStatus200>(
+    getGetAccountDeletionStatusUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAccountDeletionStatusQueryKey = () => {
+  return [`/api/account/deletion-status`] as const;
+};
+
+export const getGetAccountDeletionStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAccountDeletionStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAccountDeletionStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAccountDeletionStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAccountDeletionStatus>>
+  > = ({ signal }) => getAccountDeletionStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAccountDeletionStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAccountDeletionStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAccountDeletionStatus>>
+>;
+export type GetAccountDeletionStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Current GDPR deletion status for the signed-in user
+ */
+
+export function useGetAccountDeletionStatus<
+  TData = Awaited<ReturnType<typeof getAccountDeletionStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAccountDeletionStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAccountDeletionStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Cancel a pending account deletion request
+ */
+export const getPostAccountDeletionCancelUrl = () => {
+  return `/api/account/deletion-cancel`;
+};
+
+export const postAccountDeletionCancel = async (
+  postAccountDeletionCancelBody: PostAccountDeletionCancelBody,
+  options?: RequestInit,
+): Promise<PostAccountDeletionCancel200> => {
+  return customFetch<PostAccountDeletionCancel200>(
+    getPostAccountDeletionCancelUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(postAccountDeletionCancelBody),
+    },
+  );
+};
+
+export const getPostAccountDeletionCancelMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAccountDeletionCancel>>,
+    TError,
+    { data: BodyType<PostAccountDeletionCancelBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof postAccountDeletionCancel>>,
+  TError,
+  { data: BodyType<PostAccountDeletionCancelBody> },
+  TContext
+> => {
+  const mutationKey = ["postAccountDeletionCancel"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof postAccountDeletionCancel>>,
+    { data: BodyType<PostAccountDeletionCancelBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return postAccountDeletionCancel(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PostAccountDeletionCancelMutationResult = NonNullable<
+  Awaited<ReturnType<typeof postAccountDeletionCancel>>
+>;
+export type PostAccountDeletionCancelMutationBody =
+  BodyType<PostAccountDeletionCancelBody>;
+export type PostAccountDeletionCancelMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Cancel a pending account deletion request
+ */
+export const usePostAccountDeletionCancel = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof postAccountDeletionCancel>>,
+    TError,
+    { data: BodyType<PostAccountDeletionCancelBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof postAccountDeletionCancel>>,
+  TError,
+  { data: BodyType<PostAccountDeletionCancelBody> },
+  TContext
+> => {
+  return useMutation(getPostAccountDeletionCancelMutationOptions(options));
+};

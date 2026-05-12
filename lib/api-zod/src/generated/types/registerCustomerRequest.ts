@@ -10,6 +10,10 @@ export interface RegisterCustomerRequest {
   email: string;
   /** @minLength 8 */
   password: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
   fullName: string;
   phone?: string;
 }

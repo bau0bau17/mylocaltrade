@@ -17,6 +17,7 @@ import adminRouter from "./admin";
 import emailUnsubscribeRouter from "./email-unsubscribe";
 import companiesHouseRouter from "./companies-house";
 import promoRouter from "./promo";
+import accountDeletionRouter from "./account-deletion";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(adminRouter);
 router.use(emailUnsubscribeRouter);
 router.use(companiesHouseRouter);
 router.use(promoRouter);
+router.use(accountDeletionRouter);
 
 export default router;

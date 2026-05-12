@@ -116,12 +116,16 @@ export type TraderStatus = (typeof TRADER_STATUS)[keyof typeof TRADER_STATUS];
  * As later phases land (subscription gating, document expiry checks), tighten this.
  */
 export function isTraderProfilePublic(
-  user: Pick<User, "emailVerified" | "isActive" | "role">,
+  user: Pick<User, "emailVerified" | "isActive" | "role" | "deletedAt" | "deletionStatus">,
   profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive">,
   subscription?: { status: string | null } | null,
   documents?: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[] | null,
 ): boolean {
   if (user.role !== "trader") return false;
+  // GDPR: any account in the deletion lifecycle (or already soft-deleted)
+  // must not appear in public listings, search results or detail pages.
+  if (user.deletedAt) return false;
+  if (user.deletionStatus) return false;
   if (!user.emailVerified) return false;
   if (profile.verificationStatus !== TRADER_STATUS.VERIFIED) return false;
   if (!profile.isActive) return false;

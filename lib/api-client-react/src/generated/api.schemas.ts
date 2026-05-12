@@ -22,6 +22,10 @@ export interface RegisterCustomerRequest {
   email: string;
   /** @minLength 8 */
   password: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
   fullName: string;
   phone?: string;
 }
@@ -39,6 +43,10 @@ export interface RegisterTraderRequest {
   termsAccepted: boolean;
   /** User explicitly accepted the current Privacy Policy. */
   privacyAccepted: boolean;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
   contactName: string;
   businessName: string;
   /** Optional UK Companies House registration number. If present, the
@@ -981,4 +989,40 @@ export type SearchCompaniesHouseParams = {
    * Company name fragment to search for.
    */
   q: string;
+};
+
+export type PostAccountDeletionRequestBody = {
+  /** @minLength 1 */
+  password: string;
+  confirm: boolean;
+  /** @maxLength 2000 */
+  reason?: string | null;
+};
+
+export type PostAccountDeletionRequest200 = {
+  ok: boolean;
+  deletionStatus: string;
+  deletionRequestedAt?: string;
+  message?: string;
+};
+
+export type GetAccountDeletionStatus200 = {
+  deletionStatus?: string | null;
+  deletionRequestedAt?: string | null;
+  deletionReason?: string | null;
+  scheduledHardDeleteAt?: string | null;
+  retentionUntil?: string | null;
+  retentionReason?: string | null;
+  canCancel?: boolean;
+};
+
+export type PostAccountDeletionCancelBody = {
+  /** @minLength 1 */
+  password: string;
+  confirm: boolean;
+};
+
+export type PostAccountDeletionCancel200 = {
+  ok?: boolean;
+  deletionStatus?: string | null;
 };

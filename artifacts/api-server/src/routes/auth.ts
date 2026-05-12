@@ -252,6 +252,17 @@ router.post("/auth/login", async (req, res) => {
       res.status(403).json({ error: "This account has been deleted." });
       return;
     }
+    if (user.deletionStatus) {
+      // Account is in the GDPR deletion lifecycle — locked out for everyone
+      // except admins (who never hit this route to view deletion requests).
+      // Customer-facing message stays generic so we don't leak the exact
+      // lifecycle stage.
+      res.status(403).json({
+        error: "This account has been deactivated pending deletion. Please contact support if this is unexpected.",
+        code: "ACCOUNT_DELETION_PENDING",
+      });
+      return;
+    }
 
     const valid = await bcryptjs.compare(body.password, user.passwordHash);
     if (!valid) {

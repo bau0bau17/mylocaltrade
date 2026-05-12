@@ -348,6 +348,16 @@ export default function AccountScreen() {
             <View style={styles.separator} />
             <MenuRow icon="life-buoy" label="Legal & Support" onPress={() => router.push('/legal-support')} />
           </View>
+
+          <Text style={styles.sectionLabel}>Danger Zone</Text>
+          <View style={[styles.group, { marginHorizontal: 16 }]}>
+            <MenuRow
+              icon="trash-2"
+              label="Delete Account"
+              sub="Permanently remove your MyLocalTrade account"
+              onPress={() => router.push('/account/delete-account')}
+            />
+          </View>
         </>
       ) : null}
 

@@ -822,3 +822,113 @@ export async function sendNewMessageEmail(opts: {
 export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
+
+// ---------------------------------------------------------------------------
+// Account deletion / GDPR senders
+// ---------------------------------------------------------------------------
+
+export async function sendAccountDeletionReceivedEmail(opts: {
+  toEmail: string;
+  toName: string;
+  reason?: string | null;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const reasonBlock = opts.reason
+    ? `<div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+         <p style="color: #9CA3AF; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Reason you gave</p>
+         <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${escapeHtml(opts.reason)}</p>
+       </div>`
+    : "";
+  const html = emailShell({
+    title: "Account deletion request received",
+    preheader: "We've received your request to delete your MyLocalTrade account.",
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        We've received your request to delete your MyLocalTrade account. Your account is now <strong>deactivated</strong> — you have been signed out of the app, your push notifications have been turned off, and your trader profile (if any) is no longer visible to customers.
+      </p>
+      ${reasonBlock}
+      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
+        Our admin team will finalise the deletion once any required legal retention period has passed. We may keep a minimal record of certain data (for example, completed transactions) where the law requires us to do so.
+      </p>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 8px;">
+        <strong style="color: #F9FAFB;">Changed your mind?</strong> You can cancel this request from the app's "Delete account" screen for as long as the account is still in the deactivated state.
+      </p>
+      <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 16px 0 0;">
+        If you did not request this, please contact <a href="mailto:lucian.sabau@serviceproviderltd.co.uk" style="color: #00B4D8;">lucian.sabau@serviceproviderltd.co.uk</a> immediately.
+      </p>`,
+  });
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: "Your MyLocalTrade account deletion request",
+    html,
+    tag: "account-deletion-received",
+  });
+}
+
+export async function sendAccountDeletionCancelledEmail(opts: {
+  toEmail: string;
+  toName: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const html = emailShell({
+    title: "Account deletion cancelled",
+    preheader: "Your MyLocalTrade account has been restored.",
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        Welcome back. Your MyLocalTrade account is no longer scheduled for deletion and you can sign in again.
+      </p>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
+        Note: if you are a trader, your profile will only return to public listings once your verification status and subscription are still in good standing.
+      </p>`,
+  });
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: "Your MyLocalTrade account has been restored",
+    html,
+    tag: "account-deletion-cancelled",
+  });
+}
+
+export async function sendAdminAccountDeletionAlertEmail(opts: {
+  userEmail: string;
+  userFullName: string;
+  userRole: string;
+  reason?: string | null;
+}): Promise<void> {
+  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
+  const safeEmail = escapeHtml(opts.userEmail);
+  const safeName = escapeHtml(opts.userFullName);
+  const safeRole = escapeHtml(opts.userRole);
+  const safeReason = opts.reason ? escapeHtml(opts.reason) : "(none provided)";
+  const html = emailShell({
+    title: "New account deletion request",
+    preheader: `${safeName} has requested account deletion`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">A user has just requested account deletion. The account is already locked and the trader profile (if any) is hidden from customers.</p>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 110px;">Name</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeName}</td></tr>
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Email</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeEmail}</td></tr>
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Role</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeRole}</td></tr>
+      </table>
+      <div style="background: #0E1A2A; border-left: 3px solid #F59E0B; padding: 14px 16px; border-radius: 8px; margin: 0 0 16px;">
+        <p style="color: #FCD34D; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Reason</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
+      </div>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">Open the admin console → Account deletions to review and finalise the request.</p>`,
+  });
+  await dispatchEmail({
+    category: "contact",
+    to: { email: SUPPORT_EMAIL },
+    from: { email: FROM_EMAIL, name: "MyLocalTrade Account Deletions" },
+    subject: `[ACCOUNT DELETION] ${opts.userEmail}`,
+    html,
+    headers: {
+      "X-MyLocalTrade-Type": "account-deletion-admin-alert",
+    },
+    tag: "account-deletion-admin",
+  });
+}
