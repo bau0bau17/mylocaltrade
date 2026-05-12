@@ -1,0 +1,479 @@
+Vreau să implementezi un sistem de Request Account Deletion pentru MyLocalTrade, atât în aplicația mobilă, cât și în Admin Dashboard.
+
+Important: nu vreau hard delete instant pentru toate datele. MyLocalTrade este o platformă unde clienții și traderii comunică direct, există verificări de traderi, documente, plăți, reviews, messages, complaints și audit logs. De aceea, account deletion trebuie făcut controlat.
+
+Scopul este:
+
+* utilizatorul poate cere ștergerea contului;
+* accesul la cont este dezactivat;
+* profilul public al traderului este ascuns imediat;
+* datele care nu mai sunt necesare sunt șterse sau anonimizate;
+* anumite date pot fi păstrate limitat pentru fraud prevention, disputes, accounting, legal obligations, platform safety sau legal claims;
+* adminul poate vedea și procesa cererile de deletion;
+* totul este auditat.
+
+⸻
+
+1. Mobile App — Account Settings
+
+Adaugă în Account Settings o opțiune:
+
+Delete Account
+
+sau
+
+Request Account Deletion
+
+Când userul apasă, deschide un ecran separat cu explicație clară.
+
+Text recomandat:
+
+Deleting your account will remove access to your account and your profile will no longer be available. Some records may be retained for a limited period where required for fraud prevention, legal, accounting, dispute resolution or platform safety purposes.
+
+Pentru traderi, adaugă text suplimentar:
+
+Your public trader profile will be hidden immediately and you will no longer appear in search results. Verification, payment, audit, complaint and message records may be retained for a limited period where necessary.
+
+⸻
+
+2. Confirmation before deletion request
+
+Înainte să trimită requestul, cere:
+
+* password confirmation, dacă este disponibil;
+* checkbox obligatoriu;
+* optional deletion reason.
+
+Checkbox text:
+
+I understand that my account access will be disabled and some records may be retained for a limited period where legally necessary.
+
+Button:
+
+Submit Account Deletion Request
+
+După submit, afișează:
+
+Your account deletion request has been received. Your access may be disabled and your public profile, if any, will be removed or hidden. We may retain limited records where required for fraud prevention, disputes, legal, accounting or platform safety purposes.
+
+⸻
+
+3. Customer deletion behaviour
+
+Când un customer cere ștergerea contului:
+
+* set account_status = DELETION_REQUESTED;
+* revoke active sessions/tokens;
+* delete push notification tokens;
+* stop marketing communications;
+* disable future login, dacă deletion request este aprobat automat;
+* remove/anonymise profile details where possible;
+* remove saved traders/favourites;
+* keep enquiry/message/review records only where necessary for disputes, fraud prevention, audit, complaints or legal reasons;
+* if public reviews remain, anonymise display name to “Deleted user” unless there is a legal reason to retain identity internally.
+
+⸻
+
+4. Trader deletion behaviour
+
+Când un trader cere ștergerea contului:
+
+Immediately:
+
+* hide public trader profile;
+* remove trader from public search results;
+* set trader profile visibility = HIDDEN or DELETION_REQUESTED;
+* stop new enquiries;
+* hide public portfolio/gallery images;
+* revoke active sessions/tokens;
+* delete push notification tokens;
+* stop marketing communications;
+* disable login after request is accepted or immediately if designed that way;
+* mark subscription for cancellation or show admin action required depending on current billing logic.
+
+Do not instantly hard-delete:
+
+* identity verification records;
+* uploaded ID/document records;
+* insurance records;
+* qualification records;
+* Companies House check records;
+* payment/subscription records;
+* audit logs;
+* complaints/reports;
+* messages/enquiries;
+* review moderation history.
+
+These retained records must be restricted and must not be publicly visible.
+
+⸻
+
+5. Status values
+
+Add or update user account statuses:
+
+ACTIVE
+DELETION_REQUESTED
+DISABLED_PENDING_RETENTION
+ANONYMISED
+DELETED
+
+For trader profile visibility/status, support:
+
+PUBLIC
+HIDDEN
+SUSPENDED
+DELETION_REQUESTED
+DELETED
+
+Important:
+
+A trader with DELETION_REQUESTED, HIDDEN, SUSPENDED or DELETED status must never appear in public search or public trader profile routes.
+
+⸻
+
+6. Database fields
+
+Add fields where appropriate:
+
+deletion_requested_at
+deletion_reason
+deletion_processed_at
+scheduled_hard_delete_at
+anonymised_at
+retention_reason
+retention_until
+deletion_requested_by
+deletion_status
+marketing_opt_out_at
+account_disabled_at
+
+For admin processing, store:
+
+admin_deletion_notes
+retention_required boolean
+retention_reason
+retention_until
+processed_by_admin_id
+processed_at
+
+⸻
+
+7. Retention rules
+
+Make retention periods configurable in one place.
+
+Suggested defaults:
+
+Customer profile data:
+
+* anonymise within 30 days unless needed for disputes, fraud prevention or legal reasons.
+
+Trader public profile:
+
+* hide immediately.
+
+Trader verification documents:
+
+* retain for up to 24 months after account closure where necessary for fraud prevention, disputes, legal claims or platform safety.
+* If there is an active complaint, dispute, investigation or legal issue, retention can be extended with a documented reason.
+
+Payment/accounting records:
+
+* retain for up to 6 years where required for accounting, tax or legal obligations.
+
+Complaints, reports and audit logs:
+
+* retain for up to 6 years where needed for platform safety, disputes, fraud prevention or legal claims.
+
+Messages and enquiries:
+
+* retain where needed for disputes, fraud prevention, platform safety or legal claims.
+* otherwise anonymise personal identifiers after the retention period.
+
+Do not retain personal data forever without a documented reason.
+
+⸻
+
+8. Backend/API endpoints
+
+Create endpoints:
+
+POST /api/account/deletion-request
+GET /api/account/deletion-status
+POST /api/account/deletion-cancel, optional if not yet processed
+
+Admin endpoints:
+
+GET /api/admin/account-deletion-requests
+GET /api/admin/account-deletion-requests/:id
+POST /api/admin/account-deletion-requests/:id/approve
+POST /api/admin/account-deletion-requests/:id/retain
+POST /api/admin/account-deletion-requests/:id/anonymise
+POST /api/admin/account-deletion-requests/:id/complete
+POST /api/admin/account-deletion-requests/:id/reject, only if legally valid and with reason
+
+All endpoints must enforce proper authentication and role permissions.
+
+⸻
+
+9. Admin Dashboard — Account Deletion Requests
+
+Add a new Admin Dashboard section:
+
+Account Deletion Requests
+
+Admin list should show:
+
+* user name/email;
+* user role: customer/trader/admin;
+* request date;
+* deletion reason;
+* account status;
+* trader profile status, if trader;
+* active subscription status;
+* active disputes/reports count;
+* complaints count;
+* open conversations count;
+* payment/subscription record indicator;
+* recommended retention reason;
+* scheduled retention date;
+* current deletion status.
+
+Admin detail page should show:
+
+* user details;
+* role;
+* trader profile details, if applicable;
+* deletion request reason;
+* public visibility status;
+* subscription/payment status;
+* related complaints/reports;
+* related reviews;
+* related conversations/enquiries;
+* verification document summary;
+* Companies House check summary, if applicable;
+* audit log summary;
+* recommended action.
+
+Admin actions:
+
+* approve deletion processing;
+* anonymise account data;
+* mark retention required;
+* set retention reason;
+* set retention until date;
+* complete deletion;
+* export retained data summary;
+* add admin notes.
+
+Important:
+
+Admin should not casually view private document contents from deletion screen unless already authorised by existing admin document permission rules.
+
+⸻
+
+10. Automatic actions after deletion request
+
+When a deletion request is submitted:
+
+* create audit log entry ACCOUNT_DELETION_REQUESTED;
+* send confirmation email to user;
+* notify admin;
+* if user is trader, immediately hide public profile;
+* revoke sessions/tokens or mark account for access disable;
+* remove push tokens;
+* opt out from marketing;
+* prevent new public enquiries if trader;
+* prevent trader from appearing in public search;
+* keep required retained records restricted.
+
+For traders, public visibility removal must happen immediately, not after admin review.
+
+⸻
+
+11. Email notifications
+
+Send email to user when request is received.
+
+Subject:
+
+Account deletion request received
+
+Body:
+
+We have received your account deletion request. Your access may be disabled and your public profile, if any, will be removed or hidden. Some records may be retained for a limited period where required for fraud prevention, legal, accounting, dispute resolution or platform safety purposes.
+
+Send email to admin:
+
+New account deletion request
+
+Include:
+
+* user email;
+* role;
+* request date;
+* reason;
+* whether user is trader;
+* whether public trader profile was hidden.
+
+If email fails, do not fail the API request. Log the email failure safely.
+
+⸻
+
+12. Audit log actions
+
+Add audit log entries for:
+
+ACCOUNT_DELETION_REQUESTED
+ACCOUNT_ACCESS_DISABLED
+CUSTOMER_DATA_ANONYMISED
+TRADER_PROFILE_HIDDEN_FOR_DELETION
+ACCOUNT_RETENTION_APPLIED
+ACCOUNT_DELETION_COMPLETED
+ACCOUNT_DELETION_CANCELLED
+ADMIN_VIEWED_DELETION_REQUEST
+ADMIN_APPROVED_DELETION_PROCESSING
+ADMIN_MARKED_RETENTION_REQUIRED
+
+Each audit log should include:
+
+user_id
+performed_by
+timestamp
+action
+details
+
+⸻
+
+13. Public visibility rules
+
+Update public trader visibility logic:
+
+A trader must not appear publicly if:
+
+account_status is DELETION_REQUESTED
+account_status is DISABLED_PENDING_RETENTION
+account_status is ANONYMISED
+account_status is DELETED
+trader_profile_status is HIDDEN
+trader_profile_status is DELETION_REQUESTED
+trader_profile_status is DELETED
+
+This must be enforced in backend public query logic, not only frontend.
+
+⸻
+
+14. Reviews after account deletion
+
+If a customer deletes their account:
+
+* existing approved reviews may remain visible if needed for platform integrity;
+* display name should become “Deleted user”;
+* internal original user link can be retained only where necessary and restricted.
+
+If a trader deletes their account:
+
+* public profile should be hidden;
+* reviews should not appear on a public trader profile if the profile is no longer public;
+* internal review records can be retained for disputes, audit or legal reasons.
+
+⸻
+
+15. Messages and enquiries after deletion
+
+If customer deletes account:
+
+* customer cannot send new messages;
+* existing conversation records may be retained where needed;
+* display name can be anonymised to “Deleted user”.
+
+If trader deletes account:
+
+* trader cannot receive new enquiries;
+* existing conversations should be closed or marked unavailable;
+* customers should see a safe message if they open an old conversation:
+
+This trader is no longer available on MyLocalTrade.
+
+Do not expose deleted trader contact details publicly.
+
+⸻
+
+16. Subscription handling
+
+If a trader requests account deletion and has an active subscription:
+
+* mark subscription for cancellation or redirect to current cancellation flow;
+* do not allow public visibility after deletion request;
+* store subscription/payment records as required for accounting/legal purposes;
+* do not hard-delete Stripe customer/subscription references immediately if needed for payment records.
+
+If current Stripe logic requires manual handling, show admin alert:
+
+This trader has an active subscription. Please review billing before completing deletion.
+
+⸻
+
+17. Security
+
+Requirements:
+
+* only logged-in user can request deletion for their own account;
+* admin can view deletion requests;
+* normal users cannot view deletion requests;
+* trader cannot request deletion for another trader;
+* customer cannot request deletion for another user;
+* deletion endpoints must be rate limited;
+* password confirmation should be required where possible;
+* deletion request must be auditable;
+* avoid logging sensitive personal data;
+* do not expose retained private documents publicly.
+
+⸻
+
+18. UI wording
+
+Use careful wording.
+
+Do not say:
+
+Your data will be deleted immediately
+Everything will be permanently removed now
+We will erase all records instantly
+
+Use:
+
+Your public profile will be hidden immediately where applicable. Some records may be retained for a limited period where required for fraud prevention, legal, accounting, dispute resolution or platform safety purposes.
+
+⸻
+
+19. Privacy Policy alignment
+
+Make sure the app wording aligns with the Privacy Policy.
+
+Use this wording in the app where needed:
+
+We retain personal data only for as long as necessary for the purposes described in our Privacy Policy, including account management, platform safety, fraud prevention, dispute handling, legal obligations and accounting records.
+
+⸻
+
+20. Final summary required
+
+After implementation, provide a summary with:
+
+* mobile screens added;
+* admin dashboard pages added;
+* database fields added;
+* backend endpoints added;
+* deletion status logic;
+* trader public visibility changes;
+* retention rules implemented;
+* emails added;
+* audit log actions added;
+* any remaining limitations;
+* any manual admin steps required.
+
+Final goal:
+
+Users can request account deletion safely. Customer data is deleted or anonymised where appropriate. Trader public profiles are hidden immediately. Records needed for fraud prevention, disputes, accounting, legal obligations or platform safety are retained only for limited documented purposes.
