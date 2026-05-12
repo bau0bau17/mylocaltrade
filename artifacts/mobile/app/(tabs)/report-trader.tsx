@@ -69,7 +69,7 @@ export default function ReportTraderScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>What happens next</Text>
         <Text style={styles.paragraph}>
-          We acknowledge reports within 5 working days. Where appropriate, we will investigate, contact the trader for their response, and may suspend or remove their listing while we review. We will keep you informed of the outcome where possible.
+          We aim to acknowledge reports within 2 working days. Where appropriate, we will investigate, contact the trader for their response, and may suspend or remove their listing while we review. We will keep you informed of the outcome where possible.
         </Text>
       </View>
 

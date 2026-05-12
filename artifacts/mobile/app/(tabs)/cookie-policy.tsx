@@ -39,7 +39,7 @@ export default function CookiePolicyScreen() {
           <Text style={styles.bold}>Strictly necessary:</Text> Required to keep you signed in, remember your session and operate core features such as enquiries and reviews. These cannot be switched off.
         </Text>
         <Text style={styles.paragraph}>
-          <Text style={styles.bold}>Functional:</Text> Remember your preferences such as saved traders and recent searches.
+          <Text style={styles.bold}>Functional:</Text> Remember small preferences inside the app, such as your recent searches and view options. Saved traders are stored on our servers against your account, not in cookies.
         </Text>
         <Text style={styles.paragraph}>
           <Text style={styles.bold}>Analytics:</Text> Help us understand how the app is used so we can improve it. Where required, these are only used with your consent.
