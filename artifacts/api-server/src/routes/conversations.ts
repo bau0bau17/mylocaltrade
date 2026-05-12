@@ -9,7 +9,7 @@ import {
   traderProfilesTable,
   enquiriesTable,
 } from "@workspace/db/schema";
-import { and, eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, sql, inArray } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewMessageEmail } from "../lib/email";
@@ -266,7 +266,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         .where(
           and(
             eq(messagesTable.conversationId, id),
-            sql`${messagesTable.id} = ANY(${unreadIds})`,
+            inArray(messagesTable.id, unreadIds),
           ),
         );
       await db
