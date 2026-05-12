@@ -12,6 +12,7 @@ import { z } from "zod";
 import {
   authMiddleware,
   authMiddlewareAllowDeletion,
+  generateToken,
   revokeUserSessions,
 } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
@@ -137,8 +138,12 @@ router.post("/account/deletion-request", authMiddleware, async (req, res) => {
     const now = new Date();
     const reason = body.reason?.trim() || null;
 
-    await db.transaction(async (tx) => {
-      await tx
+    // Bump tokenVersion (revokes every other device) and capture the new
+    // value so we can mint a fresh token for THIS device — the user must
+    // remain signed in here to be able to cancel the request from the same
+    // screen without contacting support.
+    const newTokenVersion = await db.transaction(async (tx) => {
+      const [updated] = await tx
         .update(usersTable)
         .set({
           deletionStatus: "REQUESTED",
@@ -151,7 +156,8 @@ router.post("/account/deletion-request", authMiddleware, async (req, res) => {
           tokenVersion: sql`${usersTable.tokenVersion} + 1`,
           updatedAt: now,
         })
-        .where(eq(usersTable.id, userId));
+        .where(eq(usersTable.id, userId))
+        .returning({ tokenVersion: usersTable.tokenVersion });
       await tx.delete(pushTokensTable).where(eq(pushTokensTable.userId, userId));
       if (user.role === "trader") {
         await tx
@@ -159,7 +165,9 @@ router.post("/account/deletion-request", authMiddleware, async (req, res) => {
           .set({ isActive: false, updatedAt: now })
           .where(eq(traderProfilesTable.userId, userId));
       }
+      return updated.tokenVersion;
     });
+    const refreshedToken = generateToken(user.id, user.role, newTokenVersion);
 
     void logAudit({
       userId,
@@ -187,6 +195,10 @@ router.post("/account/deletion-request", authMiddleware, async (req, res) => {
       ok: true,
       deletionStatus: "REQUESTED",
       deletionRequestedAt: now.toISOString(),
+      // Fresh token bound to the bumped tokenVersion. The mobile client must
+      // swap its stored token to this value so the user stays signed in
+      // *here* (other devices were revoked) and can reach the cancel route.
+      token: refreshedToken,
       message:
         "Your account has been deactivated. Our admin team will finalise deletion shortly. You can cancel this from the same screen if you change your mind.",
     });

@@ -120,6 +120,13 @@ export const LoginResponse = zod.object({
         "Global toggle for push notifications across all conversations",
       ),
     createdAt: zod.date().optional(),
+    deletionStatus: zod
+      .string()
+      .nullish()
+      .describe(
+        "GDPR account-deletion lifecycle stage. Null for normal accounts.\nREQUESTED \/ DISABLED_PENDING_RETENTION are still cancellable from\nthe mobile client. ANONYMISED \/ COMPLETED are terminal — those\nusers cannot reach this endpoint.\n",
+      ),
+    deletionRequestedAt: zod.date().nullish(),
   }),
 });
 
@@ -183,6 +190,13 @@ export const GetMeResponse = zod.object({
     .optional()
     .describe("Global toggle for push notifications across all conversations"),
   createdAt: zod.date().optional(),
+  deletionStatus: zod
+    .string()
+    .nullish()
+    .describe(
+      "GDPR account-deletion lifecycle stage. Null for normal accounts.\nREQUESTED \/ DISABLED_PENDING_RETENTION are still cancellable from\nthe mobile client. ANONYMISED \/ COMPLETED are terminal — those\nusers cannot reach this endpoint.\n",
+    ),
+  deletionRequestedAt: zod.date().nullish(),
 });
 
 /**
@@ -1432,6 +1446,12 @@ export const PostAccountDeletionRequestResponse = zod.object({
   deletionStatus: zod.string(),
   deletionRequestedAt: zod.date().optional(),
   message: zod.string().optional(),
+  token: zod
+    .string()
+    .optional()
+    .describe(
+      "Fresh JWT bound to the bumped tokenVersion. The mobile\nclient must persist this token immediately after a\nsuccessful deletion request so the user remains signed\nin here (other devices were revoked) and can reach the\ncancel endpoint.\n",
+    ),
 });
 
 /**

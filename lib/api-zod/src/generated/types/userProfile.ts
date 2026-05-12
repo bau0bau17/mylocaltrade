@@ -17,4 +17,11 @@ export interface UserProfile {
   /** Global toggle for push notifications across all conversations */
   pushNotificationsEnabled?: boolean;
   createdAt?: Date;
+  /** GDPR account-deletion lifecycle stage. Null for normal accounts.
+REQUESTED / DISABLED_PENDING_RETENTION are still cancellable from
+the mobile client. ANONYMISED / COMPLETED are terminal — those
+users cannot reach this endpoint.
+ */
+  deletionStatus?: string | null;
+  deletionRequestedAt?: Date | null;
 }

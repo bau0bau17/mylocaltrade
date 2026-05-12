@@ -351,12 +351,22 @@ export default function AccountScreen() {
 
           <Text style={styles.sectionLabel}>Danger Zone</Text>
           <View style={[styles.group, { marginHorizontal: 16 }]}>
-            <MenuRow
-              icon="trash-2"
-              label="Delete Account"
-              sub="Permanently remove your MyLocalTrade account"
-              onPress={() => router.push('/account/delete-account')}
-            />
+            {me?.deletionStatus === 'REQUESTED' || me?.deletionStatus === 'DISABLED_PENDING_RETENTION' ? (
+              <MenuRow
+                icon="clock"
+                label="Account deletion request pending"
+                sub="View deletion status or cancel the request"
+                onPress={() => router.push('/account/delete-account')}
+                accent
+              />
+            ) : (
+              <MenuRow
+                icon="trash-2"
+                label="Delete Account"
+                sub="Permanently remove your MyLocalTrade account"
+                onPress={() => router.push('/account/delete-account')}
+              />
+            )}
           </View>
         </>
       ) : null}

@@ -11,7 +11,13 @@ import {
   UpdateLeadReminderSettingsBody,
 } from "@workspace/api-zod";
 import { DEFAULT_REMINDER_MINUTES } from "../lib/lead-reminders";
-import { generateToken, authMiddleware, generatePollToken, verifyPollToken } from "../lib/auth";
+import {
+  generateToken,
+  authMiddleware,
+  authMiddlewareAllowDeletion,
+  generatePollToken,
+  verifyPollToken,
+} from "../lib/auth";
 import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, logAudit, buildOnboardingChecklist, statusMessage, isTraderProfilePublic, evaluateBusinessProfileComplete, evaluateDocumentsComplete } from "../lib/trader-status";
@@ -252,17 +258,22 @@ router.post("/auth/login", async (req, res) => {
       res.status(403).json({ error: "This account has been deleted." });
       return;
     }
-    if (user.deletionStatus) {
-      // Account is in the GDPR deletion lifecycle — locked out for everyone
-      // except admins (who never hit this route to view deletion requests).
-      // Customer-facing message stays generic so we don't leak the exact
-      // lifecycle stage.
+    if (
+      user.deletionStatus === "ANONYMISED" ||
+      user.deletionStatus === "COMPLETED"
+    ) {
+      // Account has been irreversibly anonymised or finalised — there is
+      // nothing meaningful left to sign in to.
       res.status(403).json({
-        error: "This account has been deactivated pending deletion. Please contact support if this is unexpected.",
-        code: "ACCOUNT_DELETION_PENDING",
+        error: "This account has been deleted.",
+        code: "ACCOUNT_DELETED",
       });
       return;
     }
+    // REQUESTED / DISABLED_PENDING_RETENTION: login is allowed so the user
+    // can view their deletion status and cancel from the mobile app. The
+    // mobile client routes them to the deletion-status screen instead of
+    // the normal app shell based on the deletionStatus field below.
 
     const valid = await bcryptjs.compare(body.password, user.passwordHash);
     if (!valid) {
@@ -292,6 +303,8 @@ router.post("/auth/login", async (req, res) => {
         plan: user.plan,
         pushNotificationsEnabled: user.pushNotificationsEnabled,
         createdAt: user.createdAt.toISOString(),
+        deletionStatus: user.deletionStatus ?? null,
+        deletionRequestedAt: user.deletionRequestedAt?.toISOString() ?? null,
       },
     });
   } catch (error: unknown) {
@@ -448,7 +461,7 @@ router.get("/auth/verification-status", async (req, res) => {
   }
 });
 
-router.get("/auth/me", authMiddleware, async (req, res) => {
+router.get("/auth/me", authMiddlewareAllowDeletion, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
@@ -461,6 +474,10 @@ router.get("/auth/me", authMiddleware, async (req, res) => {
       return;
     }
 
+    // Note: this route is reachable while deletionStatus is REQUESTED or
+    // DISABLED_PENDING_RETENTION (the cancellable states) so the mobile
+    // client can render the deletion-pending UI without losing the session.
+    // ANONYMISED / COMPLETED are blocked at the middleware level.
     res.json({
       id: user.id,
       email: user.email,
@@ -470,6 +487,8 @@ router.get("/auth/me", authMiddleware, async (req, res) => {
       plan: user.plan,
       pushNotificationsEnabled: user.pushNotificationsEnabled,
       createdAt: user.createdAt.toISOString(),
+      deletionStatus: user.deletionStatus ?? null,
+      deletionRequestedAt: user.deletionRequestedAt?.toISOString() ?? null,
     });
   } catch (error) {
     req.log.error({ err: error }, "Get user failed");

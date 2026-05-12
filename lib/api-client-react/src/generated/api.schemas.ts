@@ -165,6 +165,13 @@ export interface UserProfile {
   /** Global toggle for push notifications across all conversations */
   pushNotificationsEnabled?: boolean;
   createdAt?: string;
+  /** GDPR account-deletion lifecycle stage. Null for normal accounts.
+REQUESTED / DISABLED_PENDING_RETENTION are still cancellable from
+the mobile client. ANONYMISED / COMPLETED are terminal — those
+users cannot reach this endpoint.
+ */
+  deletionStatus?: string | null;
+  deletionRequestedAt?: string | null;
 }
 
 export interface AuthResponse {
@@ -1004,6 +1011,13 @@ export type PostAccountDeletionRequest200 = {
   deletionStatus: string;
   deletionRequestedAt?: string;
   message?: string;
+  /** Fresh JWT bound to the bumped tokenVersion. The mobile
+client must persist this token immediately after a
+successful deletion request so the user remains signed
+in here (other devices were revoked) and can reach the
+cancel endpoint.
+ */
+  token?: string;
 };
 
 export type GetAccountDeletionStatus200 = {
