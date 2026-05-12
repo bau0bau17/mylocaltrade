@@ -1,0 +1,59 @@
+Great. Please do one final smoke-test checklist for the account deletion feature.
+
+Confirm the following:
+
+1. Customer deletion flow
+- Customer can request account deletion from mobile app
+- Password confirmation is required
+- Wrong password does not create deletion request
+- After request, customer is signed out
+- Sessions on other devices are invalidated
+- User cannot continue normal app usage after deletion request
+- Confirmation email is sent
+
+2. Trader deletion flow
+- Trader can request account deletion from mobile app
+- Trader profile is hidden immediately
+- Trader no longer appears in public trader list
+- Trader no longer appears in featured traders
+- Trader detail page is not publicly accessible
+- Trader count excludes deleted or deletion requested traders
+- Trader cannot receive new enquiries after deletion request
+- Existing records remain restricted for admin retention purposes
+
+3. Cancel deletion flow
+- User can access deletion status and cancel routes while in cancellable state
+- User cannot cancel after anonymised or completed deletion
+- Cancelling does not bypass verification, subscription, suspension or expired document rules
+- Trader is not automatically made public unless still VERIFIED and subscription is ACTIVE
+- Cancellation creates an audit log
+
+4. Admin deletion lifecycle
+- Admin can view account deletions
+- Admin can apply retention hold
+- Admin can anonymise PII
+- Admin can finalise deletion
+- Invalid lifecycle transitions return 409 INVALID_TRANSITION
+- Concurrent admin actions cannot corrupt deletion state
+- Admin notes and audit logs are saved
+- Admin cannot accidentally delete themselves through the user endpoint
+
+5. Data and privacy
+- Anonymise PII wipes name, email and contact data as intended
+- Retained records are not publicly visible
+- Trader verification/document records remain restricted
+- Public reviews/messages display safely after user anonymisation
+- No sensitive deletion data is exposed in public endpoints
+
+6. Technical validation
+- Database migration/schema is applied
+- OpenAPI spec is updated
+- Generated client/codegen is updated
+- Typecheck passes
+- API server starts correctly
+- Mobile app builds or runs without errors
+
+Please report:
+- Pass/fail for each area
+- Any remaining limitations
+- Any launch blockers
