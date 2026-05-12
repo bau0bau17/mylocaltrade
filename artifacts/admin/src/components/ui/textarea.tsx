@@ -13,6 +13,7 @@ const Textarea = React.forwardRef<
         className
       )}
       ref={ref}
+      style={{ color: "#0f172a", backgroundColor: "#ffffff", ...(props.style ?? {}) }}
       {...props}
     />
   )
