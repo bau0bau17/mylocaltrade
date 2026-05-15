@@ -13,6 +13,7 @@ import {
 } from '@workspace/api-client-react';
 import { detectContactInfo, contactViolationMessage } from '@/lib/content-filter';
 import { useAuth } from '@/contexts/AuthContext';
+import { isTopRated, isFastResponder, formatResponseTime } from '@/components/TraderCard';
 import {
   traderHasAnySpecialism,
   PROPERTY_TYPE_OPTIONS,
@@ -66,6 +67,12 @@ export default function EnquiryScreen() {
     trader?.mainCategory,
     trader?.additionalServices,
   );
+
+  const trustVerified = !!trader?.isVerified;
+  const trustTopRated = !!trader && isTopRated(trader.rating, trader.reviewCount);
+  const trustFast = !!trader && isFastResponder(trader.responseTimeMinutes);
+  const showTrustRow = !!trader && (trustVerified || trustTopRated || trustFast);
+  const responseTimeLabel = formatResponseTime(trader?.responseTimeMinutes);
 
   const messageViolation = useMemo(
     () => detectContactInfo(formData.message),
@@ -205,7 +212,33 @@ export default function EnquiryScreen() {
           <Feather name="message-square" size={24} color={Colors.light.primary} />
         </View>
         <Text style={styles.title}>Contact {trader?.businessName || 'Trader'}</Text>
-        <Text style={styles.subtitle}>Send a message to discuss your requirements and request a quote.</Text>
+        {showTrustRow && (
+          <View style={styles.trustRow}>
+            {trustVerified && (
+              <View style={[styles.trustChip, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                <Feather name="check-circle" size={10} color={Colors.light.success} />
+                <Text style={[styles.trustChipText, { color: Colors.light.success }]}>Verified</Text>
+              </View>
+            )}
+            {trustTopRated && (
+              <View style={[styles.trustChip, { backgroundColor: 'rgba(245, 158, 11, 0.14)' }]}>
+                <Feather name="star" size={10} color={Colors.light.featured} />
+                <Text style={[styles.trustChipText, { color: '#B45309' }]}>Top rated</Text>
+              </View>
+            )}
+            {trustFast && (
+              <View style={[styles.trustChip, { backgroundColor: Colors.light.primaryMuted }]}>
+                <Feather name="zap" size={10} color={Colors.light.primary} />
+                <Text style={[styles.trustChipText, { color: Colors.light.primary }]}>Replies fast</Text>
+              </View>
+            )}
+          </View>
+        )}
+        <Text style={styles.subtitle}>
+          {responseTimeLabel
+            ? `Send a message to discuss your requirements. ${responseTimeLabel}.`
+            : 'Send a message to discuss your requirements and request a quote.'}
+        </Text>
       </View>
 
       <View style={styles.form}>
@@ -447,6 +480,27 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     lineHeight: 20,
     textAlign: 'center',
+  },
+  trustRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  trustChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 3,
+  },
+  trustChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   form: {
     gap: 16,
