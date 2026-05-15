@@ -22,6 +22,7 @@ export function formatResponseTime(minutes: number | null | undefined): string |
 
 const TOP_RATED_MIN_RATING = 4.7;
 const TOP_RATED_MIN_REVIEWS = 5;
+const FAST_RESPONDER_MAX_MINUTES = 60;
 
 export function isTopRated(
   rating: number | null | undefined,
@@ -37,10 +38,20 @@ export function isTopRated(
   );
 }
 
+export function isFastResponder(minutes: number | null | undefined): boolean {
+  return (
+    typeof minutes === 'number' &&
+    Number.isFinite(minutes) &&
+    minutes >= 0 &&
+    minutes <= FAST_RESPONDER_MAX_MINUTES
+  );
+}
+
 export function TraderCard({ trader }: { trader: TraderProfile }) {
   const router = useRouter();
   const planStyle = PLAN_STYLES[trader.plan as keyof typeof PLAN_STYLES];
   const topRated = isTopRated(trader.rating, trader.reviewCount);
+  const fastResponder = isFastResponder(trader.responseTimeMinutes);
   const hasReviews = typeof trader.reviewCount === 'number' && trader.reviewCount > 0;
   const ratingLabel =
     typeof trader.rating === 'number' && Number.isFinite(trader.rating)
@@ -75,6 +86,12 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
               <View style={styles.topRatedBadge}>
                 <Feather name="star" size={10} color={Colors.light.featured} />
                 <Text style={styles.topRatedText}>Top rated</Text>
+              </View>
+            )}
+            {fastResponder && (
+              <View style={styles.fastBadge}>
+                <Feather name="zap" size={10} color={Colors.light.primary} />
+                <Text style={styles.fastBadgeText}>Replies fast</Text>
               </View>
             )}
           </View>
@@ -231,6 +248,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#B45309',
+    letterSpacing: 0.2,
+  },
+  fastBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 3,
+    backgroundColor: Colors.light.primaryMuted,
+  },
+  fastBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.primary,
     letterSpacing: 0.2,
   },
   checkRow: {
