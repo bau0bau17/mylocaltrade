@@ -175,6 +175,11 @@ export default function TraderProfileScreen() {
               Verified by MyLocalTrade · {new Date(trader.verifiedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
             </Text>
           )}
+          {trader.createdAt && (
+            <Text style={styles.verifiedSince}>
+              On MyLocalTrade since {new Date(trader.createdAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+            </Text>
+          )}
           {formatResponseTime(trader.responseTimeMinutes) ? (
             <View style={styles.responseChip}>
               <Feather name="clock" size={11} color={Colors.light.primary} />
