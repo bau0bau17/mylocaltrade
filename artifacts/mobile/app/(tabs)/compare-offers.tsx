@@ -193,54 +193,84 @@ function OfferCard({
   onViewProfile: () => void;
   onLeaveReview: () => void;
 }) {
+  const ratingIsNumber = offer.traderRating != null && Number.isFinite(offer.traderRating);
+  const reviewWord = offer.traderReviewCount === 1 ? 'review' : 'reviews';
+  const ratingPhrase =
+    ratingIsNumber && offer.traderReviewCount > 0
+      ? `${offer.traderRating!.toFixed(1)} stars from ${offer.traderReviewCount} ${reviewWord}`
+      : ratingIsNumber
+      ? `${offer.traderRating!.toFixed(1)} stars`
+      : offer.traderReviewCount > 0
+      ? `${offer.traderReviewCount} ${reviewWord}`
+      : 'no rating yet';
+  const replyPhrase = offer.hasTraderReply
+    ? `trader replied${offer.lastTraderReplyAt ? ` ${formatRelative(offer.lastTraderReplyAt)}` : ''}`
+    : `awaiting trader reply, enquiry sent ${formatRelative(offer.enquiryCreatedAt)}`;
+  const summaryLabel = [
+    offer.traderBusinessName,
+    offer.traderTown ? `in ${offer.traderTown}` : null,
+    resolvePill(offer.traderStatus, offer.hasTraderReply).label.toLowerCase(),
+    ratingPhrase,
+    replyPhrase,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   return (
     <View style={styles.offerCard}>
-      <View style={styles.offerTop}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.traderName} numberOfLines={1}>{offer.traderBusinessName}</Text>
-          {offer.traderTown ? (
-            <Text style={styles.traderTown} numberOfLines={1}>
-              <Feather name="map-pin" size={10} color={Colors.light.textSecondary} /> {offer.traderTown}
-            </Text>
-          ) : null}
+      <View accessible accessibilityLabel={summaryLabel}>
+        <View style={styles.offerTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.traderName} numberOfLines={1}>{offer.traderBusinessName}</Text>
+            {offer.traderTown ? (
+              <Text style={styles.traderTown} numberOfLines={1}>
+                <Feather name="map-pin" size={10} color={Colors.light.textSecondary} /> {offer.traderTown}
+              </Text>
+            ) : null}
+          </View>
+          <TraderStatusPill status={offer.traderStatus} hasReply={offer.hasTraderReply} />
         </View>
-        <TraderStatusPill status={offer.traderStatus} hasReply={offer.hasTraderReply} />
-      </View>
 
-      <View style={styles.ratingRow}>
-        <Feather name="star" size={12} color={Colors.light.featured} />
-        <Text style={styles.ratingText}>
-          {offer.traderRating != null ? offer.traderRating.toFixed(1) : 'No rating'}
-        </Text>
-        <Text style={styles.reviewCount}>
-          ({offer.traderReviewCount} {offer.traderReviewCount === 1 ? 'review' : 'reviews'})
-        </Text>
-      </View>
-
-      <View style={styles.replyBox}>
-        <Text style={styles.replyLabel}>
-          {offer.hasTraderReply ? 'Trader reply' : 'Awaiting reply'}
-        </Text>
-        {offer.hasTraderReply ? (
-          <>
-            <Text style={styles.replyBody} numberOfLines={5}>
-              {offer.lastTraderReplyPreview}
-            </Text>
-            <Text style={styles.replyTime}>
-              {offer.lastTraderReplyAt ? formatRelative(offer.lastTraderReplyAt) : ''}
-            </Text>
-          </>
-        ) : (
-          <Text style={styles.replyMuted}>
-            Sent {formatRelative(offer.enquiryCreatedAt)}. The trader has not
-            responded yet.
+        <View style={styles.ratingRow}>
+          <Feather name="star" size={12} color={Colors.light.featured} />
+          <Text style={styles.ratingText}>
+            {offer.traderRating != null ? offer.traderRating.toFixed(1) : 'No rating'}
           </Text>
-        )}
+          <Text style={styles.reviewCount}>
+            ({offer.traderReviewCount} {offer.traderReviewCount === 1 ? 'review' : 'reviews'})
+          </Text>
+        </View>
+
+        <View style={styles.replyBox}>
+          <Text style={styles.replyLabel}>
+            {offer.hasTraderReply ? 'Trader reply' : 'Awaiting reply'}
+          </Text>
+          {offer.hasTraderReply ? (
+            <>
+              <Text style={styles.replyBody} numberOfLines={5}>
+                {offer.lastTraderReplyPreview}
+              </Text>
+              <Text style={styles.replyTime}>
+                {offer.lastTraderReplyAt ? formatRelative(offer.lastTraderReplyAt) : ''}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.replyMuted}>
+              Sent {formatRelative(offer.enquiryCreatedAt)}. The trader has not
+              responded yet.
+            </Text>
+          )}
+        </View>
       </View>
 
       <View style={styles.ctaCol}>
         {onOpenChat ? (
-          <Pressable style={styles.primaryCta} onPress={onOpenChat}>
+          <Pressable
+            style={styles.primaryCta}
+            onPress={onOpenChat}
+            accessibilityRole="button"
+            accessibilityLabel={`Open chat with ${offer.traderBusinessName}`}
+          >
             <Feather name="message-circle" size={14} color="#fff" />
             <Text style={styles.primaryCtaText}>Open chat</Text>
           </Pressable>
@@ -250,12 +280,22 @@ function OfferCard({
             <Text style={styles.awaitingChatText}>Chat opens when trader replies</Text>
           </View>
         )}
-        <Pressable style={styles.secondaryCta} onPress={onViewProfile}>
+        <Pressable
+          style={styles.secondaryCta}
+          onPress={onViewProfile}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${offer.traderBusinessName}'s profile`}
+        >
           <Feather name="user" size={14} color={Colors.light.primary} />
           <Text style={styles.secondaryCtaText}>View profile</Text>
         </Pressable>
         {offer.enquiryStatus !== 'pending' && offer.hasTraderReply ? (
-          <Pressable style={styles.reviewCta} onPress={onLeaveReview}>
+          <Pressable
+            style={styles.reviewCta}
+            onPress={onLeaveReview}
+            accessibilityRole="button"
+            accessibilityLabel={`Leave a review for ${offer.traderBusinessName}`}
+          >
             <Feather name="star" size={14} color={Colors.light.featured} />
             <Text style={styles.reviewCtaText}>Leave review</Text>
           </Pressable>
@@ -265,6 +305,20 @@ function OfferCard({
   );
 }
 
+const PILL_MAP: Record<string, { label: string; bg: string; fg: string }> = {
+  NEW: { label: 'New', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+  CONTACTED: { label: 'Contacted', bg: 'rgba(59, 130, 246, 0.14)', fg: '#1D4ED8' },
+  QUOTED: { label: 'Quoted', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+  COMPLETED: { label: 'Completed', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+};
+const AWAITING_PILL = { label: 'Awaiting', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' };
+
+function resolvePill(status: Offer['traderStatus'], hasReply: boolean) {
+  if (status && PILL_MAP[status]) return PILL_MAP[status];
+  if (hasReply) return PILL_MAP.CONTACTED;
+  return AWAITING_PILL;
+}
+
 function TraderStatusPill({
   status,
   hasReply,
@@ -272,17 +326,7 @@ function TraderStatusPill({
   status: Offer['traderStatus'];
   hasReply: boolean;
 }) {
-  const map: Record<string, { label: string; bg: string; fg: string }> = {
-    NEW: { label: 'New', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
-    CONTACTED: { label: 'Contacted', bg: 'rgba(59, 130, 246, 0.14)', fg: '#1D4ED8' },
-    QUOTED: { label: 'Quoted', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
-    COMPLETED: { label: 'Completed', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
-  };
-  const v = status && map[status]
-    ? map[status]
-    : hasReply
-      ? map.CONTACTED
-      : { label: 'Awaiting', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' };
+  const v = resolvePill(status, hasReply);
   return (
     <View style={[styles.pill, { backgroundColor: v.bg }]}>
       <Text style={[styles.pillText, { color: v.fg }]}>{v.label}</Text>
