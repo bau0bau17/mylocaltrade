@@ -48,7 +48,7 @@ export default function MyEnquiriesScreen() {
           }
           renderItem={({ item }) => (
             <View>
-              <EnquiryCard enquiry={item} />
+              <EnquiryCard enquiry={item} viewerRole="customer" />
               <Pressable
                 style={styles.openConvBtn}
                 onPress={() => router.push('/messages')}
