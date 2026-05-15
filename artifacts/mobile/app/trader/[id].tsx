@@ -354,23 +354,35 @@ export default function TraderProfileScreen() {
         </Pressable>
       </Modal>
 
-      {canMessage ? (
-        <View style={[styles.bottomBar, { paddingBottom: insets.bottom || 24 }]}>
-          <View style={styles.verifyNote}>
-            <Feather name="shield" size={12} color={Colors.light.textSecondary} />
-            <Text style={styles.verifyNoteText}>
-              Always verify quotes, insurance and credentials before any work starts.
-            </Text>
+      {canMessage ? (() => {
+        const responseLabel = formatResponseTime(trader.responseTimeMinutes);
+        const ctaHintLabel = responseLabel
+          ? `Usually ${responseLabel.charAt(0).toLowerCase()}${responseLabel.slice(1)}`
+          : null;
+        return (
+          <View style={[styles.bottomBar, { paddingBottom: insets.bottom || 24 }]}>
+            <View style={styles.verifyNote}>
+              <Feather name="shield" size={12} color={Colors.light.textSecondary} />
+              <Text style={styles.verifyNoteText}>
+                Always verify quotes, insurance and credentials before any work starts.
+              </Text>
+            </View>
+            <Pressable
+              style={styles.contactButton}
+              onPress={() => router.push(`/enquiry/${trader.id}`)}
+            >
+              <Feather name="message-square" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
+              <Text style={styles.contactButtonText}>Message this trader</Text>
+            </Pressable>
+            {ctaHintLabel ? (
+              <View style={styles.ctaHint}>
+                <Feather name="clock" size={11} color={Colors.light.textMuted} />
+                <Text style={styles.ctaHintText}>{ctaHintLabel}</Text>
+              </View>
+            ) : null}
           </View>
-          <Pressable
-            style={styles.contactButton}
-            onPress={() => router.push(`/enquiry/${trader.id}`)}
-          >
-            <Feather name="message-square" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
-            <Text style={styles.contactButtonText}>Message this trader</Text>
-          </Pressable>
-        </View>
-      ) : null}
+        );
+      })() : null}
     </View>
   );
 }
@@ -684,6 +696,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  ctaHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  ctaHintText: {
+    fontSize: 11,
+    color: Colors.light.textMuted,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   responseChip: {
     flexDirection: 'row',
