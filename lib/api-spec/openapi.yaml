@@ -360,6 +360,11 @@ paths:
           schema:
             type: string
             enum: [premium_plus, elite]
+        - name: specialism
+          in: query
+          description: Filter to traders whose main category or additional services match a known specialism keyword (e.g. "solar", "heat pump", "ev charger").
+          schema:
+            type: string
         - name: sort
           in: query
           description: Result ordering. Default surfaces verified+featured first.
@@ -2383,10 +2388,26 @@ components:
           items:
             type: string
           maxItems: 3
+        specialistFields:
+          $ref: "#/components/schemas/EnquirySpecialistFields"
       required:
         - traderId
         - message
         - serviceRequired
+
+    EnquirySpecialistFields:
+      type: object
+      description: Optional structured fields shown only for energy / property specialist trades.
+      properties:
+        propertyType:
+          type: string
+          enum: [house, flat, commercial, other]
+        tenure:
+          type: string
+          enum: [owner, tenant, landlord, leaseholder]
+        urgency:
+          type: string
+          enum: [routine, soon, urgent]
 
     Enquiry:
       type: object
@@ -2417,6 +2438,10 @@ components:
           type: array
           items:
             type: string
+        specialistFields:
+          allOf:
+            - $ref: "#/components/schemas/EnquirySpecialistFields"
+          nullable: true
         status:
           type: string
           enum: [pending, responded, closed]

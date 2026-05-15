@@ -51,7 +51,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       return;
     }
 
-    const { traderId, message, serviceRequired, preferredDate, phone, attachmentUrls } = CreateEnquiryBody.parse(req.body);
+    const { traderId, message, serviceRequired, preferredDate, phone, attachmentUrls, specialistFields } = CreateEnquiryBody.parse(req.body);
 
     let normalisedAttachments: string[];
     try {
@@ -118,6 +118,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
           preferredDate: preferredDate || null,
           phone: phone || null,
           attachmentUrls: normalisedAttachments,
+          specialistFields: specialistFields ?? null,
           status: "pending",
         })
         .returning();
@@ -202,6 +203,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       preferredDate: enquiry.preferredDate,
       phone: enquiry.phone,
       attachmentUrls: enquiry.attachmentUrls ?? [],
+      specialistFields: enquiry.specialistFields ?? null,
       status: enquiry.status,
       conversationId,
       createdAt: enquiry.createdAt.toISOString(),
@@ -450,6 +452,7 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
       preferredDate: e.preferredDate,
       phone: e.phone,
       attachmentUrls: e.attachmentUrls ?? [],
+      specialistFields: e.specialistFields ?? null,
       status: e.status,
       conversationId: conversationId ?? null,
       viewedByTrader: traderViewedAt != null,

@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { EnquirySpecialistFields } from "./enquirySpecialistFields";
 import type { EnquiryStatus } from "./enquiryStatus";
 
 export interface Enquiry {
@@ -19,6 +20,7 @@ export interface Enquiry {
   preferredDate?: string | null;
   phone?: string | null;
   attachmentUrls?: string[];
+  specialistFields?: EnquirySpecialistFields | null;
   status: EnquiryStatus;
   conversationId?: number | null;
   viewedByTrader?: boolean;

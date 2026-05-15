@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { EnquirySpecialistFields } from "./enquirySpecialistFields";
 
 export interface CreateEnquiryRequest {
   traderId: number;
@@ -17,4 +18,5 @@ export interface CreateEnquiryRequest {
    * @maxItems 3
    */
   attachmentUrls?: string[];
+  specialistFields?: EnquirySpecialistFields;
 }

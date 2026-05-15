@@ -15,6 +15,7 @@ import {
 import { ReviewsSection } from '@/components/ReviewsSection';
 import { formatResponseTime } from '@/components/TraderCard';
 import { useAuth } from '@/contexts/AuthContext';
+import { detectSpecialisms, SPECIALISM_BY_KEY } from '@/constants/specialisms';
 
 export default function TraderProfileScreen() {
   const { id } = useLocalSearchParams();
@@ -28,6 +29,7 @@ export default function TraderProfileScreen() {
   const canMessage = !isAuthenticated || (!isTraderViewer && !isAdmin);
 
   const { data: trader, isLoading, error } = useGetTrader(Number(id));
+  const specialisms = detectSpecialisms(trader?.mainCategory, trader?.additionalServices);
 
   // Only fetch the saved list when the user is logged in as a customer.
   const { data: savedData } = useGetSavedTraders({
@@ -202,6 +204,23 @@ export default function TraderProfileScreen() {
             </View>
           </View>
 
+          {specialisms.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Specialisms</Text>
+              <View style={styles.specialismsRow}>
+                {specialisms.map((key) => {
+                  const spec = SPECIALISM_BY_KEY[key];
+                  return (
+                    <View key={key} style={styles.specialismBadge}>
+                      <Feather name={spec.icon} size={12} color={Colors.light.primary} />
+                      <Text style={styles.specialismBadgeText}>{spec.label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>About</Text>
             <Text style={styles.description}>
@@ -354,6 +373,28 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.light.textSecondary,
     marginBottom: 24,
+  },
+  specialismsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  specialismBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: Colors.light.primaryMuted,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  specialismBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.primary,
+    letterSpacing: 0.2,
   },
   verifyNote: {
     flexDirection: 'row',
