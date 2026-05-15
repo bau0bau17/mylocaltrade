@@ -20,9 +20,32 @@ export function formatResponseTime(minutes: number | null | undefined): string |
   return `Replies in ~${Math.round(days)}d`;
 }
 
+const TOP_RATED_MIN_RATING = 4.7;
+const TOP_RATED_MIN_REVIEWS = 5;
+
+export function isTopRated(
+  rating: number | null | undefined,
+  reviewCount: number | null | undefined,
+): boolean {
+  return (
+    typeof rating === 'number' &&
+    Number.isFinite(rating) &&
+    rating >= TOP_RATED_MIN_RATING &&
+    typeof reviewCount === 'number' &&
+    Number.isFinite(reviewCount) &&
+    reviewCount >= TOP_RATED_MIN_REVIEWS
+  );
+}
+
 export function TraderCard({ trader }: { trader: TraderProfile }) {
   const router = useRouter();
   const planStyle = PLAN_STYLES[trader.plan as keyof typeof PLAN_STYLES];
+  const topRated = isTopRated(trader.rating, trader.reviewCount);
+  const hasReviews = typeof trader.reviewCount === 'number' && trader.reviewCount > 0;
+  const ratingLabel =
+    typeof trader.rating === 'number' && Number.isFinite(trader.rating)
+      ? trader.rating.toFixed(1)
+      : '–';
 
   return (
     <Pressable style={styles.card} onPress={() => router.push(`/trader/${trader.id}`)}>
@@ -46,6 +69,12 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
               <View style={[styles.planBadge, { backgroundColor: planStyle.bg }]}>
                 {trader.plan === 'elite' && <Feather name="zap" size={10} color={planStyle.color} />}
                 <Text style={[styles.planText, { color: planStyle.color }]}>{planStyle.label}</Text>
+              </View>
+            )}
+            {topRated && (
+              <View style={styles.topRatedBadge}>
+                <Feather name="star" size={10} color={Colors.light.featured} />
+                <Text style={styles.topRatedText}>Top rated</Text>
               </View>
             )}
           </View>
@@ -73,7 +102,9 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
         </View>
         <View style={styles.footerItem}>
           <Feather name="star" size={12} color={Colors.light.featured} />
-          <Text style={styles.footerText}>{trader.rating || 'New'} ({trader.reviewCount})</Text>
+          <Text style={styles.footerText}>
+            {hasReviews ? `${ratingLabel} (${trader.reviewCount})` : 'New'}
+          </Text>
         </View>
         {formatResponseTime(trader.responseTimeMinutes) ? (
           <View style={styles.footerItem}>
@@ -185,6 +216,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: Colors.light.success,
+    letterSpacing: 0.2,
+  },
+  topRatedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 3,
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+  },
+  topRatedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
     letterSpacing: 0.2,
   },
   checkRow: {
