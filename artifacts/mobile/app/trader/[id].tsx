@@ -310,6 +310,12 @@ export default function TraderProfileScreen() {
 
       {canMessage ? (
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom || 24 }]}>
+          <View style={styles.verifyNote}>
+            <Feather name="shield" size={12} color={Colors.light.textSecondary} />
+            <Text style={styles.verifyNoteText}>
+              Always verify quotes, insurance and credentials before any work starts.
+            </Text>
+          </View>
           <Pressable
             style={styles.contactButton}
             onPress={() => router.push(`/enquiry/${trader.id}`)}
@@ -348,6 +354,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.light.textSecondary,
     marginBottom: 24,
+  },
+  verifyNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+  },
+  verifyNoteText: {
+    flex: 1,
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    lineHeight: 15,
   },
   backButton: {
     paddingHorizontal: 24,
