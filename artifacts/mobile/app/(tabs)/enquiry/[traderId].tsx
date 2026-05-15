@@ -1,13 +1,35 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
-import { useCreateEnquiry, useGetTrader } from '@workspace/api-client-react';
+import {
+  useCreateEnquiry,
+  useGetTrader,
+  useGetCustomerUploadUrl,
+} from '@workspace/api-client-react';
 import { detectContactInfo, contactViolationMessage } from '@/lib/content-filter';
 import { useAuth } from '@/contexts/AuthContext';
+
+const MAX_PHOTOS = 3;
+const MAX_BYTES = 8 * 1024 * 1024;
+const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
+function guessMime(uri: string, fallback?: string | null): string {
+  if (fallback && ALLOWED_MIMES.includes(fallback)) return fallback;
+  const ext = uri.split('?')[0].split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'jpg': case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'webp': return 'image/webp';
+    case 'heic': return 'image/heic';
+    case 'heif': return 'image/heif';
+    default: return 'image/jpeg';
+  }
+}
 
 export default function EnquiryScreen() {
   const { traderId } = useLocalSearchParams();
@@ -18,6 +40,7 @@ export default function EnquiryScreen() {
 
   const { data: trader } = useGetTrader(Number(traderId));
   const { mutateAsync: createEnquiry, isPending } = useCreateEnquiry();
+  const { mutateAsync: getUploadUrl } = useGetCustomerUploadUrl();
 
   const [formData, setFormData] = useState({
     serviceRequired: '',
@@ -25,6 +48,8 @@ export default function EnquiryScreen() {
     preferredDate: '',
     phone: '',
   });
+  const [attachments, setAttachments] = useState<{ uri: string; objectPath: string }[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const messageViolation = useMemo(
     () => detectContactInfo(formData.message),
@@ -33,6 +58,58 @@ export default function EnquiryScreen() {
   const messageViolationText = messageViolation
     ? contactViolationMessage(messageViolation)
     : null;
+
+  const handleAddPhoto = async () => {
+    if (uploadingPhoto || attachments.length >= MAX_PHOTOS) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Please allow photo library access to attach photos.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const mimeType = guessMime(asset.uri, asset.mimeType ?? null);
+    if (!ALLOWED_MIMES.includes(mimeType)) {
+      Alert.alert('Unsupported', 'Please choose a JPEG, PNG, WEBP or HEIC image.');
+      return;
+    }
+    const sizeBytes = asset.fileSize ?? 0;
+    if (sizeBytes > MAX_BYTES) {
+      Alert.alert('File too large', `Maximum size is ${(MAX_BYTES / 1024 / 1024).toFixed(0)} MB.`);
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const filename = asset.fileName || `enquiry-photo-${Date.now()}.jpg`;
+      const urlResp = await getUploadUrl({
+        data: { filename, mimeType, sizeBytes: sizeBytes || 1 },
+      });
+      const fileResp = await fetch(asset.uri);
+      const blob = await fileResp.blob();
+      const putRes = await fetch(urlResp.uploadURL, {
+        method: 'PUT',
+        headers: { 'Content-Type': mimeType },
+        body: blob,
+      });
+      if (!putRes.ok) throw new Error('Upload to storage failed');
+      setAttachments(prev => [...prev, { uri: asset.uri, objectPath: urlResp.objectPath }]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Upload failed';
+      Alert.alert('Upload failed', msg);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const handleSubmit = async () => {
     if (!formData.serviceRequired || !formData.message) {
@@ -49,7 +126,10 @@ export default function EnquiryScreen() {
         data: {
           traderId: Number(traderId),
           ...formData,
-        }
+          ...(attachments.length > 0
+            ? { attachmentUrls: attachments.map(a => a.objectPath) }
+            : {}),
+        },
       });
       Alert.alert('Success', 'Your enquiry has been sent to the trader.', [
         { text: 'OK', onPress: () => router.back() }
@@ -144,6 +224,36 @@ export default function EnquiryScreen() {
         </View>
 
         <View style={styles.inputGroup}>
+          <Text style={styles.label}>Photos (Optional, up to {MAX_PHOTOS})</Text>
+          <View style={styles.photosRow}>
+            {attachments.map((a, idx) => (
+              <View key={idx} style={styles.photoTile}>
+                <Image source={{ uri: a.uri }} style={styles.photoImage} />
+                <Pressable style={styles.photoRemove} onPress={() => removeAttachment(idx)} hitSlop={6}>
+                  <Feather name="x" size={12} color={Colors.light.white} />
+                </Pressable>
+              </View>
+            ))}
+            {attachments.length < MAX_PHOTOS && (
+              <Pressable
+                style={[styles.photoAdd, uploadingPhoto && styles.buttonDisabled]}
+                onPress={handleAddPhoto}
+                disabled={uploadingPhoto}
+              >
+                {uploadingPhoto ? (
+                  <ActivityIndicator size="small" color={Colors.light.primary} />
+                ) : (
+                  <>
+                    <Feather name="plus" size={18} color={Colors.light.primary} />
+                    <Text style={styles.photoAddText}>Add</Text>
+                  </>
+                )}
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
           <Text style={styles.label}>Preferred Date (Optional)</Text>
           <View style={styles.inputWrap}>
             <Feather name="calendar" size={16} color={Colors.light.textMuted} />
@@ -173,9 +283,9 @@ export default function EnquiryScreen() {
         </View>
 
         <Pressable
-          style={[styles.button, (isPending || !!messageViolation) && styles.buttonDisabled]}
+          style={[styles.button, (isPending || !!messageViolation || uploadingPhoto) && styles.buttonDisabled]}
           onPress={handleSubmit}
-          disabled={isPending || !!messageViolation}
+          disabled={isPending || !!messageViolation || uploadingPhoto}
         >
           {isPending ? (
             <ActivityIndicator color={Colors.light.white} />
@@ -280,6 +390,53 @@ const styles = StyleSheet.create({
   },
   textArea: {
     textAlignVertical: 'top',
+  },
+  photosRow: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  photoTile: {
+    width: 84,
+    height: 84,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoAdd: {
+    width: 84,
+    height: 84,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: Colors.light.primary,
+    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  photoAddText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.primary,
   },
   button: {
     backgroundColor: Colors.light.primary,

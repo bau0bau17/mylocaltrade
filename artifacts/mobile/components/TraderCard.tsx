@@ -11,6 +11,15 @@ const PLAN_STYLES = {
   basic: { bg: Colors.light.border, color: Colors.light.textSecondary, label: 'Basic' },
 };
 
+export function formatResponseTime(minutes: number | null | undefined): string | null {
+  if (minutes == null || !Number.isFinite(minutes) || minutes < 0) return null;
+  if (minutes < 60) return `Replies in ~${Math.max(1, Math.round(minutes))}m`;
+  const hours = minutes / 60;
+  if (hours < 24) return `Replies in ~${Math.round(hours)}h`;
+  const days = hours / 24;
+  return `Replies in ~${Math.round(days)}d`;
+}
+
 export function TraderCard({ trader }: { trader: TraderProfile }) {
   const router = useRouter();
   const planStyle = PLAN_STYLES[trader.plan as keyof typeof PLAN_STYLES];
@@ -66,6 +75,13 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
           <Feather name="star" size={12} color={Colors.light.featured} />
           <Text style={styles.footerText}>{trader.rating || 'New'} ({trader.reviewCount})</Text>
         </View>
+        {formatResponseTime(trader.responseTimeMinutes) ? (
+          <View style={styles.footerItem}>
+            <Feather name="clock" size={12} color={Colors.light.textMuted} />
+            <Text style={styles.footerText}>{formatResponseTime(trader.responseTimeMinutes)}</Text>
+          </View>
+        ) : null}
+        <View style={{ flex: 1 }} />
         <Feather name="chevron-right" size={16} color={Colors.light.textMuted} />
       </View>
     </Pressable>

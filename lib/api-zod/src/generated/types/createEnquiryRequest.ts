@@ -12,4 +12,9 @@ export interface CreateEnquiryRequest {
   serviceRequired: string;
   preferredDate?: string | null;
   phone?: string | null;
+  /**
+   * Object-storage paths for photos uploaded by the customer (max 3). Must begin with /objects/customer-uploads/<userId>/.
+   * @maxItems 3
+   */
+  attachmentUrls?: string[];
 }

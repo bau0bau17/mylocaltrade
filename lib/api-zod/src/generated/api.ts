@@ -281,6 +281,7 @@ export const UpdateLeadReminderSettingsResponse = zod
 /**
  * @summary List traders with optional search/filter
  */
+export const listTradersQuerySortDefault = `recommended`;
 export const listTradersQueryPageDefault = 1;
 export const listTradersQueryLimitDefault = 20;
 
@@ -289,6 +290,18 @@ export const ListTradersQueryParams = zod.object({
   location: zod.coerce.string().optional(),
   featured: zod.coerce.boolean().optional(),
   search: zod.coerce.string().optional(),
+  verified: zod.coerce
+    .boolean()
+    .optional()
+    .describe("Only return fully verified traders."),
+  plan: zod
+    .enum(["premium_plus", "elite"])
+    .optional()
+    .describe("Filter by subscription plan tier."),
+  sort: zod
+    .enum(["recommended", "rating", "reviews", "newest"])
+    .default(listTradersQuerySortDefault)
+    .describe("Result ordering. Default surfaces verified+featured first."),
   page: zod.coerce.number().default(listTradersQueryPageDefault),
   limit: zod.coerce.number().default(listTradersQueryLimitDefault),
 });
@@ -333,6 +346,12 @@ export const ListTradersResponse = zod.object({
       verifiedAt: zod.date().nullish(),
       rating: zod.number().nullish(),
       reviewCount: zod.number(),
+      responseTimeMinutes: zod
+        .number()
+        .nullish()
+        .describe(
+          "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+        ),
       createdAt: zod.date().optional(),
     }),
   ),
@@ -390,6 +409,12 @@ export const GetFeaturedTradersResponse = zod.object({
       verifiedAt: zod.date().nullish(),
       rating: zod.number().nullish(),
       reviewCount: zod.number(),
+      responseTimeMinutes: zod
+        .number()
+        .nullish()
+        .describe(
+          "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+        ),
       createdAt: zod.date().optional(),
     }),
   ),
@@ -443,6 +468,12 @@ export const GetTraderResponse = zod.object({
   verifiedAt: zod.date().nullish(),
   rating: zod.number().nullish(),
   reviewCount: zod.number(),
+  responseTimeMinutes: zod
+    .number()
+    .nullish()
+    .describe(
+      "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+    ),
   createdAt: zod.date().optional(),
 });
 
@@ -487,6 +518,12 @@ export const GetTraderProfileResponse = zod.object({
   verifiedAt: zod.date().nullish(),
   rating: zod.number().nullish(),
   reviewCount: zod.number(),
+  responseTimeMinutes: zod
+    .number()
+    .nullish()
+    .describe(
+      "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+    ),
   createdAt: zod.date().optional(),
 });
 
@@ -556,6 +593,12 @@ export const UpdateTraderProfileResponse = zod.object({
   verifiedAt: zod.date().nullish(),
   rating: zod.number().nullish(),
   reviewCount: zod.number(),
+  responseTimeMinutes: zod
+    .number()
+    .nullish()
+    .describe(
+      "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+    ),
   createdAt: zod.date().optional(),
 });
 
@@ -719,6 +762,22 @@ export const RegisterTraderDocumentBody = zod.object({
   mimeType: zod.string(),
   sizeBytes: zod.number(),
   expiresAt: zod.date().nullish(),
+});
+
+/**
+ * @summary Request a presigned PUT URL for a customer-side image upload (enquiry photos, trader gallery)
+ */
+export const GetCustomerUploadUrlBody = zod.object({
+  filename: zod.string(),
+  mimeType: zod.string(),
+  sizeBytes: zod.number(),
+});
+
+export const GetCustomerUploadUrlResponse = zod.object({
+  uploadURL: zod.string(),
+  objectPath: zod.string(),
+  method: zod.string(),
+  expectedHeaders: zod.record(zod.string(), zod.string()).optional(),
 });
 
 /**
@@ -1022,6 +1081,12 @@ export const GetSavedTradersResponse = zod.object({
       verifiedAt: zod.date().nullish(),
       rating: zod.number().nullish(),
       reviewCount: zod.number(),
+      responseTimeMinutes: zod
+        .number()
+        .nullish()
+        .describe(
+          "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+        ),
       createdAt: zod.date().optional(),
     }),
   ),
@@ -1064,12 +1129,21 @@ export const GetNewLeadCountResponse = zod.object({
 /**
  * @summary Send an enquiry to a trader
  */
+export const createEnquiryBodyAttachmentUrlsMax = 3;
+
 export const CreateEnquiryBody = zod.object({
   traderId: zod.number(),
   message: zod.string(),
   serviceRequired: zod.string(),
   preferredDate: zod.string().nullish(),
   phone: zod.string().nullish(),
+  attachmentUrls: zod
+    .array(zod.string())
+    .max(createEnquiryBodyAttachmentUrlsMax)
+    .optional()
+    .describe(
+      "Object-storage paths for photos uploaded by the customer (max 3). Must begin with \/objects\/customer-uploads\/<userId>\/.",
+    ),
 });
 
 /**
@@ -1088,6 +1162,7 @@ export const GetEnquiriesResponse = zod.object({
       serviceRequired: zod.string(),
       preferredDate: zod.string().nullish(),
       phone: zod.string().nullish(),
+      attachmentUrls: zod.array(zod.string()).optional(),
       status: zod.enum(["pending", "responded", "closed"]),
       conversationId: zod.number().nullish(),
       viewedByTrader: zod.boolean().optional(),

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, Alert, Image, Modal, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -13,6 +13,7 @@ import {
   getGetSavedTradersQueryKey,
 } from '@workspace/api-client-react';
 import { ReviewsSection } from '@/components/ReviewsSection';
+import { formatResponseTime } from '@/components/TraderCard';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function TraderProfileScreen() {
@@ -56,6 +57,7 @@ export default function TraderProfileScreen() {
     },
   });
   const saveBusy = saveMutation.isPending || unsaveMutation.isPending;
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const onToggleSave = () => {
     if (!isAuthenticated) {
@@ -165,6 +167,12 @@ export default function TraderProfileScreen() {
               Verified by MyLocalTrade · {new Date(trader.verifiedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
             </Text>
           )}
+          {formatResponseTime(trader.responseTimeMinutes) ? (
+            <View style={styles.responseChip}>
+              <Feather name="clock" size={11} color={Colors.light.primary} />
+              <Text style={styles.responseChipText}>{formatResponseTime(trader.responseTimeMinutes)}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.content}>
@@ -221,6 +229,19 @@ export default function TraderProfileScreen() {
             </View>
           </View>
 
+          {trader.galleryUrls && trader.galleryUrls.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Gallery</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryRow}>
+                {trader.galleryUrls.map((url, idx) => (
+                  <Pressable key={`${url}-${idx}`} onPress={() => setLightboxIndex(idx)}>
+                    <Image source={{ uri: url }} style={styles.galleryThumb} resizeMode="cover" />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>Reviews</Text>
@@ -266,6 +287,26 @@ export default function TraderProfileScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={lightboxIndex !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLightboxIndex(null)}
+      >
+        <Pressable style={styles.lightboxBackdrop} onPress={() => setLightboxIndex(null)}>
+          {lightboxIndex !== null && trader.galleryUrls?.[lightboxIndex] ? (
+            <Image
+              source={{ uri: trader.galleryUrls[lightboxIndex] }}
+              style={styles.lightboxImage}
+              resizeMode="contain"
+            />
+          ) : null}
+          <Pressable style={[styles.lightboxClose, { top: insets.top + 12 }]} onPress={() => setLightboxIndex(null)} hitSlop={10}>
+            <Feather name="x" size={22} color={Colors.light.white} />
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {canMessage ? (
         <View style={[styles.bottomBar, { paddingBottom: insets.bottom || 24 }]}>
@@ -556,5 +597,51 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  responseChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: Colors.light.primaryMuted,
+  },
+  responseChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.primary,
+    letterSpacing: 0.3,
+  },
+  galleryRow: {
+    gap: 8,
+    paddingRight: 12,
+  },
+  galleryThumb: {
+    width: 140,
+    height: 140,
+    borderRadius: 12,
+    backgroundColor: Colors.light.surface,
+  },
+  lightboxBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightboxImage: {
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height * 0.8,
+  },
+  lightboxClose: {
+    position: 'absolute',
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -18,6 +18,7 @@ export interface Enquiry {
   serviceRequired: string;
   preferredDate?: string | null;
   phone?: string | null;
+  attachmentUrls?: string[];
   status: EnquiryStatus;
   conversationId?: number | null;
   viewedByTrader?: boolean;

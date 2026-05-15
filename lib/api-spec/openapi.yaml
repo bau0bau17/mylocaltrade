@@ -349,6 +349,24 @@ paths:
           in: query
           schema:
             type: string
+        - name: verified
+          in: query
+          description: Only return fully verified traders.
+          schema:
+            type: boolean
+        - name: plan
+          in: query
+          description: Filter by subscription plan tier.
+          schema:
+            type: string
+            enum: [premium_plus, elite]
+        - name: sort
+          in: query
+          description: Result ordering. Default surfaces verified+featured first.
+          schema:
+            type: string
+            enum: [recommended, rating, reviews, newest]
+            default: recommended
         - name: page
           in: query
           schema:
@@ -662,6 +680,39 @@ paths:
                 $ref: "#/components/schemas/RegisterTraderDocumentResponse"
         "400":
           description: Invalid document data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /customer/uploads/upload-url:
+    post:
+      operationId: getCustomerUploadUrl
+      tags: [customer-uploads]
+      summary: Request a presigned PUT URL for a customer-side image upload (enquiry photos, trader gallery)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestCustomerUploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "400":
+          description: Invalid request
           content:
             application/json:
               schema:
@@ -2095,6 +2146,10 @@ components:
           nullable: true
         reviewCount:
           type: integer
+        responseTimeMinutes:
+          type: integer
+          nullable: true
+          description: Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.
         createdAt:
           type: string
           format: date-time
@@ -2322,6 +2377,12 @@ components:
         phone:
           type: string
           nullable: true
+        attachmentUrls:
+          type: array
+          description: Object-storage paths for photos uploaded by the customer (max 3). Must begin with /objects/customer-uploads/<userId>/.
+          items:
+            type: string
+          maxItems: 3
       required:
         - traderId
         - message
@@ -2352,6 +2413,10 @@ components:
         phone:
           type: string
           nullable: true
+        attachmentUrls:
+          type: array
+          items:
+            type: string
         status:
           type: string
           enum: [pending, responded, closed]
@@ -2918,6 +2983,17 @@ components:
         - evaluation
         - maxUploadBytes
         - allowedMimeTypes
+
+    RequestCustomerUploadUrlRequest:
+      type: object
+      properties:
+        filename: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+      required:
+        - filename
+        - mimeType
+        - sizeBytes
 
     RequestUploadUrlRequest:
       type: object

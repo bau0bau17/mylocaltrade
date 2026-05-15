@@ -6,8 +6,10 @@ import { authMiddleware, traderOnly } from "../lib/auth";
 import { UpdateTraderProfileBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, evaluateBusinessProfileComplete, logAudit } from "../lib/trader-status";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
+const storage = new ObjectStorageService();
 
 router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
   try {
@@ -74,6 +76,56 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       const value = (body as Record<string, unknown>)[field];
       if (value !== undefined) {
         updateData[field] = value;
+      }
+    }
+
+    // If galleryUrls is being changed, verify each NEW path against the
+    // customer-uploads namespace + actual stored object policy. Already-
+    // persisted paths are trusted (they passed the same check on first save)
+    // so re-saving the gallery doesn't re-fetch metadata for every image.
+    if (Array.isArray(updateData.galleryUrls)) {
+      const newUrls = updateData.galleryUrls as unknown[];
+      if (newUrls.length > 999) {
+        res.status(400).json({ error: "Too many gallery images." });
+        return;
+      }
+      const [existing] = await db
+        .select({ galleryUrls: traderProfilesTable.galleryUrls })
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.userId, userId));
+      const existingSet = new Set<string>(existing?.galleryUrls ?? []);
+      try {
+        const verified: string[] = [];
+        for (const raw of newUrls) {
+          if (typeof raw !== "string" || !raw) continue;
+          if (existingSet.has(raw)) {
+            // Cheap re-check defends against payloads that smuggle in
+            // strings the trader never owned (e.g. paths from other
+            // features or other users) by replaying values that happen
+            // to already sit in the gallery_urls array.
+            if (!storage.isCustomerUploadPathFor(raw, userId)) {
+              throw new Error("One of the gallery images does not belong to your account.");
+            }
+            verified.push(raw);
+            continue;
+          }
+          const normalised = await storage.verifyCustomerUploadObject(raw, userId, {
+            maxBytes: 8 * 1024 * 1024,
+            allowedMimes: new Set([
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/heic",
+              "image/heif",
+            ]),
+            label: "gallery image",
+          });
+          verified.push(normalised);
+        }
+        updateData.galleryUrls = verified;
+      } catch (err) {
+        res.status(400).json({ error: (err as Error).message });
+        return;
       }
     }
 
