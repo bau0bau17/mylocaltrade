@@ -77,22 +77,43 @@ export function EnquiryCard({
   const specialistParts = specialistSummary(enquiry.specialistFields);
   const headerName = isCustomerView
     ? (enquiry.traderBusinessName?.trim() || 'Trader')
-    : enquiry.customerName;
+    : (enquiry.customerName?.trim() || 'Customer');
+
+  const conversationOpen = enquiry.conversationId != null;
 
   const handlePress = () => {
-    if (enquiry.conversationId != null) {
+    if (conversationOpen) {
       router.push(`/messages/${enquiry.conversationId}`);
     }
   };
 
+  const a11yWhen = isCustomerView
+    ? `sent ${relativeSent(enquiry.createdAt)}`
+    : `received ${new Date(enquiry.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
+  const accessibilityLabel = [
+    isCustomerView ? `Enquiry to ${headerName}` : `Enquiry from ${headerName}`,
+    enquiry.serviceRequired,
+    !isCustomerView && isUnopened ? 'unread' : null,
+    statusLabel.toLowerCase(),
+    specialistParts.length > 0 ? specialistParts.join(', ') : null,
+    a11yWhen,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   return (
     <Pressable
       onPress={handlePress}
-      disabled={enquiry.conversationId == null}
+      disabled={!conversationOpen}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={conversationOpen ? 'Open conversation' : 'No conversation available yet'}
+      accessibilityState={{ disabled: !conversationOpen }}
       style={({ pressed }) => [
         styles.card,
         !isCustomerView && isUnopened && styles.cardUnopened,
-        pressed && enquiry.conversationId != null && { opacity: 0.85 },
+        pressed && conversationOpen && { opacity: 0.85 },
       ]}
     >
       <View style={styles.header}>
