@@ -1,12 +1,15 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useGetSavedTraders } from '@workspace/api-client-react';
 import { TraderCard } from '@/components/TraderCard';
 
 export default function SavedTradersScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { data, isLoading } = useGetSavedTraders();
 
   return (
@@ -28,6 +31,15 @@ export default function SavedTradersScreen() {
           <Text style={styles.emptySubtitle}>
             Browse traders and tap the bookmark icon to save them here.
           </Text>
+          <Pressable
+            style={styles.emptyCta}
+            onPress={() => router.push('/(tabs)/search')}
+            accessibilityRole="button"
+            accessibilityLabel="Find a trader"
+          >
+            <Feather name="search" size={16} color="#fff" />
+            <Text style={styles.emptyCtaText}>Find a trader</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -57,4 +69,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+  emptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 12,
+  },
+  emptyCtaText: { fontSize: 14, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
 });
