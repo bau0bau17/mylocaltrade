@@ -89,6 +89,7 @@ router.get("/traders", async (req, res) => {
       search,
       verified,
       plan,
+      specialism,
       sort,
       page = "1",
       limit = "20",
@@ -137,6 +138,25 @@ router.get("/traders", async (req, res) => {
       conditions.push(inArray(traderProfilesTable.plan, ["premium", "elite"]));
     } else if (plan === "elite") {
       conditions.push(eq(traderProfilesTable.plan, "elite"));
+    }
+
+    // Specialism filter: a free-text keyword (e.g. "solar", "heat pump") that
+    // matches either the trader's main category or any entry of their
+    // additionalServices array. Reuses the existing free-text services field
+    // — no new column required.
+    if (specialism && typeof specialism === "string" && specialism.trim()) {
+      const specLike = `%${specialism.trim()}%`;
+      conditions.push(
+        or(
+          ilike(traderProfilesTable.mainCategory, specLike),
+          sql`EXISTS (
+            SELECT 1 FROM json_array_elements_text(
+              COALESCE(${traderProfilesTable.additionalServices}, '[]'::json)
+            ) AS svc
+            WHERE svc ILIKE ${specLike}
+          )`,
+        )!,
+      );
     }
 
     if (search && typeof search === "string") {

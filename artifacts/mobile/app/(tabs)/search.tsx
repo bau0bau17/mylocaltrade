@@ -14,6 +14,7 @@ import {
 } from '@workspace/api-client-react';
 import { useLocation } from '@/hooks/useLocation';
 import type { FeatherIconName } from '@/types/feather-icons';
+import { SPECIALISMS, type SpecialismKey } from '@/constants/specialisms';
 
 const SORT_LABELS: Record<'recommended' | 'rating' | 'reviews' | 'newest', string> = {
   recommended: 'Recommended',
@@ -73,7 +74,12 @@ export default function SearchScreen() {
   const [hasSearched, setHasSearched] = useState(!!params.category);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [planFilter, setPlanFilter] = useState<'all' | 'premium_plus' | 'elite'>('all');
+  const [specialismFilter, setSpecialismFilter] = useState<SpecialismKey | null>(null);
   const [sort, setSort] = useState<'recommended' | 'rating' | 'reviews' | 'newest'>('recommended');
+
+  const activeSpecialism = specialismFilter
+    ? SPECIALISMS.find((s) => s.key === specialismFilter) ?? null
+    : null;
 
   useEffect(() => {
     loadRecentSearches();
@@ -116,19 +122,25 @@ export default function SearchScreen() {
     sort,
     ...(verifiedOnly ? { verified: true } : {}),
     ...(planFilter !== 'all' ? { plan: planFilter } : {}),
+    ...(activeSpecialism ? { specialism: activeSpecialism.keywords[0] } : {}),
   };
   const { data, isLoading } = useListTraders(searchParams, {
     query: {
       queryKey: getListTradersQueryKey(searchParams),
-      enabled: hasSearched,
+      enabled: hasSearched || !!activeSpecialism,
     },
   });
 
   const handleSearch = () => {
-    if (searchQuery || locationQuery) {
+    if (searchQuery || locationQuery || activeSpecialism) {
       setHasSearched(true);
       if (searchQuery) saveRecentSearch(searchQuery);
     }
+  };
+
+  const toggleSpecialism = (key: SpecialismKey) => {
+    setSpecialismFilter((prev) => (prev === key ? null : key));
+    setHasSearched(true);
   };
 
   const applyRecentSearch = (query: string) => {
@@ -265,6 +277,15 @@ export default function SearchScreen() {
               active={planFilter === 'elite'}
               onPress={() => setPlanFilter(p => p === 'elite' ? 'all' : 'elite')}
             />
+            {SPECIALISMS.map((spec) => (
+              <FilterChip
+                key={spec.key}
+                icon={spec.icon}
+                label={spec.label}
+                active={specialismFilter === spec.key}
+                onPress={() => toggleSpecialism(spec.key)}
+              />
+            ))}
           </ScrollView>
           <Text style={styles.resultsCount}>
             {isLoading ? 'Searching...' : `${data?.total || 0} results found`}

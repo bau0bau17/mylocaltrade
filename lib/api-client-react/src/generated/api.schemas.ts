@@ -401,6 +401,44 @@ export interface SubscriptionStatus {
   cancelAtPeriodEnd: boolean;
 }
 
+export type EnquirySpecialistFieldsPropertyType =
+  (typeof EnquirySpecialistFieldsPropertyType)[keyof typeof EnquirySpecialistFieldsPropertyType];
+
+export const EnquirySpecialistFieldsPropertyType = {
+  house: "house",
+  flat: "flat",
+  commercial: "commercial",
+  other: "other",
+} as const;
+
+export type EnquirySpecialistFieldsTenure =
+  (typeof EnquirySpecialistFieldsTenure)[keyof typeof EnquirySpecialistFieldsTenure];
+
+export const EnquirySpecialistFieldsTenure = {
+  owner: "owner",
+  tenant: "tenant",
+  landlord: "landlord",
+  leaseholder: "leaseholder",
+} as const;
+
+export type EnquirySpecialistFieldsUrgency =
+  (typeof EnquirySpecialistFieldsUrgency)[keyof typeof EnquirySpecialistFieldsUrgency];
+
+export const EnquirySpecialistFieldsUrgency = {
+  routine: "routine",
+  soon: "soon",
+  urgent: "urgent",
+} as const;
+
+/**
+ * Optional structured fields shown only for energy / property specialist trades.
+ */
+export interface EnquirySpecialistFields {
+  propertyType?: EnquirySpecialistFieldsPropertyType;
+  tenure?: EnquirySpecialistFieldsTenure;
+  urgency?: EnquirySpecialistFieldsUrgency;
+}
+
 export interface CreateEnquiryRequest {
   traderId: number;
   message: string;
@@ -412,6 +450,7 @@ export interface CreateEnquiryRequest {
    * @maxItems 3
    */
   attachmentUrls?: string[];
+  specialistFields?: EnquirySpecialistFields;
 }
 
 export type EnquiryStatus = (typeof EnquiryStatus)[keyof typeof EnquiryStatus];
@@ -434,6 +473,7 @@ export interface Enquiry {
   preferredDate?: string | null;
   phone?: string | null;
   attachmentUrls?: string[];
+  specialistFields?: EnquirySpecialistFields | null;
   status: EnquiryStatus;
   conversationId?: number | null;
   viewedByTrader?: boolean;
@@ -962,6 +1002,10 @@ export type ListTradersParams = {
    * Filter by subscription plan tier.
    */
   plan?: ListTradersPlan;
+  /**
+   * Filter to traders whose main category or additional services match a known specialism keyword (e.g. "solar", "heat pump", "ev charger").
+   */
+  specialism?: string;
   /**
    * Result ordering. Default surfaces verified+featured first.
    */

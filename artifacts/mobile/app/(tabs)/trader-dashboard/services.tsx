@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useGetTraderProfile, useUpdateTraderProfile } from '@workspace/api-client-react';
+import { SPECIALISMS } from '@/constants/specialisms';
 
 export default function ServicesScreen() {
   const insets = useSafeAreaInsets();
@@ -22,12 +23,17 @@ export default function ServicesScreen() {
   const addService = () => {
     const trimmed = newService.trim();
     if (!trimmed) return;
-    if (services.includes(trimmed)) {
+    if (services.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
       Alert.alert('Duplicate', 'This service is already listed');
       return;
     }
     setServices(prev => [...prev, trimmed]);
     setNewService('');
+  };
+
+  const addSuggested = (label: string) => {
+    if (services.some((s) => s.toLowerCase() === label.toLowerCase())) return;
+    setServices((prev) => [...prev, label]);
   };
 
   const removeService = (index: number) => {
@@ -68,6 +74,33 @@ export default function ServicesScreen() {
         <Text style={styles.description}>
           List the additional services you offer to help customers find you.
         </Text>
+
+        <Text style={styles.suggestedLabel}>Quick add specialisms</Text>
+        <Text style={styles.suggestedHint}>
+          These are surfaced as badges on your public profile and used to filter search.
+        </Text>
+        <View style={styles.suggestedRow}>
+          {SPECIALISMS.map((spec) => {
+            const active = services.some((s) => s.toLowerCase() === spec.label.toLowerCase());
+            return (
+              <Pressable
+                key={spec.key}
+                style={[styles.suggestedChip, active && styles.suggestedChipActive]}
+                onPress={() => addSuggested(spec.label)}
+                disabled={active}
+              >
+                <Feather
+                  name={spec.icon}
+                  size={12}
+                  color={active ? Colors.light.textMuted : Colors.light.primary}
+                />
+                <Text style={[styles.suggestedChipText, active && styles.suggestedChipTextActive]}>
+                  {spec.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         <View style={styles.addRow}>
           <TextInput
@@ -160,6 +193,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: Colors.light.primary,
+  },
+  suggestedLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
+    marginTop: 16,
+    marginBottom: 4,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  suggestedHint: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  suggestedRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  suggestedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
+  },
+  suggestedChipActive: {
+    opacity: 0.5,
+  },
+  suggestedChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.primary,
+    letterSpacing: 0.2,
+  },
+  suggestedChipTextActive: {
+    color: Colors.light.textMuted,
   },
   addRow: {
     flexDirection: 'row',

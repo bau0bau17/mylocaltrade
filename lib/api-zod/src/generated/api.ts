@@ -298,6 +298,12 @@ export const ListTradersQueryParams = zod.object({
     .enum(["premium_plus", "elite"])
     .optional()
     .describe("Filter by subscription plan tier."),
+  specialism: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      'Filter to traders whose main category or additional services match a known specialism keyword (e.g. \"solar\", \"heat pump\", \"ev charger\").',
+    ),
   sort: zod
     .enum(["recommended", "rating", "reviews", "newest"])
     .default(listTradersQuerySortDefault)
@@ -1144,6 +1150,20 @@ export const CreateEnquiryBody = zod.object({
     .describe(
       "Object-storage paths for photos uploaded by the customer (max 3). Must begin with \/objects\/customer-uploads\/<userId>\/.",
     ),
+  specialistFields: zod
+    .object({
+      propertyType: zod
+        .enum(["house", "flat", "commercial", "other"])
+        .optional(),
+      tenure: zod
+        .enum(["owner", "tenant", "landlord", "leaseholder"])
+        .optional(),
+      urgency: zod.enum(["routine", "soon", "urgent"]).optional(),
+    })
+    .optional()
+    .describe(
+      "Optional structured fields shown only for energy \/ property specialist trades.",
+    ),
 });
 
 /**
@@ -1163,6 +1183,20 @@ export const GetEnquiriesResponse = zod.object({
       preferredDate: zod.string().nullish(),
       phone: zod.string().nullish(),
       attachmentUrls: zod.array(zod.string()).optional(),
+      specialistFields: zod
+        .object({
+          propertyType: zod
+            .enum(["house", "flat", "commercial", "other"])
+            .optional(),
+          tenure: zod
+            .enum(["owner", "tenant", "landlord", "leaseholder"])
+            .optional(),
+          urgency: zod.enum(["routine", "soon", "urgent"]).optional(),
+        })
+        .describe(
+          "Optional structured fields shown only for energy \/ property specialist trades.",
+        )
+        .nullish(),
       status: zod.enum(["pending", "responded", "closed"]),
       conversationId: zod.number().nullish(),
       viewedByTrader: zod.boolean().optional(),

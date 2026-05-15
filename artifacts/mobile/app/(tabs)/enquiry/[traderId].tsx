@@ -13,6 +13,16 @@ import {
 } from '@workspace/api-client-react';
 import { detectContactInfo, contactViolationMessage } from '@/lib/content-filter';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  traderHasAnySpecialism,
+  PROPERTY_TYPE_OPTIONS,
+  TENURE_OPTIONS,
+  URGENCY_OPTIONS,
+  type PropertyType,
+  type Tenure,
+  type Urgency,
+  type SpecialistFields,
+} from '@/constants/specialisms';
 
 const MAX_PHOTOS = 3;
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -48,8 +58,14 @@ export default function EnquiryScreen() {
     preferredDate: '',
     phone: '',
   });
+  const [specialistFields, setSpecialistFields] = useState<SpecialistFields>({});
   const [attachments, setAttachments] = useState<{ uri: string; objectPath: string }[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const showSpecialistFields = traderHasAnySpecialism(
+    trader?.mainCategory,
+    trader?.additionalServices,
+  );
 
   const messageViolation = useMemo(
     () => detectContactInfo(formData.message),
@@ -121,6 +137,13 @@ export default function EnquiryScreen() {
       return;
     }
 
+    const trimmedSpecialist: SpecialistFields = {
+      ...(specialistFields.propertyType ? { propertyType: specialistFields.propertyType } : {}),
+      ...(specialistFields.tenure ? { tenure: specialistFields.tenure } : {}),
+      ...(specialistFields.urgency ? { urgency: specialistFields.urgency } : {}),
+    };
+    const hasSpecialist = Object.keys(trimmedSpecialist).length > 0;
+
     try {
       await createEnquiry({
         data: {
@@ -128,6 +151,9 @@ export default function EnquiryScreen() {
           ...formData,
           ...(attachments.length > 0
             ? { attachmentUrls: attachments.map(a => a.objectPath) }
+            : {}),
+          ...(hasSpecialist && showSpecialistFields
+            ? { specialistFields: trimmedSpecialist }
             : {}),
         },
       });
@@ -254,6 +280,92 @@ export default function EnquiryScreen() {
             )}
           </View>
         </View>
+
+        {showSpecialistFields && (
+          <View style={styles.specialistBlock}>
+            <View style={styles.specialistHeader}>
+              <Feather name="info" size={13} color={Colors.light.primary} />
+              <Text style={styles.specialistHeaderText}>
+                A few quick details (optional) help this trader prepare a more accurate quote.
+              </Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Property type</Text>
+              <View style={styles.choiceRow}>
+                {PROPERTY_TYPE_OPTIONS.map((opt) => {
+                  const active = specialistFields.propertyType === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      style={[styles.choiceChip, active && styles.choiceChipActive]}
+                      onPress={() =>
+                        setSpecialistFields((prev) => ({
+                          ...prev,
+                          propertyType: active ? undefined : (opt.value as PropertyType),
+                        }))
+                      }
+                    >
+                      <Text style={[styles.choiceChipText, active && styles.choiceChipTextActive]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>You are the</Text>
+              <View style={styles.choiceRow}>
+                {TENURE_OPTIONS.map((opt) => {
+                  const active = specialistFields.tenure === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      style={[styles.choiceChip, active && styles.choiceChipActive]}
+                      onPress={() =>
+                        setSpecialistFields((prev) => ({
+                          ...prev,
+                          tenure: active ? undefined : (opt.value as Tenure),
+                        }))
+                      }
+                    >
+                      <Text style={[styles.choiceChipText, active && styles.choiceChipTextActive]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>How soon</Text>
+              <View style={styles.choiceRow}>
+                {URGENCY_OPTIONS.map((opt) => {
+                  const active = specialistFields.urgency === opt.value;
+                  return (
+                    <Pressable
+                      key={opt.value}
+                      style={[styles.choiceChip, active && styles.choiceChipActive]}
+                      onPress={() =>
+                        setSpecialistFields((prev) => ({
+                          ...prev,
+                          urgency: active ? undefined : (opt.value as Urgency),
+                        }))
+                      }
+                    >
+                      <Text style={[styles.choiceChipText, active && styles.choiceChipTextActive]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        )}
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Preferred Date (Optional)</Text>
@@ -457,5 +569,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  specialistBlock: {
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 14,
+    padding: 14,
+    gap: 14,
+  },
+  specialistHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  specialistHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    lineHeight: 16,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  choiceChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.background,
+  },
+  choiceChipActive: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+  },
+  choiceChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+    letterSpacing: 0.2,
+  },
+  choiceChipTextActive: {
+    color: Colors.light.white,
   },
 });

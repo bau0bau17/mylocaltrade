@@ -22,6 +22,10 @@ export type ListTradersParams = {
    */
   plan?: ListTradersPlan;
   /**
+   * Filter to traders whose main category or additional services match a known specialism keyword (e.g. "solar", "heat pump", "ev charger").
+   */
+  specialism?: string;
+  /**
    * Result ordering. Default surfaces verified+featured first.
    */
   sort?: ListTradersSort;
