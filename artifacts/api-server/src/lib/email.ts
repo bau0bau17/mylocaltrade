@@ -374,6 +374,24 @@ export async function sendContactEmail(opts: {
   });
 }
 
+const ENQUIRY_PROPERTY_TYPE_LABELS: Record<string, string> = {
+  house: "House",
+  flat: "Flat",
+  commercial: "Commercial",
+  other: "Other",
+};
+const ENQUIRY_TENURE_LABELS: Record<string, string> = {
+  owner: "Owner",
+  tenant: "Tenant",
+  landlord: "Landlord",
+  leaseholder: "Leaseholder",
+};
+const ENQUIRY_URGENCY_LABELS: Record<string, string> = {
+  routine: "No rush",
+  soon: "Within a month",
+  urgent: "ASAP",
+};
+
 export async function sendNewEnquiryEmail(opts: {
   toEmail: string;
   toName: string;
@@ -382,15 +400,33 @@ export async function sendNewEnquiryEmail(opts: {
   message: string;
   preferredDate?: string | null;
   phone?: string | null;
+  specialistFields?: {
+    propertyType?: string | null;
+    tenure?: string | null;
+    urgency?: string | null;
+  } | null;
 }): Promise<void> {
   const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
   const safeName = escapeHtml(opts.toName);
   const safeCustomer = escapeHtml(opts.customerName);
   const safeService = escapeHtml(opts.serviceRequired);
   const safeMessage = escapeHtml(opts.message);
+  const sf = opts.specialistFields ?? null;
+  const propertyTypeLabel = sf?.propertyType
+    ? ENQUIRY_PROPERTY_TYPE_LABELS[sf.propertyType] ?? sf.propertyType
+    : null;
+  const tenureLabel = sf?.tenure
+    ? ENQUIRY_TENURE_LABELS[sf.tenure] ?? sf.tenure
+    : null;
+  const urgencyLabel = sf?.urgency
+    ? ENQUIRY_URGENCY_LABELS[sf.urgency] ?? sf.urgency
+    : null;
   const detailsRows = [
     ["From", safeCustomer],
     ["Service required", safeService],
+    urgencyLabel ? ["Urgency", escapeHtml(urgencyLabel)] : null,
+    propertyTypeLabel ? ["Property type", escapeHtml(propertyTypeLabel)] : null,
+    tenureLabel ? ["Customer is", escapeHtml(tenureLabel)] : null,
     opts.preferredDate ? ["Preferred date", escapeHtml(opts.preferredDate)] : null,
     opts.phone ? ["Phone", escapeHtml(opts.phone)] : null,
   ].filter(Boolean) as [string, string][];

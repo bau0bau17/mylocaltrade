@@ -165,6 +165,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
             message,
             preferredDate: preferredDate || null,
             phone: phone || null,
+            specialistFields: specialistFields ?? null,
           });
         }
       } catch (notifyErr) {
