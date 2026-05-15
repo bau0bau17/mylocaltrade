@@ -171,7 +171,10 @@ export default function EnquiryScreen() {
       Alert.alert(
         'Enquiry sent',
         `Your enquiry has been sent to ${recipient}.${replyHint} Always verify quotes, insurance and credentials before any work starts.`,
-        [{ text: 'OK', onPress: () => router.back() }],
+        [
+          { text: 'Done', style: 'cancel', onPress: () => router.back() },
+          { text: 'View enquiries', onPress: () => router.replace('/(tabs)/my-enquiries') },
+        ],
       );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Could not send enquiry';
