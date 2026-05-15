@@ -528,17 +528,29 @@ export async function sendLeadReminderEmail(opts: {
   serviceRequired: string;
   /** Signed one-click unsubscribe URL scoped to this trader + reminder kind. */
   unsubscribeUrl: string;
+  /** Optional urgency captured on the original enquiry. When "urgent" we
+   * surface it prominently in the subject and body so the trader sees the
+   * customer marked the job as ASAP. */
+  urgency?: "routine" | "soon" | "urgent" | string | null;
 }): Promise<boolean> {
   const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
   const safeName = escapeHtml(opts.toName);
   const safeCustomer = escapeHtml(opts.customerName);
   const safeService = escapeHtml(opts.serviceRequired);
+  const urgency = typeof opts.urgency === "string" ? opts.urgency : null;
+  const isUrgent = urgency === "urgent";
+  const urgencyBanner = isUrgent
+    ? `<p style="background: #7F1D1D; color: #FEE2E2; font-size: 13px; font-weight: 700; padding: 10px 14px; border-radius: 8px; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 0.5px;">Customer marked this job as ASAP</p>`
+    : "";
   const html = emailShell({
     title: "Unanswered lead on MyLocalTrade",
-    preheader: `You haven't opened ${safeCustomer}'s enquiry yet`,
+    preheader: isUrgent
+      ? `${safeCustomer} marked this ${safeService} enquiry as ASAP`
+      : `You haven't opened ${safeCustomer}'s ${safeService} enquiry yet`,
     unsubscribe: { url: opts.unsubscribeUrl, label: "Unsubscribe from these reminders" },
     bodyHtml: `
       <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      ${urgencyBanner}
       <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
         You still have an unanswered lead from <strong style="color: #00B4D8;">${safeCustomer}</strong> for <strong>${safeService}</strong>.
       </p>
@@ -551,10 +563,13 @@ export async function sendLeadReminderEmail(opts: {
         </a>
       </div>`,
   });
+  const subjectBase = `Unanswered lead from ${sanitizeHeaderValue(opts.customerName)}`;
+  const subjectWithService = `${subjectBase} — ${sanitizeHeaderValue(opts.serviceRequired)}`;
+  const subject = isUrgent ? `[ASAP] ${subjectWithService}` : subjectWithService;
   const channel = await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
-    subject: `Unanswered lead from ${sanitizeHeaderValue(opts.customerName)}`,
+    subject,
     html,
     headers: {
       "List-Unsubscribe": `<${opts.unsubscribeUrl}>`,
