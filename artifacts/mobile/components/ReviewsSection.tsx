@@ -47,6 +47,18 @@ export function ReviewsSection({ traderId }: { traderId: number }) {
   const avg = data?.averageRating ?? null;
   const count = data?.totalCount ?? 0;
 
+  const filterCounts = useMemo(() => {
+    let five = 0;
+    let four = 0;
+    let threeOrLower = 0;
+    for (const r of all) {
+      if (r.rating === 5) five += 1;
+      else if (r.rating === 4) four += 1;
+      else if (r.rating <= 3) threeOrLower += 1;
+    }
+    return { all: all.length, '5': five, '4': four, '3low': threeOrLower } as Record<RatingFilter, number>;
+  }, [all]);
+
   const visible = useMemo(() => {
     let list = [...all];
     if (filter === '5') list = list.filter((r) => r.rating === 5);
@@ -100,13 +112,32 @@ export function ReviewsSection({ traderId }: { traderId: number }) {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
             {FILTER_OPTIONS.map((opt) => {
               const active = filter === opt.key;
+              const bucketCount = filterCounts[opt.key];
+              const empty = bucketCount === 0;
               return (
                 <Pressable
                   key={opt.key}
-                  onPress={() => setFilter(opt.key)}
-                  style={[styles.chip, styles.filterChip, active && styles.chipActive]}
+                  onPress={() => {
+                    if (empty) return;
+                    setFilter(opt.key);
+                  }}
+                  disabled={empty}
+                  style={[
+                    styles.chip,
+                    styles.filterChip,
+                    active && styles.chipActive,
+                    empty && styles.chipEmpty,
+                  ]}
                 >
-                  <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      active && styles.chipTextActive,
+                      empty && styles.chipTextEmpty,
+                    ]}
+                  >
+                    {opt.label} ({bucketCount})
+                  </Text>
                 </Pressable>
               );
             })}
@@ -164,8 +195,10 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: Colors.light.border, backgroundColor: Colors.light.card },
   filterChip: { backgroundColor: Colors.light.surface },
   chipActive: { backgroundColor: Colors.light.primary, borderColor: Colors.light.primary },
+  chipEmpty: { opacity: 0.45 },
   chipText: { fontSize: 11, fontWeight: '600', color: Colors.light.text },
   chipTextActive: { color: '#fff' },
+  chipTextEmpty: { color: Colors.light.textMuted },
   emptyBox: { padding: 16, borderRadius: 12, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border, alignItems: 'center', gap: 6, marginTop: 8 },
   emptyText: { fontSize: 13, color: Colors.light.textMuted, textAlign: 'center', lineHeight: 18 },
   reviewCard: { backgroundColor: Colors.light.card, borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: Colors.light.border, marginTop: 8 },
