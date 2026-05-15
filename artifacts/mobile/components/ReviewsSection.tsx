@@ -59,6 +59,15 @@ export function ReviewsSection({ traderId }: { traderId: number }) {
     return { all: all.length, '5': five, '4': four, '3low': threeOrLower } as Record<RatingFilter, number>;
   }, [all]);
 
+  const distribution = useMemo(() => {
+    const buckets: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const r of all) {
+      const k = Math.max(1, Math.min(5, Math.round(r.rating))) as 1 | 2 | 3 | 4 | 5;
+      buckets[k] += 1;
+    }
+    return buckets;
+  }, [all]);
+
   const visible = useMemo(() => {
     let list = [...all];
     if (filter === '5') list = list.filter((r) => r.rating === 5);
@@ -92,6 +101,24 @@ export function ReviewsSection({ traderId }: { traderId: number }) {
           {count === 0 ? 'No reviews yet' : `${count} review${count === 1 ? '' : 's'}`}
         </Text>
       </View>
+
+      {count > 0 && (
+        <View style={styles.distribution}>
+          {([5, 4, 3, 2, 1] as const).map((star) => {
+            const n = distribution[star];
+            const pct = count > 0 ? Math.round((n / count) * 100) : 0;
+            return (
+              <View key={star} style={styles.distRow}>
+                <Text style={styles.distStar}>{star}★</Text>
+                <View style={styles.distTrack}>
+                  <View style={[styles.distFill, { width: `${pct}%` }]} />
+                </View>
+                <Text style={styles.distCount}>{n}</Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
       {count > 0 && (
         <>
@@ -191,6 +218,12 @@ const styles = StyleSheet.create({
   summary: { paddingVertical: 12, gap: 4 },
   avgValue: { fontSize: 28, fontWeight: '700', color: Colors.light.text, marginBottom: 4 },
   avgLabel: { fontSize: 12, color: Colors.light.textMuted, marginTop: 4 },
+  distribution: { gap: 4, paddingVertical: 8, marginBottom: 4 },
+  distRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  distStar: { width: 22, fontSize: 11, fontWeight: '600', color: Colors.light.textSecondary },
+  distTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: Colors.light.surface, overflow: 'hidden' },
+  distFill: { height: '100%', backgroundColor: Colors.light.featured, borderRadius: 3 },
+  distCount: { width: 28, textAlign: 'right', fontSize: 11, color: Colors.light.textMuted, fontVariant: ['tabular-nums'] },
   chipRow: { flexDirection: 'row', gap: 6, paddingVertical: 6 },
   chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: Colors.light.border, backgroundColor: Colors.light.card },
   filterChip: { backgroundColor: Colors.light.surface },
