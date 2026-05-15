@@ -47,12 +47,22 @@ export function isFastResponder(minutes: number | null | undefined): boolean {
   );
 }
 
+export function formatTenureSince(createdAt: Date | string | null | undefined): string | null {
+  if (!createdAt) return null;
+  const d = createdAt instanceof Date ? createdAt : new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return null;
+  const year = d.getFullYear();
+  if (year >= new Date().getFullYear()) return null;
+  return `Since ${year}`;
+}
+
 export function TraderCard({ trader }: { trader: TraderProfile }) {
   const router = useRouter();
   const planStyle = PLAN_STYLES[trader.plan as keyof typeof PLAN_STYLES];
   const topRated = isTopRated(trader.rating, trader.reviewCount);
   const fastResponder = isFastResponder(trader.responseTimeMinutes);
   const hasReviews = typeof trader.reviewCount === 'number' && trader.reviewCount > 0;
+  const tenureLabel = formatTenureSince(trader.createdAt);
   const ratingLabel =
     typeof trader.rating === 'number' && Number.isFinite(trader.rating)
       ? trader.rating.toFixed(1)
@@ -127,6 +137,12 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
           <View style={styles.footerItem}>
             <Feather name="clock" size={12} color={Colors.light.textMuted} />
             <Text style={styles.footerText}>{formatResponseTime(trader.responseTimeMinutes)}</Text>
+          </View>
+        ) : null}
+        {tenureLabel ? (
+          <View style={styles.footerItem}>
+            <Feather name="calendar" size={12} color={Colors.light.textMuted} />
+            <Text style={styles.footerText}>{tenureLabel}</Text>
           </View>
         ) : null}
         <View style={{ flex: 1 }} />
@@ -287,6 +303,8 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: 6,
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
