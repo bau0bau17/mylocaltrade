@@ -129,6 +129,16 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
                 ? "When a customer enquires about your services, you'll be able to reply here."
                 : "Send an enquiry to a trader to start a conversation."}
             </Text>
+            {!isTrader && (
+              <Pressable
+                style={styles.cta}
+                onPress={() => router.push('/(tabs)/search')}
+                accessibilityRole="button"
+                accessibilityLabel="Find a trader"
+              >
+                <Text style={styles.ctaText}>Find a trader</Text>
+              </Pressable>
+            )}
           </View>
         }
         renderItem={({ item }) => {
