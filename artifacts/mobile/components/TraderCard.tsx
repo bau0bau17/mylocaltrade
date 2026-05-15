@@ -68,8 +68,35 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
       ? trader.rating.toFixed(1)
       : '–';
 
+  const ratingIsNumber = typeof trader.rating === 'number' && Number.isFinite(trader.rating);
+  const reviewWord = trader.reviewCount === 1 ? 'review' : 'reviews';
+  const reviewsPhrase = !hasReviews
+    ? 'no reviews yet'
+    : ratingIsNumber
+    ? `${ratingLabel} stars from ${trader.reviewCount} ${reviewWord}`
+    : `${trader.reviewCount} ${reviewWord}`;
+
+  const accessibilityLabel = [
+    trader.businessName,
+    trader.mainCategory,
+    trader.isVerified ? 'verified' : null,
+    topRated ? 'top rated' : null,
+    fastResponder ? 'replies fast' : null,
+    trader.town,
+    reviewsPhrase,
+    tenureLabel ? `on MyLocalTrade ${tenureLabel.toLowerCase()}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   return (
-    <Pressable style={styles.card} onPress={() => router.push(`/trader/${trader.id}`)}>
+    <Pressable
+      style={styles.card}
+      onPress={() => router.push(`/trader/${trader.id}`)}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint="View trader profile"
+    >
       <View style={styles.header}>
         <View style={styles.avatarPlaceholder}>
           <Text style={styles.avatarLetter}>{trader.businessName.charAt(0)}</Text>
