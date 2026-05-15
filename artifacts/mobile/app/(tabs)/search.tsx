@@ -250,6 +250,23 @@ export default function SearchScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filtersRow}
           >
+            {(verifiedOnly || planFilter !== 'all' || specialismFilter !== null || sort !== 'recommended') && (
+              <Pressable
+                onPress={() => {
+                  setVerifiedOnly(false);
+                  setPlanFilter('all');
+                  setSpecialismFilter(null);
+                  setSort('recommended');
+                }}
+                style={styles.clearAllChip}
+                accessibilityRole="button"
+                accessibilityLabel="Clear all filters"
+                hitSlop={6}
+              >
+                <Feather name="x" size={12} color={Colors.light.primary} />
+                <Text style={styles.clearAllChipText}>Clear all</Text>
+              </Pressable>
+            )}
             <FilterChip
               icon="sliders"
               label={`Sort: ${SORT_LABELS[sort]}`}
@@ -443,6 +460,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 4,
+  },
+  clearAllChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    backgroundColor: Colors.light.primaryMuted,
+    marginRight: 8,
+  },
+  clearAllChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.primary,
+    letterSpacing: 0.2,
   },
   resultsCount: {
     fontSize: 12,
