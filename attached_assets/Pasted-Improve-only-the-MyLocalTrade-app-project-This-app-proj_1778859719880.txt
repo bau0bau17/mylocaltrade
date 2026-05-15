@@ -1,0 +1,156 @@
+Improve only the MyLocalTrade app project.
+
+This app project is separate from the public landing page mylocaltrade.co.uk. Do not edit the standalone landing page project.
+
+Goal:
+Improve the app into a trusted local services marketplace where customers can find verified traders, request quotes, manage enquiries, and where traders can manage leads, subscriptions and verification.
+
+Please inspect the existing app first. If something is already implemented, do not rebuild it. Only improve, fix, or complete what is missing.
+
+Main app improvements:
+
+1. Customer home screen/dashboard
+Add or improve:
+- Search for local trades
+- Popular categories
+- Verified traders
+- Emergency services
+- Energy upgrades
+- Property maintenance
+- Recent enquiries
+- Saved traders
+- Clear CTA: Request a quote
+
+2. Trader dashboard
+Add or improve:
+- New leads
+- Enquiry status
+- Profile completion score
+- Verification status
+- Subscription status
+- Upgrade prompts
+- Gallery/profile management
+- Service areas
+- Specialist badges
+
+3. Verified trader system
+Add or improve trader verification statuses:
+- Not verified
+- Pending verification
+- Verified trader
+- Premium verified trader
+
+Verification fields should include:
+- Business name
+- Company number if applicable
+- Public liability insurance
+- Trade qualifications
+- Years of experience
+- Service areas
+- Insurance expiry date
+- Admin approval status
+
+Only admin should approve verification.
+
+4. Trader profiles
+Improve profiles with:
+- Business description
+- Services offered
+- Reviews
+- Photos/gallery
+- Verification badges
+- Insurance and qualification indicators
+- Service areas
+- Contact/request quote button
+- Emergency availability
+- Energy upgrade specialist option
+- Property maintenance specialist option
+
+5. Categories
+Add or improve categories:
+- Plumbing
+- Electrical
+- Roofing
+- Gas engineers
+- Heating
+- Solar panels
+- EV charger installation
+- Heat pumps
+- Insulation
+- EPC improvements
+- Damp and mould
+- Cladding/remediation support
+- General property maintenance
+- Leasehold/property repair support
+- Locksmiths
+- Cleaning
+- Gardening and landscaping
+
+6. Customer enquiry flow
+Improve enquiry form:
+- Postcode
+- Property type
+- Service needed
+- Urgency
+- Description
+- Photo upload if already supported
+- Preferred contact method
+- Consent checkbox
+
+Save enquiries in the database and match/send them to relevant traders if this structure already exists.
+
+7. Energy Upgrades area
+Add an app section for:
+- Solar panels
+- EV chargers
+- Heat pumps
+- Insulation
+- EPC improvements
+
+This section should help customers request quotes from verified local specialists.
+
+8. Property Maintenance area
+Add an app section for:
+- Repairs
+- Damp and mould
+- Leaks
+- Roofing
+- Communal/property issues
+- General maintenance
+
+Do not provide legal advice. The app should connect users with relevant traders only.
+
+9. Admin controls
+Add or improve admin controls:
+- Approve/reject trader verification
+- Mark trader as verified
+- Mark trader as energy specialist
+- Mark trader as property maintenance specialist
+- Suspend trader if already supported
+- View verification documents if uploads already exist
+
+10. Trust and safety
+Add or improve:
+- Verified trader badges
+- Reviews
+- Insurance indicators
+- Secure enquiries
+- Report trader/problem option if already supported
+- Clear messaging that users should verify quotes and trader credentials before work starts
+
+11. Subscription positioning
+Improve trader subscription messaging:
+- More local leads
+- Verified badge
+- Better visibility
+- Priority placement
+- Enhanced profile
+- Featured placement for top tier
+- Energy/property specialist visibility
+
+Do not change Stripe logic unless necessary.
+
+12. Important
+Do not break existing authentication, account deletion, Stripe, enquiry, upload, profile, dashboard, admin or database logic.
+Reuse existing components, API routes and database models where possible.
+After changes, run typecheck/build and fix all errors.
