@@ -5,7 +5,7 @@ import { eq, desc, and, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
-import { sendNewEnquiryEmail } from "../lib/email";
+import { sendNewEnquiryEmail, sendEnquirySentToCustomerEmail } from "../lib/email";
 import { sendPushToUser } from "../lib/push-notifications";
 import { scheduleLeadReminderForEnquiry } from "../lib/lead-reminders";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
@@ -170,6 +170,19 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
         }
       } catch (notifyErr) {
         req.log.warn({ err: notifyErr, enquiryId: enquiry.id }, "Failed to send new-enquiry email");
+      }
+      try {
+        if (customer?.email) {
+          await sendEnquirySentToCustomerEmail({
+            toEmail: customer.email,
+            toName: customer.fullName ?? null,
+            traderBusinessName: trader.businessName,
+            serviceRequired,
+            message,
+          });
+        }
+      } catch (confirmErr) {
+        req.log.warn({ err: confirmErr, enquiryId: enquiry.id }, "Failed to send enquiry confirmation email");
       }
       try {
         const customerName = customer?.fullName || "A customer";

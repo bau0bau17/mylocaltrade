@@ -466,6 +466,47 @@ export async function sendNewEnquiryEmail(opts: {
   });
 }
 
+export async function sendEnquirySentToCustomerEmail(opts: {
+  toEmail: string;
+  toName: string | null;
+  traderBusinessName: string;
+  serviceRequired: string;
+  message: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName || "there");
+  const safeTrader = escapeHtml(opts.traderBusinessName);
+  const safeService = escapeHtml(opts.serviceRequired);
+  const safeMessage = escapeHtml(opts.message);
+  const html = emailShell({
+    title: "Your enquiry has been sent",
+    preheader: `We've sent your enquiry to ${safeTrader}`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        Thanks for using MyLocalTrade. We've sent your enquiry to
+        <strong style="color: #00B4D8;">${safeTrader}</strong> for
+        <strong>${safeService}</strong>.
+      </p>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
+        Most verified traders reply within a day. You'll get a notification as soon as they respond, and you can chat with them directly in the app.
+      </p>
+      <div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #9CA3AF; font-size: 12px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.4px;">Your message</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeMessage}</p>
+      </div>
+      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
+        For your safety, please keep all conversation inside MyLocalTrade until you're confident in the trader. Never share bank details or pay outside the platform before work is agreed.
+      </p>`,
+  });
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName ?? undefined },
+    subject: `We've sent your enquiry to ${opts.traderBusinessName}`,
+    html,
+    tag: "enquiry-sent-customer",
+  });
+}
+
 export async function sendLeadReminderEmail(opts: {
   toEmail: string;
   toName: string;
