@@ -108,6 +108,15 @@ export default function CompareOffersScreen() {
           Send enquiries to a few traders for the same job and they'll appear here
           side by side so you can compare their replies.
         </Text>
+        <Pressable
+          style={styles.emptyCta}
+          onPress={() => router.push('/(tabs)/search')}
+          accessibilityRole="button"
+          accessibilityLabel="Find a trader"
+        >
+          <Feather name="search" size={16} color="#fff" />
+          <Text style={styles.emptyCtaText}>Find a trader</Text>
+        </Pressable>
       </View>
     );
   }
@@ -153,13 +162,11 @@ export default function CompareOffersScreen() {
               <OfferCard
                 key={offer.enquiryId}
                 offer={offer}
-                onOpenChat={() => {
-                  if (offer.conversationId) {
-                    router.push(`/messages/${offer.conversationId}`);
-                  } else {
-                    router.push('/messages');
-                  }
-                }}
+                onOpenChat={
+                  offer.conversationId
+                    ? () => router.push(`/messages/${offer.conversationId}`)
+                    : null
+                }
                 onViewProfile={() => router.push(`/trader/${offer.traderProfileId}`)}
                 onLeaveReview={() =>
                   router.push(
@@ -182,7 +189,7 @@ function OfferCard({
   onLeaveReview,
 }: {
   offer: Offer;
-  onOpenChat: () => void;
+  onOpenChat: (() => void) | null;
   onViewProfile: () => void;
   onLeaveReview: () => void;
 }) {
@@ -232,10 +239,17 @@ function OfferCard({
       </View>
 
       <View style={styles.ctaCol}>
-        <Pressable style={styles.primaryCta} onPress={onOpenChat}>
-          <Feather name="message-circle" size={14} color="#fff" />
-          <Text style={styles.primaryCtaText}>Open chat</Text>
-        </Pressable>
+        {onOpenChat ? (
+          <Pressable style={styles.primaryCta} onPress={onOpenChat}>
+            <Feather name="message-circle" size={14} color="#fff" />
+            <Text style={styles.primaryCtaText}>Open chat</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.awaitingChat}>
+            <Feather name="clock" size={12} color={Colors.light.textSecondary} />
+            <Text style={styles.awaitingChatText}>Chat opens when trader replies</Text>
+          </View>
+        )}
         <Pressable style={styles.secondaryCta} onPress={onViewProfile}>
           <Feather name="user" size={14} color={Colors.light.primary} />
           <Text style={styles.secondaryCtaText}>View profile</Text>
@@ -298,6 +312,27 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.light.text, marginTop: 8 },
   emptySubtitle: { fontSize: 14, color: Colors.light.textSecondary, textAlign: 'center', lineHeight: 20 },
+  emptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 12,
+    alignSelf: 'center',
+  },
+  emptyCtaText: { fontSize: 14, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
+  awaitingChat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  awaitingChatText: { fontSize: 11, color: Colors.light.textSecondary, fontStyle: 'italic' },
   retryBtn: { marginTop: 12, paddingHorizontal: 18, height: 40, borderRadius: 10, backgroundColor: Colors.light.primary, alignItems: 'center', justifyContent: 'center' },
   retryText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
