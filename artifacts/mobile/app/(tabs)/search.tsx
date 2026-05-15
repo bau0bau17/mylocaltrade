@@ -310,7 +310,26 @@ export default function SearchScreen() {
                 <Feather name="search" size={32} color={Colors.light.textMuted} />
               </View>
               <Text style={styles.emptyTitle}>No traders found</Text>
-              <Text style={styles.emptySubtitle}>Try adjusting your search or location</Text>
+              <Text style={styles.emptySubtitle}>
+                {verifiedOnly || planFilter !== 'all' || specialismFilter !== null
+                  ? 'No traders match these filters. Try clearing them, or widen your location.'
+                  : 'Try adjusting your search or location.'}
+              </Text>
+              {(verifiedOnly || planFilter !== 'all' || specialismFilter !== null) && (
+                <Pressable
+                  style={styles.emptyAction}
+                  onPress={() => {
+                    setVerifiedOnly(false);
+                    setPlanFilter('all');
+                    setSpecialismFilter(null);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear filters"
+                >
+                  <Feather name="refresh-ccw" size={14} color={Colors.light.primary} />
+                  <Text style={styles.emptyActionText}>Clear filters</Text>
+                </Pressable>
+              )}
             </View>
           )}
         </View>
@@ -461,6 +480,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.light.text,
     marginBottom: 6,
+  },
+  emptyAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: Colors.light.primaryMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+  },
+  emptyActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.primary,
+    letterSpacing: 0.2,
   },
   emptySubtitle: {
     fontSize: 13,

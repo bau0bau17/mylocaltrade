@@ -83,7 +83,22 @@ export default function TradersScreen() {
                 <Feather name="users" size={28} color={Colors.light.textMuted} />
               </View>
               <Text style={styles.emptyTitle}>No traders found</Text>
-              <Text style={styles.emptySubtitle}>Try a different category</Text>
+              <Text style={styles.emptySubtitle}>
+                {selectedCategory === 'All'
+                  ? 'No traders are listed yet. Please check back soon.'
+                  : `No ${selectedCategory.toLowerCase()}s in this list right now.`}
+              </Text>
+              {selectedCategory !== 'All' && (
+                <Pressable
+                  style={styles.emptyAction}
+                  onPress={() => setSelectedCategory('All')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show all traders"
+                >
+                  <Feather name="refresh-ccw" size={14} color={Colors.light.primary} />
+                  <Text style={styles.emptyActionText}>Show all traders</Text>
+                </Pressable>
+              )}
             </View>
           }
         />
@@ -172,5 +187,24 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: 13,
     color: Colors.light.textSecondary,
+    textAlign: 'center',
+  },
+  emptyAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: Colors.light.primaryMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+  },
+  emptyActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.primary,
+    letterSpacing: 0.2,
   },
 });
