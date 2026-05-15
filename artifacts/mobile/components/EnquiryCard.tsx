@@ -4,6 +4,29 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import type { Enquiry } from '@workspace/api-client-react';
+import {
+  PROPERTY_TYPE_OPTIONS,
+  TENURE_OPTIONS,
+  URGENCY_OPTIONS,
+} from '@/constants/specialisms';
+
+function specialistSummary(fields: Enquiry['specialistFields']): string[] {
+  if (!fields) return [];
+  const parts: string[] = [];
+  if (fields.propertyType) {
+    const opt = PROPERTY_TYPE_OPTIONS.find((o) => o.value === fields.propertyType);
+    parts.push(opt ? opt.label : fields.propertyType);
+  }
+  if (fields.tenure) {
+    const opt = TENURE_OPTIONS.find((o) => o.value === fields.tenure);
+    parts.push(opt ? opt.label : fields.tenure);
+  }
+  if (fields.urgency) {
+    const opt = URGENCY_OPTIONS.find((o) => o.value === fields.urgency);
+    parts.push(opt ? opt.label : fields.urgency);
+  }
+  return parts;
+}
 
 export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
   const router = useRouter();
@@ -19,6 +42,7 @@ export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
 
   const statusColor = getStatusColor(enquiry.status);
   const isUnopened = enquiry.viewedByTrader === false;
+  const specialistParts = specialistSummary(enquiry.specialistFields);
 
   const handlePress = () => {
     if (enquiry.conversationId != null) {
@@ -49,7 +73,17 @@ export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
       <View style={styles.divider} />
       
       <Text style={styles.message} numberOfLines={3}>{enquiry.message}</Text>
-      
+
+      {specialistParts.length > 0 && (
+        <View style={styles.specialistRow}>
+          {specialistParts.map((part, idx) => (
+            <View key={`${part}-${idx}`} style={styles.specialistChip}>
+              <Text style={styles.specialistChipText}>{part}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <View style={styles.footer}>
         <View style={styles.contactRow}>
           <Feather name="mail" size={14} color={Colors.light.textSecondary} />
@@ -125,6 +159,26 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     lineHeight: 20,
     marginBottom: 16,
+  },
+  specialistRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  specialistChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  specialistChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.primary,
+    letterSpacing: 0.2,
   },
   footer: {
     gap: 6,

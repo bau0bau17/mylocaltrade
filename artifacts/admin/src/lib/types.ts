@@ -213,6 +213,12 @@ export interface ExpiringDocumentsResponse {
   documents: ExpiringDocument[];
 }
 
+export interface AdminEnquirySpecialistFields {
+  propertyType?: "house" | "flat" | "commercial" | "other";
+  tenure?: "owner" | "tenant" | "landlord" | "leaseholder";
+  urgency?: "routine" | "soon" | "urgent";
+}
+
 export interface AdminEnquiry {
   id: number;
   traderId: number;
@@ -225,6 +231,7 @@ export interface AdminEnquiry {
   serviceRequired: string;
   preferredDate: string | null;
   phone: string | null;
+  specialistFields: AdminEnquirySpecialistFields | null;
   status: string;
   createdAt: string;
 }
