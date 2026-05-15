@@ -39,6 +39,20 @@ function logoAttachment() {
   };
 }
 
+/**
+ * Sanitise a user-supplied string for safe use in email headers (Subject,
+ * recipient names, etc). Strips CR/LF and other control characters that
+ * could enable RFC 5322 header injection in the SMTP fallback path,
+ * collapses whitespace, and caps length so a single long field cannot
+ * blow out the subject line. Returns an empty string for nullish input.
+ */
+function sanitizeHeaderValue(value: string | null | undefined, maxLen = 120): string {
+  if (typeof value !== "string") return "";
+  // eslint-disable-next-line no-control-regex
+  const stripped = value.replace(/[\r\n\t\u0000-\u001F\u007F]+/g, " ").replace(/\s+/g, " ").trim();
+  return stripped.length > maxLen ? stripped.slice(0, maxLen) : stripped;
+}
+
 function getApiBaseUrl(): string {
   if (process.env.API_BASE_URL) return process.env.API_BASE_URL;
   const domain = process.env.REPLIT_DEV_DOMAIN;
@@ -361,7 +375,7 @@ export async function sendContactEmail(opts: {
     to: { email: SUPPORT_EMAIL },
     from: { email: CONTACT_FROM_EMAIL, name: "MyLocalTrade Contact Form" },
     replyTo: { email: opts.fromEmail, name: opts.fromName },
-    subject: `[CONTACT - Reply within 48h] ${opts.subject}`,
+    subject: `[CONTACT - Reply within 48h] ${sanitizeHeaderValue(opts.subject)}`,
     html,
     headers: {
       "X-Priority": "1",
@@ -460,7 +474,7 @@ export async function sendNewEnquiryEmail(opts: {
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
-    subject: `New enquiry: ${opts.serviceRequired}`,
+    subject: `New enquiry: ${sanitizeHeaderValue(opts.serviceRequired)}`,
     html,
     tag: "new-enquiry",
   });
@@ -501,7 +515,7 @@ export async function sendEnquirySentToCustomerEmail(opts: {
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName ?? undefined },
-    subject: `We've sent your enquiry to ${opts.traderBusinessName}`,
+    subject: `We've sent your enquiry to ${sanitizeHeaderValue(opts.traderBusinessName)}`,
     html,
     tag: "enquiry-sent-customer",
   });
@@ -540,7 +554,7 @@ export async function sendLeadReminderEmail(opts: {
   const channel = await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
-    subject: `Unanswered lead from ${opts.customerName}`,
+    subject: `Unanswered lead from ${sanitizeHeaderValue(opts.customerName)}`,
     html,
     headers: {
       "List-Unsubscribe": `<${opts.unsubscribeUrl}>`,
@@ -687,7 +701,7 @@ export async function sendReviewReplyEmail(opts: {
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
-    subject: `${opts.traderName} replied to your review`,
+    subject: `${sanitizeHeaderValue(opts.traderName)} replied to your review`,
     html,
     tag: "review-reply",
   });
@@ -856,6 +870,10 @@ export async function sendNewMessageEmail(opts: {
   senderRole: "customer" | "trader";
   preview: string;
   conversationId: number;
+  /** Optional: the service the conversation is about, e.g. "Kitchen tiling".
+   * When present we surface it in the subject, preheader, and body so the
+   * recipient instantly remembers which enquiry this reply is for. */
+  serviceRequired?: string | null;
 }): Promise<void> {
   const safeName = escapeHtml(opts.toName);
   const safeSender = escapeHtml(opts.senderName);
@@ -863,15 +881,30 @@ export async function sendNewMessageEmail(opts: {
   const trimmed = opts.preview.length > 140 ? opts.preview.slice(0, 140) + "…" : opts.preview;
   const safePreview = escapeHtml(trimmed);
   const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
-  const subject =
+  const trimmedService =
+    typeof opts.serviceRequired === "string" && opts.serviceRequired.trim().length > 0
+      ? opts.serviceRequired.trim().slice(0, 80)
+      : null;
+  const safeService = trimmedService ? escapeHtml(trimmedService) : null;
+  const safeSenderHeader = sanitizeHeaderValue(opts.senderName);
+  const safeServiceHeader = trimmedService ? sanitizeHeaderValue(trimmedService) : "";
+  const subjectBase =
     opts.senderRole === "trader"
-      ? `New reply from ${opts.senderName}`
-      : `New message from ${opts.senderName}`;
+      ? `New reply from ${safeSenderHeader}`
+      : `New message from ${safeSenderHeader}`;
+  const subject = safeServiceHeader ? `${subjectBase} — Re: ${safeServiceHeader}` : subjectBase;
+  const preheader = safeService
+    ? `${safeSender} replied about your ${safeService} enquiry`
+    : `${safeSender} sent you a message on MyLocalTrade`;
+  const contextLine = safeService
+    ? `<p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0 0 16px;">Re: <strong style="color: #E5E7EB;">${safeService}</strong></p>`
+    : "";
   const html = emailShell({
     title: "New message on MyLocalTrade",
-    preheader: `${safeSender} sent you a message on MyLocalTrade`,
+    preheader,
     bodyHtml: `
       <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      ${contextLine}
       <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
         You have a new message from <strong style="color: #00B4D8;">${safeSender}</strong> on MyLocalTrade.
       </p>
@@ -1001,7 +1034,7 @@ export async function sendAdminAccountDeletionAlertEmail(opts: {
     category: "contact",
     to: { email: SUPPORT_EMAIL },
     from: { email: FROM_EMAIL, name: "MyLocalTrade Account Deletions" },
-    subject: `[ACCOUNT DELETION] ${opts.userEmail}`,
+    subject: `[ACCOUNT DELETION] ${sanitizeHeaderValue(opts.userEmail)}`,
     html,
     headers: {
       "X-MyLocalTrade-Type": "account-deletion-admin-alert",

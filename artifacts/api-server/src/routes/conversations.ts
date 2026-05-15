@@ -422,6 +422,7 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
             senderRole,
             preview,
             conversationId: id,
+            serviceRequired: conv.serviceRequired ?? null,
           });
         }
         // Recipient mute check honours per-side timed mutes. If a timed mute
