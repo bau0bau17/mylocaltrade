@@ -86,6 +86,15 @@ export default function MyEnquiriesScreen() {
           <Text style={styles.emptySubtitle}>
             When you send enquiries to traders, they will appear here.
           </Text>
+          <Pressable
+            style={[styles.compareBtn, styles.emptyCta]}
+            onPress={() => router.push('/(tabs)/search')}
+            accessibilityRole="button"
+            accessibilityLabel="Find a trader"
+          >
+            <Feather name="search" size={16} color="#fff" />
+            <Text style={styles.compareBtnText}>Find a trader</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -144,4 +153,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   compareBtnText: { fontSize: 14, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
+  emptyCta: { marginTop: 20, marginHorizontal: 0, paddingHorizontal: 24, alignSelf: 'center' },
 });
