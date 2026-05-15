@@ -49,13 +49,22 @@ export default function MyEnquiriesScreen() {
           renderItem={({ item }) => (
             <View>
               <EnquiryCard enquiry={item} viewerRole="customer" />
-              <Pressable
-                style={styles.openConvBtn}
-                onPress={() => router.push('/messages')}
-              >
-                <Feather name="message-circle" size={14} color={Colors.light.primary} />
-                <Text style={styles.openConvBtnText}>Open conversation</Text>
-              </Pressable>
+              {item.conversationId != null ? (
+                <Pressable
+                  style={styles.openConvBtn}
+                  onPress={() => router.push(`/messages/${item.conversationId}`)}
+                >
+                  <Feather name="message-circle" size={14} color={Colors.light.primary} />
+                  <Text style={styles.openConvBtnText}>Open conversation</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.awaitingHint}>
+                  <Feather name="clock" size={13} color={Colors.light.textSecondary} />
+                  <Text style={styles.awaitingHintText}>
+                    Conversation opens when the trader replies
+                  </Text>
+                </View>
+              )}
               {item.status !== 'pending' && (
                 <Pressable
                   style={styles.reviewBtn}
@@ -112,6 +121,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   openConvBtnText: { fontSize: 13, fontWeight: '700', color: Colors.light.primary, letterSpacing: 0.2 },
+  awaitingHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: -6,
+    marginBottom: 8,
+    paddingVertical: 8,
+  },
+  awaitingHintText: { fontSize: 12, color: Colors.light.textSecondary, fontStyle: 'italic' },
   compareBtn: {
     flexDirection: 'row',
     alignItems: 'center',
