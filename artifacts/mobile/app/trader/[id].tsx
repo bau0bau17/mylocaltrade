@@ -13,7 +13,7 @@ import {
   getGetSavedTradersQueryKey,
 } from '@workspace/api-client-react';
 import { ReviewsSection } from '@/components/ReviewsSection';
-import { formatResponseTime } from '@/components/TraderCard';
+import { formatResponseTime, isTopRated } from '@/components/TraderCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { detectSpecialisms, SPECIALISM_BY_KEY } from '@/constants/specialisms';
 
@@ -163,6 +163,12 @@ export default function TraderProfileScreen() {
                 <Text style={[styles.planTextColored, { color: Colors.light.primary }]}>Premium</Text>
               </View>
             )}
+            {isTopRated(trader.rating, trader.reviewCount) && (
+              <View style={[styles.planBadge, { backgroundColor: 'rgba(245, 158, 11, 0.14)' }]}>
+                <Feather name="star" size={11} color={Colors.light.featured} />
+                <Text style={[styles.planTextColored, { color: '#B45309' }]}>Top rated</Text>
+              </View>
+            )}
           </View>
           {trader.verifiedAt && (
             <Text style={styles.verifiedSince}>
@@ -183,8 +189,16 @@ export default function TraderProfileScreen() {
               <View style={[styles.statIconWrap, { backgroundColor: Colors.light.featuredMuted }]}>
                 <Feather name="star" size={16} color={Colors.light.featured} />
               </View>
-              <Text style={styles.statValue}>{trader.rating || 'New'}</Text>
-              <Text style={styles.statLabel}>{trader.reviewCount} Reviews</Text>
+              <Text style={styles.statValue}>
+                {typeof trader.rating === 'number' && Number.isFinite(trader.rating)
+                  ? trader.rating.toFixed(1)
+                  : 'New'}
+              </Text>
+              <Text style={styles.statLabel}>
+                {typeof trader.reviewCount === 'number' && trader.reviewCount > 0
+                  ? `${trader.reviewCount} ${trader.reviewCount === 1 ? 'Review' : 'Reviews'}`
+                  : 'No reviews yet'}
+              </Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
@@ -196,10 +210,23 @@ export default function TraderProfileScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <View style={[styles.statIconWrap, { backgroundColor: Colors.light.secondaryMuted }]}>
-                <Feather name="check-circle" size={16} color={Colors.light.secondary} />
+              <View
+                style={[
+                  styles.statIconWrap,
+                  {
+                    backgroundColor: trader.isVerified
+                      ? Colors.light.secondaryMuted
+                      : Colors.light.border,
+                  },
+                ]}
+              >
+                <Feather
+                  name={trader.isVerified ? 'check-circle' : 'shield'}
+                  size={16}
+                  color={trader.isVerified ? Colors.light.secondary : Colors.light.textMuted}
+                />
               </View>
-              <Text style={styles.statValue}>Verified</Text>
+              <Text style={styles.statValue}>{trader.isVerified ? 'Verified' : 'Unverified'}</Text>
               <Text style={styles.statLabel}>Business</Text>
             </View>
           </View>
