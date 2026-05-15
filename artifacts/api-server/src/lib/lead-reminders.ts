@@ -139,12 +139,14 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
       const apiBase = (process.env.API_BASE_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080"}`).replace(/\/$/, "");
       const token = generateUnsubscribeToken(row.traderProfileId, "lead_reminder");
       const unsubscribeUrl = `${apiBase}/api/email/unsubscribe?token=${encodeURIComponent(token)}`;
+      const sf = (row.enquiry.specialistFields ?? null) as { urgency?: string | null } | null;
       emailOk = await sendLeadReminderEmail({
         toEmail: row.traderEmail,
         toName: row.traderContactName?.trim() || row.traderBusinessName?.trim() || "there",
         customerName,
         serviceRequired: row.enquiry.serviceRequired,
         unsubscribeUrl,
+        urgency: sf?.urgency ?? null,
       });
     } catch (err) {
       logger.warn({ err, enquiryId }, "Failed to send lead reminder email");
