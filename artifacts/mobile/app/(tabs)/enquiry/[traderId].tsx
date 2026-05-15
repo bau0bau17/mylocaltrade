@@ -164,9 +164,13 @@ export default function EnquiryScreen() {
             : {}),
         },
       });
+      const recipient = trader?.businessName?.trim() || 'the trader';
+      const replyHint = responseTimeLabel
+        ? ` Usually ${responseTimeLabel.charAt(0).toLowerCase()}${responseTimeLabel.slice(1)}.`
+        : '';
       Alert.alert(
         'Enquiry sent',
-        'Your enquiry has been sent to the trader. Always verify quotes, insurance and credentials before any work starts.',
+        `Your enquiry has been sent to ${recipient}.${replyHint} Always verify quotes, insurance and credentials before any work starts.`,
         [{ text: 'OK', onPress: () => router.back() }],
       );
     } catch (error: unknown) {
