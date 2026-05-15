@@ -28,7 +28,13 @@ function specialistSummary(fields: Enquiry['specialistFields']): string[] {
   return parts;
 }
 
-export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
+export function EnquiryCard({
+  enquiry,
+  viewerRole = 'trader',
+}: {
+  enquiry: Enquiry;
+  viewerRole?: 'customer' | 'trader';
+}) {
   const router = useRouter();
 
   const getStatusColor = (status: string) => {
@@ -40,9 +46,13 @@ export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
     }
   };
 
+  const isCustomerView = viewerRole === 'customer';
   const statusColor = getStatusColor(enquiry.status);
   const isUnopened = enquiry.viewedByTrader === false;
   const specialistParts = specialistSummary(enquiry.specialistFields);
+  const headerName = isCustomerView
+    ? (enquiry.traderBusinessName?.trim() || 'Trader')
+    : enquiry.customerName;
 
   const handlePress = () => {
     if (enquiry.conversationId != null) {
@@ -56,13 +66,13 @@ export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
       disabled={enquiry.conversationId == null}
       style={({ pressed }) => [
         styles.card,
-        isUnopened && styles.cardUnopened,
+        !isCustomerView && isUnopened && styles.cardUnopened,
         pressed && enquiry.conversationId != null && { opacity: 0.85 },
       ]}
     >
       <View style={styles.header}>
         <View style={styles.headerInfo}>
-          <Text style={styles.name}>{enquiry.customerName}</Text>
+          <Text style={styles.name}>{headerName}</Text>
           <Text style={styles.service}>{enquiry.serviceRequired}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: `${statusColor}1A` }]}>
@@ -85,19 +95,26 @@ export function EnquiryCard({ enquiry }: { enquiry: Enquiry }) {
       )}
 
       <View style={styles.footer}>
-        <View style={styles.contactRow}>
-          <Feather name="mail" size={14} color={Colors.light.textSecondary} />
-          <Text style={styles.contactText}>{enquiry.customerEmail}</Text>
-        </View>
-        {enquiry.phone && (
-          <View style={styles.contactRow}>
-            <Feather name="phone" size={14} color={Colors.light.textSecondary} />
-            <Text style={styles.contactText}>{enquiry.phone}</Text>
-          </View>
+        {!isCustomerView && (
+          <>
+            <View style={styles.contactRow}>
+              <Feather name="mail" size={14} color={Colors.light.textSecondary} />
+              <Text style={styles.contactText}>{enquiry.customerEmail}</Text>
+            </View>
+            {enquiry.phone && (
+              <View style={styles.contactRow}>
+                <Feather name="phone" size={14} color={Colors.light.textSecondary} />
+                <Text style={styles.contactText}>{enquiry.phone}</Text>
+              </View>
+            )}
+          </>
         )}
         <View style={styles.contactRow}>
           <Feather name="calendar" size={14} color={Colors.light.textSecondary} />
-          <Text style={styles.contactText}>{new Date(enquiry.createdAt).toLocaleDateString()}</Text>
+          <Text style={styles.contactText}>
+            {isCustomerView ? 'Sent ' : ''}
+            {new Date(enquiry.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </Text>
         </View>
       </View>
     </Pressable>
