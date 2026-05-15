@@ -4,32 +4,66 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
-import { useGetFeaturedTraders } from '@workspace/api-client-react';
+import {
+  useGetFeaturedTraders,
+  useGetEnquiries,
+  useGetSavedTraders,
+  getGetEnquiriesQueryKey,
+  getGetSavedTradersQueryKey,
+} from '@workspace/api-client-react';
 import { CategoryCard } from '@/components/CategoryCard';
 import { TraderCard } from '@/components/TraderCard';
 import { HomeFooter } from '@/components/HomeFooter';
 import { useLocation } from '@/hooks/useLocation';
+import { useAuth } from '@/contexts/AuthContext';
 import type { FeatherIconName } from '@/types/feather-icons';
 
 const CATEGORIES: { name: string; icon: FeatherIconName }[] = [
   { name: 'Plumbing', icon: 'droplet' },
   { name: 'Electrical', icon: 'zap' },
   { name: 'Roofing', icon: 'home' },
-  { name: 'Cleaning', icon: 'sun' },
+  { name: 'Gas engineers', icon: 'thermometer' },
+  { name: 'Heating', icon: 'thermometer' },
+  { name: 'Solar panels', icon: 'sun' },
+  { name: 'EV chargers', icon: 'battery-charging' },
+  { name: 'Heat pumps', icon: 'wind' },
+  { name: 'Insulation', icon: 'layers' },
+  { name: 'EPC improvements', icon: 'bar-chart-2' },
+  { name: 'Damp & mould', icon: 'cloud-drizzle' },
+  { name: 'Cladding & remediation', icon: 'shield' },
+  { name: 'General maintenance', icon: 'tool' },
+  { name: 'Leasehold repairs', icon: 'file-text' },
+  { name: 'Locksmiths', icon: 'key' },
+  { name: 'Cleaning', icon: 'trash-2' },
+  { name: 'Gardening & landscaping', icon: 'scissors' },
   { name: 'Painting', icon: 'edit-2' },
-  { name: 'Building', icon: 'tool' },
-  { name: 'Locksmith', icon: 'key' },
-  { name: 'Removals', icon: 'truck' },
+  { name: 'Building', icon: 'home' },
   { name: 'Handyman', icon: 'settings' },
-  { name: 'Heating & Gas', icon: 'thermometer' },
 ];
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Awaiting reply',
+  responded: 'Replied',
+  completed: 'Completed',
+  rejected: 'Declined',
+};
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const location = useLocation();
+  const { isAuthenticated, isCustomer } = useAuth();
+  const showCustomerSections = isAuthenticated && isCustomer;
 
   const { data: featuredData, isLoading: isLoadingFeatured } = useGetFeaturedTraders({ limit: 5 });
+  const { data: enquiriesData } = useGetEnquiries({
+    query: { enabled: showCustomerSections, queryKey: getGetEnquiriesQueryKey() },
+  });
+  const { data: savedData } = useGetSavedTraders({
+    query: { enabled: showCustomerSections, queryKey: getGetSavedTradersQueryKey() },
+  });
+  const recentEnquiries = (enquiriesData?.enquiries ?? []).slice(0, 2);
+  const savedTraders = (savedData?.traders ?? []).slice(0, 5);
 
   const handleLocationPress = () => {
     if (location.permissionDenied) {
@@ -125,9 +159,22 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        <Pressable style={styles.quoteCta} onPress={() => router.push('/(tabs)/search')}>
+          <View style={styles.quoteCtaIcon}>
+            <Feather name="message-square" size={18} color={Colors.light.white} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.quoteCtaTitle}>Request a quote</Text>
+            <Text style={styles.quoteCtaSub}>
+              Find a verified local trader and send your job details for free.
+            </Text>
+          </View>
+          <Feather name="arrow-right" size={18} color={Colors.light.white} />
+        </Pressable>
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Categories</Text>
+            <Text style={styles.sectionTitle}>Popular categories</Text>
             <Pressable onPress={() => router.push('/(tabs)/search')} style={styles.seeAllBtn}>
               <Text style={styles.seeAll}>Browse all</Text>
               <Feather name="arrow-right" size={13} color={Colors.light.primary} />
@@ -141,6 +188,61 @@ export default function HomeScreen() {
             ))}
           </View>
         </View>
+
+        {showCustomerSections && recentEnquiries.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent enquiries</Text>
+              <Pressable onPress={() => router.push('/(tabs)/my-enquiries')} style={styles.seeAllBtn}>
+                <Text style={styles.seeAll}>See all</Text>
+                <Feather name="arrow-right" size={13} color={Colors.light.primary} />
+              </Pressable>
+            </View>
+            <View style={{ gap: 10 }}>
+              {recentEnquiries.map((enq) => (
+                <Pressable
+                  key={enq.id}
+                  style={styles.enquiryRow}
+                  onPress={() => router.push('/(tabs)/my-enquiries')}
+                >
+                  <View style={styles.enquiryRowIcon}>
+                    <Feather name="send" size={14} color={Colors.light.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.enquiryRowTitle} numberOfLines={1}>
+                      {enq.traderBusinessName}
+                    </Text>
+                    <Text style={styles.enquiryRowSub} numberOfLines={1}>
+                      {enq.serviceRequired}
+                    </Text>
+                  </View>
+                  <Text style={styles.enquiryRowStatus}>
+                    {STATUS_LABEL[enq.status] ?? enq.status}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {showCustomerSections && savedTraders.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Saved traders</Text>
+              <Pressable onPress={() => router.push('/(tabs)/saved-traders')} style={styles.seeAllBtn}>
+                <Text style={styles.seeAll}>See all</Text>
+                <Feather name="arrow-right" size={13} color={Colors.light.primary} />
+              </Pressable>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+              {savedTraders.map((trader) => (
+                <View key={trader.id} style={styles.featuredCardWrapper}>
+                  <TraderCard trader={trader} />
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -530,5 +632,71 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: Colors.light.border,
+  },
+  quoteCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+  },
+  quoteCtaIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quoteCtaTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.light.white,
+    letterSpacing: 0.2,
+  },
+  quoteCtaSub: {
+    fontSize: 12,
+    color: Colors.light.white,
+    opacity: 0.92,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  enquiryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.light.card,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  enquiryRowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  enquiryRowTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.text,
+  },
+  enquiryRowSub: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
+  },
+  enquiryRowStatus: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.primary,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
 });

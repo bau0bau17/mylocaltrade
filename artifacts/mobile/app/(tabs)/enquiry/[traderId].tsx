@@ -131,9 +131,11 @@ export default function EnquiryScreen() {
             : {}),
         },
       });
-      Alert.alert('Success', 'Your enquiry has been sent to the trader.', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      Alert.alert(
+        'Enquiry sent',
+        'Your enquiry has been sent to the trader. Always verify quotes, insurance and credentials before any work starts.',
+        [{ text: 'OK', onPress: () => router.back() }],
+      );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Could not send enquiry';
       Alert.alert('Error', message);

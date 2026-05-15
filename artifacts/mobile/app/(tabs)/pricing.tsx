@@ -169,8 +169,28 @@ export default function PricingScreen() {
         </View>
         <Text style={styles.title}>Choose Your Plan</Text>
         <Text style={styles.subtitle}>
-          Select the right plan to grow your trade business and reach more local customers.
+          Get more local leads, the verified badge and priority placement so customers find your trade business first.
         </Text>
+      </View>
+
+      <View style={styles.benefitsCard}>
+        <Text style={styles.benefitsTitle}>Why upgrade</Text>
+        {[
+          { icon: 'users' as const, label: 'More local leads from customers in your area' },
+          { icon: 'check-circle' as const, label: 'Verified trader badge displayed on every listing' },
+          { icon: 'eye' as const, label: 'Better visibility in search and category results' },
+          { icon: 'arrow-up' as const, label: 'Priority placement above unpaid traders' },
+          { icon: 'image' as const, label: 'Enhanced profile with photos, services and reviews' },
+          { icon: 'star' as const, label: 'Featured placement on the home screen (Elite)' },
+          { icon: 'zap' as const, label: 'Specialist visibility for energy and property maintenance work' },
+        ].map((b, idx) => (
+          <View key={idx} style={styles.benefitRow}>
+            <View style={styles.benefitIconWrap}>
+              <Feather name={b.icon} size={13} color={Colors.light.primary} />
+            </View>
+            <Text style={styles.benefitText}>{b.label}</Text>
+          </View>
+        ))}
       </View>
 
       {!isTrader && (
@@ -395,6 +415,43 @@ const styles = StyleSheet.create({
   gateBody: { fontSize: 13, color: Colors.light.textSecondary, lineHeight: 18, marginBottom: 10 },
   gateBtn: { alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 8, backgroundColor: Colors.light.primary, borderRadius: 10 },
   gateBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  benefitsCard: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  benefitsTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textMuted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  benefitIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  benefitText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.light.text,
+    lineHeight: 18,
+  },
   faqSection: {
     paddingHorizontal: 8,
   },
