@@ -49,6 +49,15 @@ export function EnquiryCard({
   const isCustomerView = viewerRole === 'customer';
   const statusColor = getStatusColor(enquiry.status);
   const isUnopened = enquiry.viewedByTrader === false;
+  const customerStatusLabel = (() => {
+    switch (enquiry.status) {
+      case 'pending': return 'Awaiting reply';
+      case 'responded': return 'Trader replied';
+      case 'closed': return 'Closed';
+      default: return String(enquiry.status);
+    }
+  })();
+  const statusLabel = isCustomerView ? customerStatusLabel : enquiry.status.toUpperCase();
   const specialistParts = specialistSummary(enquiry.specialistFields);
   const headerName = isCustomerView
     ? (enquiry.traderBusinessName?.trim() || 'Trader')
@@ -76,7 +85,7 @@ export function EnquiryCard({
           <Text style={styles.service}>{enquiry.serviceRequired}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: `${statusColor}1A` }]}>
-          <Text style={[styles.statusText, { color: statusColor }]}>{enquiry.status.toUpperCase()}</Text>
+          <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
         </View>
       </View>
       
