@@ -109,6 +109,9 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
   if (claimed.length === 0) return false;
 
   const customerName = row.customerName?.trim() || "a customer";
+  const sf = (row.enquiry.specialistFields ?? null) as { urgency?: string | null } | null;
+  const reminderUrgency = sf?.urgency ?? null;
+  const isUrgent = reminderUrgency === "urgent";
 
   // Fan out to push + email in parallel. Both share the single
   // `reminderSentAt` claim above, so neither channel double-sends.
@@ -118,12 +121,15 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
   const pushPromise = (async () => {
     try {
       pushOk = await sendPushToUser(row.conv!.traderUserId, {
-        title: "Unanswered lead",
-        body: `You still have an unanswered lead from ${customerName}.`,
+        title: isUrgent ? "Unanswered ASAP lead" : "Unanswered lead",
+        body: isUrgent
+          ? `ASAP — ${customerName} is still waiting for a reply.`
+          : `You still have an unanswered lead from ${customerName}.`,
         data: {
           type: "lead_reminder",
           enquiryId: row.enquiry.id,
           conversationId: row.conv!.id,
+          ...(isUrgent ? { urgency: "urgent" } : {}),
         },
       });
     } catch (err) {
@@ -139,14 +145,13 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
       const apiBase = (process.env.API_BASE_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080"}`).replace(/\/$/, "");
       const token = generateUnsubscribeToken(row.traderProfileId, "lead_reminder");
       const unsubscribeUrl = `${apiBase}/api/email/unsubscribe?token=${encodeURIComponent(token)}`;
-      const sf = (row.enquiry.specialistFields ?? null) as { urgency?: string | null } | null;
       emailOk = await sendLeadReminderEmail({
         toEmail: row.traderEmail,
         toName: row.traderContactName?.trim() || row.traderBusinessName?.trim() || "there",
         customerName,
         serviceRequired: row.enquiry.serviceRequired,
         unsubscribeUrl,
-        urgency: sf?.urgency ?? null,
+        urgency: reminderUrgency,
       });
     } catch (err) {
       logger.warn({ err, enquiryId }, "Failed to send lead reminder email");
