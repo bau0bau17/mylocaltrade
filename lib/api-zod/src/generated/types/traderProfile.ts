@@ -39,5 +39,7 @@ export interface TraderProfile {
   verifiedAt?: Date | null;
   rating?: number | null;
   reviewCount: number;
+  /** Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data. */
+  responseTimeMinutes?: number | null;
   createdAt?: Date;
 }

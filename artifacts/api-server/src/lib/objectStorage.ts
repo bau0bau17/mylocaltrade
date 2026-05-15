@@ -214,6 +214,86 @@ export class ObjectStorageService {
     return normalizedPath;
   }
 
+  // Verify that a customer-upload objectPath belongs to the given userId
+  // namespace AND that the actual stored object satisfies our size + MIME
+  // policy. The client-declared sizeBytes/mimeType when requesting an upload
+  // URL cannot be trusted at PUT time, so this re-checks the real GCS
+  // metadata before we persist a reference to the object. Returns the
+  // normalised /objects/... path. Throws an Error whose message is safe to
+  // surface to clients on policy/permission failures.
+  // Cheap, no-IO check that a path lies inside the caller's customer-uploads
+  // namespace. Use this for already-persisted references where a full
+  // metadata re-verification would be wasteful, but you still want to reject
+  // arbitrary strings being injected via an update payload.
+  isCustomerUploadPathFor(rawPath: string, userId: number): boolean {
+    if (typeof rawPath !== "string" || !rawPath) return false;
+    const normalised = this.normalizeObjectEntityPath(rawPath);
+    return normalised.startsWith(`/objects/customer-uploads/${userId}/`);
+  }
+
+  async verifyCustomerUploadObject(
+    rawPath: string,
+    userId: number,
+    opts: { maxBytes: number; allowedMimes: ReadonlySet<string>; label?: string } = {
+      maxBytes: 8 * 1024 * 1024,
+      allowedMimes: new Set([
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif",
+      ]),
+    },
+  ): Promise<string> {
+    const label = opts.label ?? "photo";
+    const normalised = this.normalizeObjectEntityPath(rawPath);
+    const expectedPrefix = `/objects/customer-uploads/${userId}/`;
+    if (!normalised.startsWith(expectedPrefix)) {
+      throw new Error(`One of the ${label}s does not belong to your account.`);
+    }
+    // If this object has already been finalised by a previous verification it
+    // lives under .../v/ where no client signed PUT URL exists, so it cannot
+    // be overwritten. Skip re-verification + re-move in that case.
+    const finalisedPrefix = `${expectedPrefix}v/`;
+    if (normalised.startsWith(finalisedPrefix)) {
+      return normalised;
+    }
+    let file: File;
+    try {
+      file = await this.getObjectEntityFile(normalised);
+    } catch {
+      throw new Error(`A ${label} could not be found in storage. Please re-upload.`);
+    }
+    const [metadata] = await file.getMetadata();
+    const sizeBytes = Number(metadata.size ?? 0);
+    if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+      throw new Error(`A ${label} appears to be empty. Please re-upload.`);
+    }
+    if (sizeBytes > opts.maxBytes) {
+      const mb = (opts.maxBytes / 1024 / 1024).toFixed(0);
+      throw new Error(`A ${label} exceeds the ${mb} MB size limit.`);
+    }
+    const contentType = (metadata.contentType ?? "").toString().toLowerCase();
+    if (!opts.allowedMimes.has(contentType)) {
+      throw new Error(`A ${label} has an unsupported file type.`);
+    }
+    // Defeat the verify-then-PUT-again TOCTOU race: move the object to a
+    // path the client never received a signed URL for. If they re-PUT to
+    // the original signed URL afterwards, it lands at the now-empty source
+    // and never affects the persisted reference.
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith("/")) entityDir = `${entityDir}/`;
+    const finalisedEntityId = `customer-uploads/${userId}/v/${randomUUID()}`;
+    const destFullPath = `${entityDir}${finalisedEntityId}`;
+    const { objectName: destObjectName } = parseObjectPath(destFullPath);
+    try {
+      await file.move(destObjectName);
+    } catch (err) {
+      throw new Error(`A ${label} could not be finalised in storage.`);
+    }
+    return `/objects/${finalisedEntityId}`;
+  }
+
   async canAccessObjectEntity({
     userId,
     objectFile,

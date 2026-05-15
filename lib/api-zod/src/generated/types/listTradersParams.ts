@@ -5,12 +5,26 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ListTradersPlan } from "./listTradersPlan";
+import type { ListTradersSort } from "./listTradersSort";
 
 export type ListTradersParams = {
   category?: string;
   location?: string;
   featured?: boolean;
   search?: string;
+  /**
+   * Only return fully verified traders.
+   */
+  verified?: boolean;
+  /**
+   * Filter by subscription plan tier.
+   */
+  plan?: ListTradersPlan;
+  /**
+   * Result ordering. Default surfaces verified+featured first.
+   */
+  sort?: ListTradersSort;
   page?: number;
   limit?: number;
 };

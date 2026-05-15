@@ -64,6 +64,7 @@ import type {
   RegisterTraderRequest,
   ReplyToReviewRequest,
   ReportConversationRequest,
+  RequestCustomerUploadUrlRequest,
   RequestUploadUrlRequest,
   ResendVerificationRequest,
   ResolveReportRequest,
@@ -2040,6 +2041,93 @@ export const useRegisterTraderDocument = <
   TContext
 > => {
   return useMutation(getRegisterTraderDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Request a presigned PUT URL for a customer-side image upload (enquiry photos, trader gallery)
+ */
+export const getGetCustomerUploadUrlUrl = () => {
+  return `/api/customer/uploads/upload-url`;
+};
+
+export const getCustomerUploadUrl = async (
+  requestCustomerUploadUrlRequest: RequestCustomerUploadUrlRequest,
+  options?: RequestInit,
+): Promise<UploadUrlResponse> => {
+  return customFetch<UploadUrlResponse>(getGetCustomerUploadUrlUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(requestCustomerUploadUrlRequest),
+  });
+};
+
+export const getGetCustomerUploadUrlMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getCustomerUploadUrl>>,
+    TError,
+    { data: BodyType<RequestCustomerUploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof getCustomerUploadUrl>>,
+  TError,
+  { data: BodyType<RequestCustomerUploadUrlRequest> },
+  TContext
+> => {
+  const mutationKey = ["getCustomerUploadUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof getCustomerUploadUrl>>,
+    { data: BodyType<RequestCustomerUploadUrlRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return getCustomerUploadUrl(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GetCustomerUploadUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof getCustomerUploadUrl>>
+>;
+export type GetCustomerUploadUrlMutationBody =
+  BodyType<RequestCustomerUploadUrlRequest>;
+export type GetCustomerUploadUrlMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Request a presigned PUT URL for a customer-side image upload (enquiry photos, trader gallery)
+ */
+export const useGetCustomerUploadUrl = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getCustomerUploadUrl>>,
+    TError,
+    { data: BodyType<RequestCustomerUploadUrlRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof getCustomerUploadUrl>>,
+  TError,
+  { data: BodyType<RequestCustomerUploadUrlRequest> },
+  TContext
+> => {
+  return useMutation(getGetCustomerUploadUrlMutationOptions(options));
 };
 
 /**

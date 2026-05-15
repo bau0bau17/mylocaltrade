@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
@@ -7,9 +7,60 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import { TraderCard } from '@/components/TraderCard';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { useListTraders, getListTradersQueryKey } from '@workspace/api-client-react';
+import {
+  useListTraders,
+  getListTradersQueryKey,
+  type ListTradersParams,
+} from '@workspace/api-client-react';
 import { useLocation } from '@/hooks/useLocation';
 import type { FeatherIconName } from '@/types/feather-icons';
+
+const SORT_LABELS: Record<'recommended' | 'rating' | 'reviews' | 'newest', string> = {
+  recommended: 'Recommended',
+  rating: 'Top rated',
+  reviews: 'Most reviewed',
+  newest: 'Newest',
+};
+
+function FilterChip({ icon, label, active, onPress }: { icon: FeatherIconName; label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[chipStyles.chip, active && chipStyles.chipActive]}
+    >
+      <Feather name={icon} size={12} color={active ? Colors.light.white : Colors.light.textSecondary} />
+      <Text style={[chipStyles.chipText, active && chipStyles.chipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
+    marginRight: 8,
+  },
+  chipActive: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+    letterSpacing: 0.2,
+  },
+  chipTextActive: {
+    color: Colors.light.white,
+  },
+});
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
@@ -20,6 +71,9 @@ export default function SearchScreen() {
   const [locationQuery, setLocationQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [hasSearched, setHasSearched] = useState(!!params.category);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [planFilter, setPlanFilter] = useState<'all' | 'premium_plus' | 'elite'>('all');
+  const [sort, setSort] = useState<'recommended' | 'rating' | 'reviews' | 'newest'>('recommended');
 
   useEffect(() => {
     loadRecentSearches();
@@ -56,7 +110,13 @@ export default function SearchScreen() {
     }
   };
 
-  const searchParams = { search: searchQuery, location: locationQuery };
+  const searchParams: ListTradersParams = {
+    search: searchQuery,
+    location: locationQuery,
+    sort,
+    ...(verifiedOnly ? { verified: true } : {}),
+    ...(planFilter !== 'all' ? { plan: planFilter } : {}),
+  };
   const { data, isLoading } = useListTraders(searchParams, {
     query: {
       queryKey: getListTradersQueryKey(searchParams),
@@ -173,6 +233,39 @@ export default function SearchScreen() {
         </View>
       ) : (
         <View style={styles.resultsContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersRow}
+          >
+            <FilterChip
+              icon="sliders"
+              label={`Sort: ${SORT_LABELS[sort]}`}
+              active={sort !== 'recommended'}
+              onPress={() => {
+                const order: typeof sort[] = ['recommended', 'rating', 'reviews', 'newest'];
+                setSort(order[(order.indexOf(sort) + 1) % order.length]);
+              }}
+            />
+            <FilterChip
+              icon="check-circle"
+              label="Verified only"
+              active={verifiedOnly}
+              onPress={() => setVerifiedOnly(v => !v)}
+            />
+            <FilterChip
+              icon="star"
+              label="Premium+"
+              active={planFilter === 'premium_plus'}
+              onPress={() => setPlanFilter(p => p === 'premium_plus' ? 'all' : 'premium_plus')}
+            />
+            <FilterChip
+              icon="zap"
+              label="Elite"
+              active={planFilter === 'elite'}
+              onPress={() => setPlanFilter(p => p === 'elite' ? 'all' : 'elite')}
+            />
+          </ScrollView>
           <Text style={styles.resultsCount}>
             {isLoading ? 'Searching...' : `${data?.total || 0} results found`}
             {!isLoading && locationQuery ? ` near ${locationQuery}` : ''}
@@ -306,12 +399,17 @@ const styles = StyleSheet.create({
   resultsContainer: {
     flex: 1,
   },
+  filtersRow: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
   resultsCount: {
     fontSize: 12,
     fontWeight: '600',
     color: Colors.light.textMuted,
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 12,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },

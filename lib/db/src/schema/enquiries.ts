@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, varchar, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, varchar, timestamp, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -12,6 +12,9 @@ export const enquiriesTable = pgTable("enquiries", {
   serviceRequired: varchar("service_required", { length: 255 }).notNull(),
   preferredDate: varchar("preferred_date", { length: 100 }),
   phone: varchar("phone", { length: 50 }),
+  // Customer-uploaded photo references (object storage paths beginning with
+  // /objects/customer-uploads/<userId>/...). Validated server-side on insert.
+  attachmentUrls: json("attachment_urls").$type<string[]>().default([]),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
   reminderSentAt: timestamp("reminder_sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

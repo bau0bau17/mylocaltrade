@@ -1,8 +1,14 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { traderProfilesTable, usersTable } from "@workspace/db/schema";
+import {
+  traderProfilesTable,
+  usersTable,
+  enquiriesTable,
+  conversationsTable,
+  messagesTable,
+} from "@workspace/db/schema";
 import type { TraderProfile } from "@workspace/db/schema";
-import { eq, and, ilike, or, desc, sql, inArray, isNull } from "drizzle-orm";
+import { eq, and, ilike, or, desc, asc, sql, inArray, isNull, gte } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -11,9 +17,82 @@ const router: IRouter = Router();
 // are visible but flagged so customers can see where they are in the process.
 const VISIBLE_STATUSES = ["VERIFIED", "UNDER_REVIEW", "PENDING_DOCUMENTS"] as const;
 
+// Compute the median time (in minutes) between a customer's enquiry and the
+// trader's first reply, over the last 90 days, for the given trader profile
+// IDs. Returns a Map<traderProfileId, medianMinutes>. Traders with no
+// qualifying samples are simply absent from the map (rendered as null on the
+// wire).
+async function computeResponseTimes(
+  traderProfileIds: number[],
+): Promise<Map<number, number>> {
+  if (traderProfileIds.length === 0) return new Map();
+  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+
+  // For each conversation tied to one of the given traders, find the customer's
+  // initial message time (= conversation.createdAt is fine, but we use the
+  // first customer message to be safe) and the trader's first reply, then the
+  // delta in minutes. We only consider conversations where the trader actually
+  // replied so non-responders don't artificially deflate the median.
+  const rows = await db.execute<{
+    trader_profile_id: number;
+    minutes: number;
+  }>(sql`
+    SELECT
+      c.trader_profile_id,
+      EXTRACT(EPOCH FROM (trader_first.first_at - customer_first.first_at)) / 60.0 AS minutes
+    FROM ${conversationsTable} c
+    JOIN LATERAL (
+      SELECT MIN(m.created_at) AS first_at
+      FROM ${messagesTable} m
+      WHERE m.conversation_id = c.id AND m.sender_role = 'customer'
+    ) customer_first ON TRUE
+    JOIN LATERAL (
+      SELECT MIN(m.created_at) AS first_at
+      FROM ${messagesTable} m
+      WHERE m.conversation_id = c.id AND m.sender_role = 'trader'
+    ) trader_first ON TRUE
+    WHERE c.trader_profile_id IN (${sql.raw(traderProfileIds.map((id) => Number(id)).join(","))})
+      AND c.created_at >= ${since}
+      AND customer_first.first_at IS NOT NULL
+      AND trader_first.first_at IS NOT NULL
+      AND trader_first.first_at > customer_first.first_at
+  `);
+
+  const buckets = new Map<number, number[]>();
+  for (const row of rows.rows ?? []) {
+    const id = Number(row.trader_profile_id);
+    const minutes = Number(row.minutes);
+    if (!Number.isFinite(id) || !Number.isFinite(minutes) || minutes < 0) continue;
+    if (!buckets.has(id)) buckets.set(id, []);
+    buckets.get(id)!.push(minutes);
+  }
+  const result = new Map<number, number>();
+  for (const [id, samples] of buckets) {
+    if (samples.length < 2) continue; // need at least 2 samples to be meaningful
+    samples.sort((a, b) => a - b);
+    const mid = Math.floor(samples.length / 2);
+    const median =
+      samples.length % 2 === 0
+        ? (samples[mid - 1] + samples[mid]) / 2
+        : samples[mid];
+    result.set(id, Math.round(median));
+  }
+  return result;
+}
+
 router.get("/traders", async (req, res) => {
   try {
-    const { category, location, featured, search, page = "1", limit = "20" } = req.query;
+    const {
+      category,
+      location,
+      featured,
+      search,
+      verified,
+      plan,
+      sort,
+      page = "1",
+      limit = "20",
+    } = req.query;
     const pageNum = Math.max(1, parseInt(String(page)) || 1);
     const limitNum = Math.min(50, Math.max(1, parseInt(String(limit)) || 20));
     const offset = (pageNum - 1) * limitNum;
@@ -50,6 +129,16 @@ router.get("/traders", async (req, res) => {
       conditions.push(eq(traderProfilesTable.isFeatured, true));
     }
 
+    if (verified === "true") {
+      conditions.push(eq(traderProfilesTable.verificationStatus, "VERIFIED"));
+    }
+
+    if (plan === "premium_plus") {
+      conditions.push(inArray(traderProfilesTable.plan, ["premium", "elite"]));
+    } else if (plan === "elite") {
+      conditions.push(eq(traderProfilesTable.plan, "elite"));
+    }
+
     if (search && typeof search === "string") {
       const searchLike = `%${search}%`;
       conditions.push(
@@ -69,6 +158,33 @@ router.get("/traders", async (req, res) => {
 
     const where = conditions.length > 1 ? and(...conditions) : conditions[0];
 
+    // Build ORDER BY based on requested sort. The default ("recommended")
+    // preserves the previous behaviour: verified, then featured, then newest.
+    const orderBy = (() => {
+      switch (sort) {
+        case "rating":
+          return [
+            sql`${traderProfilesTable.rating} DESC NULLS LAST`,
+            desc(traderProfilesTable.reviewCount),
+            desc(traderProfilesTable.createdAt),
+          ];
+        case "reviews":
+          return [
+            desc(traderProfilesTable.reviewCount),
+            sql`${traderProfilesTable.rating} DESC NULLS LAST`,
+            desc(traderProfilesTable.createdAt),
+          ];
+        case "newest":
+          return [desc(traderProfilesTable.createdAt)];
+        default:
+          return [
+            sql`case when ${traderProfilesTable.verificationStatus} = 'VERIFIED' then 0 else 1 end`,
+            desc(traderProfilesTable.isFeatured),
+            desc(traderProfilesTable.createdAt),
+          ];
+      }
+    })();
+
     const traders = await db
       .select({
         profile: traderProfilesTable,
@@ -77,12 +193,7 @@ router.get("/traders", async (req, res) => {
       .from(traderProfilesTable)
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(where)
-      .orderBy(
-        // Verified traders first, then featured, then newest.
-        sql`case when ${traderProfilesTable.verificationStatus} = 'VERIFIED' then 0 else 1 end`,
-        desc(traderProfilesTable.isFeatured),
-        desc(traderProfilesTable.createdAt),
-      )
+      .orderBy(...orderBy)
       .limit(limitNum)
       .offset(offset);
 
@@ -94,8 +205,12 @@ router.get("/traders", async (req, res) => {
 
     const total = countResult?.count || 0;
 
+    const responseTimes = await computeResponseTimes(traders.map((r) => r.profile.id));
+
     res.json({
-      traders: traders.map((r) => formatTrader(r.profile, r.emailVerified)),
+      traders: traders.map((r) =>
+        formatTrader(r.profile, r.emailVerified, responseTimes.get(r.profile.id) ?? null),
+      ),
       total,
       page: pageNum,
       limit: limitNum,
@@ -127,8 +242,12 @@ router.get("/traders/featured", async (req, res) => {
       .orderBy(desc(traderProfilesTable.createdAt))
       .limit(limit);
 
+    const responseTimes = await computeResponseTimes(traders.map((r) => r.profile.id));
+
     res.json({
-      traders: traders.map((r) => formatTrader(r.profile, r.emailVerified)),
+      traders: traders.map((r) =>
+        formatTrader(r.profile, r.emailVerified, responseTimes.get(r.profile.id) ?? null),
+      ),
       total: traders.length,
       page: 1,
       limit,
@@ -171,14 +290,20 @@ router.get("/traders/:id", async (req, res) => {
       return;
     }
 
-    res.json(formatTrader(row.profile, row.emailVerified));
+    const responseTimes = await computeResponseTimes([row.profile.id]);
+
+    res.json(formatTrader(row.profile, row.emailVerified, responseTimes.get(row.profile.id) ?? null));
   } catch (error) {
     req.log.error({ err: error }, "Get trader failed");
     res.status(500).json({ error: "Failed to get trader" });
   }
 });
 
-function formatTrader(t: TraderProfile, emailVerified: boolean) {
+function formatTrader(
+  t: TraderProfile,
+  emailVerified: boolean,
+  responseTimeMinutes: number | null,
+) {
   return {
     id: t.id,
     userId: t.userId,
@@ -210,6 +335,7 @@ function formatTrader(t: TraderProfile, emailVerified: boolean) {
     verifiedAt: t.verifiedAt ? t.verifiedAt.toISOString() : null,
     rating: t.rating,
     reviewCount: t.reviewCount,
+    responseTimeMinutes,
     createdAt: t.createdAt.toISOString(),
   };
 }

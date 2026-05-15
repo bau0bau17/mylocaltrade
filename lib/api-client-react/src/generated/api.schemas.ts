@@ -279,6 +279,8 @@ export interface TraderProfile {
   verifiedAt?: string | null;
   rating?: number | null;
   reviewCount: number;
+  /** Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data. */
+  responseTimeMinutes?: number | null;
   createdAt?: string;
 }
 
@@ -405,6 +407,11 @@ export interface CreateEnquiryRequest {
   serviceRequired: string;
   preferredDate?: string | null;
   phone?: string | null;
+  /**
+   * Object-storage paths for photos uploaded by the customer (max 3). Must begin with /objects/customer-uploads/<userId>/.
+   * @maxItems 3
+   */
+  attachmentUrls?: string[];
 }
 
 export type EnquiryStatus = (typeof EnquiryStatus)[keyof typeof EnquiryStatus];
@@ -426,6 +433,7 @@ export interface Enquiry {
   serviceRequired: string;
   preferredDate?: string | null;
   phone?: string | null;
+  attachmentUrls?: string[];
   status: EnquiryStatus;
   conversationId?: number | null;
   viewedByTrader?: boolean;
@@ -790,6 +798,12 @@ export interface TraderDocumentsResponse {
   allowedMimeTypes: string[];
 }
 
+export interface RequestCustomerUploadUrlRequest {
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
 export type RequestUploadUrlRequestType =
   (typeof RequestUploadUrlRequestType)[keyof typeof RequestUploadUrlRequestType];
 
@@ -940,9 +954,39 @@ export type ListTradersParams = {
   location?: string;
   featured?: boolean;
   search?: string;
+  /**
+   * Only return fully verified traders.
+   */
+  verified?: boolean;
+  /**
+   * Filter by subscription plan tier.
+   */
+  plan?: ListTradersPlan;
+  /**
+   * Result ordering. Default surfaces verified+featured first.
+   */
+  sort?: ListTradersSort;
   page?: number;
   limit?: number;
 };
+
+export type ListTradersPlan =
+  (typeof ListTradersPlan)[keyof typeof ListTradersPlan];
+
+export const ListTradersPlan = {
+  premium_plus: "premium_plus",
+  elite: "elite",
+} as const;
+
+export type ListTradersSort =
+  (typeof ListTradersSort)[keyof typeof ListTradersSort];
+
+export const ListTradersSort = {
+  recommended: "recommended",
+  rating: "rating",
+  reviews: "reviews",
+  newest: "newest",
+} as const;
 
 export type GetFeaturedTradersParams = {
   limit?: number;

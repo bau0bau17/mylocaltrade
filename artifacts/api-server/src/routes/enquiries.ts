@@ -10,8 +10,37 @@ import { sendPushToUser } from "../lib/push-notifications";
 import { scheduleLeadReminderForEnquiry } from "../lib/lead-reminders";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
+const storage = new ObjectStorageService();
+
+// Validate that every attachment URL really belongs to the calling customer's
+// own customer-uploads/<userId>/ namespace AND that the stored object meets
+// our size/MIME policy (defends against clients lying in the upload-URL
+// request). Returns the normalised paths or throws an Error whose message is
+// safe to surface to the client.
+async function validateEnquiryAttachments(rawUrls: string[] | undefined, userId: number): Promise<string[]> {
+  if (!rawUrls || rawUrls.length === 0) return [];
+  if (rawUrls.length > 3) {
+    throw new Error("A maximum of 3 photos can be attached to an enquiry.");
+  }
+  return Promise.all(
+    rawUrls.map((u) =>
+      storage.verifyCustomerUploadObject(u, userId, {
+        maxBytes: 8 * 1024 * 1024,
+        allowedMimes: new Set([
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/heic",
+          "image/heif",
+        ]),
+        label: "photo",
+      }),
+    ),
+  );
+}
 
 router.post("/enquiries", authMiddleware, async (req, res) => {
   try {
@@ -22,7 +51,15 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       return;
     }
 
-    const { traderId, message, serviceRequired, preferredDate, phone } = CreateEnquiryBody.parse(req.body);
+    const { traderId, message, serviceRequired, preferredDate, phone, attachmentUrls } = CreateEnquiryBody.parse(req.body);
+
+    let normalisedAttachments: string[];
+    try {
+      normalisedAttachments = await validateEnquiryAttachments(attachmentUrls, userId);
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+      return;
+    }
 
     const violation =
       detectContactInfo(message) ??
@@ -66,7 +103,10 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
     // the first message in that thread so customer + trader can chat.
     const previewBody =
       `Service: ${serviceRequired}\n\n${message}` +
-      (preferredDate ? `\n\nPreferred date: ${preferredDate}` : "");
+      (preferredDate ? `\n\nPreferred date: ${preferredDate}` : "") +
+      (normalisedAttachments.length > 0
+        ? `\n\n[${normalisedAttachments.length} photo${normalisedAttachments.length === 1 ? "" : "s"} attached]`
+        : "");
     const { enquiry, conversationId } = await db.transaction(async (tx) => {
       const [enq] = await tx
         .insert(enquiriesTable)
@@ -77,6 +117,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
           serviceRequired,
           preferredDate: preferredDate || null,
           phone: phone || null,
+          attachmentUrls: normalisedAttachments,
           status: "pending",
         })
         .returning();
@@ -160,6 +201,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       serviceRequired: enquiry.serviceRequired,
       preferredDate: enquiry.preferredDate,
       phone: enquiry.phone,
+      attachmentUrls: enquiry.attachmentUrls ?? [],
       status: enquiry.status,
       conversationId,
       createdAt: enquiry.createdAt.toISOString(),
@@ -407,6 +449,7 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
       serviceRequired: e.serviceRequired,
       preferredDate: e.preferredDate,
       phone: e.phone,
+      attachmentUrls: e.attachmentUrls ?? [],
       status: e.status,
       conversationId: conversationId ?? null,
       viewedByTrader: traderViewedAt != null,
