@@ -186,13 +186,17 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       }
       try {
         const customerName = customer?.fullName || "A customer";
+        const isUrgent = specialistFields?.urgency === "urgent";
         await sendPushToUser(trader.userId, {
-          title: "New enquiry",
-          body: `${customerName}: ${serviceRequired}`,
+          title: isUrgent ? "New ASAP enquiry" : "New enquiry",
+          body: isUrgent
+            ? `ASAP — ${customerName}: ${serviceRequired}`
+            : `${customerName}: ${serviceRequired}`,
           data: {
             type: "new_enquiry",
             enquiryId: enquiry.id,
             conversationId,
+            ...(isUrgent ? { urgency: "urgent" } : {}),
           },
         });
       } catch (pushErr) {
