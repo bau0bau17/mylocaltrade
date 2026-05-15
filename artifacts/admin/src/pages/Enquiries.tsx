@@ -11,6 +11,33 @@ import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/format";
 import { Search } from "lucide-react";
 
+const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  house: "House",
+  flat: "Flat",
+  commercial: "Commercial",
+  other: "Other",
+};
+const TENURE_LABELS: Record<string, string> = {
+  owner: "Owner",
+  tenant: "Tenant",
+  landlord: "Landlord",
+  leaseholder: "Leaseholder",
+};
+const URGENCY_LABELS: Record<string, string> = {
+  routine: "No rush",
+  soon: "Within a month",
+  urgent: "ASAP",
+};
+
+function specialistChips(fields: AdminEnquiry["specialistFields"]): { key: string; label: string }[] {
+  if (!fields) return [];
+  const out: { key: string; label: string }[] = [];
+  if (fields.propertyType) out.push({ key: "propertyType", label: PROPERTY_TYPE_LABELS[fields.propertyType] ?? fields.propertyType });
+  if (fields.tenure) out.push({ key: "tenure", label: TENURE_LABELS[fields.tenure] ?? fields.tenure });
+  if (fields.urgency) out.push({ key: "urgency", label: URGENCY_LABELS[fields.urgency] ?? fields.urgency });
+  return out;
+}
+
 export default function EnquiriesPage() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
@@ -91,6 +118,19 @@ export default function EnquiriesPage() {
                         )}
                       </div>
                       <p className="text-sm mt-2 whitespace-pre-line">{e.message}</p>
+                      {(() => {
+                        const chips = specialistChips(e.specialistFields);
+                        if (chips.length === 0) return null;
+                        return (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {chips.map((c) => (
+                              <Badge key={c.key} variant="secondary" className="text-[10px]">
+                                {c.label}
+                              </Badge>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       {(e.preferredDate || e.phone) && (
                         <div className="text-xs text-muted-foreground mt-1.5">
                           {e.preferredDate && <span>Preferred: {e.preferredDate} </span>}

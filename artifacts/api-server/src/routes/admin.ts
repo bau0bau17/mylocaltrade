@@ -1266,6 +1266,7 @@ router.get("/admin/enquiries", authMiddleware, adminOnly, async (req, res) => {
         serviceRequired: enquiriesTable.serviceRequired,
         preferredDate: enquiriesTable.preferredDate,
         phone: enquiriesTable.phone,
+        specialistFields: enquiriesTable.specialistFields,
         status: enquiriesTable.status,
         createdAt: enquiriesTable.createdAt,
       })
@@ -1279,6 +1280,7 @@ router.get("/admin/enquiries", authMiddleware, adminOnly, async (req, res) => {
     res.json({
       enquiries: rows.map((r) => ({
         ...r,
+        specialistFields: r.specialistFields ?? null,
         createdAt: r.createdAt.toISOString(),
       })),
     });
