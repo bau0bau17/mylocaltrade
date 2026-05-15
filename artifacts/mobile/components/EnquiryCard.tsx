@@ -10,6 +10,22 @@ import {
   URGENCY_OPTIONS,
 } from '@/constants/specialisms';
 
+function relativeSent(createdAt: string | Date, now: Date = new Date()): string {
+  const then = new Date(createdAt).getTime();
+  const diffMs = now.getTime() - then;
+  if (!Number.isFinite(diffMs) || diffMs < 0) {
+    return new Date(createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return new Date(createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 function specialistSummary(fields: Enquiry['specialistFields']): string[] {
   if (!fields) return [];
   const parts: string[] = [];
@@ -121,8 +137,9 @@ export function EnquiryCard({
         <View style={styles.contactRow}>
           <Feather name="calendar" size={14} color={Colors.light.textSecondary} />
           <Text style={styles.contactText}>
-            {isCustomerView ? 'Sent ' : ''}
-            {new Date(enquiry.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+            {isCustomerView
+              ? `Sent ${relativeSent(enquiry.createdAt)}`
+              : new Date(enquiry.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </Text>
         </View>
       </View>
