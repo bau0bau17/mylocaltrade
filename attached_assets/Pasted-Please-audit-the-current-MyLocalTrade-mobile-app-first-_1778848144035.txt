@@ -1,0 +1,61 @@
+Please audit the current MyLocalTrade mobile app first. If any of the items below are already implemented correctly, do not replace or rebuild them unnecessarily. Keep what is already working and only improve, fix, or add what is missing or weak.
+
+Main goal:
+Improve the app so it becomes a stronger local trades marketplace product focused on trust, lead conversion, user convenience, and trader value.
+
+Please prioritise these app improvements:
+
+1. Core marketplace value
+- Make the app feel more useful than just a directory
+- Focus on trust, communication, lead generation, and ease of finding the right trader
+
+2. Search and discovery
+- Improve category search
+- Improve location-based search
+- Improve postcode / town relevance
+- Improve trader filtering
+- Make discovery faster and more useful for users
+
+3. Trader profiles
+- Improve trader profiles so they feel more complete and trustworthy
+- Include stronger profile structure such as services, service areas, description, images, opening hours, contact details, and badges if appropriate
+- Make profiles visually stronger and easier to compare
+
+4. Features to prioritise
+Please add or improve these features where needed:
+- trader reviews
+- verified trader badges
+- save favourites
+- quote request flow
+- photo upload for job requests
+- in-app chat
+- booking request or availability structure
+- compare traders
+- notifications
+- better trader profile detail
+- price guide or estimate range structure
+- trader dashboard improvements
+
+5. Trader-side value
+- Improve the trader dashboard experience
+- Make it easier for traders to manage their profile, services, enquiries, and future subscription value
+- Keep the structure scalable for future monetisation and lead management
+
+6. UX and trust
+- Make the app feel more polished and more useful for real users
+- Strengthen the local marketplace feel
+- Improve trust cues
+- Improve conversion from browsing to contacting a trader
+- Keep the product clean and not overloaded
+
+7. Product direction
+- Build features in a scalable and modular way
+- Keep the app focused on what users currently expect from modern local services apps
+- Do not add random features that weaken the product focus
+- Prioritise features that help users choose a trader and help traders receive better leads
+
+8. Style and structure
+- Keep the current MyLocalTrade branding
+- Keep all text in English
+- Use UK spelling
+- Keep the app modern, trustworthy, mobile-first, and scalable
