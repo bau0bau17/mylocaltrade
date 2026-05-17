@@ -147,10 +147,21 @@ export default function CompareOffersScreen() {
           </View>
 
           {group.offers.length === 1 ? (
-            <Text style={styles.singleHint}>
-              Only one trader contacted so far. Send the same enquiry to a few
-              more from the same trade so you can compare quotes here.
-            </Text>
+            <View style={styles.singleHintBox}>
+              <Text style={styles.singleHint}>
+                Only one trader contacted so far. Send the same enquiry to a few
+                more from the same trade so you can compare quotes here.
+              </Text>
+              <Pressable
+                style={styles.singleHintCta}
+                onPress={() => router.push('/(tabs)/search')}
+                accessibilityRole="button"
+                accessibilityLabel="Find more traders"
+              >
+                <Feather name="search" size={12} color={Colors.light.primary} />
+                <Text style={styles.singleHintCtaText}>Find more traders</Text>
+              </Pressable>
+            </View>
           ) : null}
 
           <ScrollView
@@ -395,7 +406,21 @@ const styles = StyleSheet.create({
   groupTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: Colors.light.text },
   groupCount: { fontSize: 11, fontWeight: '700', color: Colors.light.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
 
+  singleHintBox: { gap: 8 },
   singleHint: { fontSize: 12, color: Colors.light.textSecondary, lineHeight: 17, fontStyle: 'italic' },
+  singleHintCta: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    backgroundColor: 'transparent',
+  },
+  singleHintCtaText: { fontSize: 12, fontWeight: '700', color: Colors.light.primary, letterSpacing: 0.2 },
 
   offersRow: { gap: 12, paddingVertical: 4 },
   offerCard: {
