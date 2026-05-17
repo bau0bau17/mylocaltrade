@@ -30,6 +30,18 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB");
 }
 
+function spokenTimeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} minute${m === 1 ? "" : "s"} ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hour${h === 1 ? "" : "s"} ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d} day${d === 1 ? "" : "s"} ago`;
+  return `on ${new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
+}
+
 function mutedRemaining(mutedUntil?: string | null): string | null {
   if (!mutedUntil) return null;
   const remainingMs = new Date(mutedUntil).getTime() - Date.now();
@@ -147,10 +159,37 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
           const muted = !!item.muted;
           const remaining = muted ? mutedRemaining(item.mutedUntil) : null;
           const muteLabel = muted ? (remaining ? `Muted · ${remaining}` : "Muted") : null;
+          const spokenName = otherName ?? (isTrader ? "a customer" : "a trader");
+          const statusSpoken = (STATUS_LABEL[item.status] ?? item.status).toLowerCase();
+          const unreadPhrase = unread
+            ? `${item.unreadCount} unread message${item.unreadCount === 1 ? "" : "s"}`
+            : null;
+          const traderStatusPhrase =
+            isTrader && item.traderStatus
+              ? `trader status ${String(item.traderStatus).toLowerCase()}`
+              : null;
+          const mutedPhrase = muted
+            ? remaining
+              ? `muted, ${remaining}`
+              : "muted"
+            : null;
+          const a11yLabel = [
+            `Conversation with ${spokenName}`,
+            unreadPhrase,
+            `last updated ${spokenTimeAgo(item.lastMessageAt)}`,
+            `status ${statusSpoken}`,
+            traderStatusPhrase,
+            mutedPhrase,
+          ]
+            .filter(Boolean)
+            .join(", ");
           return (
             <Pressable
               style={[styles.row, unread && styles.rowUnread, muted && styles.rowMuted]}
               onPress={() => router.push(`/messages/${item.id}`)}
+              accessibilityRole="button"
+              accessibilityLabel={a11yLabel}
+              accessibilityHint="Open conversation"
             >
               <View style={[styles.avatar, unread && styles.avatarUnread, muted && styles.avatarMuted]}>
                 <Text style={[styles.avatarText, muted && styles.mutedDim]}>
