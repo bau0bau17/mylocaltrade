@@ -244,12 +244,18 @@ function OfferCard({
 
         <View style={styles.ratingRow}>
           <Feather name="star" size={12} color={Colors.light.featured} />
-          <Text style={styles.ratingText}>
-            {offer.traderRating != null ? offer.traderRating.toFixed(1) : 'No rating'}
-          </Text>
-          <Text style={styles.reviewCount}>
-            ({offer.traderReviewCount} {offer.traderReviewCount === 1 ? 'review' : 'reviews'})
-          </Text>
+          {offer.traderReviewCount === 0 ? (
+            <Text style={styles.ratingText}>New</Text>
+          ) : (
+            <>
+              <Text style={styles.ratingText}>
+                {offer.traderRating != null ? offer.traderRating.toFixed(1) : 'No rating'}
+              </Text>
+              <Text style={styles.reviewCount}>
+                ({offer.traderReviewCount} {offer.traderReviewCount === 1 ? 'review' : 'reviews'})
+              </Text>
+            </>
+          )}
         </View>
 
         <View style={styles.replyBox}>
