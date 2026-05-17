@@ -323,14 +323,26 @@ export default function TraderProfileScreen() {
                 </View>
                 <Text style={styles.contactText}>{trader.contactName}</Text>
               </View>
-              <Pressable style={styles.contactRow} onPress={() => Linking.openURL(`tel:${trader.phone}`)}>
+              <Pressable
+                style={styles.contactRow}
+                onPress={() => Linking.openURL(`tel:${trader.phone}`)}
+                accessibilityRole="button"
+                accessibilityLabel={`Call ${trader.businessName}`}
+                accessibilityHint="Opens your phone app"
+              >
                 <View style={styles.contactIconWrap}>
                   <Feather name="phone" size={14} color={Colors.light.primary} />
                 </View>
                 <Text style={[styles.contactText, { color: Colors.light.primary }]}>{trader.phone}</Text>
               </Pressable>
               {trader.website && (
-                <Pressable style={styles.contactRow} onPress={() => Linking.openURL(trader.website!)}>
+                <Pressable
+                  style={styles.contactRow}
+                  onPress={() => Linking.openURL(trader.website!)}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Open ${trader.businessName} website`}
+                  accessibilityHint="Opens in your browser"
+                >
                   <View style={styles.contactIconWrap}>
                     <Feather name="globe" size={14} color={Colors.light.primary} />
                   </View>
