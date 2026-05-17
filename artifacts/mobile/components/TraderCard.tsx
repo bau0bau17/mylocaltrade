@@ -23,6 +23,7 @@ export function formatResponseTime(minutes: number | null | undefined): string |
 const TOP_RATED_MIN_RATING = 4.7;
 const TOP_RATED_MIN_REVIEWS = 5;
 const FAST_RESPONDER_MAX_MINUTES = 60;
+const PROMPT_RESPONDER_MAX_MINUTES = 24 * 60;
 
 export function isTopRated(
   rating: number | null | undefined,
@@ -47,6 +48,15 @@ export function isFastResponder(minutes: number | null | undefined): boolean {
   );
 }
 
+export function isPromptResponder(minutes: number | null | undefined): boolean {
+  return (
+    typeof minutes === 'number' &&
+    Number.isFinite(minutes) &&
+    minutes > FAST_RESPONDER_MAX_MINUTES &&
+    minutes <= PROMPT_RESPONDER_MAX_MINUTES
+  );
+}
+
 export function formatTenureSince(createdAt: Date | string | null | undefined): string | null {
   if (!createdAt) return null;
   const d = createdAt instanceof Date ? createdAt : new Date(createdAt);
@@ -61,6 +71,7 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
   const planStyle = PLAN_STYLES[trader.plan as keyof typeof PLAN_STYLES];
   const topRated = isTopRated(trader.rating, trader.reviewCount);
   const fastResponder = isFastResponder(trader.responseTimeMinutes);
+  const promptResponder = !fastResponder && isPromptResponder(trader.responseTimeMinutes);
   const hasReviews = typeof trader.reviewCount === 'number' && trader.reviewCount > 0;
   const tenureLabel = formatTenureSince(trader.createdAt);
   const ratingLabel =
@@ -82,6 +93,7 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
     trader.isVerified ? 'verified' : null,
     topRated ? 'top rated' : null,
     fastResponder ? 'replies fast' : null,
+    promptResponder ? 'replies promptly' : null,
     trader.town,
     reviewsPhrase,
     tenureLabel ? `on MyLocalTrade ${tenureLabel.toLowerCase()}` : null,
@@ -129,6 +141,12 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
               <View style={styles.fastBadge}>
                 <Feather name="zap" size={10} color={Colors.light.primary} />
                 <Text style={styles.fastBadgeText}>Replies fast</Text>
+              </View>
+            )}
+            {promptResponder && (
+              <View style={styles.promptBadge}>
+                <Feather name="clock" size={10} color={Colors.light.textSecondary} />
+                <Text style={styles.promptBadgeText}>Replies promptly</Text>
               </View>
             )}
           </View>
@@ -306,6 +324,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: Colors.light.primary,
+    letterSpacing: 0.2,
+  },
+  promptBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 3,
+    backgroundColor: Colors.light.border,
+  },
+  promptBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
     letterSpacing: 0.2,
   },
   checkRow: {
