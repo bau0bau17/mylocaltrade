@@ -87,10 +87,15 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
     ? `${ratingLabel} stars from ${trader.reviewCount} ${reviewWord}`
     : `${trader.reviewCount} ${reviewWord}`;
 
+  const planTierLabel =
+    trader.plan === 'elite' || trader.plan === 'premium'
+      ? `${PLAN_STYLES[trader.plan].label.toLowerCase()} member`
+      : null;
   const accessibilityLabel = [
     trader.businessName,
     trader.mainCategory,
     trader.isVerified ? 'verified' : null,
+    planTierLabel,
     topRated ? 'top rated' : null,
     fastResponder ? 'replies fast' : null,
     promptResponder ? 'replies promptly' : null,
