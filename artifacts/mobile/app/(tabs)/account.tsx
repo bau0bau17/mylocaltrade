@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Image } from 're
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { getApiUrl } from '@/lib/api-url';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { ScreenHeader } from '@/components/ScreenHeader';
@@ -57,7 +58,7 @@ function computeOnboardingPill(
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, isAuthenticated, isTrader, isAdmin, logout } = useAuth();
+  const { user, isAuthenticated, isTrader, isAdmin, logout, token: adminToken } = useAuth();
   const qc = useQueryClient();
   const { data: unreadData } = useGetConversationsUnreadCount({
     query: {
@@ -92,6 +93,36 @@ export default function AccountScreen() {
     },
   });
   const onboardingPill = computeOnboardingPill(onboardingStatus);
+
+  const { data: traderReviewCount = 0 } = useQuery({
+    queryKey: ['admin', 'trader-review-count'],
+    enabled: isAuthenticated && isAdmin && !!adminToken,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const res = await fetch(`${getApiUrl()}/api/admin/traders?status=UNDER_REVIEW`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      if (!res.ok) return 0;
+      const json = await res.json();
+      const row = (json.counts ?? []).find((c: { status: string; count: number }) => c.status === 'UNDER_REVIEW');
+      return row?.count ?? (json.traders?.length ?? 0);
+    },
+  });
+  const { data: accountDeletionCount = 0 } = useQuery({
+    queryKey: ['admin', 'account-deletion-count'],
+    enabled: isAuthenticated && isAdmin && !!adminToken,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const res = await fetch(`${getApiUrl()}/api/admin/account-deletions?status=REQUESTED`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      if (!res.ok) return 0;
+      const json = await res.json();
+      return json.total ?? (json.items?.length ?? 0);
+    },
+  });
 
   const { data: reminderSettings } = useGetLeadReminderSettings({
     query: {
@@ -215,7 +246,9 @@ export default function AccountScreen() {
           <View style={[styles.group, { marginHorizontal: 16 }]}>
             <MenuRow icon="activity" label="Live Dashboard" sub="Platform stats & live activity" onPress={() => router.push('/admin/stats')} accent />
             <View style={styles.separator} />
-            <MenuRow icon="shield" label="Trader Review Queue" sub="Approve or reject trader applications" onPress={() => router.push('/admin')} accent />
+            <MenuRow icon="shield" label="Trader Review Queue" sub="Approve or reject trader applications" onPress={() => router.push('/admin')} accent badge={traderReviewCount} />
+            <View style={styles.separator} />
+            <MenuRow icon="user-x" label="Account Deletion Reviews" sub="Review customer & trader deletion requests" onPress={() => router.push('/admin/account-deletions')} accent badge={accountDeletionCount} />
           </View>
         </>
       ) : null}

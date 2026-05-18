@@ -193,25 +193,25 @@ export default function AdminStatsScreen() {
                 label="Awaiting Docs"
                 value={data.traders.byStatus.PENDING_DOCUMENTS ?? 0}
                 tone="warn"
-                onPress={() => router.push('/admin/trader-review?status=PENDING_DOCUMENTS' as never)}
+                onPress={() => router.push('/admin?status=PENDING_DOCUMENTS' as never)}
               />
               <StatusCard
                 label="Under Review"
                 value={data.traders.byStatus.UNDER_REVIEW ?? 0}
                 tone="info"
-                onPress={() => router.push('/admin/trader-review?status=UNDER_REVIEW' as never)}
+                onPress={() => router.push('/admin?status=UNDER_REVIEW' as never)}
               />
               <StatusCard
                 label="Verified"
                 value={data.traders.byStatus.VERIFIED ?? 0}
                 tone="success"
-                onPress={() => router.push('/admin/trader-review?status=VERIFIED' as never)}
+                onPress={() => router.push('/admin?status=VERIFIED' as never)}
               />
               <StatusCard
                 label="Rejected"
                 value={data.traders.byStatus.REJECTED ?? 0}
                 tone="danger"
-                onPress={() => router.push('/admin/trader-review?status=REJECTED' as never)}
+                onPress={() => router.push('/admin?status=REJECTED' as never)}
               />
             </View>
             <View style={styles.smallRow}>
