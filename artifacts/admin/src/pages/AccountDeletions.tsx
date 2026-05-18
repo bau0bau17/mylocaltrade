@@ -9,6 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { formatDate } from "@/lib/format";
 import { Trash2, ChevronDown, ChevronRight, Search } from "lucide-react";
 
@@ -390,32 +401,64 @@ function DeletionDetail({
 
       <div className="flex flex-wrap gap-2">
         {!anonymised && (
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={anonymiseMut.isPending}
-            onClick={() => {
-              if (confirm("Wipe this user's PII? This cannot be undone.")) {
-                anonymiseMut.mutate({ notes: notes.trim() || undefined });
-              }
-            }}
-          >
-            {anonymiseMut.isPending ? "Anonymising…" : "Anonymise PII"}
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={anonymiseMut.isPending}
+              >
+                {anonymiseMut.isPending ? "Anonymising…" : "Anonymise PII"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Anonymise this user's PII?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This wipes the user's name, email, phone and other personal data and cannot be undone.
+                  The row itself is kept so reviews, conversations and audit history stay intact.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() =>
+                    anonymiseMut.mutate({ notes: notes.trim() || undefined })
+                  }
+                >
+                  Anonymise
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
         {!completed && (
-          <Button
-            size="sm"
-            variant="default"
-            disabled={completeMut.isPending}
-            onClick={() => {
-              if (confirm("Finalise the deletion? The account will be soft-deleted.")) {
-                completeMut.mutate();
-              }
-            }}
-          >
-            {completeMut.isPending ? "Completing…" : "Mark as completed"}
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                size="sm"
+                variant="default"
+                disabled={completeMut.isPending}
+              >
+                {completeMut.isPending ? "Completing…" : "Mark as completed"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Finalise the deletion?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The account will be soft-deleted and the user signed out of every device.
+                  This is a terminal state and cannot be reversed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => completeMut.mutate()}>
+                  Mark as completed
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
       </div>
 
