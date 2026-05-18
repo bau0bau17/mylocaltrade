@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Alert,
   TextInput,
+  Modal,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -207,8 +208,21 @@ function DeletionCard({
 }) {
   const c = statusColor(row.deletionStatus);
   const [retentionReason, setRetentionReason] = useState('');
+  const [confirm, setConfirm] = useState<null | 'anonymise' | 'complete'>(null);
+  const [submitting, setSubmitting] = useState(false);
   const completed = row.deletionStatus === 'COMPLETED';
   const anonymised = row.deletionStatus === 'ANONYMISED' || completed;
+
+  const runConfirmed = async () => {
+    if (!confirm) return;
+    setSubmitting(true);
+    try {
+      await onAction(confirm, {});
+      setConfirm(null);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <View style={styles.card}>
@@ -279,20 +293,9 @@ function DeletionCard({
             {!anonymised && (
               <Pressable
                 style={[styles.btn, styles.btnDanger]}
-                onPress={() =>
-                  Alert.alert(
-                    'Anonymise PII?',
-                    'This wipes the user\'s name, email and contact details. It cannot be undone.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Anonymise',
-                        style: 'destructive',
-                        onPress: () => onAction('anonymise', {}),
-                      },
-                    ],
-                  )
-                }
+                onPress={() => setConfirm('anonymise')}
+                accessibilityRole="button"
+                accessibilityLabel="Anonymise this user's personal data"
               >
                 <Feather name="user-x" size={14} color={Colors.light.white} />
                 <Text style={styles.btnText}>Anonymise</Text>
@@ -301,26 +304,64 @@ function DeletionCard({
             {!completed && (
               <Pressable
                 style={[styles.btn, styles.btnPrimary]}
-                onPress={() =>
-                  Alert.alert(
-                    'Finalise deletion?',
-                    'The account will be soft-deleted. This cannot be undone.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Complete',
-                        style: 'destructive',
-                        onPress: () => onAction('complete', {}),
-                      },
-                    ],
-                  )
-                }
+                onPress={() => setConfirm('complete')}
+                accessibilityRole="button"
+                accessibilityLabel="Mark this deletion as completed"
               >
                 <Feather name="check" size={14} color={Colors.light.white} />
                 <Text style={styles.btnText}>Mark completed</Text>
               </Pressable>
             )}
           </View>
+
+          <Modal
+            visible={confirm !== null}
+            transparent
+            animationType="fade"
+            onRequestClose={() => !submitting && setConfirm(null)}
+          >
+            <Pressable
+              style={styles.modalBackdrop}
+              onPress={() => !submitting && setConfirm(null)}
+            >
+              <Pressable style={styles.modalCard} onPress={() => {}}>
+                <Text style={styles.modalTitle}>
+                  {confirm === 'anonymise' ? 'Anonymise PII?' : 'Finalise deletion?'}
+                </Text>
+                <Text style={styles.modalBody}>
+                  {confirm === 'anonymise'
+                    ? "This wipes the user's name, email and contact details. The row is kept so reviews, conversations and audit history stay intact. This cannot be undone."
+                    : 'The account will be soft-deleted and the user signed out everywhere. This is a terminal state and cannot be reversed.'}
+                </Text>
+                <View style={styles.modalActions}>
+                  <Pressable
+                    style={[styles.btn, styles.btnGhost]}
+                    onPress={() => setConfirm(null)}
+                    disabled={submitting}
+                  >
+                    <Text style={[styles.btnText, { color: Colors.light.text }]}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.btn,
+                      confirm === 'anonymise' ? styles.btnDanger : styles.btnPrimary,
+                      submitting && styles.btnDisabled,
+                    ]}
+                    onPress={runConfirmed}
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <ActivityIndicator size="small" color={Colors.light.white} />
+                    ) : (
+                      <Text style={styles.btnText}>
+                        {confirm === 'anonymise' ? 'Anonymise' : 'Mark completed'}
+                      </Text>
+                    )}
+                  </Pressable>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
         </View>
       )}
     </View>
@@ -386,5 +427,27 @@ const styles = StyleSheet.create({
   btnSecondary: { backgroundColor: Colors.light.featured },
   btnDanger: { backgroundColor: Colors.light.error },
   btnDisabled: { opacity: 0.45 },
+  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: Colors.light.border },
   btnText: { color: Colors.light.white, fontSize: 13, fontWeight: '700' },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    padding: 18,
+    gap: 12,
+  },
+  modalTitle: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
+  modalBody: { fontSize: 13, lineHeight: 19, color: Colors.light.textSecondary },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 4 },
 });
