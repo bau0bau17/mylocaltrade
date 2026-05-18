@@ -1,99 +1,69 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ActivityIndicator,
-  ScrollView,
-  RefreshControl,
-  TextInput,
-  FlatList,
-} from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
 
-interface TraderRow {
-  userId: number;
-  email: string;
-  emailVerified: boolean;
-  businessName: string;
-  contactName: string;
-  phone: string;
-  town: string;
-  postcode: string;
-  mainCategory: string;
-  verificationStatus: string;
-  phoneVerified: boolean;
-  businessProfileCompleted: boolean;
-  documentsSubmitted: boolean;
-  submittedForReviewAt: string | null;
-  verifiedAt: string | null;
-}
+const COUNTS_REFETCH_INTERVAL_MS = 30_000;
 
-interface CountRow {
-  status: string;
-  count: number;
-}
-
-const STATUS_FILTERS: { key: string; label: string }[] = [
-  { key: 'UNDER_REVIEW', label: 'Under review' },
-  { key: 'PENDING_DOCUMENTS', label: 'Pending docs' },
-  { key: 'VERIFIED', label: 'Verified' },
-  { key: 'REJECTED', label: 'Rejected' },
-  { key: 'SUSPENDED', label: 'Suspended' },
-  { key: 'ALL', label: 'All' },
-];
+type SectionItem = {
+  key: string;
+  icon: React.ComponentProps<typeof Feather>['name'];
+  title: string;
+  subtitle: string;
+  href: string;
+  badge: number;
+  loading: boolean;
+};
 
 export default function AdminIndexScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { token, isAdmin } = useAuth();
 
-  const [statusFilter, setStatusFilter] = useState<string>('UNDER_REVIEW');
-  const [query, setQuery] = useState('');
-  const [traders, setTraders] = useState<TraderRow[]>([]);
-  const [counts, setCounts] = useState<CountRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const enabled = !!token && isAdmin;
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'ALL') params.set('status', statusFilter);
-      if (query.trim()) params.set('q', query.trim());
-      const res = await fetch(`${getApiUrl()}/api/admin/traders?${params.toString()}`, {
+  const traderQueueQuery = useQuery({
+    queryKey: ['admin', 'index-counts', 'trader-review'],
+    enabled,
+    refetchInterval: COUNTS_REFETCH_INTERVAL_MS,
+    refetchOnWindowFocus: true,
+    queryFn: async (): Promise<number> => {
+      const res = await fetch(`${getApiUrl()}/api/admin/traders?status=UNDER_REVIEW`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to load traders');
-      setTraders(json.traders);
-      setCounts(json.counts ?? []);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [token, statusFilter, query]);
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      const row = (json.counts ?? []).find((c: { status: string; count: number }) => c.status === 'UNDER_REVIEW');
+      return Number(row?.count ?? 0);
+    },
+  });
 
-  useEffect(() => {
-    setLoading(true);
-    load();
-  }, [load]);
+  const deletionsQueueQuery = useQuery({
+    queryKey: ['admin', 'index-counts', 'account-deletions'],
+    enabled,
+    refetchInterval: COUNTS_REFETCH_INTERVAL_MS,
+    refetchOnWindowFocus: true,
+    queryFn: async (): Promise<number> => {
+      const res = await fetch(`${getApiUrl()}/api/admin/account-deletions?status=REQUESTED`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      if (typeof json.total === 'number') return json.total;
+      if (Array.isArray(json.items)) return json.items.length;
+      return 0;
+    },
+  });
 
-  const countByStatus = useMemo(() => {
-    const map: Record<string, number> = {};
-    counts.forEach((c) => { map[c.status] = c.count; });
-    return map;
-  }, [counts]);
+  const onRefresh = () => {
+    void traderQueueQuery.refetch();
+    void deletionsQueueQuery.refetch();
+  };
 
   if (!isAdmin) {
     return (
@@ -104,250 +74,138 @@ export default function AdminIndexScreen() {
     );
   }
 
+  const sections: SectionItem[] = [
+    {
+      key: 'stats',
+      icon: 'activity',
+      title: 'Live Dashboard',
+      subtitle: 'Real-time platform metrics',
+      href: '/admin/stats',
+      badge: 0,
+      loading: false,
+    },
+    {
+      key: 'trader-review',
+      icon: 'user-check',
+      title: 'Trader Review Queue',
+      subtitle: 'Verify and approve new traders',
+      href: '/admin/trader-review',
+      badge: traderQueueQuery.data ?? 0,
+      loading: traderQueueQuery.isLoading,
+    },
+    {
+      key: 'account-deletions',
+      icon: 'trash-2',
+      title: 'Account Deletion Reviews',
+      subtitle: 'Process GDPR deletion requests',
+      href: '/admin/account-deletions',
+      badge: deletionsQueueQuery.data ?? 0,
+      loading: deletionsQueueQuery.isLoading,
+    },
+    {
+      key: 'promo-codes',
+      icon: 'tag',
+      title: 'Promo Codes',
+      subtitle: 'Manage promotional codes',
+      href: '/admin/promo-codes',
+      badge: 0,
+      loading: false,
+    },
+  ];
+
+  const refreshing = traderQueueQuery.isFetching || deletionsQueueQuery.isFetching;
+
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
-      <Stack.Screen options={{ title: 'Trader Review' }} />
+      <Stack.Screen options={{ title: 'Admin' }} />
 
       <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 50) + 12 }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={20} color={Colors.light.text} />
         </Pressable>
-        <Text style={styles.headerTitle}>Trader Review</Text>
+        <Text style={styles.headerTitle}>Admin</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      <View style={styles.shortcutsRow}>
-        <Pressable
-          onPress={() => router.push('/admin/account-deletions')}
-          style={styles.shortcutBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Account deletions"
-          accessibilityHint="Review and manage account deletion requests"
-        >
-          <Feather name="trash-2" size={14} color={Colors.light.primary} />
-          <Text style={styles.shortcutText}>Account deletions</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => router.push('/admin/promo-codes')}
-          style={styles.shortcutBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Promo codes"
-          accessibilityHint="Manage promotional codes"
-        >
-          <Feather name="tag" size={14} color={Colors.light.primary} />
-          <Text style={styles.shortcutText}>Promo codes</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.searchWrap}>
-        <Feather name="search" size={16} color={Colors.light.textMuted} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search business, contact, email, postcode"
-          placeholderTextColor={Colors.light.textMuted}
-          style={styles.search}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          onSubmitEditing={load}
-        />
-        {query.length > 0 && (
-          <Pressable onPress={() => { setQuery(''); }}>
-            <Feather name="x" size={16} color={Colors.light.textMuted} />
-          </Pressable>
-        )}
-      </View>
-
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersScroll}
-        contentContainerStyle={styles.filtersRow}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+        }
       >
-        {STATUS_FILTERS.map((f) => {
-          const active = f.key === statusFilter;
-          const count = f.key === 'ALL'
-            ? counts.reduce((s, c) => s + c.count, 0)
-            : (countByStatus[f.key] ?? 0);
-          return (
-            <Pressable
-              key={f.key}
-              onPress={() => setStatusFilter(f.key)}
-              style={[styles.chip, active && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                {f.label}
-                {count > 0 ? ` · ${count}` : ''}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={Colors.light.primary} />
-        </View>
-      ) : error ? (
-        <View style={[styles.center, { paddingHorizontal: 24 }]}>
-          <Feather name="alert-circle" size={24} color={Colors.light.error} />
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryBtn} onPress={load}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <FlatList
-          data={traders}
-          keyExtractor={(t) => String(t.userId)}
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); load(); }}
-              tintColor={Colors.light.primary}
-            />
-          }
-          ListEmptyComponent={
-            <View style={[styles.center, { paddingVertical: 60 }]}>
-              <Feather name="inbox" size={28} color={Colors.light.textMuted} />
-              <Text style={styles.muted}>No traders match this view.</Text>
+        {sections.map((s) => (
+          <Pressable
+            key={s.key}
+            style={styles.menuCard}
+            onPress={() => router.push(s.href as never)}
+            accessibilityRole="button"
+            accessibilityLabel={
+              s.badge > 0
+                ? `${s.title}, ${s.badge} ${s.badge === 1 ? 'item' : 'items'} needing attention`
+                : s.title
+            }
+            accessibilityHint={s.subtitle}
+          >
+            <View style={styles.menuIconWrap}>
+              <Feather name={s.icon} size={20} color={Colors.light.primary} />
             </View>
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              style={styles.card}
-              onPress={() => router.push(`/admin/${item.userId}`)}
-            >
-              <View style={styles.cardTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.bizName} numberOfLines={1}>{item.businessName}</Text>
-                  <Text style={styles.contactName} numberOfLines={1}>
-                    {item.contactName} · {item.mainCategory}
-                  </Text>
-                </View>
-                <StatusPill status={item.verificationStatus} />
+            <View style={styles.menuTextWrap}>
+              <Text style={styles.menuTitle}>{s.title}</Text>
+              <Text style={styles.menuSubtitle}>{s.subtitle}</Text>
+            </View>
+            {s.badge > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{s.badge > 99 ? '99+' : String(s.badge)}</Text>
               </View>
-              <View style={styles.metaRow}>
-                <Feather name="mail" size={11} color={Colors.light.textMuted} />
-                <Text style={styles.metaText} numberOfLines={1}>{item.email}</Text>
-              </View>
-              <View style={styles.metaRow}>
-                <Feather name="map-pin" size={11} color={Colors.light.textMuted} />
-                <Text style={styles.metaText} numberOfLines={1}>
-                  {item.town} {item.postcode}
-                </Text>
-              </View>
-              <View style={styles.checkRow}>
-                <Check label="Email" state={item.emailVerified ? 'ok' : 'missing'} />
-                <Check label="Phone" state={item.phoneVerified ? 'ok' : 'missing'} />
-                <Check label="Profile" state={item.businessProfileCompleted ? 'ok' : 'missing'} />
-                <Check
-                  label="Docs"
-                  state={
-                    item.verificationStatus === 'VERIFIED'
-                      ? 'ok'
-                      : item.documentsSubmitted
-                      ? 'pending'
-                      : 'missing'
-                  }
-                />
-              </View>
-              {item.submittedForReviewAt && (
-                <Text style={styles.submittedText}>
-                  Submitted {formatDate(item.submittedForReviewAt)}
-                </Text>
-              )}
-            </Pressable>
-          )}
-        />
-      )}
+            ) : null}
+            <Feather name="chevron-right" size={20} color={Colors.light.textMuted} />
+          </Pressable>
+        ))}
+      </ScrollView>
     </View>
   );
-}
-
-function Check({ label, state }: { label: string; state: 'ok' | 'pending' | 'missing' }) {
-  const cfg =
-    state === 'ok'
-      ? { icon: 'check' as const, color: Colors.light.success, bg: undefined }
-      : state === 'pending'
-      ? { icon: 'clock' as const, color: '#B45309', bg: 'rgba(245, 158, 11, 0.14)' }
-      : { icon: 'x' as const, color: Colors.light.textMuted, bg: undefined };
-  return (
-    <View style={[styles.checkChip, cfg.bg ? { backgroundColor: cfg.bg } : null]}>
-      <Feather name={cfg.icon} size={10} color={cfg.color} />
-      <Text style={[styles.checkText, { color: cfg.color }]}>{label}</Text>
-    </View>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const map: Record<string, { label: string; bg: string; fg: string }> = {
-    PENDING_EMAIL_VERIFICATION: { label: 'Email', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
-    PENDING_PHONE_VERIFICATION: { label: 'Phone', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
-    PROFILE_INCOMPLETE: { label: 'Profile', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
-    PENDING_DOCUMENTS: { label: 'Awaiting docs', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
-    UNDER_REVIEW: { label: 'Under review', bg: 'rgba(59, 130, 246, 0.14)', fg: '#1D4ED8' },
-    VERIFIED: { label: 'Verified', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
-    REJECTED: { label: 'Rejected', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
-    SUSPENDED: { label: 'Suspended', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
-    EXPIRED_DOCUMENTS: { label: 'Expired docs', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
-  };
-  const v = map[status] ?? { label: status, bg: Colors.light.surface, fg: Colors.light.text };
-  return (
-    <View style={[styles.pill, { backgroundColor: v.bg }]}>
-      <Text style={[styles.pillText, { color: v.fg }]}>{v.label}</Text>
-    </View>
-  );
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return iso;
-  }
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   muted: { color: Colors.light.textMuted, fontSize: 14 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 8 },
+
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 16 },
   backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: Colors.light.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.light.border },
   headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.light.text },
 
-  shortcutsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 },
-  shortcutBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: 10, backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border },
-  shortcutText: { fontSize: 12, fontWeight: '600', color: Colors.light.text },
+  menuCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+    backgroundColor: Colors.light.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  menuIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuTextWrap: { flex: 1 },
+  menuTitle: { fontSize: 15, fontWeight: '700', color: Colors.light.text },
+  menuSubtitle: { fontSize: 12, color: Colors.light.textMuted, marginTop: 2 },
 
-  searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 12, paddingHorizontal: 12, height: 40, borderRadius: 12, backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border },
-  search: { flex: 1, fontSize: 13, color: Colors.light.text, padding: 0 },
-
-  filtersScroll: { flexGrow: 0, flexShrink: 0 },
-  filtersRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
-  chip: { paddingHorizontal: 12, height: 30, borderRadius: 14, borderWidth: 1, borderColor: Colors.light.border, backgroundColor: Colors.light.card, alignItems: 'center', justifyContent: 'center' },
-  chipActive: { backgroundColor: Colors.light.primary, borderColor: Colors.light.primary },
-  chipText: { fontSize: 12, fontWeight: '600', color: Colors.light.text },
-  chipTextActive: { color: '#fff' },
-
-  card: { backgroundColor: Colors.light.card, borderRadius: 14, borderWidth: 1, borderColor: Colors.light.border, padding: 14, marginBottom: 10, gap: 6 },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 4 },
-  bizName: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
-  contactName: { fontSize: 12, color: Colors.light.textMuted, marginTop: 2 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metaText: { flex: 1, fontSize: 11, color: Colors.light.textMuted },
-
-  checkRow: { flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' },
-  checkChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, height: 20, borderRadius: 6, backgroundColor: Colors.light.surface },
-  checkText: { fontSize: 10, color: Colors.light.textMuted, fontWeight: '600' },
-
-  submittedText: { fontSize: 10, color: Colors.light.textMuted, marginTop: 6 },
-
-  pill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
-  pillText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
-
-  errorText: { fontSize: 13, color: Colors.light.error, textAlign: 'center' },
-  retryBtn: { paddingHorizontal: 14, height: 36, borderRadius: 10, backgroundColor: Colors.light.primary, alignItems: 'center', justifyContent: 'center' },
-  retryText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  badge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.light.error,
+    paddingHorizontal: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
 });
