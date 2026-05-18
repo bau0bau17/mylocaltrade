@@ -113,14 +113,30 @@ export default function AdminIndexScreen() {
           <Feather name="arrow-left" size={20} color={Colors.light.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Trader Review</Text>
-        <View style={{ flexDirection: 'row' }}>
-          <Pressable onPress={() => router.push('/admin/account-deletions')} style={styles.backBtn}>
-            <Feather name="trash-2" size={20} color={Colors.light.text} />
-          </Pressable>
-          <Pressable onPress={() => router.push('/admin/promo-codes')} style={styles.backBtn}>
-            <Feather name="tag" size={20} color={Colors.light.text} />
-          </Pressable>
-        </View>
+        <View style={{ width: 36 }} />
+      </View>
+
+      <View style={styles.shortcutsRow}>
+        <Pressable
+          onPress={() => router.push('/admin/account-deletions')}
+          style={styles.shortcutBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Account deletions"
+          accessibilityHint="Review and manage account deletion requests"
+        >
+          <Feather name="trash-2" size={14} color={Colors.light.primary} />
+          <Text style={styles.shortcutText}>Account deletions</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/admin/promo-codes')}
+          style={styles.shortcutBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Promo codes"
+          accessibilityHint="Manage promotional codes"
+        >
+          <Feather name="tag" size={14} color={Colors.light.primary} />
+          <Text style={styles.shortcutText}>Promo codes</Text>
+        </Pressable>
       </View>
 
       <View style={styles.searchWrap}>
@@ -300,6 +316,10 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 8 },
   backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: Colors.light.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.light.border },
   headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.light.text },
+
+  shortcutsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 },
+  shortcutBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: 10, backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border },
+  shortcutText: { fontSize: 12, fontWeight: '600', color: Colors.light.text },
 
   searchWrap: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 12, paddingHorizontal: 12, height: 40, borderRadius: 12, backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border },
   search: { flex: 1, fontSize: 13, color: Colors.light.text, padding: 0 },
