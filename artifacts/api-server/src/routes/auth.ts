@@ -21,6 +21,7 @@ import {
 import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, logAudit, buildOnboardingChecklist, statusMessage, isTraderProfilePublic, evaluateBusinessProfileComplete, evaluateDocumentsComplete } from "../lib/trader-status";
+import { ACCOUNT_DELETION_STATUSES, type User } from "@workspace/db/schema";
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, evaluateLegalAcceptance } from "../lib/legal";
 import { getCompanyProfile, formatChAddress } from "../lib/companies-house";
 import type { AiVerificationResult } from "../lib/trader-ai-verification";
@@ -28,14 +29,69 @@ import { traderDocumentsTable } from "@workspace/db/schema";
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
+/**
+ * Returns reopen context if `existing` refers to a user that has previously
+ * been put through the account-deletion lifecycle (requested, retained,
+ * anonymised or completed). In that case we let the email be re-used by a
+ * fresh registration. Returns null if there is no prior user, or if the prior
+ * user is a normal, in-use account (then the caller should 409 as before).
+ */
+function pickReopenContext(
+  existing: User | undefined,
+): { priorUserId: number; priorRole: string; priorStatus: string | null } | null {
+  if (!existing) return null;
+  const inLifecycle =
+    !!existing.deletionStatus &&
+    (ACCOUNT_DELETION_STATUSES as readonly string[]).includes(existing.deletionStatus);
+  if (!inLifecycle && !existing.deletedAt) return null;
+  return {
+    priorUserId: existing.id,
+    priorRole: existing.role,
+    priorStatus: existing.deletionStatus ?? null,
+  };
+}
+
+/**
+ * Frees up the email on a prior deletion-lifecycle user so that a new
+ * registration can claim it. The prior row is preserved (audit, reviews,
+ * conversations and FK references stay intact) — only the unique email
+ * column and the trader_profiles mirror are rewritten to a placeholder.
+ */
+async function releasePriorEmail(
+  // The drizzle tx type is intentionally inferred from db.transaction; using
+  // a typeof argument here would tie us to private drizzle types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  priorUserId: number,
+  priorRole: string,
+): Promise<void> {
+  const released = `released-${priorUserId}-${Date.now()}@released.mylocaltrade.invalid`;
+  await tx
+    .update(usersTable)
+    .set({ email: released, updatedAt: new Date() })
+    .where(eq(usersTable.id, priorUserId));
+  if (priorRole === "trader") {
+    await tx
+      .update(traderProfilesTable)
+      .set({ email: released, updatedAt: new Date() })
+      .where(eq(traderProfilesTable.userId, priorUserId));
+  }
+}
+
 const router: IRouter = Router();
 
 router.post("/auth/register/customer", async (req, res) => {
   try {
     const body = RegisterCustomerBody.parse(req.body);
 
-    const existing = await db.select().from(usersTable).where(eq(usersTable.email, body.email)).limit(1);
-    if (existing.length > 0) {
+    const [existing] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, body.email))
+      .limit(1);
+    const reopen = pickReopenContext(existing);
+    if (existing && !reopen) {
+      // Active (non-deleted) account already owns this email.
       res.status(409).json({ error: "An account with this email already exists" });
       return;
     }
@@ -43,17 +99,35 @@ router.post("/auth/register/customer", async (req, res) => {
     const passwordHash = await bcryptjs.hash(body.password, 12);
     const verificationToken = generateVerificationToken();
 
-    const [user] = await db.insert(usersTable).values({
-      email: body.email,
-      passwordHash,
-      fullName: body.fullName,
-      phone: body.phone || null,
-      role: "customer",
-      isActive: false,
-      emailVerified: false,
-      emailVerificationToken: verificationToken,
-      emailVerificationSentAt: new Date(),
-    }).returning();
+    const user = await db.transaction(async (tx) => {
+      if (reopen) await releasePriorEmail(tx, reopen.priorUserId, reopen.priorRole);
+      const [created] = await tx.insert(usersTable).values({
+        email: body.email,
+        passwordHash,
+        fullName: body.fullName,
+        phone: body.phone || null,
+        role: "customer",
+        isActive: false,
+        emailVerified: false,
+        emailVerificationToken: verificationToken,
+        emailVerificationSentAt: new Date(),
+      }).returning();
+      return created;
+    });
+
+    if (reopen) {
+      void logAudit({
+        userId: reopen.priorUserId,
+        action: "ACCOUNT_REOPENED",
+        details: {
+          newUserId: user.id,
+          newEmail: user.email,
+          newRole: "customer",
+          priorRole: reopen.priorRole,
+          priorDeletionStatus: reopen.priorStatus,
+        },
+      });
+    }
 
     sendVerificationEmail(user.email, user.fullName, verificationToken).catch((err) =>
       req.log.error({ err }, "Failed to send verification email")
@@ -91,8 +165,13 @@ router.post("/auth/register/trader", async (req, res) => {
       return;
     }
 
-    const existing = await db.select().from(usersTable).where(eq(usersTable.email, body.email)).limit(1);
-    if (existing.length > 0) {
+    const [existing] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, body.email))
+      .limit(1);
+    const reopen = pickReopenContext(existing);
+    if (existing && !reopen) {
       res.status(409).json({ error: "An account with this email already exists" });
       return;
     }
@@ -176,6 +255,7 @@ router.post("/auth/register/trader", async (req, res) => {
     }
 
     const result = await db.transaction(async (tx) => {
+      if (reopen) await releasePriorEmail(tx, reopen.priorUserId, reopen.priorRole);
       const [user] = await tx.insert(usersTable).values({
         email: body.email,
         passwordHash,
@@ -224,6 +304,20 @@ router.post("/auth/register/trader", async (req, res) => {
         autoVerifiedByCompaniesHouse: aiVerificationStatus === "MATCH",
       },
     });
+
+    if (reopen) {
+      void logAudit({
+        userId: reopen.priorUserId,
+        action: "ACCOUNT_REOPENED",
+        details: {
+          newUserId: result.id,
+          newEmail: result.email,
+          newRole: "trader",
+          priorRole: reopen.priorRole,
+          priorDeletionStatus: reopen.priorStatus,
+        },
+      });
+    }
 
     sendVerificationEmail(result.email, result.fullName, verificationToken).catch((err) =>
       req.log.error({ err }, "Failed to send verification email")
