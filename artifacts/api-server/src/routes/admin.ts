@@ -1132,6 +1132,29 @@ router.post("/admin/traders/:userId/unsuspend", authMiddleware, adminOnly, async
       performedBy: adminId,
       details: { newStatus: nextStatus },
     });
+    // Returning to review re-runs the advisory support checks, mirroring a fresh
+    // document submission. Each is fire-and-forget and a no-op when its field is
+    // absent, so this never blocks or delays the unsuspend response.
+    if (nextStatus === TRADER_STATUS.UNDER_REVIEW) {
+      const { triggerAiVerification } = await import("../lib/trader-ai-verification");
+      const { triggerVatCheck } = await import("../lib/vat-check");
+      const { triggerDomainCheck } = await import("../lib/domain-check");
+      triggerAiVerification({
+        userId: updated.userId,
+        businessName: updated.businessName,
+        businessAddress: updated.businessAddress,
+        town: updated.town,
+        postcode: updated.postcode,
+        companyNumber: updated.companyNumber,
+        businessRole: updated.businessRole,
+      });
+      triggerVatCheck({ userId: updated.userId, vatNumber: updated.vatNumber });
+      triggerDomainCheck({
+        userId: updated.userId,
+        businessEmailDomain: updated.businessEmailDomain,
+        website: updated.website,
+      });
+    }
     res.json({ profile: updated });
   } catch (error) {
     req.log.error({ err: error }, "Unsuspend trader failed");
@@ -1621,17 +1644,37 @@ router.post("/admin/traders/:userId/ai-verification/run", authMiddleware, adminO
     }
     const { userId: adminId } = req as AuthenticatedRequest;
     const { runAiVerification } = await import("../lib/trader-ai-verification");
-    const result = await runAiVerification(
-      {
-        userId: profile.userId,
-        businessName: profile.businessName,
-        businessAddress: profile.businessAddress,
-        town: profile.town,
-        postcode: profile.postcode,
-      },
-      { source: "ADMIN_MANUAL", performedBy: adminId },
-    );
-    res.json({ result });
+    const { runVatCheck } = await import("../lib/vat-check");
+    const { runDomainCheck } = await import("../lib/domain-check");
+    // Run the support-layer checks together. Each is advisory and independent;
+    // a failure in one must not prevent the others, so they are settled.
+    const [aiSettled, vatSettled, domainSettled] = await Promise.allSettled([
+      runAiVerification(
+        {
+          userId: profile.userId,
+          businessName: profile.businessName,
+          businessAddress: profile.businessAddress,
+          town: profile.town,
+          postcode: profile.postcode,
+          companyNumber: profile.companyNumber,
+          businessRole: profile.businessRole,
+        },
+        { source: "ADMIN_MANUAL", performedBy: adminId },
+      ),
+      runVatCheck(
+        { userId: profile.userId, vatNumber: profile.vatNumber },
+        { source: "ADMIN_MANUAL", performedBy: adminId },
+      ),
+      runDomainCheck(
+        { userId: profile.userId, businessEmailDomain: profile.businessEmailDomain, website: profile.website },
+        { source: "ADMIN_MANUAL", performedBy: adminId },
+      ),
+    ]);
+    res.json({
+      result: aiSettled.status === "fulfilled" ? aiSettled.value : null,
+      vat: vatSettled.status === "fulfilled" ? vatSettled.value : null,
+      domain: domainSettled.status === "fulfilled" ? domainSettled.value : null,
+    });
   } catch (error) {
     req.log.error({ err: error }, "Run AI verification failed");
     res.status(500).json({ error: "Failed to run AI verification" });

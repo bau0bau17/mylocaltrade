@@ -31,6 +31,7 @@ export interface TraderProfile {
   businessRole?: TraderProfileBusinessRole;
   authorisedRepresentative?: boolean | null;
   businessEmailDomain?: string | null;
+  vatNumber?: string | null;
   plan?: TraderProfilePlan;
   isFeatured: boolean;
   isActive: boolean;

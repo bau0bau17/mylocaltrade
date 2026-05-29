@@ -69,10 +69,61 @@ Respond with strict JSON only: {"verdict":"MATCH|PARTIAL_MATCH|NO_MATCH","reason
   return { verdict: safeVerdict, reasoning: parsed.reasoning ?? "No reasoning provided." };
 }
 
+/**
+ * Reset any previously stored Companies House cross-check so a stale historical
+ * verdict (e.g. an old NOT_FOUND) cannot bias a reviewer after a run that
+ * intentionally no-ops (sole trader / no confirmable company match).
+ */
+async function clearAiVerification(
+  snapshot: Pick<TraderProfile, "userId" | "companyNumber" | "businessRole">,
+): Promise<void> {
+  // Concurrency guard: only clear if the company number / role still match the
+  // values this run started from. Otherwise a newer run (kicked off by an edit)
+  // owns the state and this slower stale run must not wipe it.
+  const [current] = await db
+    .select({
+      companyNumber: traderProfilesTable.companyNumber,
+      businessRole: traderProfilesTable.businessRole,
+    })
+    .from(traderProfilesTable)
+    .where(eq(traderProfilesTable.userId, snapshot.userId))
+    .limit(1);
+  if (
+    (current?.companyNumber ?? "").trim() !== (snapshot.companyNumber ?? "").trim() ||
+    (current?.businessRole ?? "") !== (snapshot.businessRole ?? "")
+  ) {
+    return;
+  }
+  await db
+    .update(traderProfilesTable)
+    .set({
+      aiVerificationStatus: null,
+      aiVerificationData: null,
+      aiVerificationCheckedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(traderProfilesTable.userId, snapshot.userId));
+}
+
 export async function runAiVerification(
-  profile: Pick<TraderProfile, "userId" | "businessName" | "businessAddress" | "town" | "postcode">,
+  profile: Pick<TraderProfile, "userId" | "businessName" | "businessAddress" | "town" | "postcode" | "companyNumber" | "businessRole">,
   options: { source: AiVerificationSource; performedBy?: number | null } = { source: "AUTO_UNDER_REVIEW" },
-): Promise<AiVerificationResult> {
+): Promise<AiVerificationResult | null> {
+  const suppliedNumber = profile.companyNumber?.replace(/\s+/g, "") || undefined;
+
+  // Sole traders / self-employed people are first-class and legitimately have no
+  // company on Companies House. When no company number was supplied there is
+  // nothing precise to look up, so we no-op rather than persist a misleading
+  // NOT_FOUND advisory against them. We still attempt a name search below to
+  // OPPORTUNISTICALLY find a match, but a miss is treated as neutral (no-op),
+  // never a penalty — because we cannot distinguish a genuine sole trader from a
+  // mistyped business name. A NOT_FOUND is only ever recorded when a trader has
+  // explicitly supplied a company number that does not exist on the register.
+  if (!suppliedNumber && profile.businessRole === "SELF_EMPLOYED") {
+    await clearAiVerification(profile);
+    return null;
+  }
+
   const submitted = {
     businessName: profile.businessName,
     address: [profile.businessAddress, profile.town].filter(Boolean).join(", "),
@@ -81,20 +132,31 @@ export async function runAiVerification(
 
   let result: AiVerificationResult;
   try {
-    const hit = await searchCompanyTopHit(profile.businessName);
-    if (!hit?.company_number) {
-      result = {
-        verdict: "NOT_FOUND",
-        reasoning: "No matching company found on Companies House for this business name.",
-        submitted,
-        companiesHouse: null,
-      };
+    // Prefer a direct lookup against the official register using the company
+    // number the trader supplied — this is far more precise than a name search.
+    // Fall back to a name search only when no number was provided.
+    let companyNumber: string | undefined = suppliedNumber;
+    if (!companyNumber) {
+      const hit = await searchCompanyTopHit(profile.businessName);
+      companyNumber = hit?.company_number ?? undefined;
+    }
+    if (!companyNumber) {
+      // No supplied number and no name-search match: neutral no-op, not a
+      // penalty. Clear any stale prior verdict so old results cannot mislead.
+      await clearAiVerification(profile);
+      return null;
     } else {
-      const ch = await getCompanyProfile(hit.company_number);
+      const ch = await getCompanyProfile(companyNumber);
       if (!ch) {
+        if (!suppliedNumber) {
+          // The name search pointed at a number that no longer resolves; treat
+          // as a neutral miss rather than a penalty against an unconfirmed name.
+          await clearAiVerification(profile);
+          return null;
+        }
         result = {
           verdict: "NOT_FOUND",
-          reasoning: "Companies House did not return a profile for the matched company number.",
+          reasoning: "Companies House has no company registered with the supplied company number.",
           submitted,
           companiesHouse: null,
         };
@@ -126,6 +188,24 @@ export async function runAiVerification(
     };
   }
 
+  // Concurrency guard: if the trader changed their company number or business
+  // role while this check was running, skip the write so a slower stale run
+  // cannot clobber a newer verdict.
+  const [current] = await db
+    .select({
+      companyNumber: traderProfilesTable.companyNumber,
+      businessRole: traderProfilesTable.businessRole,
+    })
+    .from(traderProfilesTable)
+    .where(eq(traderProfilesTable.userId, profile.userId))
+    .limit(1);
+  if (
+    (current?.companyNumber ?? "").trim() !== (profile.companyNumber ?? "").trim() ||
+    (current?.businessRole ?? "") !== (profile.businessRole ?? "")
+  ) {
+    return result;
+  }
+
   await db
     .update(traderProfilesTable)
     .set({
@@ -149,7 +229,7 @@ export async function runAiVerification(
 
 /** Fire-and-forget wrapper for use during status transitions. */
 export function triggerAiVerification(
-  profile: Pick<TraderProfile, "userId" | "businessName" | "businessAddress" | "town" | "postcode">,
+  profile: Pick<TraderProfile, "userId" | "businessName" | "businessAddress" | "town" | "postcode" | "companyNumber" | "businessRole">,
 ): void {
   void runAiVerification(profile, { source: "AUTO_UNDER_REVIEW" }).catch((err) => {
     // The inner runAiVerification persists ERROR verdicts; reaching this catch

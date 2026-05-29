@@ -286,6 +286,7 @@ export interface TraderProfile {
   businessRole?: TraderProfileBusinessRole;
   authorisedRepresentative?: boolean | null;
   businessEmailDomain?: string | null;
+  vatNumber?: string | null;
   plan?: TraderProfilePlan;
   isFeatured: boolean;
   isActive: boolean;
@@ -341,6 +342,7 @@ export interface UpdateTraderProfileRequest {
   businessRole?: UpdateTraderProfileRequestBusinessRole;
   authorisedRepresentative?: boolean;
   businessEmailDomain?: string;
+  vatNumber?: string;
 }
 
 export interface TraderListResponse {

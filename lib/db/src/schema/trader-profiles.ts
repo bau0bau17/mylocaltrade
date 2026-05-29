@@ -37,6 +37,10 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   userId: integer("user_id").notNull().references(() => usersTable.id).unique(),
   businessName: varchar("business_name", { length: 255 }).notNull(),
   companyNumber: varchar("company_number", { length: 20 }),
+  // Optional VAT registration number. Like companyNumber it is never required
+  // (sole traders / self-employed may have neither); when supplied it is used
+  // purely as a supporting validation aid, not as a gate.
+  vatNumber: varchar("vat_number", { length: 20 }),
   contactName: varchar("contact_name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 50 }).notNull(),
@@ -131,6 +135,37 @@ export const traderProfilesTable = pgTable("trader_profiles", {
     error?: string;
   }>(),
   aiVerificationCheckedAt: timestamp("ai_verification_checked_at"),
+
+  // --- VAT register cross-check (support layer) ---
+  // Advisory only: a UK VAT checksum is always validated, and when HMRC API
+  // credentials are configured the number is also looked up against the live
+  // HMRC VAT register. Null = not yet checked. Never blocks approval.
+  vatVerificationStatus: varchar("vat_verification_status", { length: 30 }),
+  vatVerificationData: json("vat_verification_data").$type<{
+    verdict: "REGISTERED" | "NOT_REGISTERED" | "VALID_FORMAT" | "INVALID_FORMAT" | "ERROR";
+    reasoning: string;
+    vatNumber: string;
+    checksumValid: boolean;
+    registerChecked: boolean;
+    register: { name?: string; address?: string } | null;
+    error?: string;
+  }>(),
+  vatVerificationCheckedAt: timestamp("vat_verification_checked_at"),
+
+  // --- Business email domain trust signal (support layer) ---
+  // Advisory only: checks that the declared business email domain resolves and
+  // can receive mail (MX/A records) and whether it matches the website domain.
+  // Null = not yet checked. Never required, never blocks approval.
+  domainVerificationStatus: varchar("domain_verification_status", { length: 30 }),
+  domainVerificationData: json("domain_verification_data").$type<{
+    verdict: "RESOLVES_MATCHES_WEBSITE" | "RESOLVES" | "NO_MAIL_RECORDS" | "NOT_RESOLVED" | "ERROR";
+    reasoning: string;
+    domain: string;
+    hasMailRecords: boolean;
+    matchesWebsite: boolean | null;
+    error?: string;
+  }>(),
+  domainVerificationCheckedAt: timestamp("domain_verification_checked_at"),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

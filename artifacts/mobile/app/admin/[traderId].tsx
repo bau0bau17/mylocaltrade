@@ -95,6 +95,28 @@ interface TraderDetail {
       } | null;
       error?: string;
     } | null;
+    vatNumber: string | null;
+    vatVerificationStatus: 'REGISTERED' | 'NOT_REGISTERED' | 'VALID_FORMAT' | 'INVALID_FORMAT' | 'ERROR' | null;
+    vatVerificationCheckedAt: string | null;
+    vatVerificationData: {
+      verdict: 'REGISTERED' | 'NOT_REGISTERED' | 'VALID_FORMAT' | 'INVALID_FORMAT' | 'ERROR';
+      reasoning: string;
+      vatNumber: string;
+      checksumValid: boolean;
+      registerChecked: boolean;
+      register: { name?: string; address?: string } | null;
+      error?: string;
+    } | null;
+    domainVerificationStatus: 'RESOLVES_MATCHES_WEBSITE' | 'RESOLVES' | 'NO_MAIL_RECORDS' | 'NOT_RESOLVED' | 'ERROR' | null;
+    domainVerificationCheckedAt: string | null;
+    domainVerificationData: {
+      verdict: 'RESOLVES_MATCHES_WEBSITE' | 'RESOLVES' | 'NO_MAIL_RECORDS' | 'NOT_RESOLVED' | 'ERROR';
+      reasoning: string;
+      domain: string;
+      hasMailRecords: boolean;
+      matchesWebsite: boolean | null;
+      error?: string;
+    } | null;
   };
   documents: TraderDoc[];
   documentsEvaluation: {
@@ -472,9 +494,9 @@ export default function AdminTraderDetail() {
           ) : null}
         </View>
 
-        {/* AI Verification */}
+        {/* Verification checks (support layer) */}
         <View style={styles.aiHeaderRow}>
-          <Text style={styles.sectionLabel}>AI Verification</Text>
+          <Text style={styles.sectionLabel}>Verification checks</Text>
           <Pressable
             style={[styles.aiRunBtn, aiBusy && { opacity: 0.5 }]}
             disabled={aiBusy}
@@ -486,14 +508,14 @@ export default function AdminTraderDetail() {
               <Feather name="refresh-cw" size={12} color={Colors.light.primary} />
             )}
             <Text style={styles.aiRunBtnText}>
-              {profile.aiVerificationCheckedAt ? 'Re-run check' : 'Run check'}
+              {profile.aiVerificationCheckedAt ? 'Re-run checks' : 'Run checks'}
             </Text>
           </Pressable>
         </View>
         <View style={styles.card}>
           {!profile.aiVerificationCheckedAt || !profile.aiVerificationData ? (
             <Text style={styles.muted}>
-              No AI cross-check yet. Tap Run check to compare submitted data against Companies House.
+              No Companies House cross-check yet. Tap Run checks to compare submitted data against Companies House. These checks are a support aid only — manual review remains the final decision.
             </Text>
           ) : (
             <>
@@ -540,6 +562,67 @@ export default function AdminTraderDetail() {
               ) : null}
               {profile.aiVerificationData.error ? (
                 <Text style={styles.aiErrorText}>Error: {profile.aiVerificationData.error}</Text>
+              ) : null}
+            </>
+          )}
+        </View>
+
+        {/* VAT check */}
+        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>VAT register check</Text>
+        <View style={styles.card}>
+          {!profile.vatNumber ? (
+            <Text style={styles.muted}>
+              No VAT number provided. Not required for sole traders or self-employed traders.
+            </Text>
+          ) : !profile.vatVerificationCheckedAt || !profile.vatVerificationData ? (
+            <Text style={styles.muted}>
+              VAT number {profile.vatNumber} not checked yet. Tap Run checks above.
+            </Text>
+          ) : (
+            <>
+              <View style={styles.aiVerdictRow}>
+                <VatVerdictPill verdict={profile.vatVerificationData.verdict} />
+                <Text style={styles.aiCheckedAt}>
+                  Checked {formatDate(profile.vatVerificationCheckedAt)}
+                </Text>
+              </View>
+              <Text style={styles.aiReasoning}>{profile.vatVerificationData.reasoning}</Text>
+              {profile.vatVerificationData.register ? (
+                <View style={styles.aiCompareBox}>
+                  <Text style={styles.aiCompareTitle}>HMRC VAT register</Text>
+                  <CompareRow label="Name" a="—" b={profile.vatVerificationData.register.name ?? '—'} />
+                  <CompareRow label="Address" a="—" b={profile.vatVerificationData.register.address ?? '—'} />
+                </View>
+              ) : null}
+              {profile.vatVerificationData.error ? (
+                <Text style={styles.aiErrorText}>Error: {profile.vatVerificationData.error}</Text>
+              ) : null}
+            </>
+          )}
+        </View>
+
+        {/* Business email domain check */}
+        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>Business email domain</Text>
+        <View style={styles.card}>
+          {!profile.businessEmailDomain ? (
+            <Text style={styles.muted}>
+              No business email domain declared. This is an optional trust signal only.
+            </Text>
+          ) : !profile.domainVerificationCheckedAt || !profile.domainVerificationData ? (
+            <Text style={styles.muted}>
+              Domain {profile.businessEmailDomain} not checked yet. Tap Run checks above.
+            </Text>
+          ) : (
+            <>
+              <View style={styles.aiVerdictRow}>
+                <DomainVerdictPill verdict={profile.domainVerificationData.verdict} />
+                <Text style={styles.aiCheckedAt}>
+                  Checked {formatDate(profile.domainVerificationCheckedAt)}
+                </Text>
+              </View>
+              <Text style={styles.aiReasoning}>{profile.domainVerificationData.reasoning}</Text>
+              {profile.domainVerificationData.error ? (
+                <Text style={styles.aiErrorText}>Error: {profile.domainVerificationData.error}</Text>
               ) : null}
             </>
           )}
@@ -989,6 +1072,38 @@ function AiVerdictPill({ verdict }: { verdict: 'MATCH' | 'PARTIAL_MATCH' | 'NO_M
     NO_MATCH: { label: 'AI: No match', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
     NOT_FOUND: { label: 'AI: Not found on CH', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
     ERROR: { label: 'AI: Check failed', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+  };
+  const v = map[verdict] ?? map.ERROR;
+  return (
+    <View style={[styles.pill, { backgroundColor: v.bg }]}>
+      <Text style={[styles.pillText, { color: v.fg }]}>{v.label}</Text>
+    </View>
+  );
+}
+
+function VatVerdictPill({ verdict }: { verdict: 'REGISTERED' | 'NOT_REGISTERED' | 'VALID_FORMAT' | 'INVALID_FORMAT' | 'ERROR' }) {
+  const map: Record<string, { label: string; bg: string; fg: string }> = {
+    REGISTERED: { label: 'VAT: Registered', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+    VALID_FORMAT: { label: 'VAT: Valid format', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
+    NOT_REGISTERED: { label: 'VAT: Not on register', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
+    INVALID_FORMAT: { label: 'VAT: Invalid number', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
+    ERROR: { label: 'VAT: Check failed', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+  };
+  const v = map[verdict] ?? map.ERROR;
+  return (
+    <View style={[styles.pill, { backgroundColor: v.bg }]}>
+      <Text style={[styles.pillText, { color: v.fg }]}>{v.label}</Text>
+    </View>
+  );
+}
+
+function DomainVerdictPill({ verdict }: { verdict: 'RESOLVES_MATCHES_WEBSITE' | 'RESOLVES' | 'NO_MAIL_RECORDS' | 'NOT_RESOLVED' | 'ERROR' }) {
+  const map: Record<string, { label: string; bg: string; fg: string }> = {
+    RESOLVES_MATCHES_WEBSITE: { label: 'Domain: Matches website', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+    RESOLVES: { label: 'Domain: Resolves', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
+    NO_MAIL_RECORDS: { label: 'Domain: No mail records', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
+    NOT_RESOLVED: { label: 'Domain: Does not resolve', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
+    ERROR: { label: 'Domain: Check failed', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
   };
   const v = map[verdict] ?? map.ERROR;
   return (
