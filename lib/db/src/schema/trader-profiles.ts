@@ -70,6 +70,10 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   businessEmailDomain: varchar("business_email_domain", { length: 255 }),
   // The admin who granted verified status (accountability / audit aid).
   verifiedByAdminId: integer("verified_by_admin_id").references(() => usersTable.id),
+  // Durable note the admin recorded at the moment of verification. Unlike
+  // adminNotes (general-purpose, may be cleared by later lifecycle actions),
+  // this preserves the original verification rationale for the audit trail.
+  verificationNotes: text("verification_notes"),
   // When the admin asks for more information, the human-readable reason shown
   // to the trader so they know exactly what to supply.
   needsMoreInfoReason: text("needs_more_info_reason"),

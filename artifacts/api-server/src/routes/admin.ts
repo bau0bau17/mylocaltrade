@@ -711,6 +711,7 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
         rejectionReason: null,
         needsMoreInfoReason: null,
         adminNotes: body.notes ?? profile.adminNotes,
+        verificationNotes: body.notes ?? profile.verificationNotes,
         ...(restoreActive ? { isActive: true } : {}),
         updatedAt: new Date(),
       })
