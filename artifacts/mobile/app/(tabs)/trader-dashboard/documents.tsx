@@ -246,6 +246,9 @@ export default function DocumentsScreen() {
               ? 'All required documents uploaded — your account is queued for admin review.'
               : 'Upload at least your photo ID and a current public liability insurance certificate to submit your profile for review.'}
           </Text>
+          <Pressable onPress={() => router.push('/how-verification-works')} hitSlop={6}>
+            <Text style={styles.summaryLink}>How verification works</Text>
+          </Pressable>
         </View>
 
         {evaluation?.hasExpiredRequired && (
@@ -441,6 +444,7 @@ const styles = StyleSheet.create({
   summaryTitle: { fontSize: 13, fontWeight: '700', color: Colors.light.text },
   summaryCount: { fontSize: 12, color: Colors.light.textMuted, fontWeight: '600' },
   summaryHint: { fontSize: 12, color: Colors.light.textMuted, lineHeight: 17 },
+  summaryLink: { fontSize: 12, color: Colors.light.primary, fontWeight: '600', marginTop: 4 },
 
   card: { backgroundColor: Colors.light.card, borderRadius: 14, borderWidth: 1, borderColor: Colors.light.border, padding: 14, marginBottom: 12, gap: 12 },
   cardHeader: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
