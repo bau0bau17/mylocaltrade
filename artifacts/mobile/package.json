@@ -59,6 +59,7 @@
     "@react-navigation/bottom-tabs": "7.15.6",
     "expo-device": "^8.0.10",
     "expo-document-picker": "^14.0.8",
-    "expo-notifications": "^0.32.17"
+    "expo-notifications": "^0.32.17",
+    "react-native-purchases": "^10.2.0"
   }
 }
