@@ -374,6 +374,165 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
   }
 });
 
+// POST /api/subscriptions/revenuecat-sync — verify the trader's RevenueCat
+// entitlement (Apple In-App Purchase on iOS) and, if active, take the profile
+// live. This path is SEPARATE from web Stripe: it only ever ACTIVATES based on
+// a valid RevenueCat entitlement and never deactivates an existing subscription
+// (so a web Stripe subscriber who opens the iOS app is never clobbered).
+// Expiry / cancellation handling is a follow-up via RevenueCat webhooks.
+const REVENUECAT_ENTITLEMENT_ID =
+  process.env.REVENUECAT_ENTITLEMENT_ID || "trader_subscription";
+const RC_PLAN_ID = "trader";
+
+interface RevenueCatEntitlement {
+  expires_date: string | null;
+  product_identifier?: string;
+}
+interface RevenueCatSubscriberResponse {
+  subscriber?: {
+    entitlements?: Record<string, RevenueCatEntitlement>;
+  };
+}
+
+router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async (req, res) => {
+  try {
+    const secretKey = process.env.REVENUECAT_SECRET_KEY;
+    if (!secretKey) {
+      res.status(503).json({ error: "In-app purchases are not configured yet." });
+      return;
+    }
+
+    const { userId } = req as AuthenticatedRequest;
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    // Mirror the subscribe gate: only verified traders may go live.
+    const [profile] = await db
+      .select()
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile || profile.verificationStatus !== TRADER_STATUS.VERIFIED) {
+      res.status(403).json({ error: "Your account must be verified before you can subscribe." });
+      return;
+    }
+
+    // RevenueCat uses our app user id as the subscriber id (set via logIn on the
+    // client). Query the REST API to confirm the entitlement server-side.
+    let rcResponse: RevenueCatSubscriberResponse;
+    try {
+      const rcRes = await fetch(
+        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(String(userId))}`,
+        { headers: { Authorization: `Bearer ${secretKey}` } },
+      );
+      if (!rcRes.ok) {
+        req.log.error({ status: rcRes.status }, "RevenueCat lookup failed");
+        res.status(502).json({ error: "Could not verify your subscription. Please try again." });
+        return;
+      }
+      rcResponse = (await rcRes.json()) as RevenueCatSubscriberResponse;
+    } catch (e) {
+      req.log.error({ err: e }, "RevenueCat request error");
+      res.status(502).json({ error: "Could not verify your subscription. Please try again." });
+      return;
+    }
+
+    const entitlement = rcResponse.subscriber?.entitlements?.[REVENUECAT_ENTITLEMENT_ID];
+    const expiresAt = entitlement?.expires_date ? new Date(entitlement.expires_date) : null;
+    const isActive = !!entitlement && (expiresAt === null || expiresAt.getTime() > Date.now());
+
+    if (!isActive) {
+      // Never deactivate here — that would risk clobbering a web Stripe sub.
+      res.json({ active: false });
+      return;
+    }
+
+    const periodEnd = expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    let stripeOwned = false;
+
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, userId))
+        .limit(1);
+
+      // If a Stripe-managed subscription already owns this row, never touch it:
+      // overwriting plan/period/cancel fields would clobber the web Stripe state.
+      // We still make sure the profile is live below (it normally already is).
+      stripeOwned =
+        !!existing && (!!existing.stripeSubscriptionId || !!existing.stripeCustomerId);
+
+      if (existing && !stripeOwned) {
+        await tx
+          .update(subscriptionsTable)
+          .set({
+            status: "active",
+            planId: RC_PLAN_ID,
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: periodEnd,
+            cancelAtPeriodEnd: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(subscriptionsTable.userId, userId));
+      } else if (!existing) {
+        await tx.insert(subscriptionsTable).values({
+          userId,
+          planId: RC_PLAN_ID,
+          status: "active",
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: periodEnd,
+        });
+      }
+
+      // Ensure the profile is live. When Stripe owns the subscription row we
+      // leave its plan label intact and only guarantee the account is active.
+      if (stripeOwned) {
+        await tx
+          .update(usersTable)
+          .set({ isActive: true })
+          .where(eq(usersTable.id, userId));
+        await tx
+          .update(traderProfilesTable)
+          .set({ isActive: true, updatedAt: new Date() })
+          .where(eq(traderProfilesTable.userId, userId));
+      } else {
+        await tx
+          .update(usersTable)
+          .set({ plan: RC_PLAN_ID, isActive: true })
+          .where(eq(usersTable.id, userId));
+        await tx
+          .update(traderProfilesTable)
+          .set({ plan: RC_PLAN_ID, isActive: true, updatedAt: new Date() })
+          .where(eq(traderProfilesTable.userId, userId));
+      }
+    });
+
+    await logAudit({
+      userId,
+      action: "SUBSCRIPTION_ACTIVATED",
+      details: { plan: RC_PLAN_ID, source: "revenuecat", productId: entitlement?.product_identifier, stripeOwned },
+    });
+    await logAudit({ userId, action: "PROFILE_WENT_LIVE", details: { plan: RC_PLAN_ID, source: "revenuecat", stripeOwned } });
+
+    res.json({
+      active: true,
+      plan: RC_PLAN_ID,
+      productId: entitlement?.product_identifier ?? null,
+      currentPeriodEnd: stripeOwned ? null : periodEnd.toISOString(),
+      stripeOwned,
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "RevenueCat sync failed");
+    res.status(500).json({ error: "Failed to sync subscription" });
+  }
+});
+
 // POST /api/subscriptions/cancel — schedule cancellation at period end (mock + Stripe-ready)
 router.post("/subscriptions/cancel", authMiddleware, traderOnly, async (req, res) => {
   try {

@@ -9,11 +9,13 @@ import {
   useCancelSubscription,
   useResumeSubscription,
 } from '@workspace/api-client-react';
+import { useSubscription } from '@/lib/revenuecat';
 
 const PLAN_LABEL: Record<string, string> = {
   basic: 'Basic',
   premium: 'Premium',
   elite: 'Elite',
+  trader: 'Trader Subscription',
 };
 
 export default function BillingScreen() {
@@ -25,9 +27,32 @@ export default function BillingScreen() {
   });
   const { mutateAsync: cancelSub, isPending: cancelling } = useCancelSubscription();
   const { mutateAsync: resumeSub, isPending: resuming } = useResumeSubscription();
+  const subscription = useSubscription();
   const busy = cancelling || resuming;
 
-  useFocusEffect(useCallback(() => { refetch(); }, [refetch]));
+  useFocusEffect(useCallback(() => {
+    refetch();
+    if (subscription.isSupported) subscription.refresh();
+  }, [refetch, subscription]));
+
+  const manageApple = async () => {
+    await subscription.manageSubscriptions();
+  };
+
+  const restoreApple = async () => {
+    try {
+      const active = await subscription.restore();
+      await refetch();
+      Alert.alert(
+        active ? 'Subscription restored' : 'Nothing to restore',
+        active
+          ? 'Your Trader Subscription has been restored.'
+          : 'We could not find an active subscription for this Apple ID.',
+      );
+    } catch (e) {
+      Alert.alert('Restore failed', e instanceof Error ? e.message : 'Try again.');
+    }
+  };
 
   const cancel = () => {
     if (!status || status.cancelAtPeriodEnd) return;
@@ -112,7 +137,31 @@ export default function BillingScreen() {
 
         <View style={s.divider} />
 
-        {!isActive ? (
+        {subscription.isSupported ? (
+          !isActive ? (
+            <View style={{ gap: 10 }}>
+              <Pressable style={s.primaryBtn} onPress={() => router.push('/pricing')}>
+                <Feather name="zap" size={18} color="#fff" />
+                <Text style={s.primaryBtnText}>Choose a plan</Text>
+              </Pressable>
+              <Pressable style={s.dangerBtn} onPress={restoreApple}>
+                <Feather name="refresh-ccw" size={18} color={Colors.light.text} />
+                <Text style={s.dangerBtnText}>Restore purchases</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ gap: 10 }}>
+              <Pressable style={s.secondaryBtn} onPress={manageApple}>
+                <Feather name="settings" size={18} color={Colors.light.primary} />
+                <Text style={s.secondaryBtnText}>Manage subscription</Text>
+              </Pressable>
+              <Pressable style={s.dangerBtn} onPress={restoreApple}>
+                <Feather name="refresh-ccw" size={18} color={Colors.light.text} />
+                <Text style={s.dangerBtnText}>Restore purchases</Text>
+              </Pressable>
+            </View>
+          )
+        ) : !isActive ? (
           <Pressable style={s.primaryBtn} onPress={() => router.push('/pricing')}>
             <Feather name="zap" size={18} color="#fff" />
             <Text style={s.primaryBtnText}>Choose a plan</Text>
@@ -143,11 +192,22 @@ export default function BillingScreen() {
       <View style={s.featuresSection}>
         <Text style={s.sectionTitle}>Your Plan Features</Text>
         <View style={s.featuresCard}>
-          <Feature included={isActive} text="Public business profile" />
-          <Feature included={isActive} text="Receive customer enquiries" />
-          <Feature included={isActive && isPremiumOrElite} text="Higher search ranking" />
-          <Feature included={isActive && isPremiumOrElite} text="Featured listing badge" />
-          <Feature included={isActive && plan === 'elite'} text="Top-of-search Elite placement" />
+          {subscription.isSupported ? (
+            <>
+              <Feature included={isActive} text="Public business profile" />
+              <Feature included={isActive} text="Receive customer enquiries" />
+              <Feature included={isActive} text="Verified trader badge on your listing" />
+              <Feature included={isActive} text="Visible in search and category results" />
+            </>
+          ) : (
+            <>
+              <Feature included={isActive} text="Public business profile" />
+              <Feature included={isActive} text="Receive customer enquiries" />
+              <Feature included={isActive && isPremiumOrElite} text="Higher search ranking" />
+              <Feature included={isActive && isPremiumOrElite} text="Featured listing badge" />
+              <Feature included={isActive && plan === 'elite'} text="Top-of-search Elite placement" />
+            </>
+          )}
         </View>
       </View>
 

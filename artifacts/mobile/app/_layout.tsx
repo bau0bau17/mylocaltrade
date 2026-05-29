@@ -21,6 +21,7 @@ import Colors from "@/constants/colors";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { SubscriptionProvider } from "@/lib/revenuecat";
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "@/lib/api-url";
@@ -131,11 +132,13 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <GestureHandlerRootView>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
+            <SubscriptionProvider>
+              <GestureHandlerRootView>
+                <KeyboardProvider>
+                  <RootLayoutNav />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </SubscriptionProvider>
           </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>
