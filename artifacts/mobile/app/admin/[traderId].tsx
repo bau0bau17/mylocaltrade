@@ -77,6 +77,7 @@ interface TraderDetail {
     rejectedAt: string | null;
     rejectionReason: string | null;
     adminNotes: string | null;
+    verificationNotes: string | null;
     isActive: boolean;
     aiVerificationStatus: 'MATCH' | 'PARTIAL_MATCH' | 'NO_MATCH' | 'NOT_FOUND' | 'ERROR' | null;
     aiVerificationCheckedAt: string | null;
@@ -416,6 +417,12 @@ export default function AdminTraderDetail() {
             <View style={styles.notesBox}>
               <Text style={styles.notesLabel}>Admin notes</Text>
               <Text style={styles.notesText}>{profile.adminNotes}</Text>
+            </View>
+          )}
+          {profile.verificationNotes && (
+            <View style={styles.notesBox}>
+              <Text style={styles.notesLabel}>Verification notes</Text>
+              <Text style={styles.notesText}>{profile.verificationNotes}</Text>
             </View>
           )}
           {profile.rejectionReason && status === 'REJECTED' && (

@@ -136,6 +136,7 @@ export interface TraderProfileFull {
   rejectedAt: string | null;
   rejectionReason: string | null;
   adminNotes: string | null;
+  verificationNotes: string | null;
   termsAcceptedAt: string | null;
   termsVersion: string | null;
   privacyAcceptedAt: string | null;

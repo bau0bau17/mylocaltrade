@@ -468,6 +468,7 @@ export default function TraderDetail({ userId }: Props) {
                 full
               />
               <Field label="Admin notes" value={profile.adminNotes || "—"} full />
+              <Field label="Verification notes" value={profile.verificationNotes || "—"} full />
             </CardContent>
           </Card>
         </TabsContent>
