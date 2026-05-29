@@ -1,22 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
-const CONTACT_EMAIL = 'lucian.sabau@serviceproviderltd.co.uk';
-
 export default function AboutScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
 
   return (
     <ScrollView 
       style={styles.container}
       contentContainerStyle={{
         paddingTop: insets.top + 16,
-        paddingBottom: insets.bottom + 24,
+        paddingBottom: insets.bottom + 96,
         paddingHorizontal: 20,
       }}
     >
@@ -72,72 +68,10 @@ export default function AboutScreen() {
         </View>
       </View>
 
-      <View style={styles.companyInfo}>
-        <Text style={styles.companyHeading}>Company Information</Text>
-
-        <View style={styles.infoRow}>
-          <Feather name="briefcase" size={14} color={Colors.light.textMuted} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Trading Name</Text>
-            <Text style={styles.infoText}>MyLocalTrade</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Feather name="shield" size={14} color={Colors.light.textMuted} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Legal Entity</Text>
-            <Text style={styles.infoText}>Service Provider LTD</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Feather name="hash" size={14} color={Colors.light.textMuted} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Company Number</Text>
-            <Text style={styles.infoText}>15830141</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Feather name="globe" size={14} color={Colors.light.textMuted} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Place of Registration</Text>
-            <Text style={styles.infoText}>England and Wales</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Feather name="map-pin" size={14} color={Colors.light.textMuted} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Registered Office</Text>
-            <Text style={styles.infoText}>71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, United Kingdom</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Feather name="mail" size={14} color={Colors.light.textMuted} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Contact Email</Text>
-            <Text style={styles.infoText}>{CONTACT_EMAIL}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoDivider} />
-
-        <Pressable
-          style={styles.contactBtn}
-          onPress={() => router.push('/contact-support?subject=General%20Enquiry')}
-        >
-          <Feather name="mail" size={16} color={Colors.light.primary} />
-          <Text style={styles.contactBtnText}>Contact Us</Text>
-        </Pressable>
-      </View>
-
       <View style={styles.legalNote}>
         <Feather name="info" size={14} color={Colors.light.textMuted} />
         <Text style={styles.legalNoteText}>
-          This app is operated by Service Provider LTD (Company No. 15830141), a company registered in England and Wales, trading as MyLocalTrade. Registered office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ. By using this app you agree to our Terms & Conditions and Privacy Policy. For any enquiries, use the Contact Us button above.
+          This app is operated by Service Provider LTD (Company No. 15830141), a company registered in England and Wales, trading as MyLocalTrade. Registered office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ. By using this app you agree to our Terms & Conditions and Privacy Policy.
         </Text>
       </View>
     </ScrollView>
@@ -220,50 +154,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.textSecondary,
   },
-  companyInfo: {
-    backgroundColor: Colors.light.card,
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    marginTop: 8,
-  },
-  companyHeading: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.light.textMuted,
-    marginBottom: 16,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-    gap: 12,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.light.textMuted,
-    marginBottom: 2,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  infoText: {
-    fontSize: 14,
-    color: Colors.light.text,
-    lineHeight: 20,
-  },
-  infoDivider: {
-    height: 1,
-    backgroundColor: Colors.light.border,
-    marginVertical: 6,
-    marginBottom: 14,
-  },
   legalNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -280,21 +170,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.light.textMuted,
     lineHeight: 18,
-  },
-  contactBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.light.primaryMuted,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  },
-  contactBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.light.primary,
   },
 });
