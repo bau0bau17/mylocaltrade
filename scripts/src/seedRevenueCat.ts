@@ -33,47 +33,42 @@ const APP_STORE_BUNDLE_ID = "com.mylocaltrade.app";
 const PLAY_STORE_APP_NAME = "MyLocalTrade Android";
 const PLAY_STORE_PACKAGE_NAME = "com.mylocaltrade.app";
 
-const ENTITLEMENT_IDENTIFIER = "membership";
-const ENTITLEMENT_DISPLAY_NAME = "MyLocalTrade Membership";
+// Single entitlement model: one "Trader Subscription" granted by either the
+// Monthly or the Annual product. NO basic/premium/elite tiers — the iOS app has
+// a single subscription. The tiered model only exists on the web (Stripe) side.
+const ENTITLEMENT_IDENTIFIER = "trader_subscription";
+const ENTITLEMENT_DISPLAY_NAME = "Trader Subscription";
 
 const OFFERING_IDENTIFIER = "default";
 const OFFERING_DISPLAY_NAME = "Default Offering";
 
-const PRODUCT_DURATION = "P1M";
-
-// One tier = one product + one package. The single "membership" entitlement is
-// attached to all three so the server/client can detect an active subscription;
-// the active product identifier tells us WHICH tier the trader holds.
-const TIERS = [
+// One product per billing period. Both attach to the single entitlement.
+// Package lookup keys use RevenueCat's reserved identifiers so the client can
+// read offering.monthly / offering.annual directly.
+// NOTE: test-store prices below are PLACEHOLDERS for the RevenueCat test store
+// only. The real customer-facing prices are set in App Store Connect.
+const PRODUCTS = [
   {
-    key: "basic",
-    storeIdentifier: "basic_monthly",
-    playStoreIdentifier: "basic_monthly:monthly",
-    displayName: "Basic Plan",
-    userFacingTitle: "Basic Monthly",
-    packageIdentifier: "basic",
-    packageDisplayName: "Basic Monthly",
-    prices: [{ amount_micros: 10_000_000, currency: "GBP" }], // £10
+    key: "monthly",
+    duration: "P1M",
+    storeIdentifier: "trader_subscription_monthly",
+    playStoreIdentifier: "trader_subscription:monthly",
+    displayName: "Trader Subscription (Monthly)",
+    userFacingTitle: "Trader Subscription Monthly",
+    packageIdentifier: "$rc_monthly",
+    packageDisplayName: "Monthly",
+    prices: [{ amount_micros: 20_000_000, currency: "GBP" }], // £20 placeholder
   },
   {
-    key: "premium",
-    storeIdentifier: "premium_monthly",
-    playStoreIdentifier: "premium_monthly:monthly",
-    displayName: "Premium Plan",
-    userFacingTitle: "Premium Monthly",
-    packageIdentifier: "premium",
-    packageDisplayName: "Premium Monthly",
-    prices: [{ amount_micros: 20_000_000, currency: "GBP" }], // £20
-  },
-  {
-    key: "elite",
-    storeIdentifier: "elite_monthly",
-    playStoreIdentifier: "elite_monthly:monthly",
-    displayName: "Elite Plan",
-    userFacingTitle: "Elite Monthly",
-    packageIdentifier: "elite",
-    packageDisplayName: "Elite Monthly",
-    prices: [{ amount_micros: 30_000_000, currency: "GBP" }], // £30
+    key: "annual",
+    duration: "P1Y",
+    storeIdentifier: "trader_subscription_annual",
+    playStoreIdentifier: "trader_subscription:annual",
+    displayName: "Trader Subscription (Annual)",
+    userFacingTitle: "Trader Subscription Annual",
+    packageIdentifier: "$rc_annual",
+    packageDisplayName: "Annual",
+    prices: [{ amount_micros: 200_000_000, currency: "GBP" }], // £200 placeholder
   },
 ] as const;
 
@@ -172,6 +167,7 @@ async function seedRevenueCat() {
     productIdentifier: string,
     displayName: string,
     userFacingTitle: string,
+    duration: string,
     isTestStore: boolean,
   ): Promise<Product> => {
     const existingProduct = existingProducts.items?.find(
@@ -189,7 +185,7 @@ async function seedRevenueCat() {
       display_name: displayName,
     };
     if (isTestStore) {
-      body.subscription = { duration: PRODUCT_DURATION };
+      body.subscription = { duration };
       body.title = userFacingTitle;
     }
 
@@ -203,7 +199,7 @@ async function seedRevenueCat() {
     return createdProduct;
   };
 
-  // Ensure entitlement exists.
+  // Ensure the single entitlement exists.
   let entitlement: Entitlement | undefined;
   const { data: existingEntitlements, error: listEntitlementsError } = await listEntitlements({
     client,
@@ -278,41 +274,44 @@ async function seedRevenueCat() {
 
   const allProductIds: string[] = [];
 
-  for (const tier of TIERS) {
-    console.log("\n--- Seeding tier:", tier.key, "---");
+  for (const product of PRODUCTS) {
+    console.log("\n--- Seeding product:", product.key, "---");
 
     const testStoreProduct = await ensureProductForApp(
       app,
-      "Test Store " + tier.key,
-      tier.storeIdentifier,
-      tier.displayName,
-      tier.userFacingTitle,
+      "Test Store " + product.key,
+      product.storeIdentifier,
+      product.displayName,
+      product.userFacingTitle,
+      product.duration,
       true,
     );
     const appStoreProduct = await ensureProductForApp(
       appStoreApp,
-      "App Store " + tier.key,
-      tier.storeIdentifier,
-      tier.displayName,
-      tier.userFacingTitle,
+      "App Store " + product.key,
+      product.storeIdentifier,
+      product.displayName,
+      product.userFacingTitle,
+      product.duration,
       false,
     );
     const playStoreProduct = await ensureProductForApp(
       playStoreApp,
-      "Play Store " + tier.key,
-      tier.playStoreIdentifier,
-      tier.displayName,
-      tier.userFacingTitle,
+      "Play Store " + product.key,
+      product.playStoreIdentifier,
+      product.displayName,
+      product.userFacingTitle,
+      product.duration,
       false,
     );
 
     allProductIds.push(testStoreProduct.id, appStoreProduct.id, playStoreProduct.id);
 
-    // Test store prices.
+    // Test store prices (placeholders — real prices live in App Store Connect).
     const { error: priceError } = await client.post<TestStorePricesResponse>({
       url: "/projects/{project_id}/products/{product_id}/test_store_prices",
       path: { project_id: project.id, product_id: testStoreProduct.id },
-      body: { prices: tier.prices },
+      body: { prices: product.prices },
     });
     if (priceError) {
       if (
@@ -321,15 +320,15 @@ async function seedRevenueCat() {
         "type" in priceError &&
         priceError["type"] === "resource_already_exists"
       ) {
-        console.log("Test store prices already exist for", tier.key);
+        console.log("Test store prices already exist for", product.key);
       } else {
-        throw new Error("Failed to add test store prices for " + tier.key);
+        throw new Error("Failed to add test store prices for " + product.key);
       }
     } else {
-      console.log("Added test store prices for", tier.key);
+      console.log("Added test store prices for", product.key);
     }
 
-    // Attach all three store products to the single membership entitlement.
+    // Attach all three store products to the single Trader Subscription entitlement.
     const { error: attachEntitlementError } = await attachProductsToEntitlement({
       client,
       path: { project_id: project.id, entitlement_id: entitlement.id },
@@ -337,31 +336,31 @@ async function seedRevenueCat() {
     });
     if (attachEntitlementError) {
       if (attachEntitlementError.type === "unprocessable_entity_error") {
-        console.log("Products already attached to entitlement for", tier.key);
+        console.log("Products already attached to entitlement for", product.key);
       } else {
-        throw new Error("Failed to attach products to entitlement for " + tier.key);
+        throw new Error("Failed to attach products to entitlement for " + product.key);
       }
     } else {
-      console.log("Attached products to entitlement for", tier.key);
+      console.log("Attached products to entitlement for", product.key);
     }
 
-    // One package per tier.
+    // One package per billing period using the RC reserved lookup key.
     let pkg: Package | undefined = existingPackages.items?.find(
-      (p) => p.lookup_key === tier.packageIdentifier,
+      (p) => p.lookup_key === product.packageIdentifier,
     );
     if (pkg) {
-      console.log("Package already exists for", tier.key, ":", pkg.id);
+      console.log("Package already exists for", product.key, ":", pkg.id);
     } else {
       const { data: newPackage, error } = await createPackages({
         client,
         path: { project_id: project.id, offering_id: offering.id },
         body: {
-          lookup_key: tier.packageIdentifier,
-          display_name: tier.packageDisplayName,
+          lookup_key: product.packageIdentifier,
+          display_name: product.packageDisplayName,
         },
       });
-      if (error) throw new Error("Failed to create package for " + tier.key);
-      console.log("Created package for", tier.key, ":", newPackage.id);
+      if (error) throw new Error("Failed to create package for " + product.key);
+      console.log("Created package for", product.key, ":", newPackage.id);
       pkg = newPackage;
     }
 
@@ -381,12 +380,12 @@ async function seedRevenueCat() {
         attachPackageError.type === "unprocessable_entity_error" &&
         attachPackageError.message?.includes("Cannot attach product")
       ) {
-        console.log("Skipping package attach for", tier.key, "- already has incompatible product");
+        console.log("Skipping package attach for", product.key, "- already has incompatible product");
       } else {
-        throw new Error("Failed to attach products to package for " + tier.key);
+        throw new Error("Failed to attach products to package for " + product.key);
       }
     } else {
-      console.log("Attached products to package for", tier.key);
+      console.log("Attached products to package for", product.key);
     }
   }
 
