@@ -1,17 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import Colors from '@/constants/colors';
 
 export default function CookiePolicyScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={{
         paddingTop: insets.top + 16,
-        paddingBottom: insets.bottom + 24,
+        paddingBottom: tabBarHeight + insets.bottom + 32,
         paddingHorizontal: 20,
       }}
     >
