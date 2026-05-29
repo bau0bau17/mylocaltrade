@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 
@@ -8,13 +9,14 @@ const SUPPORT_EMAIL = 'support@mylocaltrade.co.uk';
 
 export default function ComplaintsScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={{
         paddingTop: insets.top + 16,
-        paddingBottom: insets.bottom + 24,
+        paddingBottom: tabBarHeight + insets.bottom + 32,
         paddingHorizontal: 20,
       }}
     >
