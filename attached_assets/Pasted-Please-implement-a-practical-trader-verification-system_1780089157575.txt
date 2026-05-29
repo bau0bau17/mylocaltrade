@@ -1,0 +1,132 @@
+Please implement a practical trader verification system in the MyLocalTrade app.
+
+Important:
+Do not rebuild existing trust badges, verified/unverified UI, or trader trust surfaces unnecessarily if they are already correct.
+Reuse the current verification and trust UI where possible.
+
+Goal:
+Create a realistic trader verification flow that works for:
+- business owners
+- directors
+- managers
+- employees
+- self-employed / sole traders
+- authorised representatives of a business
+
+The system must not assume that every trader is the legal owner of the business.
+
+Main requirements:
+
+1. Verification structure
+Support separate verification layers:
+- account verification
+- contact verification
+- business verification
+- verified trader approval
+
+2. Trader role in business
+Add fields such as:
+- owner
+- director
+- manager
+- employee
+- self-employed
+- other
+
+Also add:
+- authorisedRepresentative: yes/no
+
+3. Verification status flow
+Add structured statuses such as:
+- not_started
+- pending
+- needs_more_info
+- verified
+- rejected
+
+Future-proof the model so it can later support:
+- expired
+- suspended
+- revalidation_required
+
+4. Business document support
+Prepare support for verification documents such as:
+- public liability insurance
+- company registration proof
+- VAT proof
+- business address proof
+- authorisation proof if the person is not the owner
+- optional website or business email domain evidence
+
+5. Sole trader path
+Do not require a company registration number for sole traders or self-employed traders.
+Allow a separate practical verification path for them.
+
+6. Non-owner strategy
+Allow non-owner traders to represent a business if they can show they are authorised.
+
+Examples of acceptable non-owner proof:
+- business email domain
+- manager/owner confirmation
+- business document linking them to the company
+- insurance or other business documents showing the company details
+
+7. Badge logic
+Keep verified badge separate from:
+- email verified
+- phone verified
+- business details submitted
+- documents under review
+
+Do not show full verified trader approval unless admin review is complete.
+
+8. Public trust wording
+Do not imply that MyLocalTrade guarantees a trader’s work or outcome.
+Make the verified badge mean that business or representative details were reviewed according to platform checks.
+
+9. Admin review
+Add or improve admin review capability:
+- review documents
+- approve
+- reject
+- request more info
+- leave internal notes
+- record who verified
+- record when verification happened
+- record rejection reason or more-info reason
+
+10. Verification audit fields
+Add or prepare support for:
+- verifiedAt
+- verifiedByAdminId
+- verificationNotes
+- rejectionReason
+- needsMoreInfoReason
+- revalidationDueAt
+
+11. Document safety
+Treat verification documents as sensitive files.
+Restrict access to admins only.
+Do not expose uploaded documents publicly.
+Do not show raw verification files on public trader profiles.
+
+12. Safety
+Do not break:
+- auth
+- trader profiles
+- subscriptions
+- dashboard
+- enquiries
+- existing trust UI
+- reviews
+- messaging
+- admin flows
+
+13. Output
+After the audit and changes, summarise:
+- what verification logic already existed
+- what was added
+- what remains placeholder
+- whether non-owner authorised representatives are now supported properly
+- whether sole traders are supported properly
+- whether the verified badge wording is safe and not misleading

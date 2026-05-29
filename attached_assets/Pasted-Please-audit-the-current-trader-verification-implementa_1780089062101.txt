@@ -1,0 +1,85 @@
+Please audit the current trader verification implementation and extend it into a realistic business verification flow.
+
+Important:
+Do not rebuild existing trust badges or verification UI unnecessarily if already implemented correctly.
+Reuse the current verified / unverified surfaces where possible.
+
+Goal:
+Create a practical trader vetting strategy that works not only for company owners, but also for authorised employees or managers who may represent a business without personally owning it or having access to every company document.
+
+Requirements:
+
+1. Verification levels
+Support separate concepts for:
+- account verification
+- business verification
+- verified trader approval
+
+2. Trader role in business
+Add a trader field such as:
+- owner
+- director
+- manager
+- employee
+- self-employed
+- other
+
+Also add:
+- authorised representative yes/no
+
+3. Verification status
+Add a structured verification status flow such as:
+- not_started
+- pending
+- needs_more_info
+- verified
+- rejected
+
+4. Business verification documents
+Prepare support for trader verification documents such as:
+- public liability insurance
+- company registration proof
+- VAT proof
+- business address proof
+- authorisation proof if the trader is not the owner
+- optional business website or business email domain evidence
+
+5. Non-owner strategy
+Do not require every trader to be the business owner.
+Allow employees or managers to represent a business if they can show they are authorised.
+
+Examples of acceptable non-owner proof:
+- business email domain
+- manager/owner confirmation
+- business document linking them to the company
+- insurance or other business documents showing the company details
+
+6. Badge logic
+Keep verified badge separate from simple email/phone verification.
+Do not show full verified trader approval unless admin review is complete.
+
+7. Admin review
+Add or improve admin review capability for trader verification:
+- review submitted documents
+- approve / reject / request more info
+- add internal notes
+- record who verified and when
+
+8. Safety
+Do not break:
+- auth
+- trader profiles
+- subscriptions
+- dashboard
+- enquiries
+- existing trust UI
+- reviews
+- messaging
+- admin flows
+
+9. Output
+After the audit and changes, summarise:
+- what verification logic already existed
+- what was added
+- what remains placeholder
+- whether the app now supports non-owner authorised representatives properly
