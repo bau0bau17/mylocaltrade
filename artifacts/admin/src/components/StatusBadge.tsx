@@ -7,6 +7,7 @@ const styleMap: Record<TraderStatus, string> = {
   PROFILE_INCOMPLETE: "bg-muted text-muted-foreground border-transparent",
   PENDING_DOCUMENTS: "bg-blue-100 text-blue-800 border-transparent",
   UNDER_REVIEW: "bg-amber-100 text-amber-900 border-transparent",
+  NEEDS_MORE_INFO: "bg-yellow-100 text-yellow-900 border-transparent",
   VERIFIED: "bg-emerald-100 text-emerald-800 border-transparent",
   REJECTED: "bg-red-100 text-red-800 border-transparent",
   SUSPENDED: "bg-zinc-200 text-zinc-800 border-transparent",

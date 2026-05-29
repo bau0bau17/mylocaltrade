@@ -7,6 +7,7 @@ import { UpdateTraderProfileBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, evaluateBusinessProfileComplete, logAudit } from "../lib/trader-status";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { reconcileDocumentsState } from "./trader-documents";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -45,6 +46,9 @@ router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
       logoUrl: trader.logoUrl,
       galleryUrls: trader.galleryUrls || [],
       socialLinks: trader.socialLinks,
+      businessRole: trader.businessRole,
+      authorisedRepresentative: trader.authorisedRepresentative,
+      businessEmailDomain: trader.businessEmailDomain,
       plan: trader.plan,
       isFeatured: trader.isFeatured,
       isActive: trader.isActive,
@@ -70,6 +74,7 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       "additionalServices", "businessAddress", "town", "postcode",
       "serviceAreas", "businessDescription", "website", "openingHours",
       "logoUrl", "galleryUrls", "socialLinks",
+      "businessRole", "authorisedRepresentative", "businessEmailDomain",
     ] as const;
 
     for (const field of allowedFields) {
@@ -169,6 +174,20 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
     }
     logAudit({ userId, action: "BUSINESS_PROFILE_UPDATED" });
 
+    // If the admin asked for more information about profile details (rather than
+    // documents), a profile update is the trader's resubmission. Reconcile so a
+    // complete profile + document set returns them to UNDER_REVIEW and clears
+    // the request note. Document-only resubmissions are reconciled on upload.
+    if (updated.verificationStatus === TRADER_STATUS.NEEDS_MORE_INFO) {
+      await reconcileDocumentsState(userId);
+      const [refreshed] = await db
+        .select()
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.userId, userId))
+        .limit(1);
+      if (refreshed) Object.assign(updated, refreshed);
+    }
+
     res.json({
       id: updated.id,
       userId: updated.userId,
@@ -185,6 +204,9 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       businessDescription: updated.businessDescription,
       website: updated.website,
       openingHours: updated.openingHours,
+      businessRole: updated.businessRole,
+      authorisedRepresentative: updated.authorisedRepresentative,
+      businessEmailDomain: updated.businessEmailDomain,
       logoUrl: updated.logoUrl,
       galleryUrls: updated.galleryUrls || [],
       socialLinks: updated.socialLinks,

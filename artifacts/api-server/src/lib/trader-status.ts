@@ -1,6 +1,7 @@
 import { db } from "@workspace/db";
 import { traderAuditLogTable, type TraderAuditAction, type TraderProfile, type User, type TraderDocument, type TraderDocumentType } from "@workspace/db/schema";
 
+// Baseline documents required of every trader regardless of role.
 export const REQUIRED_DOCUMENT_TYPES: TraderDocumentType[] = ["ID_DOCUMENT", "INSURANCE"];
 
 export const DOCUMENT_TYPE_LABELS: Record<TraderDocumentType, string> = {
@@ -8,6 +9,10 @@ export const DOCUMENT_TYPE_LABELS: Record<TraderDocumentType, string> = {
   PROOF_OF_ADDRESS: "Proof of address",
   INSURANCE: "Public liability insurance",
   QUALIFICATION: "Trade qualification",
+  COMPANY_REGISTRATION: "Company registration",
+  VAT_REGISTRATION: "VAT registration",
+  BUSINESS_ADDRESS: "Business address proof",
+  AUTHORISATION: "Authorisation letter",
   OTHER: "Other supporting document",
 };
 
@@ -16,8 +21,49 @@ export const DOCUMENT_TYPE_HINTS: Record<TraderDocumentType, string> = {
   PROOF_OF_ADDRESS: "Utility bill, bank statement or council tax letter from the last 3 months.",
   INSURANCE: "Current public liability insurance certificate.",
   QUALIFICATION: "Trade certificate, City & Guilds, NVQ or equivalent.",
+  COMPANY_REGISTRATION: "Companies House certificate of incorporation (optional).",
+  VAT_REGISTRATION: "HMRC VAT registration certificate (optional).",
+  BUSINESS_ADDRESS: "Recent utility bill, lease or rates bill showing the business address (optional).",
+  AUTHORISATION: "A signed letter from the business owner authorising you to act on their behalf.",
   OTHER: "Anything else that supports your application.",
 };
+
+/**
+ * Context describing who is being verified, used to make document requirements
+ * role-aware. All fields are optional so existing callers keep the baseline
+ * behaviour (ID + insurance) when they don't pass any context.
+ */
+export interface DocumentEvaluationContext {
+  businessRole?: string | null;
+  authorisedRepresentative?: boolean | null;
+}
+
+/**
+ * Documents that MUST be supplied for the given role. We never require a
+ * company number / company registration — sole traders are first-class. The
+ * only role-driven requirement is an authorisation letter when the person is a
+ * non-owner acting as an authorised representative.
+ */
+export function getRequiredDocumentTypes(ctx?: DocumentEvaluationContext): TraderDocumentType[] {
+  const required: TraderDocumentType[] = [...REQUIRED_DOCUMENT_TYPES];
+  if (ctx?.authorisedRepresentative) required.push("AUTHORISATION");
+  return required;
+}
+
+/**
+ * Document types to surface (in display order) for the given role. Company
+ * identity evidence is offered to everyone except sole traders, but always
+ * as optional supporting evidence.
+ */
+export function getDisplayDocumentTypes(ctx?: DocumentEvaluationContext): TraderDocumentType[] {
+  const types: TraderDocumentType[] = ["ID_DOCUMENT", "INSURANCE"];
+  if (ctx?.authorisedRepresentative) types.push("AUTHORISATION");
+  types.push("QUALIFICATION", "PROOF_OF_ADDRESS");
+  if (ctx?.businessRole !== "SELF_EMPLOYED") {
+    types.push("COMPANY_REGISTRATION", "VAT_REGISTRATION", "BUSINESS_ADDRESS");
+  }
+  return types;
+}
 
 export interface DocumentTypeStatus {
   type: TraderDocumentType;
@@ -62,14 +108,18 @@ export function isDocExpiringSoon(
   return diff > 0 && diff <= EXPIRY_SOON_DAYS * 24 * 60 * 60 * 1000;
 }
 
-export function evaluateDocumentsComplete(documents: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[]): DocumentsEvaluation {
+export function evaluateDocumentsComplete(
+  documents: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[],
+  ctx?: DocumentEvaluationContext,
+): DocumentsEvaluation {
   const now = new Date();
-  const allTypes: TraderDocumentType[] = ["ID_DOCUMENT", "INSURANCE", "PROOF_OF_ADDRESS", "QUALIFICATION"];
-  const byType: DocumentTypeStatus[] = allTypes.map((type) => {
+  const requiredTypes = getRequiredDocumentTypes(ctx);
+  const displayTypes = getDisplayDocumentTypes(ctx);
+  const byType: DocumentTypeStatus[] = displayTypes.map((type) => {
     const docs = documents.filter((d) => d.type === type);
     const sorted = [...docs].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     const latest = sorted[0];
-    const required = REQUIRED_DOCUMENT_TYPES.includes(type);
+    const required = requiredTypes.includes(type);
     // Acceptable = pending or approved AND not expired (by status or by date).
     const acceptable = docs.some(
       (d) => (d.status === "PENDING_REVIEW" || d.status === "APPROVED") && !isDocExpired(d, now),
@@ -91,7 +141,7 @@ export function evaluateDocumentsComplete(documents: Pick<TraderDocument, "type"
       expiringSoon: latestExpiringSoon,
     };
   });
-  const complete = REQUIRED_DOCUMENT_TYPES.every((req) => byType.find((b) => b.type === req)?.satisfied);
+  const complete = requiredTypes.every((req) => byType.find((b) => b.type === req)?.satisfied);
   const hasExpiredRequired = byType.some((b) => b.required && b.expired);
   const hasExpiringSoonRequired = byType.some((b) => b.required && b.expiringSoon);
   return { complete, byType, hasExpiredRequired, hasExpiringSoonRequired };
@@ -103,6 +153,7 @@ export const TRADER_STATUS = {
   PROFILE_INCOMPLETE: "PROFILE_INCOMPLETE",
   PENDING_DOCUMENTS: "PENDING_DOCUMENTS",
   UNDER_REVIEW: "UNDER_REVIEW",
+  NEEDS_MORE_INFO: "NEEDS_MORE_INFO",
   VERIFIED: "VERIFIED",
   REJECTED: "REJECTED",
   SUSPENDED: "SUSPENDED",
@@ -117,7 +168,7 @@ export type TraderStatus = (typeof TRADER_STATUS)[keyof typeof TRADER_STATUS];
  */
 export function isTraderProfilePublic(
   user: Pick<User, "emailVerified" | "isActive" | "role" | "deletedAt" | "deletionStatus">,
-  profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive">,
+  profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive" | "businessRole" | "authorisedRepresentative">,
   subscription?: { status: string | null } | null,
   documents?: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[] | null,
 ): boolean {
@@ -136,7 +187,10 @@ export function isTraderProfilePublic(
   if (subscription !== undefined && subscription?.status !== "active") return false;
   // Phase 7: any expired required document hides the profile.
   if (documents) {
-    const evaluation = evaluateDocumentsComplete(documents);
+    const evaluation = evaluateDocumentsComplete(documents, {
+      businessRole: profile.businessRole,
+      authorisedRepresentative: profile.authorisedRepresentative,
+    });
     if (evaluation.hasExpiredRequired) return false;
   }
   return true;
@@ -247,7 +301,7 @@ export interface ChecklistStep {
 
 export function buildOnboardingChecklist(
   user: Pick<User, "emailVerified">,
-  profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "documentsSubmitted" | "isActive" | "rejectionReason" | "adminNotes">,
+  profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "documentsSubmitted" | "isActive" | "rejectionReason" | "adminNotes" | "needsMoreInfoReason">,
   subscription?: { status: string | null; planId?: string | null; cancelAtPeriodEnd?: boolean } | null,
 ): ChecklistStep[] {
   const status = profile.verificationStatus as TraderStatus;
@@ -258,6 +312,7 @@ export function buildOnboardingChecklist(
   const verified = status === TRADER_STATUS.VERIFIED;
   const rejected = status === TRADER_STATUS.REJECTED;
   const underReview = status === TRADER_STATUS.UNDER_REVIEW;
+  const needsMoreInfo = status === TRADER_STATUS.NEEDS_MORE_INFO;
   const subActive = subscription?.status === "active";
   const subCancelling = subActive && subscription?.cancelAtPeriodEnd === true;
 
@@ -295,16 +350,20 @@ export function buildOnboardingChecklist(
         ? "locked"
         : status === TRADER_STATUS.EXPIRED_DOCUMENTS
           ? "expired"
-          : docsDone
-            ? "completed"
-            : "action_required",
+          : needsMoreInfo
+            ? "action_required"
+            : docsDone
+              ? "completed"
+              : "action_required",
       description: !businessDone
         ? "Complete your business profile first."
         : status === TRADER_STATUS.EXPIRED_DOCUMENTS
           ? "A required document has expired. Upload a fresh copy to restore your listing."
-          : docsDone
-            ? undefined
-            : "Upload your photo ID and current public liability insurance.",
+          : needsMoreInfo
+            ? profile.needsMoreInfoReason ?? "Our team needs more information — see the details above and upload what's requested."
+            : docsDone
+              ? undefined
+              : "Upload your photo ID and current public liability insurance.",
     },
     {
       key: "review",
@@ -313,11 +372,17 @@ export function buildOnboardingChecklist(
         ? "rejected"
         : verified
           ? "completed"
-          : underReview
-            ? "pending"
-            : "locked",
-      description: rejected ? profile.rejectionReason ?? undefined : profile.adminNotes ?? undefined,
-      comingSoon: docsDone && !verified && !rejected, // Phase 5
+          : needsMoreInfo
+            ? "action_required"
+            : underReview
+              ? "pending"
+              : "locked",
+      description: rejected
+        ? profile.rejectionReason ?? undefined
+        : needsMoreInfo
+          ? profile.needsMoreInfoReason ?? "Our team needs more information before we can verify your account."
+          : profile.adminNotes ?? undefined,
+      comingSoon: docsDone && !verified && !rejected && !needsMoreInfo, // Phase 5
     },
     {
       key: "subscription",
@@ -348,7 +413,7 @@ export function buildOnboardingChecklist(
   ];
 }
 
-export function statusMessage(profile: Pick<TraderProfile, "verificationStatus" | "rejectionReason">): string {
+export function statusMessage(profile: Pick<TraderProfile, "verificationStatus" | "rejectionReason" | "needsMoreInfoReason">): string {
   const status = profile.verificationStatus as TraderStatus;
   switch (status) {
     case TRADER_STATUS.PENDING_EMAIL_VERIFICATION:
@@ -361,6 +426,10 @@ export function statusMessage(profile: Pick<TraderProfile, "verificationStatus" 
       return "Upload your verification documents (ID, insurance, qualifications).";
     case TRADER_STATUS.UNDER_REVIEW:
       return "Your profile is currently under review. We'll notify you once your documents have been checked.";
+    case TRADER_STATUS.NEEDS_MORE_INFO:
+      return profile.needsMoreInfoReason
+        ? `We need a bit more information before we can verify your account: ${profile.needsMoreInfoReason}`
+        : "We need a bit more information before we can verify your account. Please check your dashboard for details.";
     case TRADER_STATUS.VERIFIED:
       return "Your profile is verified. Choose a subscription plan to make it live.";
     case TRADER_STATUS.REJECTED:

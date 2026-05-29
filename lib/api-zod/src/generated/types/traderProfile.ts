@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { TraderProfileBusinessRole } from "./traderProfileBusinessRole";
 import type { TraderProfilePlan } from "./traderProfilePlan";
 import type { TraderProfileSocialLinks } from "./traderProfileSocialLinks";
 
@@ -27,6 +28,9 @@ export interface TraderProfile {
   logoUrl?: string | null;
   galleryUrls?: string[];
   socialLinks?: TraderProfileSocialLinks;
+  businessRole?: TraderProfileBusinessRole;
+  authorisedRepresentative?: boolean | null;
+  businessEmailDomain?: string | null;
   plan?: TraderProfilePlan;
   isFeatured: boolean;
   isActive: boolean;

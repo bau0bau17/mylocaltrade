@@ -30,7 +30,10 @@ export async function reconcileExpiredDocuments(): Promise<{ checked: number; fl
       .select()
       .from(traderDocumentsTable)
       .where(eq(traderDocumentsTable.userId, profile.userId));
-    const evaluation = evaluateDocumentsComplete(docs);
+    const evaluation = evaluateDocumentsComplete(docs, {
+      businessRole: profile.businessRole,
+      authorisedRepresentative: profile.authorisedRepresentative,
+    });
     if (!evaluation.hasExpiredRequired) continue;
 
     await db

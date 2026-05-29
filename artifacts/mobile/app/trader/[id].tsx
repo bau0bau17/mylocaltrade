@@ -183,7 +183,7 @@ export default function TraderProfileScreen() {
           </View>
           {trader.verifiedAt && (
             <Text style={styles.verifiedSince}>
-              Verified by MyLocalTrade · {new Date(trader.verifiedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+              Documents reviewed by MyLocalTrade · {new Date(trader.verifiedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
             </Text>
           )}
           {trader.createdAt && (

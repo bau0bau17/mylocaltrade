@@ -43,6 +43,7 @@ const storage = new ObjectStorageService();
 
 const REVIEWABLE_STATUSES = [
   TRADER_STATUS.UNDER_REVIEW,
+  TRADER_STATUS.NEEDS_MORE_INFO,
   TRADER_STATUS.PENDING_DOCUMENTS,
   TRADER_STATUS.PROFILE_INCOMPLETE,
   TRADER_STATUS.VERIFIED,
@@ -332,7 +333,10 @@ router.get("/admin/traders/:userId", authMiddleware, adminOnly, async (req, res)
       user: userSafe,
       profile: profileSafe,
       documents,
-      documentsEvaluation: evaluateDocumentsComplete(documents),
+      documentsEvaluation: evaluateDocumentsComplete(documents, {
+        businessRole: row.profile.businessRole,
+        authorisedRepresentative: row.profile.authorisedRepresentative,
+      }),
       auditLog,
     });
   } catch (error) {
@@ -672,7 +676,10 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
       .select()
       .from(traderDocumentsTable)
       .where(eq(traderDocumentsTable.userId, userId));
-    const evaluation = evaluateDocumentsComplete(docs);
+    const evaluation = evaluateDocumentsComplete(docs, {
+      businessRole: profile.businessRole,
+      authorisedRepresentative: profile.authorisedRepresentative,
+    });
     if (!evaluation.complete) {
       res.status(400).json({ error: "Trader has not submitted all required documents." });
       return;
@@ -699,8 +706,10 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
       .set({
         verificationStatus: TRADER_STATUS.VERIFIED,
         verifiedAt: new Date(),
+        verifiedByAdminId: adminId,
         rejectedAt: null,
         rejectionReason: null,
+        needsMoreInfoReason: null,
         adminNotes: body.notes ?? profile.adminNotes,
         ...(restoreActive ? { isActive: true } : {}),
         updatedAt: new Date(),
@@ -822,7 +831,9 @@ router.post("/admin/traders/:userId/reject", authMiddleware, adminOnly, async (r
 });
 
 // POST /api/admin/traders/:userId/request-info
-// Sends the trader back to PENDING_DOCUMENTS so they can upload again.
+// Sends the trader to NEEDS_MORE_INFO with a reason so they can supply the
+// missing detail or documents. Once they re-submit a complete set the
+// document reconciler returns them to UNDER_REVIEW automatically.
 router.post("/admin/traders/:userId/request-info", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { userId: adminId } = req as AuthenticatedRequest;
@@ -840,8 +851,9 @@ router.post("/admin/traders/:userId/request-info", authMiddleware, adminOnly, as
     const [updated] = await db
       .update(traderProfilesTable)
       .set({
-        verificationStatus: TRADER_STATUS.PENDING_DOCUMENTS,
+        verificationStatus: TRADER_STATUS.NEEDS_MORE_INFO,
         documentsSubmitted: false,
+        needsMoreInfoReason: body.notes,
         adminNotes: body.notes,
         updatedAt: new Date(),
       })
@@ -1076,7 +1088,10 @@ router.post("/admin/traders/:userId/unsuspend", authMiddleware, adminOnly, async
       .select()
       .from(traderDocumentsTable)
       .where(eq(traderDocumentsTable.userId, userId));
-    const evaluation = evaluateDocumentsComplete(docs);
+    const evaluation = evaluateDocumentsComplete(docs, {
+      businessRole: profile.businessRole,
+      authorisedRepresentative: profile.authorisedRepresentative,
+    });
 
     // Mirror approve()'s subscription-gating: only restore public visibility if
     // the trader currently holds an active subscription.

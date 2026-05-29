@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateTraderProfileRequestBusinessRole } from "./updateTraderProfileRequestBusinessRole";
 import type { UpdateTraderProfileRequestSocialLinks } from "./updateTraderProfileRequestSocialLinks";
 
 export interface UpdateTraderProfileRequest {
@@ -23,4 +24,7 @@ export interface UpdateTraderProfileRequest {
   logoUrl?: string;
   galleryUrls?: string[];
   socialLinks?: UpdateTraderProfileRequestSocialLinks;
+  businessRole?: UpdateTraderProfileRequestBusinessRole;
+  authorisedRepresentative?: boolean;
+  businessEmailDomain?: string;
 }

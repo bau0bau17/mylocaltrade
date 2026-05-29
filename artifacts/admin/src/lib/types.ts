@@ -4,6 +4,7 @@ export type TraderStatus =
   | "PROFILE_INCOMPLETE"
   | "PENDING_DOCUMENTS"
   | "UNDER_REVIEW"
+  | "NEEDS_MORE_INFO"
   | "VERIFIED"
   | "REJECTED"
   | "SUSPENDED"
@@ -15,6 +16,7 @@ export const STATUS_LABELS: Record<TraderStatus, string> = {
   PROFILE_INCOMPLETE: "Profile incomplete",
   PENDING_DOCUMENTS: "Pending documents",
   UNDER_REVIEW: "Under review",
+  NEEDS_MORE_INFO: "Needs more info",
   VERIFIED: "Verified",
   REJECTED: "Rejected",
   SUSPENDED: "Suspended",
@@ -23,6 +25,7 @@ export const STATUS_LABELS: Record<TraderStatus, string> = {
 
 export const REVIEW_FILTER_STATUSES: TraderStatus[] = [
   "UNDER_REVIEW",
+  "NEEDS_MORE_INFO",
   "PENDING_DOCUMENTS",
   "PROFILE_INCOMPLETE",
   "VERIFIED",
@@ -30,6 +33,15 @@ export const REVIEW_FILTER_STATUSES: TraderStatus[] = [
   "SUSPENDED",
   "EXPIRED_DOCUMENTS",
 ];
+
+export const BUSINESS_ROLE_LABELS: Record<string, string> = {
+  OWNER: "Owner",
+  DIRECTOR: "Director",
+  MANAGER: "Manager",
+  EMPLOYEE: "Employee",
+  SELF_EMPLOYED: "Self-employed / sole trader",
+  OTHER: "Other",
+};
 
 export interface TraderListRow {
   userId: number;
@@ -66,6 +78,10 @@ export type DocumentType =
   | "PROOF_OF_ADDRESS"
   | "INSURANCE"
   | "QUALIFICATION"
+  | "COMPANY_REGISTRATION"
+  | "VAT_REGISTRATION"
+  | "BUSINESS_ADDRESS"
+  | "AUTHORISATION"
   | "OTHER";
 
 export type DocumentStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "EXPIRED";
@@ -99,6 +115,10 @@ export interface TraderProfileFull {
   businessDescription: string | null;
   website: string | null;
   openingHours: string | null;
+  businessRole: string | null;
+  authorisedRepresentative: boolean;
+  businessEmailDomain: string | null;
+  needsMoreInfoReason: string | null;
   logoUrl: string | null;
   galleryUrls: string[] | null;
   socialLinks: Record<string, string | undefined> | null;
