@@ -5,13 +5,9 @@ import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import {
   useGetSubscriptionPlans,
-  useCreateCheckoutSession,
-  useDemoActivateSubscription,
   useGetTraderOnboardingStatus,
 } from '@workspace/api-client-react';
 import { PlanCard } from '@/components/PlanCard';
-import type { CreateCheckoutRequestPlanId, DemoActivateSubscriptionParams } from '@workspace/api-client-react';
-import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { getApiUrl } from '@/lib/api-url';
@@ -28,12 +24,9 @@ interface PromoPreview {
 export default function PricingScreen() {
   const insets = useSafeAreaInsets();
   const { data: plansData, isLoading: isLoadingPlans } = useGetSubscriptionPlans();
-  const { mutateAsync: createCheckout } = useCreateCheckoutSession();
-  const { mutateAsync: demoActivate } = useDemoActivateSubscription();
   const { token, isTrader } = useAuth();
   const router = useRouter();
 
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [promoInput, setPromoInput] = useState('');
   const [promoApplied, setPromoApplied] = useState<PromoPreview | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
@@ -100,47 +93,16 @@ export default function PricingScreen() {
     setPromoError(null);
   };
 
-  const handleSelectPlan = async (planId: string) => {
-    setSelectedPlanId(planId);
-    try {
-      const promoCode = promoApplied?.code;
-      const response = await createCheckout({
-        data: {
-          planId: planId as CreateCheckoutRequestPlanId,
-          // promoCode isn't in the OpenAPI type yet — cast through unknown.
-          ...(promoCode ? ({ promoCode } as Record<string, unknown>) : {}),
-        } as Parameters<typeof createCheckout>[0]['data'],
-      });
-
-      // Demo mode: backend returns the sentinel `url: "DEMO_MODE"` and a
-      // demoActivationUrl we can call instantly to flip the subscription
-      // active without going through Stripe.
-      if (response.url === 'DEMO_MODE' && response.demoActivationUrl) {
-        const params: DemoActivateSubscriptionParams = {
-          sessionId: response.sessionId,
-          planId: planId as CreateCheckoutRequestPlanId,
-        };
-        const activateData = await demoActivate({ params });
-        if (activateData.success) {
-          const promoNote = (response as { promo?: { discountGbp: number; validForDays: number } }).promo;
-          const baseMsg = `Your ${planId} plan has been activated! (Demo Mode)`;
-          const promoMsg = promoNote
-            ? `\n\n£${promoNote.discountGbp} OFF applied for ${promoNote.validForDays} days.`
-            : '';
-          Alert.alert('Success', baseMsg + promoMsg);
-          handleClearPromo();
-        } else {
-          Alert.alert('Error', activateData.error || 'Activation failed');
-        }
-      } else if (response.url && response.url !== 'DEMO_MODE') {
-        await WebBrowser.openBrowserAsync(response.url);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Could not start checkout process';
-      Alert.alert('Checkout Failed', message);
-    } finally {
-      setSelectedPlanId(null);
-    }
+  const handleSelectPlan = (_planId: string) => {
+    // Apple App Store compliance: paid digital subscriptions purchased inside
+    // the iOS app must use Apple In-App Purchase. The previous Stripe / web
+    // checkout flow has been removed from the app, and no external payment
+    // links or calls to action are shown here. In-app purchasing is enabled
+    // securely through the App Store once configured.
+    Alert.alert(
+      'Subscriptions coming soon',
+      'In-app subscriptions are being set up and will be available securely through the App Store shortly.',
+    );
   };
 
   if (isLoadingPlans || verifiedStatus === 'unknown') {
@@ -287,7 +249,6 @@ export default function PricingScreen() {
               }
               handleSelectPlan(planId);
             }}
-            isLoading={selectedPlanId === plan.id}
           />
         ))}
       </View>

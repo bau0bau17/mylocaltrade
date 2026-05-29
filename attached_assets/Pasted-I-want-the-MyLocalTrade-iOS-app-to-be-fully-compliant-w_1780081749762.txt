@@ -1,0 +1,53 @@
+I want the MyLocalTrade iOS app to be fully compliant with Apple App Store policy.
+
+Important:
+Please treat Apple compliance as a strict requirement.
+Audit the current iOS app first and only change what is necessary.
+If something is already compliant, keep it.
+
+Main rule:
+Any paid digital trader subscription, premium feature, featured placement, enhanced profile, visibility upgrade, or any other paid digital functionality used inside the iOS app must follow Apple’s In-App Purchase rules. Do not rely on Stripe or web checkout inside the iOS app for these purchases.
+
+Please do the following:
+
+1. Full compliance audit
+- inspect all iOS screens related to pricing, subscriptions, upgrades, premium plans, featured placement, enhanced profiles, billing, restore purchases, and locked premium features
+- inspect all relevant API calls and backend responses used by the iOS app
+- identify any non-compliant payment, upgrade, or external checkout behaviour
+
+2. Remove non-compliant purchase paths from iOS
+- remove or disable any Stripe-based purchase flow inside the iOS app
+- remove or disable any external checkout links, web payment redirects, or calls to action that are not compliant with Apple policy
+- make sure the iOS app does not expose hidden Stripe or web purchase paths through APIs
+
+3. Use Apple-compliant in-app purchase logic
+- use Apple In-App Purchase for paid digital subscriptions and premium digital features in the iOS app
+- RevenueCat is acceptable as the subscription layer if needed
+- web Stripe can remain for the website only, but not as the in-app purchase method for iOS
+
+4. Subscription integrity
+- make sure premium access in iOS depends on Apple-compliant entitlements
+- audit subscription status, renewals, expiry handling, restore purchases, and feature unlocking
+- make sure the app is safe for App Review
+
+5. Keep scope safe
+Do not break:
+- auth
+- profiles
+- trader dashboard
+- enquiries
+- messaging
+- uploads
+- reviews
+- admin
+- non-payment flows
+
+6. Output required
+After the audit and fixes, tell me clearly:
+- what was already compliant
+- what was not compliant
+- what screens were changed
+- what API routes or backend logic were changed
+- whether any Stripe or web payment path is still reachable from the iOS app
+- whether restore purchases is covered
+- whether the iOS app is now safer for Apple App Review
