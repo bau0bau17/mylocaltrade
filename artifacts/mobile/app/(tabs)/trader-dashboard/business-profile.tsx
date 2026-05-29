@@ -65,6 +65,17 @@ export default function BusinessProfileScreen() {
   const [completed, setCompleted] = useState(false);
   const [attemptedSave, setAttemptedSave] = useState(false);
 
+  // Business email domain confirmation (round-trip email proof). Advisory only.
+  const [emailVerify, setEmailVerify] = useState<{
+    verified: boolean;
+    verifiedAddress: string | null;
+    pendingTarget: string | null;
+    savedDomain: string;
+  }>({ verified: false, verifiedAddress: null, pendingTarget: null, savedDomain: '' });
+  const [verifyAddress, setVerifyAddress] = useState('');
+  const [sendingVerify, setSendingVerify] = useState(false);
+  const [verifyNotice, setVerifyNotice] = useState<string | null>(null);
+
   useEffect(() => {
     if (!error) return;
     const t = setTimeout(() => setError(null), 6000);
@@ -94,6 +105,12 @@ export default function BusinessProfileScreen() {
           authorisedRepresentative: Boolean(json.authorisedRepresentative),
           businessEmailDomain: json.businessEmailDomain ?? '',
           vatNumber: json.vatNumber ?? '',
+        });
+        setEmailVerify({
+          verified: Boolean(json.businessEmailVerified),
+          verifiedAddress: json.businessEmailVerifiedAddress ?? null,
+          pendingTarget: json.businessEmailVerificationTarget ?? null,
+          savedDomain: json.businessEmailDomain ?? '',
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load profile');
@@ -174,6 +191,31 @@ export default function BusinessProfileScreen() {
       setError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSendVerification = async () => {
+    setVerifyNotice(null);
+    setSendingVerify(true);
+    try {
+      const res = await fetch(`${getApiUrl()}/api/profile/business-email/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(
+          verifyAddress.trim() ? { email: verifyAddress.trim() } : {},
+        ),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to send verification email');
+      setEmailVerify(prev => ({ ...prev, pendingTarget: json.target ?? (verifyAddress.trim() || null) }));
+      setVerifyNotice(`Verification email sent to ${json.target}. Click the link in your inbox to confirm.`);
+    } catch (e) {
+      setVerifyNotice(e instanceof Error ? e.message : 'Failed to send verification email');
+    } finally {
+      setSendingVerify(false);
     }
   };
 
@@ -335,6 +377,60 @@ export default function BusinessProfileScreen() {
             />
           </View>
           <Text style={styles.helper}>Helps us confirm you use an official business email address.</Text>
+
+          {emailVerify.savedDomain.trim().length > 0 && (
+            <View style={styles.verifyBox}>
+              {emailVerify.verified ? (
+                <View style={styles.verifyStatusRow}>
+                  <Feather name="check-circle" size={16} color={Colors.light.success} />
+                  <Text style={styles.verifyConfirmedText}>
+                    Confirmed{emailVerify.verifiedAddress ? ` (${emailVerify.verifiedAddress})` : ''}
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.verifyStatusRow}>
+                    <Feather name="alert-circle" size={16} color={Colors.light.textMuted} />
+                    <Text style={styles.verifyPendingText}>
+                      {emailVerify.pendingTarget
+                        ? `Verification pending — check ${emailVerify.pendingTarget} and click the link.`
+                        : 'Not confirmed yet. Send a verification email to an address at this domain.'}
+                    </Text>
+                  </View>
+                  <View style={styles.inputWrap}>
+                    <Feather name="mail" size={16} color={Colors.light.textMuted} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={`e.g. info@${emailVerify.savedDomain}`}
+                      placeholderTextColor={Colors.light.textMuted}
+                      value={verifyAddress}
+                      onChangeText={setVerifyAddress}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                    />
+                  </View>
+                  <Pressable
+                    style={[styles.verifyBtn, sendingVerify && styles.btnDisabled]}
+                    onPress={handleSendVerification}
+                    disabled={sendingVerify}
+                  >
+                    {sendingVerify ? (
+                      <ActivityIndicator color={Colors.light.primary} />
+                    ) : (
+                      <Text style={styles.verifyBtnText}>
+                        {emailVerify.pendingTarget ? 'Resend verification email' : 'Send verification email'}
+                      </Text>
+                    )}
+                  </Pressable>
+                </>
+              )}
+              {verifyNotice ? <Text style={styles.verifyNotice}>{verifyNotice}</Text> : null}
+            </View>
+          )}
+          {form.businessEmailDomain.trim() !== emailVerify.savedDomain.trim() && form.businessEmailDomain.trim().length > 0 && (
+            <Text style={styles.helper}>Save your profile to verify this domain.</Text>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -614,4 +710,12 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.5 },
   footerHint: { fontSize: 11, color: Colors.light.textMuted, textAlign: 'center', marginTop: 10 },
   errorBanner: { color: Colors.light.textSecondary, fontSize: 14, textAlign: 'center' },
+
+  verifyBox: { marginTop: 12, padding: 12, backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 12, gap: 10 },
+  verifyStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  verifyConfirmedText: { flex: 1, fontSize: 13, color: Colors.light.success, fontWeight: '700' },
+  verifyPendingText: { flex: 1, fontSize: 12, color: Colors.light.textSecondary, lineHeight: 17 },
+  verifyBtn: { borderWidth: 1, borderColor: Colors.light.primary, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  verifyBtnText: { color: Colors.light.primary, fontSize: 13, fontWeight: '700' },
+  verifyNotice: { fontSize: 12, color: Colors.light.textSecondary, lineHeight: 17 },
 });

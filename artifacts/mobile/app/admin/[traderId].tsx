@@ -67,6 +67,10 @@ interface TraderDetail {
     businessRole: string | null;
     authorisedRepresentative: boolean;
     businessEmailDomain: string | null;
+    businessEmailVerified: boolean;
+    businessEmailVerifiedAddress: string | null;
+    businessEmailVerifiedAt: string | null;
+    businessEmailVerificationTarget: string | null;
     needsMoreInfoReason: string | null;
     verificationStatus: string;
     phoneVerified: boolean;
@@ -626,6 +630,33 @@ export default function AdminTraderDetail() {
               ) : null}
             </>
           )}
+          {profile.businessEmailDomain ? (
+            <View style={styles.emailVerifyRow}>
+              {profile.businessEmailVerified ? (
+                <>
+                  <Feather name="check-circle" size={14} color={Colors.light.success} />
+                  <Text style={styles.emailVerifyConfirmed}>
+                    Email confirmed
+                    {profile.businessEmailVerifiedAddress
+                      ? ` (${profile.businessEmailVerifiedAddress})`
+                      : ''}
+                    {profile.businessEmailVerifiedAt
+                      ? ` · ${formatDate(profile.businessEmailVerifiedAt)}`
+                      : ''}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Feather name="alert-circle" size={14} color={Colors.light.textMuted} />
+                  <Text style={styles.emailVerifySelf}>
+                    Self-declared only{profile.businessEmailVerificationTarget
+                      ? ` · verification pending (${profile.businessEmailVerificationTarget})`
+                      : ' · not confirmed by email'}
+                  </Text>
+                </>
+              )}
+            </View>
+          ) : null}
         </View>
 
         {/* Documents */}
@@ -1198,6 +1229,9 @@ const styles = StyleSheet.create({
   compareSubmitted: { fontSize: 12, color: Colors.light.text, fontWeight: '600' },
   compareCh: { fontSize: 11, color: Colors.light.textMuted, marginTop: 2, fontStyle: 'italic' },
   aiErrorText: { fontSize: 11, color: Colors.light.error, fontStyle: 'italic' },
+  emailVerifyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.light.border },
+  emailVerifyConfirmed: { flex: 1, fontSize: 12, color: Colors.light.success, fontWeight: '600', lineHeight: 17 },
+  emailVerifySelf: { flex: 1, fontSize: 12, color: Colors.light.textMuted, lineHeight: 17 },
 
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   pillText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },

@@ -326,6 +326,48 @@ export async function sendVerificationEmail(
   });
 }
 
+export async function sendBusinessEmailVerificationEmail(
+  toEmail: string,
+  toName: string,
+  businessName: string,
+  token: string,
+): Promise<void> {
+  const verifyUrl = `${getApiBaseUrl()}/api/profile/business-email/confirm?token=${token}`;
+  const safeName = escapeHtml(toName || "there");
+  const safeBusiness = escapeHtml(businessName);
+  const safeAddress = escapeHtml(toEmail);
+  const html = emailShell({
+    title: "Confirm your business email address",
+    preheader: `Confirm ${safeAddress} for ${safeBusiness} on MyLocalTrade`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        Please confirm that <strong style="color: #00B4D8;">${safeAddress}</strong> is a working
+        business email address for <strong>${safeBusiness}</strong>. Confirming it adds a trust
+        signal to your MyLocalTrade profile.
+      </p>
+      <div style="text-align: center; margin: 24px 0;">
+        <a href="${verifyUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 16px; padding: 14px 40px; border-radius: 12px; text-decoration: none;">
+          Confirm this email address
+        </a>
+      </div>
+      <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
+        If the button above doesn't work, copy and paste this link into your browser:
+      </p>
+      <p style="color: #00B4D8; font-size: 13px; word-break: break-all; margin: 0 0 8px;">${verifyUrl}</p>
+      <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 0;">
+        This link expires in 24 hours. If you didn't request this, you can safely ignore this email.
+      </p>`,
+  });
+  await dispatchEmail({
+    category: "verification",
+    to: { email: toEmail, name: toName },
+    subject: "Confirm your business email address — MyLocalTrade",
+    html,
+    tag: "business-email-verify",
+  });
+}
+
 export async function sendContactEmail(opts: {
   fromName: string;
   fromEmail: string;

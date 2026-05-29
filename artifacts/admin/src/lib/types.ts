@@ -118,6 +118,10 @@ export interface TraderProfileFull {
   businessRole: string | null;
   authorisedRepresentative: boolean;
   businessEmailDomain: string | null;
+  businessEmailVerified: boolean;
+  businessEmailVerifiedAddress: string | null;
+  businessEmailVerifiedAt: string | null;
+  businessEmailVerificationTarget: string | null;
   needsMoreInfoReason: string | null;
   logoUrl: string | null;
   galleryUrls: string[] | null;
