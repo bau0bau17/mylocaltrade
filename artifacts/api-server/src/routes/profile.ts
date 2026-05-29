@@ -49,6 +49,7 @@ router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
       businessRole: trader.businessRole,
       authorisedRepresentative: trader.authorisedRepresentative,
       businessEmailDomain: trader.businessEmailDomain,
+      vatNumber: trader.vatNumber,
       plan: trader.plan,
       isFeatured: trader.isFeatured,
       isActive: trader.isActive,
@@ -67,6 +68,20 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
     const { userId } = req as AuthenticatedRequest;
     const body = UpdateTraderProfileBody.parse(req.body);
 
+    // Snapshot the verification-relevant fields BEFORE the update so we can
+    // re-run (or clear) the advisory support checks when any of them change.
+    const [prior] = await db
+      .select({
+        companyNumber: traderProfilesTable.companyNumber,
+        businessRole: traderProfilesTable.businessRole,
+        vatNumber: traderProfilesTable.vatNumber,
+        businessEmailDomain: traderProfilesTable.businessEmailDomain,
+        website: traderProfilesTable.website,
+      })
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
     const allowedFields = [
@@ -75,6 +90,7 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       "serviceAreas", "businessDescription", "website", "openingHours",
       "logoUrl", "galleryUrls", "socialLinks",
       "businessRole", "authorisedRepresentative", "businessEmailDomain",
+      "vatNumber",
     ] as const;
 
     for (const field of allowedFields) {
@@ -188,6 +204,48 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       if (refreshed) Object.assign(updated, refreshed);
     }
 
+    // When a verification-relevant field changes via a direct profile edit, the
+    // stored support-layer verdict is now stale. Re-trigger the affected check —
+    // each is fire-and-forget, advisory, and self-clears when its field is
+    // absent, so this both refreshes a new value and wipes an obsolete verdict.
+    const norm = (v: string | null | undefined) => (v ?? "").trim();
+    const companyChanged =
+      norm(prior?.companyNumber) !== norm(updated.companyNumber) ||
+      norm(prior?.businessRole) !== norm(updated.businessRole);
+    const vatChanged = norm(prior?.vatNumber) !== norm(updated.vatNumber);
+    const domainChanged =
+      norm(prior?.businessEmailDomain) !== norm(updated.businessEmailDomain) ||
+      norm(prior?.website) !== norm(updated.website);
+    if (companyChanged || vatChanged || domainChanged) {
+      const [{ triggerAiVerification }, { triggerVatCheck }, { triggerDomainCheck }] =
+        await Promise.all([
+          import("../lib/trader-ai-verification"),
+          import("../lib/vat-check"),
+          import("../lib/domain-check"),
+        ]);
+      if (companyChanged) {
+        triggerAiVerification({
+          userId: updated.userId,
+          businessName: updated.businessName,
+          businessAddress: updated.businessAddress,
+          town: updated.town,
+          postcode: updated.postcode,
+          companyNumber: updated.companyNumber,
+          businessRole: updated.businessRole,
+        });
+      }
+      if (vatChanged) {
+        triggerVatCheck({ userId: updated.userId, vatNumber: updated.vatNumber });
+      }
+      if (domainChanged) {
+        triggerDomainCheck({
+          userId: updated.userId,
+          businessEmailDomain: updated.businessEmailDomain,
+          website: updated.website,
+        });
+      }
+    }
+
     res.json({
       id: updated.id,
       userId: updated.userId,
@@ -207,6 +265,7 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       businessRole: updated.businessRole,
       authorisedRepresentative: updated.authorisedRepresentative,
       businessEmailDomain: updated.businessEmailDomain,
+      vatNumber: updated.vatNumber,
       logoUrl: updated.logoUrl,
       galleryUrls: updated.galleryUrls || [],
       socialLinks: updated.socialLinks,

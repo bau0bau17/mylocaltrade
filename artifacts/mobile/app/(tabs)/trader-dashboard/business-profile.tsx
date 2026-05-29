@@ -33,6 +33,7 @@ interface ProfileForm {
   businessRole: string;
   authorisedRepresentative: boolean;
   businessEmailDomain: string;
+  vatNumber: string;
 }
 
 export default function BusinessProfileScreen() {
@@ -54,6 +55,7 @@ export default function BusinessProfileScreen() {
     businessRole: '',
     authorisedRepresentative: false,
     businessEmailDomain: '',
+    vatNumber: '',
   });
   const [serviceInput, setServiceInput] = useState('');
   const [areaInput, setAreaInput] = useState('');
@@ -91,6 +93,7 @@ export default function BusinessProfileScreen() {
           businessRole: json.businessRole ?? '',
           authorisedRepresentative: Boolean(json.authorisedRepresentative),
           businessEmailDomain: json.businessEmailDomain ?? '',
+          vatNumber: json.vatNumber ?? '',
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load profile');
@@ -156,6 +159,7 @@ export default function BusinessProfileScreen() {
           businessRole: form.businessRole || undefined,
           authorisedRepresentative: form.authorisedRepresentative,
           businessEmailDomain: form.businessEmailDomain.trim() || undefined,
+          vatNumber: form.vatNumber.trim() || undefined,
         }),
       });
       const json = await res.json();
@@ -331,6 +335,25 @@ export default function BusinessProfileScreen() {
             />
           </View>
           <Text style={styles.helper}>Helps us confirm you use an official business email address.</Text>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>VAT number (optional)</Text>
+          <View style={styles.inputWrap}>
+            <Feather name="hash" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. GB123456789"
+              placeholderTextColor={Colors.light.textMuted}
+              value={form.vatNumber}
+              onChangeText={(t) => setForm(p => ({ ...p, vatNumber: t }))}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+          </View>
+          <Text style={styles.helper}>
+            Only if you are VAT registered. Not required for sole traders or self-employed traders. We use it as a supporting check.
+          </Text>
         </View>
 
         <Text style={styles.sectionTitle}>Services offered *</Text>

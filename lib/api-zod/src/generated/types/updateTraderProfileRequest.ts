@@ -27,4 +27,5 @@ export interface UpdateTraderProfileRequest {
   businessRole?: UpdateTraderProfileRequestBusinessRole;
   authorisedRepresentative?: boolean;
   businessEmailDomain?: string;
+  vatNumber?: string;
 }

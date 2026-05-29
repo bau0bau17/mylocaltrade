@@ -2141,6 +2141,9 @@ components:
         businessEmailDomain:
           type: string
           nullable: true
+        vatNumber:
+          type: string
+          nullable: true
         plan:
           type: string
           enum: [basic, premium, elite]
@@ -2251,6 +2254,8 @@ components:
         authorisedRepresentative:
           type: boolean
         businessEmailDomain:
+          type: string
+        vatNumber:
           type: string
 
     TraderListResponse:
