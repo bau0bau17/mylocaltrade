@@ -152,7 +152,7 @@ export default function BillingScreen() {
       </View>
 
       <Text style={s.footnote}>
-        Demo mode: payments aren't taken. Stripe integration is wired and will activate when STRIPE_SECRET_KEY is configured.
+        Subscriptions for the iOS app are handled securely through the Apple App Store.
       </Text>
     </ScrollView>
   );
