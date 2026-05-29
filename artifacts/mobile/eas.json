@@ -6,7 +6,10 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "REPLACE-WITH-YOUR-REVENUECAT-IOS-PUBLIC-SDK-KEY"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -14,13 +17,15 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-YOUR-DEPLOYED-API.replit.app"
+        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-YOUR-DEPLOYED-API.replit.app",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "REPLACE-WITH-YOUR-REVENUECAT-IOS-PUBLIC-SDK-KEY"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-YOUR-DEPLOYED-API.replit.app"
+        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-YOUR-DEPLOYED-API.replit.app",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "REPLACE-WITH-YOUR-REVENUECAT-IOS-PUBLIC-SDK-KEY"
       }
     }
   },
