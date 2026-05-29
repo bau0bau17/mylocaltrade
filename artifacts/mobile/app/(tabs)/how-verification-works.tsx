@@ -17,6 +17,12 @@ export default function HowVerificationWorksScreen() {
     >
       <Text style={styles.title}>How Verification Works</Text>
 
+      <View style={styles.summaryBox}>
+        <Text style={styles.summaryText}>
+          Verified means certain trader or business details have been reviewed by MyLocalTrade according to its verification process. It does not mean the platform guarantees workmanship or outcomes. Customers should still review quotes, insurance, credentials, and suitability before work starts.
+        </Text>
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.paragraph}>
           MyLocalTrade is a platform connecting customers with independent local traders. This page explains the checks we apply to trader profiles before they appear in public search.
@@ -120,6 +126,13 @@ export default function HowVerificationWorksScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
   title: { fontSize: 24, fontWeight: '700', color: Colors.light.text, marginBottom: 24, letterSpacing: 0.3 },
+  summaryBox: {
+    backgroundColor: Colors.light.primaryMuted,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+  },
+  summaryText: { fontSize: 14, color: Colors.light.text, lineHeight: 22 },
   section: { marginBottom: 24 },
   heading: { fontSize: 16, fontWeight: '600', color: Colors.light.text, marginBottom: 12 },
   paragraph: { fontSize: 14, color: Colors.light.textSecondary, lineHeight: 22, marginBottom: 10 },

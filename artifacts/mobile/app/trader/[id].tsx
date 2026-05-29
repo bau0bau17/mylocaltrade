@@ -30,6 +30,7 @@ export default function TraderProfileScreen() {
 
   const { data: trader, isLoading, error } = useGetTrader(Number(id));
   const specialisms = detectSpecialisms(trader?.mainCategory, trader?.additionalServices);
+  const [verifiedHelpVisible, setVerifiedHelpVisible] = useState(false);
 
   // Only fetch the saved list when the user is logged in as a customer.
   const { data: savedData } = useGetSavedTraders({
@@ -147,10 +148,16 @@ export default function TraderProfileScreen() {
               <Text style={styles.categoryText}>{trader.mainCategory}</Text>
             </View>
             {trader.isVerified && (
-              <View style={[styles.planBadge, { backgroundColor: 'rgba(16, 185, 129, 0.14)' }]}>
+              <Pressable
+                style={[styles.planBadge, { backgroundColor: 'rgba(16, 185, 129, 0.14)' }]}
+                onPress={() => setVerifiedHelpVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="What does Verified mean?"
+              >
                 <Feather name="check-circle" size={11} color={Colors.light.success} />
                 <Text style={[styles.planTextColored, { color: Colors.light.success }]}>Verified</Text>
-              </View>
+                <Feather name="info" size={10} color={Colors.light.success} style={{ marginLeft: 3 }} />
+              </Pressable>
             )}
             {trader.plan === 'elite' && (
               <View style={[styles.planBadge, { backgroundColor: Colors.light.eliteMuted }]}>
@@ -185,6 +192,11 @@ export default function TraderProfileScreen() {
             <Text style={styles.verifiedSince}>
               Documents reviewed by MyLocalTrade · {new Date(trader.verifiedAt).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
             </Text>
+          )}
+          {trader.isVerified && (
+            <Pressable onPress={() => setVerifiedHelpVisible(true)} hitSlop={6}>
+              <Text style={styles.verifiedHelpLink}>What does Verified mean?</Text>
+            </Pressable>
           )}
           {trader.createdAt && (
             <Text style={styles.verifiedSince}>
@@ -382,6 +394,38 @@ export default function TraderProfileScreen() {
         </Pressable>
       </Modal>
 
+      <Modal
+        visible={verifiedHelpVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setVerifiedHelpVisible(false)}
+      >
+        <Pressable style={styles.helpBackdrop} onPress={() => setVerifiedHelpVisible(false)}>
+          <Pressable style={styles.helpCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.helpHeader}>
+              <Feather name="check-circle" size={18} color={Colors.light.success} />
+              <Text style={styles.helpTitle}>What "Verified" means</Text>
+            </View>
+            <Text style={styles.helpBody}>
+              Verified means certain trader or business details have been reviewed by MyLocalTrade according to its verification process. It does not mean the platform guarantees workmanship or outcomes. Customers should still review quotes, insurance, credentials, and suitability before work starts.
+            </Text>
+            <Pressable
+              style={styles.helpLinkRow}
+              onPress={() => {
+                setVerifiedHelpVisible(false);
+                router.push('/how-verification-works');
+              }}
+            >
+              <Text style={styles.helpLinkText}>Read how verification works</Text>
+              <Feather name="arrow-right" size={14} color={Colors.light.primary} />
+            </Pressable>
+            <Pressable style={styles.helpCloseBtn} onPress={() => setVerifiedHelpVisible(false)}>
+              <Text style={styles.helpCloseText}>Close</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {canMessage ? (() => {
         const responseLabel = formatResponseTime(trader.responseTimeMinutes);
         const ctaHintLabel = responseLabel
@@ -573,6 +617,64 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.light.textMuted,
     letterSpacing: 0.3,
+  },
+  verifiedHelpLink: {
+    marginTop: 6,
+    fontSize: 12,
+    color: Colors.light.primary,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  helpBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  helpCard: {
+    backgroundColor: Colors.light.white,
+    borderRadius: 16,
+    padding: 20,
+  },
+  helpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  helpTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.light.text,
+    letterSpacing: 0.2,
+  },
+  helpBody: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: Colors.light.textSecondary,
+  },
+  helpLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 16,
+  },
+  helpLinkText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.primary,
+    letterSpacing: 0.2,
+  },
+  helpCloseBtn: {
+    marginTop: 16,
+    alignSelf: 'flex-end',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  helpCloseText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
   },
   categoryBadge: {
     backgroundColor: Colors.light.primaryMuted,
