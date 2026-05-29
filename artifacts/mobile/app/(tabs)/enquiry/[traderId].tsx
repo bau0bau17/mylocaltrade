@@ -47,7 +47,7 @@ export default function EnquiryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
-  const blockedRole = user?.role === 'admin' || user?.role === 'trader';
+  const isCustomer = user?.role === 'customer';
 
   const { data: trader } = useGetTrader(Number(traderId));
   const { mutateAsync: createEnquiry, isPending } = useCreateEnquiry();
@@ -182,24 +182,46 @@ export default function EnquiryScreen() {
     }
   };
 
-  if (blockedRole) {
+  if (!isCustomer) {
+    const isGuest = !user;
     return (
       <View style={[styles.container, { paddingTop: insets.top + 80, paddingHorizontal: 24, alignItems: 'center' }]}>
         <View style={styles.headerIconWrap}>
           <Feather name="lock" size={24} color={Colors.light.primary} />
         </View>
-        <Text style={[styles.title, { textAlign: 'center' }]}>Customers only</Text>
-        <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 24 }]}>
-          {user?.role === 'admin'
-            ? "Admin accounts can't send enquiries to traders. Use a customer account for this."
-            : "Trader accounts can't send enquiries. Use a customer account for this."}
+        <Text style={[styles.title, { textAlign: 'center' }]}>
+          {isGuest ? 'Sign in to send a message' : 'Customers only'}
         </Text>
-        <Pressable
-          style={{ backgroundColor: Colors.light.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 }}
-          onPress={() => router.back()}
-        >
-          <Text style={{ color: Colors.light.white, fontWeight: '700' }}>Go Back</Text>
-        </Pressable>
+        <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 24 }]}>
+          {isGuest
+            ? 'You need a customer account to message a trader. Sign in or create a free customer account to continue.'
+            : user?.role === 'admin'
+              ? "Admin accounts can't send enquiries to traders. Use a customer account for this."
+              : "Trader accounts can't send enquiries. Use a customer account for this."}
+        </Text>
+        {isGuest ? (
+          <>
+            <Pressable
+              style={{ backgroundColor: Colors.light.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, marginBottom: 12 }}
+              onPress={() => router.push('/auth/login')}
+            >
+              <Text style={{ color: Colors.light.white, fontWeight: '700' }}>Sign In</Text>
+            </Pressable>
+            <Pressable
+              style={{ paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12, borderWidth: 1, borderColor: Colors.light.primary }}
+              onPress={() => router.push('/auth/register-customer')}
+            >
+              <Text style={{ color: Colors.light.primary, fontWeight: '700' }}>Create Customer Account</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            style={{ backgroundColor: Colors.light.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 12 }}
+            onPress={() => router.back()}
+          >
+            <Text style={{ color: Colors.light.white, fontWeight: '700' }}>Go Back</Text>
+          </Pressable>
+        )}
       </View>
     );
   }
