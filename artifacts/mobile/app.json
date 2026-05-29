@@ -17,7 +17,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.mylocaltrade.app",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "MyLocalTrade uses your location to show tradespeople near you."
+        "NSLocationWhenInUseUsageDescription": "MyLocalTrade uses your location to show tradespeople near you.",
+        "NSPhotoLibraryUsageDescription": "MyLocalTrade needs access to your photos so you can add images to your enquiries and trader gallery.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
