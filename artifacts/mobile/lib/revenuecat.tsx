@@ -11,6 +11,7 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import type {
   CustomerInfo,
+  PurchasesEntitlementInfo,
   PurchasesOffering,
   PurchasesPackage,
 } from 'react-native-purchases';
@@ -33,15 +34,48 @@ import { getApiUrl } from '@/lib/api-url';
 export const TRADER_ENTITLEMENT_ID =
   process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID || 'trader_subscription';
 
+const TEST_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '';
 const IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
 const ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '';
 
-const platformApiKey =
-  Platform.OS === 'ios'
-    ? IOS_API_KEY
-    : Platform.OS === 'android'
-    ? ANDROID_API_KEY
-    : '';
+// Pick the right RevenueCat SDK key for this build:
+//  - Development / preview builds use the RevenueCat Test Store key so the full
+//    purchase + paywall flow can be exercised without App Store / Play Store
+//    configuration.
+//  - Production builds use the platform App Store / Play Store key.
+function resolvePlatformApiKey(): string {
+  if (Platform.OS !== 'ios' && Platform.OS !== 'android') return '';
+  if (__DEV__ && TEST_API_KEY) return TEST_API_KEY;
+  return Platform.OS === 'ios' ? IOS_API_KEY : ANDROID_API_KEY;
+}
+
+const platformApiKey = resolvePlatformApiKey();
+
+// RevenueCat enforces entitlement lookup keys case/punctuation-insensitively, so
+// the identifier the SDK reports back may differ in casing/spacing from our
+// configured id (e.g. a dashboard-created "Trader Subscription" vs
+// "trader_subscription"). Normalise before comparing.
+function normalizeEntitlementKey(key: string): string {
+  return key
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+const TARGET_ENTITLEMENT_NORM = normalizeEntitlementKey(TRADER_ENTITLEMENT_ID);
+
+/** Find the active trader entitlement regardless of key casing/spacing. */
+function findActiveTraderEntitlement(
+  info: CustomerInfo | null,
+): PurchasesEntitlementInfo | null {
+  if (!info) return null;
+  const active = info.entitlements.active;
+  if (active[TRADER_ENTITLEMENT_ID]) return active[TRADER_ENTITLEMENT_ID];
+  for (const key of Object.keys(active)) {
+    if (normalizeEntitlementKey(key) === TARGET_ENTITLEMENT_NORM) return active[key];
+  }
+  return null;
+}
 
 // Expo Go ships as the "storeClient" execution environment and has no native
 // RevenueCat module. dev/production builds report "standalone" or "bare".
@@ -82,6 +116,22 @@ async function ensureConfigured(): Promise<PurchasesDefault | null> {
     })();
   }
   return configurePromise;
+}
+
+// react-native-purchases-ui (native paywall + customer center) is also a
+// native-only module. Load it lazily and only after the core SDK is configured.
+type PurchasesUIDefault = typeof import('react-native-purchases-ui').default;
+
+async function ensurePurchasesUI(): Promise<PurchasesUIDefault | null> {
+  const P = await ensureConfigured();
+  if (!P) return null;
+  try {
+    const mod = await import('react-native-purchases-ui');
+    return mod.default;
+  } catch (e) {
+    console.warn('RevenueCatUI load failed', e);
+    return null;
+  }
 }
 
 async function syncEntitlementWithBackend(token: string | null): Promise<void> {
@@ -139,6 +189,13 @@ interface SubscriptionContextValue {
   purchase: (pkg: PurchasesPackage) => Promise<boolean>;
   restore: () => Promise<boolean>;
   manageSubscriptions: () => Promise<void>;
+  /**
+   * Present the native RevenueCat Paywall for the current offering. Resolves to
+   * true if the trader entitlement is active once the paywall is dismissed.
+   */
+  presentPaywall: () => Promise<boolean>;
+  /** Present the native RevenueCat Customer Center (manage/cancel/refund). */
+  presentCustomerCenter: () => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(
@@ -176,7 +233,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       applyCustomerInfo(info);
       // Returning subscribers may already hold an active entitlement before they
       // ever tap purchase/restore. Sync the server so their profile stays live.
-      if (info.entitlements.active[TRADER_ENTITLEMENT_ID]) {
+      if (findActiveTraderEntitlement(info)) {
         await syncEntitlementWithBackend(token);
       }
     } catch (e) {
@@ -248,7 +305,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (!P) throw new Error('In-app purchases are not available in this build.');
       const { customerInfo: info } = await P.purchasePackage(pkg);
       applyCustomerInfo(info);
-      const active = !!info.entitlements.active[TRADER_ENTITLEMENT_ID];
+      const active = !!findActiveTraderEntitlement(info);
       if (active) await syncEntitlementWithBackend(token);
       return active;
     },
@@ -260,7 +317,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!P) throw new Error('In-app purchases are not available in this build.');
     const info = await P.restorePurchases();
     applyCustomerInfo(info);
-    const active = !!info.entitlements.active[TRADER_ENTITLEMENT_ID];
+    const active = !!findActiveTraderEntitlement(info);
     if (active) await syncEntitlementWithBackend(token);
     return active;
   }, [applyCustomerInfo, token]);
@@ -275,7 +332,37 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const activeEntitlement = customerInfo?.entitlements.active[TRADER_ENTITLEMENT_ID] ?? null;
+  const presentPaywall = useCallback(async (): Promise<boolean> => {
+    const UI = await ensurePurchasesUI();
+    if (!UI) throw new Error('In-app purchases are not available in this build.');
+    // Present the current offering's paywall (falls back to the SDK default if
+    // no offering is loaded). The result enum is informational; the customer
+    // info re-read below is the source of truth for entitlement state.
+    await UI.presentPaywall(offering ? { offering } : {});
+    const P = await ensureConfigured();
+    let active = false;
+    if (P) {
+      const info = await P.getCustomerInfo();
+      applyCustomerInfo(info);
+      active = !!findActiveTraderEntitlement(info);
+      if (active) await syncEntitlementWithBackend(token);
+    }
+    return active;
+  }, [offering, applyCustomerInfo, token]);
+
+  const presentCustomerCenter = useCallback(async (): Promise<void> => {
+    const UI = await ensurePurchasesUI();
+    if (!UI) return;
+    try {
+      await UI.presentCustomerCenter();
+      // The user may have cancelled/refunded inside the Customer Center.
+      await loadCustomerInfo();
+    } catch (e) {
+      console.warn('RevenueCat presentCustomerCenter failed', e);
+    }
+  }, [loadCustomerInfo]);
+
+  const activeEntitlement = findActiveTraderEntitlement(customerInfo);
 
   const value: SubscriptionContextValue = {
     isSupported: isPurchasesSupported,
@@ -290,6 +377,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     purchase,
     restore,
     manageSubscriptions,
+    presentPaywall,
+    presentCustomerCenter,
   };
 
   return (

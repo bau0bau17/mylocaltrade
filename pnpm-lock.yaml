@@ -170,6 +170,10 @@ overrides:
 importers:
 
   .:
+    dependencies:
+      '@replit/revenuecat-sdk':
+        specifier: ^4.2.0
+        version: 4.2.0(typescript@5.9.3)
     devDependencies:
       prettier:
         specifier: ^3.8.1
@@ -375,6 +379,9 @@ importers:
       '@google-cloud/storage':
         specifier: ^7.19.0
         version: 7.19.0
+      '@replit/revenuecat-sdk':
+        specifier: ^4.2.0
+        version: 4.2.0(typescript@5.9.3)
       '@types/nodemailer':
         specifier: ^7.0.11
         version: 7.0.11
@@ -2517,6 +2524,11 @@ packages:
 
   '@react-navigation/routers@7.5.3':
     resolution: {integrity: sha512-1tJHg4KKRJuQ1/EvJxatrMef3NZXEPzwUIUZ3n1yJ2t7Q97siwRtbynRpQG9/69ebbtiZ8W3ScOZF/OmhvM4Rg==}
+
+  '@replit/revenuecat-sdk@4.2.0':
+    resolution: {integrity: sha512-6y1qm4Wn9vJHKy9h6XAUHj8fPbblN6vu+poHD8fPpoTiSk8fv4RevH/EfXLQLusBmWrRDQ4fkYCUoT5Pfe3Cyg==}
+    peerDependencies:
+      typescript: ^5
 
   '@replit/vite-plugin-cartographer@0.5.1':
     resolution: {integrity: sha512-KiaQMx4ssTM8hSjMFscyIV1PN1bRVCWCFqN3fXOfXa39uFFCKUaeL3VvH/sxuy7S7ET+MCFOt+J7lLtL56bRrA==}
@@ -9117,6 +9129,10 @@ snapshots:
   '@react-navigation/routers@7.5.3':
     dependencies:
       nanoid: 3.3.11
+
+  '@replit/revenuecat-sdk@4.2.0(typescript@5.9.3)':
+    dependencies:
+      typescript: 5.9.3
 
   '@replit/vite-plugin-cartographer@0.5.1':
     dependencies:

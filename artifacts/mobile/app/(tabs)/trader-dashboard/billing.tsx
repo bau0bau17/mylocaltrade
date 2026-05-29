@@ -36,7 +36,10 @@ export default function BillingScreen() {
   }, [refetch, subscription]));
 
   const manageApple = async () => {
-    await subscription.manageSubscriptions();
+    // Customer Center is the full self-service surface (manage, cancel, refund,
+    // restore). It falls back silently if unavailable in this build.
+    await subscription.presentCustomerCenter();
+    await refetch();
   };
 
   const restoreApple = async () => {
