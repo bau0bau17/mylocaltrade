@@ -445,6 +445,26 @@ export default function TraderDetail({ userId }: Props) {
                 value={profile.authorisedRepresentative ? "Yes — acting on behalf of the owner" : "No"}
               />
               <Field label="Business email domain" value={profile.businessEmailDomain || "—"} />
+              {profile.businessEmailDomain ? (
+                <Field
+                  label="Business email confirmation"
+                  value={
+                    profile.businessEmailVerified
+                      ? `Confirmed${
+                          profile.businessEmailVerifiedAddress
+                            ? ` (${profile.businessEmailVerifiedAddress})`
+                            : ""
+                        }${
+                          profile.businessEmailVerifiedAt
+                            ? ` · ${new Date(profile.businessEmailVerifiedAt).toLocaleDateString("en-GB")}`
+                            : ""
+                        }`
+                      : profile.businessEmailVerificationTarget
+                        ? `Self-declared — verification pending (${profile.businessEmailVerificationTarget})`
+                        : "Self-declared (not confirmed by email)"
+                  }
+                />
+              ) : null}
               <Field
                 label="Additional services"
                 value={profile.additionalServices?.join(", ") || "—"}

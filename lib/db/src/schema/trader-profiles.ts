@@ -72,6 +72,20 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   // Optional business email domain captured as supporting evidence that a
   // non-owner representative genuinely works for the business.
   businessEmailDomain: varchar("business_email_domain", { length: 255 }),
+  // --- Business email domain ownership confirmation (Task #39) ---
+  // Round-trip email proof that the trader controls a mailbox at their declared
+  // business email domain. Advisory trust signal only; never blocks approval.
+  // True once a verification link sent to an address at the declared domain was
+  // clicked, OR when the trader's already-verified login email is at that domain.
+  businessEmailVerified: boolean("business_email_verified").notNull().default(false),
+  // The specific address that was confirmed (shown to admins for context).
+  businessEmailVerifiedAddress: varchar("business_email_verified_address", { length: 255 }),
+  businessEmailVerifiedAt: timestamp("business_email_verified_at"),
+  // The address a pending verification email was last sent to (and its token +
+  // send time, used for the confirm link, 24h expiry and a resend cooldown).
+  businessEmailVerificationTarget: varchar("business_email_verification_target", { length: 255 }),
+  businessEmailVerificationToken: text("business_email_verification_token"),
+  businessEmailVerificationSentAt: timestamp("business_email_verification_sent_at"),
   // The admin who granted verified status (accountability / audit aid).
   verifiedByAdminId: integer("verified_by_admin_id").references(() => usersTable.id),
   // Durable note the admin recorded at the moment of verification. Unlike

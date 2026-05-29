@@ -326,8 +326,12 @@ router.get("/admin/traders/:userId", authMiddleware, adminOnly, async (req, res)
     // Strip secrets from user/profile before returning
     const { passwordHash, emailVerificationToken, emailVerificationExpiresAt, ...userSafe } =
       row.user as Record<string, unknown> & { passwordHash?: string; emailVerificationToken?: string | null; emailVerificationExpiresAt?: Date | null };
-    const { phoneOtpHash, phoneOtpExpiresAt, ...profileSafe } =
-      row.profile as Record<string, unknown> & { phoneOtpHash?: string | null; phoneOtpExpiresAt?: Date | null };
+    const { phoneOtpHash, phoneOtpExpiresAt, businessEmailVerificationToken, ...profileSafe } =
+      row.profile as Record<string, unknown> & {
+        phoneOtpHash?: string | null;
+        phoneOtpExpiresAt?: Date | null;
+        businessEmailVerificationToken?: string | null;
+      };
 
     res.json({
       user: userSafe,
