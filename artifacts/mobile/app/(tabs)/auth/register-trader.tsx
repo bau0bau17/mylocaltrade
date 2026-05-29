@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -20,6 +21,7 @@ interface ChHit {
 
 export default function RegisterTraderScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { registerTrader } = useAuth();
 
@@ -195,7 +197,7 @@ export default function RegisterTraderScreen() {
         style={styles.scroll}
         contentContainerStyle={{
           paddingTop: 24,
-          paddingBottom: insets.bottom + 24,
+          paddingBottom: tabBarHeight + insets.bottom + 32,
           paddingHorizontal: 24,
         }}
         bottomOffset={60}
