@@ -9,12 +9,28 @@ export const TRADER_VERIFICATION_STATUSES = [
   "PROFILE_INCOMPLETE",
   "PENDING_DOCUMENTS",
   "UNDER_REVIEW",
+  "NEEDS_MORE_INFO",
   "VERIFIED",
   "REJECTED",
   "SUSPENDED",
   "EXPIRED_DOCUMENTS",
+  // Reserved for a future periodic re-validation flow.
+  "REVALIDATION_REQUIRED",
 ] as const;
 export type TraderVerificationStatus = (typeof TRADER_VERIFICATION_STATUSES)[number];
+
+// The relationship the person completing verification has to the business.
+// Practical roles so owners, company officers, staff and sole traders can all
+// be verified — and a non-owner can declare they are an authorised representative.
+export const BUSINESS_ROLES = [
+  "OWNER",
+  "DIRECTOR",
+  "MANAGER",
+  "EMPLOYEE",
+  "SELF_EMPLOYED",
+  "OTHER",
+] as const;
+export type BusinessRole = (typeof BUSINESS_ROLES)[number];
 
 export const traderProfilesTable = pgTable("trader_profiles", {
   id: serial("id").primaryKey(),
@@ -41,6 +57,24 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   isActive: boolean("is_active").notNull().default(false),
   rating: real("rating"),
   reviewCount: integer("review_count").notNull().default(0),
+
+  // --- Verification: who is completing it & for what business (Task #38) ---
+  // The person's relationship to the business (OWNER, DIRECTOR, MANAGER,
+  // EMPLOYEE, SELF_EMPLOYED, OTHER). Null until the trader declares it.
+  businessRole: varchar("business_role", { length: 30 }),
+  // True when a non-owner declares they are acting with the owner's authority.
+  // When set, an authorisation document is required during review.
+  authorisedRepresentative: boolean("authorised_representative").notNull().default(false),
+  // Optional business email domain captured as supporting evidence that a
+  // non-owner representative genuinely works for the business.
+  businessEmailDomain: varchar("business_email_domain", { length: 255 }),
+  // The admin who granted verified status (accountability / audit aid).
+  verifiedByAdminId: integer("verified_by_admin_id").references(() => usersTable.id),
+  // When the admin asks for more information, the human-readable reason shown
+  // to the trader so they know exactly what to supply.
+  needsMoreInfoReason: text("needs_more_info_reason"),
+  // Reserved for a future periodic re-validation flow.
+  revalidationDueAt: timestamp("revalidation_due_at"),
 
   // --- Verification state machine (Phase 1+) ---
   verificationStatus: varchar("verification_status", { length: 40 })

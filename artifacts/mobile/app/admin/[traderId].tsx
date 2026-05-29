@@ -64,6 +64,10 @@ interface TraderDetail {
     businessDescription: string | null;
     website: string | null;
     openingHours: string | null;
+    businessRole: string | null;
+    authorisedRepresentative: boolean;
+    businessEmailDomain: string | null;
+    needsMoreInfoReason: string | null;
     verificationStatus: string;
     phoneVerified: boolean;
     businessProfileCompleted: boolean;
@@ -372,9 +376,9 @@ export default function AdminTraderDetail() {
   const { profile, user, documents, documentsEvaluation, auditLog } = data;
   const status = profile.verificationStatus;
   const verifiedWithoutDocs = status === 'VERIFIED' && !documentsEvaluation.complete;
-  const canApprove = ['UNDER_REVIEW', 'PENDING_DOCUMENTS', 'REJECTED', 'SUSPENDED'].includes(status);
-  const canReject = ['UNDER_REVIEW', 'PENDING_DOCUMENTS', 'VERIFIED'].includes(status);
-  const canRequestInfo = ['UNDER_REVIEW', 'PENDING_DOCUMENTS'].includes(status);
+  const canApprove = ['UNDER_REVIEW', 'PENDING_DOCUMENTS', 'NEEDS_MORE_INFO', 'REJECTED', 'SUSPENDED'].includes(status);
+  const canReject = ['UNDER_REVIEW', 'PENDING_DOCUMENTS', 'NEEDS_MORE_INFO', 'VERIFIED'].includes(status);
+  const canRequestInfo = ['UNDER_REVIEW', 'PENDING_DOCUMENTS', 'NEEDS_MORE_INFO'].includes(status);
   const canSuspend = ['VERIFIED', 'UNDER_REVIEW'].includes(status);
 
   return (
@@ -420,6 +424,12 @@ export default function AdminTraderDetail() {
               <Text style={styles.notesText}>{profile.rejectionReason}</Text>
             </View>
           )}
+          {profile.needsMoreInfoReason && status === 'NEEDS_MORE_INFO' && (
+            <View style={[styles.notesBox, { borderColor: '#B45309' }]}>
+              <Text style={[styles.notesLabel, { color: '#B45309' }]}>Information requested</Text>
+              <Text style={styles.notesText}>{profile.needsMoreInfoReason}</Text>
+            </View>
+          )}
         </View>
 
         {/* Business info */}
@@ -429,6 +439,15 @@ export default function AdminTraderDetail() {
           <Field label="Email" value={user.email} extra={user.emailVerified ? '✓ verified' : 'unverified'} />
           <Field label="Phone" value={profile.phone} extra={profile.phoneVerified ? '✓ verified' : 'unverified'} />
           <Field label="Trade" value={profile.mainCategory} />
+          {profile.businessRole ? (
+            <Field label="Role in business" value={ROLE_LABELS[profile.businessRole] ?? profile.businessRole} />
+          ) : null}
+          {profile.authorisedRepresentative ? (
+            <Field label="Authorisation" value="Acting on behalf of the business owner" />
+          ) : null}
+          {profile.businessEmailDomain ? (
+            <Field label="Business email domain" value={profile.businessEmailDomain} />
+          ) : null}
           {profile.additionalServices?.length ? (
             <Field label="Services" value={profile.additionalServices.join(', ')} />
           ) : null}
@@ -829,7 +848,20 @@ const DOC_LABEL: Record<string, string> = {
   PROOF_OF_ADDRESS: 'Proof of address',
   INSURANCE: 'Public liability insurance',
   QUALIFICATION: 'Trade qualification',
+  COMPANY_REGISTRATION: 'Company registration',
+  VAT_REGISTRATION: 'VAT registration',
+  BUSINESS_ADDRESS: 'Business address',
+  AUTHORISATION: 'Authorisation letter',
   OTHER: 'Other document',
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: 'Owner',
+  DIRECTOR: 'Director',
+  MANAGER: 'Manager',
+  EMPLOYEE: 'Employee',
+  SELF_EMPLOYED: 'Self-employed / sole trader',
+  OTHER: 'Other',
 };
 
 // Convert a fetched Blob into a data: URI usable by <Image source={{ uri }}>.
@@ -929,6 +961,7 @@ function StatusPill({ status }: { status: string }) {
     PROFILE_INCOMPLETE: { label: 'Profile incomplete', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
     PENDING_DOCUMENTS: { label: 'Awaiting documents', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
     UNDER_REVIEW: { label: 'Under review', bg: 'rgba(59, 130, 246, 0.14)', fg: '#1D4ED8' },
+    NEEDS_MORE_INFO: { label: 'Needs more info', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
     VERIFIED: { label: 'Verified', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
     REJECTED: { label: 'Rejected', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
     SUSPENDED: { label: 'Suspended', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },

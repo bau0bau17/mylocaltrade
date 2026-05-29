@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, downloadAuthed, fetchAuthedBlob, ApiError } from "@/lib/api";
 import { queryClient as qc } from "@/lib/queryClient";
-import type { TraderDetailResponse, TraderDocument } from "@/lib/types";
+import { BUSINESS_ROLE_LABELS, type TraderDetailResponse, type TraderDocument } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -405,6 +405,14 @@ export default function TraderDetail({ userId }: Props) {
           </AlertDescription>
         </Alert>
       )}
+      {profile.verificationStatus === "NEEDS_MORE_INFO" && profile.needsMoreInfoReason && (
+        <Alert>
+          <AlertTriangle className="w-4 h-4" />
+          <AlertDescription>
+            <strong>Information requested:</strong> {profile.needsMoreInfoReason}
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Tabs defaultValue="profile">
         <TabsList>
@@ -428,6 +436,15 @@ export default function TraderDetail({ userId }: Props) {
               <Field label="Email" value={user.email} />
               <Field label="Phone" value={profile.phone} extra={profile.phoneVerified ? "verified" : "unverified"} />
               <Field label="Main category" value={profile.mainCategory} />
+              <Field
+                label="Role in business"
+                value={profile.businessRole ? (BUSINESS_ROLE_LABELS[profile.businessRole] ?? profile.businessRole) : "—"}
+              />
+              <Field
+                label="Authorised representative"
+                value={profile.authorisedRepresentative ? "Yes — acting on behalf of the owner" : "No"}
+              />
+              <Field label="Business email domain" value={profile.businessEmailDomain || "—"} />
               <Field
                 label="Additional services"
                 value={profile.additionalServices?.join(", ") || "—"}
@@ -858,6 +875,10 @@ function labelForDocType(type: string): string {
     case "PROOF_OF_ADDRESS": return "Proof of address";
     case "INSURANCE": return "Public liability insurance";
     case "QUALIFICATION": return "Trade qualification";
+    case "COMPANY_REGISTRATION": return "Company registration";
+    case "VAT_REGISTRATION": return "VAT registration";
+    case "BUSINESS_ADDRESS": return "Business address";
+    case "AUTHORISATION": return "Authorisation letter";
     default: return "Other document";
   }
 }

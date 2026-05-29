@@ -720,7 +720,10 @@ router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
       .select()
       .from(traderDocumentsTable)
       .where(eq(traderDocumentsTable.userId, userId));
-    const documents = evaluateDocumentsComplete(docs);
+    const documents = evaluateDocumentsComplete(docs, {
+      businessRole: profile.businessRole,
+      authorisedRepresentative: profile.authorisedRepresentative,
+    });
     const [sub] = await db
       .select()
       .from(subscriptionsTable)
@@ -746,6 +749,9 @@ router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
       isActive: profile.isActive,
       rejectionReason: profile.rejectionReason,
       adminNotes: profile.adminNotes,
+      needsMoreInfoReason: profile.needsMoreInfoReason,
+      businessRole: profile.businessRole,
+      authorisedRepresentative: profile.authorisedRepresentative,
       checklist: buildOnboardingChecklist(user, profile, subscription),
       businessProfile,
       documents,

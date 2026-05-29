@@ -144,6 +144,9 @@ export const GetTraderOnboardingStatusResponse = zod.object({
   isActive: zod.boolean(),
   rejectionReason: zod.string().nullish(),
   adminNotes: zod.string().nullish(),
+  needsMoreInfoReason: zod.string().nullish(),
+  businessRole: zod.string().nullish(),
+  authorisedRepresentative: zod.boolean().nullish(),
   checklist: zod.array(
     zod.object({
       key: zod.string(),
@@ -340,6 +343,18 @@ export const ListTradersResponse = zod.object({
           linkedin: zod.string().optional(),
         })
         .nullish(),
+      businessRole: zod
+        .enum([
+          "OWNER",
+          "DIRECTOR",
+          "MANAGER",
+          "EMPLOYEE",
+          "SELF_EMPLOYED",
+          "OTHER",
+        ])
+        .nullish(),
+      authorisedRepresentative: zod.boolean().nullish(),
+      businessEmailDomain: zod.string().nullish(),
       plan: zod.enum(["basic", "premium", "elite"]).nullish(),
       isFeatured: zod.boolean(),
       isActive: zod.boolean(),
@@ -403,6 +418,18 @@ export const GetFeaturedTradersResponse = zod.object({
           linkedin: zod.string().optional(),
         })
         .nullish(),
+      businessRole: zod
+        .enum([
+          "OWNER",
+          "DIRECTOR",
+          "MANAGER",
+          "EMPLOYEE",
+          "SELF_EMPLOYED",
+          "OTHER",
+        ])
+        .nullish(),
+      authorisedRepresentative: zod.boolean().nullish(),
+      businessEmailDomain: zod.string().nullish(),
       plan: zod.enum(["basic", "premium", "elite"]).nullish(),
       isFeatured: zod.boolean(),
       isActive: zod.boolean(),
@@ -462,6 +489,18 @@ export const GetTraderResponse = zod.object({
       linkedin: zod.string().optional(),
     })
     .nullish(),
+  businessRole: zod
+    .enum([
+      "OWNER",
+      "DIRECTOR",
+      "MANAGER",
+      "EMPLOYEE",
+      "SELF_EMPLOYED",
+      "OTHER",
+    ])
+    .nullish(),
+  authorisedRepresentative: zod.boolean().nullish(),
+  businessEmailDomain: zod.string().nullish(),
   plan: zod.enum(["basic", "premium", "elite"]).nullish(),
   isFeatured: zod.boolean(),
   isActive: zod.boolean(),
@@ -512,6 +551,18 @@ export const GetTraderProfileResponse = zod.object({
       linkedin: zod.string().optional(),
     })
     .nullish(),
+  businessRole: zod
+    .enum([
+      "OWNER",
+      "DIRECTOR",
+      "MANAGER",
+      "EMPLOYEE",
+      "SELF_EMPLOYED",
+      "OTHER",
+    ])
+    .nullish(),
+  authorisedRepresentative: zod.boolean().nullish(),
+  businessEmailDomain: zod.string().nullish(),
   plan: zod.enum(["basic", "premium", "elite"]).nullish(),
   isFeatured: zod.boolean(),
   isActive: zod.boolean(),
@@ -559,6 +610,18 @@ export const UpdateTraderProfileBody = zod.object({
       linkedin: zod.string().optional(),
     })
     .optional(),
+  businessRole: zod
+    .enum([
+      "OWNER",
+      "DIRECTOR",
+      "MANAGER",
+      "EMPLOYEE",
+      "SELF_EMPLOYED",
+      "OTHER",
+    ])
+    .optional(),
+  authorisedRepresentative: zod.boolean().optional(),
+  businessEmailDomain: zod.string().optional(),
 });
 
 export const UpdateTraderProfileResponse = zod.object({
@@ -587,6 +650,18 @@ export const UpdateTraderProfileResponse = zod.object({
       linkedin: zod.string().optional(),
     })
     .nullish(),
+  businessRole: zod
+    .enum([
+      "OWNER",
+      "DIRECTOR",
+      "MANAGER",
+      "EMPLOYEE",
+      "SELF_EMPLOYED",
+      "OTHER",
+    ])
+    .nullish(),
+  authorisedRepresentative: zod.boolean().nullish(),
+  businessEmailDomain: zod.string().nullish(),
   plan: zod.enum(["basic", "premium", "elite"]).nullish(),
   isFeatured: zod.boolean(),
   isActive: zod.boolean(),
@@ -709,6 +784,10 @@ export const GetTraderDocumentsResponse = zod.object({
         "PROOF_OF_ADDRESS",
         "INSURANCE",
         "QUALIFICATION",
+        "COMPANY_REGISTRATION",
+        "VAT_REGISTRATION",
+        "BUSINESS_ADDRESS",
+        "AUTHORISATION",
         "OTHER",
       ]),
       originalFilename: zod.string(),
@@ -732,6 +811,10 @@ export const GetTraderDocumentsResponse = zod.object({
           "PROOF_OF_ADDRESS",
           "INSURANCE",
           "QUALIFICATION",
+          "COMPANY_REGISTRATION",
+          "VAT_REGISTRATION",
+          "BUSINESS_ADDRESS",
+          "AUTHORISATION",
           "OTHER",
         ]),
         label: zod.string(),
@@ -761,6 +844,10 @@ export const RegisterTraderDocumentBody = zod.object({
     "PROOF_OF_ADDRESS",
     "INSURANCE",
     "QUALIFICATION",
+    "COMPANY_REGISTRATION",
+    "VAT_REGISTRATION",
+    "BUSINESS_ADDRESS",
+    "AUTHORISATION",
     "OTHER",
   ]),
   objectPath: zod.string(),
@@ -795,6 +882,10 @@ export const GetTraderDocumentUploadUrlBody = zod.object({
     "PROOF_OF_ADDRESS",
     "INSURANCE",
     "QUALIFICATION",
+    "COMPANY_REGISTRATION",
+    "VAT_REGISTRATION",
+    "BUSINESS_ADDRESS",
+    "AUTHORISATION",
     "OTHER",
   ]),
   filename: zod.string(),
@@ -829,6 +920,10 @@ export const DeleteTraderDocumentResponse = zod.object({
           "PROOF_OF_ADDRESS",
           "INSURANCE",
           "QUALIFICATION",
+          "COMPANY_REGISTRATION",
+          "VAT_REGISTRATION",
+          "BUSINESS_ADDRESS",
+          "AUTHORISATION",
           "OTHER",
         ]),
         label: zod.string(),
@@ -1075,6 +1170,18 @@ export const GetSavedTradersResponse = zod.object({
           linkedin: zod.string().optional(),
         })
         .nullish(),
+      businessRole: zod
+        .enum([
+          "OWNER",
+          "DIRECTOR",
+          "MANAGER",
+          "EMPLOYEE",
+          "SELF_EMPLOYED",
+          "OTHER",
+        ])
+        .nullish(),
+      authorisedRepresentative: zod.boolean().nullish(),
+      businessEmailDomain: zod.string().nullish(),
       plan: zod.enum(["basic", "premium", "elite"]).nullish(),
       isFeatured: zod.boolean(),
       isActive: zod.boolean(),

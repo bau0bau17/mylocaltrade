@@ -135,6 +135,9 @@ export interface TraderOnboardingStatus {
   isActive: boolean;
   rejectionReason?: string | null;
   adminNotes?: string | null;
+  needsMoreInfoReason?: string | null;
+  businessRole?: string | null;
+  authorisedRepresentative?: boolean | null;
   checklist: TraderOnboardingChecklistStep[];
   legal?: TraderLegalAcceptance;
   email: string;
@@ -238,6 +241,19 @@ export type TraderProfileSocialLinks = {
   linkedin?: string;
 } | null;
 
+export type TraderProfileBusinessRole =
+  | (typeof TraderProfileBusinessRole)[keyof typeof TraderProfileBusinessRole]
+  | null;
+
+export const TraderProfileBusinessRole = {
+  OWNER: "OWNER",
+  DIRECTOR: "DIRECTOR",
+  MANAGER: "MANAGER",
+  EMPLOYEE: "EMPLOYEE",
+  SELF_EMPLOYED: "SELF_EMPLOYED",
+  OTHER: "OTHER",
+} as const;
+
 export type TraderProfilePlan =
   | (typeof TraderProfilePlan)[keyof typeof TraderProfilePlan]
   | null;
@@ -267,6 +283,9 @@ export interface TraderProfile {
   logoUrl?: string | null;
   galleryUrls?: string[];
   socialLinks?: TraderProfileSocialLinks;
+  businessRole?: TraderProfileBusinessRole;
+  authorisedRepresentative?: boolean | null;
+  businessEmailDomain?: string | null;
   plan?: TraderProfilePlan;
   isFeatured: boolean;
   isActive: boolean;
@@ -291,6 +310,18 @@ export type UpdateTraderProfileRequestSocialLinks = {
   linkedin?: string;
 };
 
+export type UpdateTraderProfileRequestBusinessRole =
+  (typeof UpdateTraderProfileRequestBusinessRole)[keyof typeof UpdateTraderProfileRequestBusinessRole];
+
+export const UpdateTraderProfileRequestBusinessRole = {
+  OWNER: "OWNER",
+  DIRECTOR: "DIRECTOR",
+  MANAGER: "MANAGER",
+  EMPLOYEE: "EMPLOYEE",
+  SELF_EMPLOYED: "SELF_EMPLOYED",
+  OTHER: "OTHER",
+} as const;
+
 export interface UpdateTraderProfileRequest {
   businessName?: string;
   contactName?: string;
@@ -307,6 +338,9 @@ export interface UpdateTraderProfileRequest {
   logoUrl?: string;
   galleryUrls?: string[];
   socialLinks?: UpdateTraderProfileRequestSocialLinks;
+  businessRole?: UpdateTraderProfileRequestBusinessRole;
+  authorisedRepresentative?: boolean;
+  businessEmailDomain?: string;
 }
 
 export interface TraderListResponse {
@@ -772,6 +806,10 @@ export const TraderDocumentType = {
   PROOF_OF_ADDRESS: "PROOF_OF_ADDRESS",
   INSURANCE: "INSURANCE",
   QUALIFICATION: "QUALIFICATION",
+  COMPANY_REGISTRATION: "COMPANY_REGISTRATION",
+  VAT_REGISTRATION: "VAT_REGISTRATION",
+  BUSINESS_ADDRESS: "BUSINESS_ADDRESS",
+  AUTHORISATION: "AUTHORISATION",
   OTHER: "OTHER",
 } as const;
 
@@ -806,6 +844,10 @@ export const DocumentTypeStatusType = {
   PROOF_OF_ADDRESS: "PROOF_OF_ADDRESS",
   INSURANCE: "INSURANCE",
   QUALIFICATION: "QUALIFICATION",
+  COMPANY_REGISTRATION: "COMPANY_REGISTRATION",
+  VAT_REGISTRATION: "VAT_REGISTRATION",
+  BUSINESS_ADDRESS: "BUSINESS_ADDRESS",
+  AUTHORISATION: "AUTHORISATION",
   OTHER: "OTHER",
 } as const;
 
@@ -852,6 +894,10 @@ export const RequestUploadUrlRequestType = {
   PROOF_OF_ADDRESS: "PROOF_OF_ADDRESS",
   INSURANCE: "INSURANCE",
   QUALIFICATION: "QUALIFICATION",
+  COMPANY_REGISTRATION: "COMPANY_REGISTRATION",
+  VAT_REGISTRATION: "VAT_REGISTRATION",
+  BUSINESS_ADDRESS: "BUSINESS_ADDRESS",
+  AUTHORISATION: "AUTHORISATION",
   OTHER: "OTHER",
 } as const;
 
@@ -879,6 +925,10 @@ export const RegisterTraderDocumentRequestType = {
   PROOF_OF_ADDRESS: "PROOF_OF_ADDRESS",
   INSURANCE: "INSURANCE",
   QUALIFICATION: "QUALIFICATION",
+  COMPANY_REGISTRATION: "COMPANY_REGISTRATION",
+  VAT_REGISTRATION: "VAT_REGISTRATION",
+  BUSINESS_ADDRESS: "BUSINESS_ADDRESS",
+  AUTHORISATION: "AUTHORISATION",
   OTHER: "OTHER",
 } as const;
 

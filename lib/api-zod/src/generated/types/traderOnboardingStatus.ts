@@ -19,6 +19,9 @@ export interface TraderOnboardingStatus {
   isActive: boolean;
   rejectionReason?: string | null;
   adminNotes?: string | null;
+  needsMoreInfoReason?: string | null;
+  businessRole?: string | null;
+  authorisedRepresentative?: boolean | null;
   checklist: TraderOnboardingChecklistStep[];
   legal?: TraderLegalAcceptance;
   email: string;

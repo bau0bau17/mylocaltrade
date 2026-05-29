@@ -39,16 +39,18 @@ export default function HowVerificationWorksScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>2. Document checks</Text>
         <Text style={styles.paragraph}>
-          Traders are asked to upload supporting documents:
+          The documents we ask for depend on the trader's role in the business. A sole trader is never asked for a company number, while a limited company director may be asked for company registration details.
         </Text>
         <Text style={styles.paragraph}>
           • Photo ID (required){'\n'}
           • Public liability insurance certificate (required){'\n'}
           • Proof of address (optional){'\n'}
-          • Trade qualifications, such as NVQ or City &amp; Guilds (optional)
+          • Trade qualifications, such as NVQ or City &amp; Guilds (optional){'\n'}
+          • Company registration, VAT registration or business address (where the business is registered){'\n'}
+          • A signed authorisation letter (where someone applies on behalf of the business owner)
         </Text>
         <Text style={styles.paragraph}>
-          Each document is reviewed by our team and is either approved or rejected with a reason. The trader can then upload a replacement. Documents are tracked as pending review, approved, rejected or expired.
+          Each document is reviewed by our team and is either approved or rejected with a reason. If we need anything else, we mark the profile as needing more information and tell the trader what to provide. The trader can then upload a replacement. Documents are tracked as pending review, approved, rejected or expired.
         </Text>
         <Text style={styles.paragraph}>
           Where a required document expires, the trader's profile is automatically hidden from public search until a valid replacement is uploaded and approved.

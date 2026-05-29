@@ -61,19 +61,23 @@ function serializeDoc(d: typeof traderDocumentsTable.$inferSelect) {
   };
 }
 
-async function reconcileDocumentsState(userId: number) {
+export async function reconcileDocumentsState(userId: number) {
   const docs = await db
     .select()
     .from(traderDocumentsTable)
     .where(eq(traderDocumentsTable.userId, userId));
-  const evaluation = evaluateDocumentsComplete(docs);
 
   const [profile] = await db
     .select()
     .from(traderProfilesTable)
     .where(eq(traderProfilesTable.userId, userId))
     .limit(1);
-  if (!profile) return evaluation;
+  if (!profile) return evaluateDocumentsComplete(docs);
+
+  const evaluation = evaluateDocumentsComplete(docs, {
+    businessRole: profile.businessRole,
+    authorisedRepresentative: profile.authorisedRepresentative,
+  });
 
   const wasSubmitted = profile.documentsSubmitted;
   const stateChange: Record<string, unknown> = {};
@@ -115,6 +119,17 @@ async function reconcileDocumentsState(userId: number) {
     stateChange.submittedForReviewAt = new Date();
   }
 
+  // If admin asked for more information and the trader has since supplied a
+  // complete set of documents, queue them back for review and clear the note.
+  if (
+    profile.verificationStatus === TRADER_STATUS.NEEDS_MORE_INFO &&
+    evaluation.complete
+  ) {
+    stateChange.verificationStatus = TRADER_STATUS.UNDER_REVIEW;
+    stateChange.submittedForReviewAt = new Date();
+    stateChange.needsMoreInfoReason = null;
+  }
+
   if (Object.keys(stateChange).length > 0) {
     stateChange.updatedAt = new Date();
     await db
@@ -148,7 +163,15 @@ router.get("/trader/documents", authMiddleware, traderOnly, async (req, res) => 
       .from(traderDocumentsTable)
       .where(eq(traderDocumentsTable.userId, userId))
       .orderBy(desc(traderDocumentsTable.createdAt));
-    const evaluation = evaluateDocumentsComplete(docs);
+    const [profile] = await db
+      .select()
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    const evaluation = evaluateDocumentsComplete(docs, {
+      businessRole: profile?.businessRole,
+      authorisedRepresentative: profile?.authorisedRepresentative,
+    });
     res.json({
       documents: docs.map(serializeDoc),
       evaluation,

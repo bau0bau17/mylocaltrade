@@ -11,6 +11,15 @@ import { getApiUrl } from '@/lib/api-url';
 
 const MIN_DESCRIPTION_LEN = 80;
 
+const BUSINESS_ROLE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'OWNER', label: 'Owner' },
+  { value: 'DIRECTOR', label: 'Director' },
+  { value: 'MANAGER', label: 'Manager' },
+  { value: 'EMPLOYEE', label: 'Employee' },
+  { value: 'SELF_EMPLOYED', label: 'Self-employed / sole trader' },
+  { value: 'OTHER', label: 'Other' },
+];
+
 interface ProfileForm {
   mainCategory: string;
   businessDescription: string;
@@ -21,6 +30,9 @@ interface ProfileForm {
   serviceAreas: string[];
   openingHours: string;
   website: string;
+  businessRole: string;
+  authorisedRepresentative: boolean;
+  businessEmailDomain: string;
 }
 
 export default function BusinessProfileScreen() {
@@ -39,6 +51,9 @@ export default function BusinessProfileScreen() {
     serviceAreas: [],
     openingHours: '',
     website: '',
+    businessRole: '',
+    authorisedRepresentative: false,
+    businessEmailDomain: '',
   });
   const [serviceInput, setServiceInput] = useState('');
   const [areaInput, setAreaInput] = useState('');
@@ -73,6 +88,9 @@ export default function BusinessProfileScreen() {
           serviceAreas: Array.isArray(json.serviceAreas) ? json.serviceAreas : [],
           openingHours: json.openingHours ?? '',
           website: json.website ?? '',
+          businessRole: json.businessRole ?? '',
+          authorisedRepresentative: Boolean(json.authorisedRepresentative),
+          businessEmailDomain: json.businessEmailDomain ?? '',
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load profile');
@@ -135,6 +153,9 @@ export default function BusinessProfileScreen() {
           serviceAreas: form.serviceAreas,
           openingHours: form.openingHours.trim(),
           website: form.website.trim() || undefined,
+          businessRole: form.businessRole || undefined,
+          authorisedRepresentative: form.authorisedRepresentative,
+          businessEmailDomain: form.businessEmailDomain.trim() || undefined,
         }),
       });
       const json = await res.json();
@@ -251,6 +272,65 @@ export default function BusinessProfileScreen() {
             {form.businessDescription.trim().length} / {MIN_DESCRIPTION_LEN} characters minimum
           </Text>
           {fieldErr('businessDescription') && <Text style={styles.fieldError}>{fieldErr('businessDescription')}</Text>}
+        </View>
+
+        <Text style={styles.sectionTitle}>Your role in the business</Text>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>How are you connected to this business?</Text>
+          <Text style={styles.helper}>
+            This helps us verify the right documents. Sole traders are never asked for a company number.
+          </Text>
+          <View style={styles.roleGrid}>
+            {BUSINESS_ROLE_OPTIONS.map((opt) => {
+              const selected = form.businessRole === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => setForm(p => ({ ...p, businessRole: selected ? '' : opt.value }))}
+                  style={[styles.roleChip, selected && styles.roleChipSelected]}
+                >
+                  <Text style={[styles.roleChipText, selected && styles.roleChipTextSelected]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Pressable
+            onPress={() => setForm(p => ({ ...p, authorisedRepresentative: !p.authorisedRepresentative }))}
+            style={styles.toggleRow}
+          >
+            <Feather
+              name={form.authorisedRepresentative ? 'check-square' : 'square'}
+              size={20}
+              color={form.authorisedRepresentative ? Colors.light.primary : Colors.light.textMuted}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.toggleLabel}>I am acting on behalf of the business owner</Text>
+              <Text style={styles.toggleHint}>
+                Tick this if you are not the owner. We will ask you to upload a signed authorisation letter.
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Business email domain (optional)</Text>
+          <View style={styles.inputWrap}>
+            <Feather name="at-sign" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. yourcompany.co.uk"
+              placeholderTextColor={Colors.light.textMuted}
+              value={form.businessEmailDomain}
+              onChangeText={(t) => setForm(p => ({ ...p, businessEmailDomain: t }))}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+            />
+          </View>
+          <Text style={styles.helper}>Helps us confirm you use an official business email address.</Text>
         </View>
 
         <Text style={styles.sectionTitle}>Services offered *</Text>
@@ -493,6 +573,15 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 16 },
   chipText: { fontSize: 12, color: Colors.light.text, fontWeight: '500' },
   emptyChips: { fontSize: 12, color: Colors.light.textMuted, marginLeft: 4, marginTop: 6, fontStyle: 'italic' },
+
+  roleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  roleChip: { paddingHorizontal: 14, paddingVertical: 9, backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 12 },
+  roleChipSelected: { backgroundColor: 'rgba(59, 130, 246, 0.10)', borderColor: Colors.light.primary },
+  roleChipText: { fontSize: 13, color: Colors.light.text, fontWeight: '600' },
+  roleChipTextSelected: { color: Colors.light.primary },
+  toggleRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 12, padding: 14 },
+  toggleLabel: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
+  toggleHint: { fontSize: 11, color: Colors.light.textMuted, lineHeight: 16, marginTop: 4 },
 
   errorBox: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: Colors.light.errorMuted, borderColor: Colors.light.error, borderWidth: 1, padding: 12, borderRadius: 10, marginTop: 14 },
   errorText: { flex: 1, fontSize: 12, color: Colors.light.error, lineHeight: 17 },

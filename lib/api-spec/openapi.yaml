@@ -1927,6 +1927,15 @@ components:
         adminNotes:
           type: string
           nullable: true
+        needsMoreInfoReason:
+          type: string
+          nullable: true
+        businessRole:
+          type: string
+          nullable: true
+        authorisedRepresentative:
+          type: boolean
+          nullable: true
         checklist:
           type: array
           items:
@@ -2122,6 +2131,16 @@ components:
               type: string
             linkedin:
               type: string
+        businessRole:
+          type: string
+          enum: [OWNER, DIRECTOR, MANAGER, EMPLOYEE, SELF_EMPLOYED, OTHER]
+          nullable: true
+        authorisedRepresentative:
+          type: boolean
+          nullable: true
+        businessEmailDomain:
+          type: string
+          nullable: true
         plan:
           type: string
           enum: [basic, premium, elite]
@@ -2226,6 +2245,13 @@ components:
               type: string
             linkedin:
               type: string
+        businessRole:
+          type: string
+          enum: [OWNER, DIRECTOR, MANAGER, EMPLOYEE, SELF_EMPLOYED, OTHER]
+        authorisedRepresentative:
+          type: boolean
+        businessEmailDomain:
+          type: string
 
     TraderListResponse:
       type: object
@@ -2916,7 +2942,7 @@ components:
         id: { type: integer }
         type:
           type: string
-          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, OTHER]
+          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, COMPANY_REGISTRATION, VAT_REGISTRATION, BUSINESS_ADDRESS, AUTHORISATION, OTHER]
         originalFilename: { type: string }
         mimeType: { type: string }
         sizeBytes: { type: integer }
@@ -2951,7 +2977,7 @@ components:
       properties:
         type:
           type: string
-          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, OTHER]
+          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, COMPANY_REGISTRATION, VAT_REGISTRATION, BUSINESS_ADDRESS, AUTHORISATION, OTHER]
         label: { type: string }
         required: { type: boolean }
         hint: { type: string }
@@ -3025,7 +3051,7 @@ components:
       properties:
         type:
           type: string
-          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, OTHER]
+          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, COMPANY_REGISTRATION, VAT_REGISTRATION, BUSINESS_ADDRESS, AUTHORISATION, OTHER]
         filename: { type: string }
         mimeType: { type: string }
         sizeBytes: { type: integer }
@@ -3055,7 +3081,7 @@ components:
       properties:
         type:
           type: string
-          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, OTHER]
+          enum: [ID_DOCUMENT, PROOF_OF_ADDRESS, INSURANCE, QUALIFICATION, COMPANY_REGISTRATION, VAT_REGISTRATION, BUSINESS_ADDRESS, AUTHORISATION, OTHER]
         objectPath: { type: string }
         originalFilename: { type: string }
         mimeType: { type: string }

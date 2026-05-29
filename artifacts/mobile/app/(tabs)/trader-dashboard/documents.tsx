@@ -18,12 +18,22 @@ import type {
   RequestUploadUrlRequestType,
 } from '@workspace/api-client-react';
 
-const DOCUMENT_TYPES = [
-  { type: 'ID_DOCUMENT', label: 'Photo ID', required: true, icon: 'user', hint: 'Passport or driving licence (front).' },
-  { type: 'INSURANCE', label: 'Public liability insurance', required: true, icon: 'shield', hint: 'Current insurance certificate.' },
-  { type: 'PROOF_OF_ADDRESS', label: 'Proof of address', required: false, icon: 'home', hint: 'Utility bill or bank statement (last 3 months).' },
-  { type: 'QUALIFICATION', label: 'Trade qualification', required: false, icon: 'award', hint: 'Trade certificate, NVQ, City & Guilds, etc.' },
-] as const;
+// Which Feather icon to show per document type. The list of types to render,
+// their labels, hints and required flags are all driven by the server's
+// role-aware evaluation (evaluation.byType) so a sole trader never sees
+// company-only documents and an authorised representative is asked for an
+// authorisation letter.
+const DOC_ICONS: Record<string, string> = {
+  ID_DOCUMENT: 'user',
+  INSURANCE: 'shield',
+  PROOF_OF_ADDRESS: 'home',
+  QUALIFICATION: 'award',
+  COMPANY_REGISTRATION: 'briefcase',
+  VAT_REGISTRATION: 'percent',
+  BUSINESS_ADDRESS: 'map-pin',
+  AUTHORISATION: 'file-text',
+  OTHER: 'file',
+};
 
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -255,28 +265,27 @@ export default function DocumentsScreen() {
           </View>
         )}
 
-        {DOCUMENT_TYPES.map((dt) => {
-          const evalRow = evaluation?.byType.find((b: DocumentTypeStatus) => b.type === dt.type);
-          const myDocs = docs.filter((d) => d.type === dt.type);
-          const isUploading = uploadingType === dt.type;
+        {(evaluation?.byType ?? []).map((evalRow: DocumentTypeStatus) => {
+          const myDocs = docs.filter((d) => d.type === evalRow.type);
+          const isUploading = uploadingType === evalRow.type;
           return (
-            <View key={dt.type} style={styles.card}>
+            <View key={evalRow.type} style={styles.card}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardIcon}>
-                  <Feather name={dt.icon as 'shield'} size={18} color={Colors.light.primary} />
+                  <Feather name={(DOC_ICONS[evalRow.type] ?? 'file') as 'shield'} size={18} color={Colors.light.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.cardTitleRow}>
-                    <Text style={styles.cardTitle}>{dt.label}</Text>
-                    {dt.required ? (
+                    <Text style={styles.cardTitle}>{evalRow.label}</Text>
+                    {evalRow.required ? (
                       <View style={styles.requiredBadge}><Text style={styles.requiredBadgeText}>Required</Text></View>
                     ) : (
                       <View style={styles.optionalBadge}><Text style={styles.optionalBadgeText}>Optional</Text></View>
                     )}
                   </View>
-                  <Text style={styles.cardHint}>{dt.hint}</Text>
+                  {evalRow.hint ? <Text style={styles.cardHint}>{evalRow.hint}</Text> : null}
                 </View>
-                {evalRow?.satisfied && (
+                {evalRow.satisfied && (
                   <Feather name="check-circle" size={18} color={Colors.light.success} />
                 )}
               </View>
@@ -323,15 +332,15 @@ export default function DocumentsScreen() {
                 </View>
               )}
 
-              {TRACK_EXPIRY[dt.type] && (
+              {TRACK_EXPIRY[evalRow.type] && (
                 <View style={styles.expiryInputRow}>
                   <Feather name="calendar" size={13} color={Colors.light.textMuted} />
                   <TextInput
                     style={styles.expiryInput}
                     placeholder="Expiry date (YYYY-MM-DD, optional)"
                     placeholderTextColor={Colors.light.textMuted}
-                    value={expiryInputs[dt.type] ?? ''}
-                    onChangeText={(v) => setExpiryInputs((prev) => ({ ...prev, [dt.type]: v }))}
+                    value={expiryInputs[evalRow.type] ?? ''}
+                    onChangeText={(v) => setExpiryInputs((prev) => ({ ...prev, [evalRow.type]: v }))}
                     keyboardType="numbers-and-punctuation"
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -342,7 +351,7 @@ export default function DocumentsScreen() {
 
               <Pressable
                 style={[styles.uploadBtn, isUploading && styles.btnDisabled]}
-                onPress={() => handlePick(dt.type)}
+                onPress={() => handlePick(evalRow.type)}
                 disabled={isUploading}
               >
                 {isUploading ? (

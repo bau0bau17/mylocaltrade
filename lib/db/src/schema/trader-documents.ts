@@ -6,6 +6,11 @@ export const TRADER_DOCUMENT_TYPES = [
   "PROOF_OF_ADDRESS",
   "INSURANCE",
   "QUALIFICATION",
+  // Task #38: business-identity & authority evidence.
+  "COMPANY_REGISTRATION",
+  "VAT_REGISTRATION",
+  "BUSINESS_ADDRESS",
+  "AUTHORISATION",
   "OTHER",
 ] as const;
 export type TraderDocumentType = (typeof TRADER_DOCUMENT_TYPES)[number];
