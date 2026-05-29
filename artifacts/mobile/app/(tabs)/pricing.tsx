@@ -11,8 +11,7 @@ import { PlanCard } from '@/components/PlanCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { getApiUrl } from '@/lib/api-url';
-import { useSubscription, isUserCancelledError } from '@/lib/revenuecat';
-import type { PurchasesPackage } from 'react-native-purchases';
+import { useSubscription } from '@/lib/revenuecat';
 
 interface PromoPreview {
   code: string;
@@ -34,7 +33,7 @@ export default function PricingScreen() {
   const [promoApplied, setPromoApplied] = useState<PromoPreview | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
-  const [purchasingId, setPurchasingId] = useState<string | null>(null);
+  const [paywallBusy, setPaywallBusy] = useState(false);
 
   const { data: onboardingStatus, isLoading: isLoadingOnboarding } = useGetTraderOnboardingStatus({
     query: {
@@ -106,11 +105,19 @@ export default function PricingScreen() {
     );
   };
 
-  const handlePurchase = async (pkg: PurchasesPackage) => {
-    if (purchasingId) return;
-    setPurchasingId(pkg.identifier);
+  const handleOpenPaywall = async () => {
+    if (!isTrader) {
+      Alert.alert('Trade account needed', 'Register as a tradesperson to subscribe to a plan.');
+      return;
+    }
+    if (verifiedStatus !== 'verified') {
+      Alert.alert('Get verified first', 'Finish your trader verification before subscribing.');
+      return;
+    }
+    if (paywallBusy) return;
+    setPaywallBusy(true);
     try {
-      const active = await subscription.purchase(pkg);
+      const active = await subscription.presentPaywall();
       if (active) {
         Alert.alert(
           'You are subscribed',
@@ -119,11 +126,9 @@ export default function PricingScreen() {
         router.push('/trader-dashboard/billing');
       }
     } catch (e) {
-      if (!isUserCancelledError(e)) {
-        Alert.alert('Purchase failed', e instanceof Error ? e.message : 'Please try again.');
-      }
+      Alert.alert('Could not open plans', e instanceof Error ? e.message : 'Please try again.');
     } finally {
-      setPurchasingId(null);
+      setPaywallBusy(false);
     }
   };
 
@@ -302,48 +307,33 @@ export default function PricingScreen() {
           ) : (
             <>
               <Text style={styles.iapHeading}>Trader Subscription</Text>
-              {subscription.monthlyPackage && (
-                <IapPlanButton
-                  label="Monthly"
-                  priceLabel={subscription.monthlyPackage.product.priceString}
-                  cadence="per month"
-                  disabled={!isTrader || verifiedStatus !== 'verified' || !!purchasingId}
-                  loading={purchasingId === subscription.monthlyPackage.identifier}
-                  onPress={() => {
-                    if (!isTrader) {
-                      Alert.alert('Trade account needed', 'Register as a tradesperson to subscribe to a plan.');
-                      return;
-                    }
-                    if (verifiedStatus !== 'verified') {
-                      Alert.alert('Get verified first', 'Finish your trader verification before subscribing.');
-                      return;
-                    }
-                    handlePurchase(subscription.monthlyPackage!);
-                  }}
-                />
-              )}
-              {subscription.annualPackage && (
-                <IapPlanButton
-                  label="Annual"
-                  priceLabel={subscription.annualPackage.product.priceString}
-                  cadence="per year"
-                  highlight
-                  disabled={!isTrader || verifiedStatus !== 'verified' || !!purchasingId}
-                  loading={purchasingId === subscription.annualPackage.identifier}
-                  onPress={() => {
-                    if (!isTrader) {
-                      Alert.alert('Trade account needed', 'Register as a tradesperson to subscribe to a plan.');
-                      return;
-                    }
-                    if (verifiedStatus !== 'verified') {
-                      Alert.alert('Get verified first', 'Finish your trader verification before subscribing.');
-                      return;
-                    }
-                    handlePurchase(subscription.annualPackage!);
-                  }}
-                />
-              )}
-              <Pressable style={styles.restoreBtn} onPress={handleRestore} disabled={!!purchasingId}>
+              <View style={styles.paywallTeaser}>
+                {subscription.monthlyPackage && (
+                  <Text style={styles.paywallTeaserText}>
+                    {subscription.monthlyPackage.product.priceString} / month
+                  </Text>
+                )}
+                {subscription.annualPackage && (
+                  <Text style={styles.paywallTeaserText}>
+                    {subscription.annualPackage.product.priceString} / year
+                  </Text>
+                )}
+              </View>
+              <Pressable
+                style={[styles.paywallCta, paywallBusy && { opacity: 0.6 }]}
+                onPress={handleOpenPaywall}
+                disabled={paywallBusy}
+              >
+                {paywallBusy ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Feather name="credit-card" size={18} color="#fff" />
+                    <Text style={styles.paywallCtaText}>View plans & subscribe</Text>
+                  </>
+                )}
+              </Pressable>
+              <Pressable style={styles.restoreBtn} onPress={handleRestore} disabled={paywallBusy}>
                 <Text style={styles.restoreBtnText}>Restore purchases</Text>
               </Pressable>
             </>
@@ -383,48 +373,6 @@ export default function PricingScreen() {
         </View>
       </View>
     </ScrollView>
-  );
-}
-
-function IapPlanButton({
-  label,
-  priceLabel,
-  cadence,
-  onPress,
-  disabled,
-  loading,
-  highlight,
-}: {
-  label: string;
-  priceLabel: string;
-  cadence: string;
-  onPress: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-  highlight?: boolean;
-}) {
-  return (
-    <Pressable
-      style={[
-        styles.iapPlanBtn,
-        highlight && styles.iapPlanBtnHighlight,
-        disabled && { opacity: 0.6 },
-      ]}
-      onPress={onPress}
-      disabled={disabled || loading}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={styles.iapPlanLabel}>{label}</Text>
-        <Text style={styles.iapPlanCadence}>{cadence}</Text>
-      </View>
-      {loading ? (
-        <ActivityIndicator color={highlight ? '#fff' : Colors.light.primary} />
-      ) : (
-        <Text style={[styles.iapPlanPrice, highlight && styles.iapPlanPriceHighlight]}>
-          {priceLabel}
-        </Text>
-      )}
-    </Pressable>
   );
 }
 
@@ -502,6 +450,18 @@ const styles = StyleSheet.create({
   iapPlanPriceHighlight: { color: '#fff' },
   restoreBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   restoreBtnText: { fontSize: 14, fontWeight: '600', color: Colors.light.primary },
+  paywallTeaser: { flexDirection: 'row', gap: 16, marginBottom: 14 },
+  paywallTeaserText: { fontSize: 14, fontWeight: '600', color: Colors.light.textSecondary },
+  paywallCta: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primary,
+  },
+  paywallCtaText: { fontSize: 15, fontWeight: '700', color: '#fff' },
   iapActiveCard: {
     flexDirection: 'row',
     gap: 12,

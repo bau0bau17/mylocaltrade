@@ -15,6 +15,11 @@ import { CreateCheckoutSessionBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
 import { claimPromoForUser } from "./promo";
+import {
+  listCustomerActiveEntitlements,
+  listEntitlements,
+} from "@replit/revenuecat-sdk";
+import { getUncachableRevenueCatClient } from "../lib/revenueCatClient";
 
 const router: IRouter = Router();
 
@@ -382,22 +387,25 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
 // Expiry / cancellation handling is a follow-up via RevenueCat webhooks.
 const REVENUECAT_ENTITLEMENT_ID =
   process.env.REVENUECAT_ENTITLEMENT_ID || "trader_subscription";
+const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
 const RC_PLAN_ID = "trader";
 
-interface RevenueCatEntitlement {
-  expires_date: string | null;
-  product_identifier?: string;
+// Entitlement lookup keys differ between display names ("Trader Subscription")
+// and identifiers ("trader_subscription"). Normalise both sides before
+// comparing so either form resolves to the same entitlement.
+function normalizeEntitlementKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
-interface RevenueCatSubscriberResponse {
-  subscriber?: {
-    entitlements?: Record<string, RevenueCatEntitlement>;
-  };
+
+interface RevenueCatActiveEntitlement {
+  entitlement_id?: string;
+  expires_at?: number | null;
+  product_identifier?: string;
 }
 
 router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async (req, res) => {
   try {
-    const secretKey = process.env.REVENUECAT_SECRET_KEY;
-    if (!secretKey) {
+    if (!REVENUECAT_PROJECT_ID) {
       res.status(503).json({ error: "In-app purchases are not configured yet." });
       return;
     }
@@ -421,29 +429,62 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
       return;
     }
 
-    // RevenueCat uses our app user id as the subscriber id (set via logIn on the
-    // client). Query the REST API to confirm the entitlement server-side.
-    let rcResponse: RevenueCatSubscriberResponse;
+    // RevenueCat uses our app user id as the customer id (set via logIn on the
+    // client). Query the v2 Developer API (via the Replit connector) to confirm
+    // the active entitlement server-side.
+    const wanted = normalizeEntitlementKey(REVENUECAT_ENTITLEMENT_ID);
+    let activeEntitlements: RevenueCatActiveEntitlement[];
+    // The v2 active_entitlements list identifies entitlements by their object id
+    // (e.g. "entl..."), NOT by lookup key/display name. Resolve our configured
+    // key to that object id (and its lookup key) so we can match reliably.
+    let targetEntitlementId: string | null = null;
+    let targetLookupKey: string | null = null;
     try {
-      const rcRes = await fetch(
-        `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(String(userId))}`,
-        { headers: { Authorization: `Bearer ${secretKey}` } },
+      const client = await getUncachableRevenueCatClient();
+
+      const { data: entlData } = await listEntitlements({
+        client,
+        path: { project_id: REVENUECAT_PROJECT_ID },
+      });
+      const target = (entlData?.items ?? []).find(
+        (e) =>
+          e.id === REVENUECAT_ENTITLEMENT_ID ||
+          (!!e.lookup_key && normalizeEntitlementKey(e.lookup_key) === wanted) ||
+          (!!e.display_name && normalizeEntitlementKey(e.display_name) === wanted),
       );
-      if (!rcRes.ok) {
-        req.log.error({ status: rcRes.status }, "RevenueCat lookup failed");
+      targetEntitlementId = target?.id ?? null;
+      targetLookupKey = target?.lookup_key ?? null;
+
+      const { data, error } = await listCustomerActiveEntitlements({
+        client,
+        path: { project_id: REVENUECAT_PROJECT_ID, customer_id: String(userId) },
+      });
+      if (error) {
+        req.log.error({ err: error }, "RevenueCat lookup failed");
         res.status(502).json({ error: "Could not verify your subscription. Please try again." });
         return;
       }
-      rcResponse = (await rcRes.json()) as RevenueCatSubscriberResponse;
+      activeEntitlements = (data?.items ?? []) as RevenueCatActiveEntitlement[];
     } catch (e) {
       req.log.error({ err: e }, "RevenueCat request error");
       res.status(502).json({ error: "Could not verify your subscription. Please try again." });
       return;
     }
 
-    const entitlement = rcResponse.subscriber?.entitlements?.[REVENUECAT_ENTITLEMENT_ID];
-    const expiresAt = entitlement?.expires_date ? new Date(entitlement.expires_date) : null;
-    const isActive = !!entitlement && (expiresAt === null || expiresAt.getTime() > Date.now());
+    const entitlement = activeEntitlements.find((e) => {
+      if (!e.entitlement_id) return false;
+      // Primary: match against the resolved entitlement object id.
+      if (targetEntitlementId && e.entitlement_id === targetEntitlementId) return true;
+      const norm = normalizeEntitlementKey(e.entitlement_id);
+      // Fallbacks: some payloads may surface the lookup key/display name instead.
+      if (targetLookupKey && norm === normalizeEntitlementKey(targetLookupKey)) return true;
+      return norm === wanted;
+    });
+    // The v2 active_entitlements endpoint only returns currently-active grants,
+    // so presence implies active. expires_at is epoch milliseconds (or null for
+    // a lifetime / non-expiring grant).
+    const expiresAt = entitlement?.expires_at ? new Date(entitlement.expires_at) : null;
+    const isActive = !!entitlement;
 
     if (!isActive) {
       // Never deactivate here — that would risk clobbering a web Stripe sub.

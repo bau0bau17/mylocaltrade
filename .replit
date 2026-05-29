@@ -20,6 +20,7 @@ runButton = "Project"
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
+integrations = ["revenuecat:1.0.0"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
@@ -32,6 +33,10 @@ SMTP_HOST = "smtp.office365.com"
 SMTP_PORT = "587"
 SMTP_FROM = "noreply@mylocaltrade.co.uk"
 SMTP_USER = "noreply@mylocaltrade.co.uk"
+EXPO_PUBLIC_REVENUECAT_TEST_API_KEY = "test_qbWESyJrXDmlctafkOtDEaJqYTW"
+EXPO_PUBLIC_REVENUECAT_IOS_API_KEY = "appl_BIVAfGioOyQNZKAYqDNZkTtBnOk"
+EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY = "goog_qHukXmrQAVympYwzJvgUmuuFcrW"
+REVENUECAT_PROJECT_ID = "proja2b11716"
 
 [nix]
 channel = "stable-25_05"

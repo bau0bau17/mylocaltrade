@@ -24,6 +24,7 @@ import {
   type Offering,
   type Package,
   type CreateProductData,
+  type Duration,
 } from "@replit/revenuecat-sdk";
 
 const PROJECT_NAME = "MyLocalTrade";
@@ -76,6 +77,16 @@ type TestStorePricesResponse = {
   object: string;
   prices: { amount_micros: number; currency: string }[];
 };
+
+// RevenueCat enforces lookup-key uniqueness case/punctuation-insensitively.
+// Normalise so "Trader Subscription" and "trader_subscription" are treated as
+// the same key when reconciling with entities created in the dashboard.
+function normalizeKey(key: string): string {
+  return key
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
 
 async function seedRevenueCat() {
   const client = await getUncachableRevenueCatClient();
@@ -185,7 +196,7 @@ async function seedRevenueCat() {
       display_name: displayName,
     };
     if (isTestStore) {
-      body.subscription = { duration };
+      body.subscription = { duration: duration as Duration };
       body.title = userFacingTitle;
     }
 
@@ -199,7 +210,10 @@ async function seedRevenueCat() {
     return createdProduct;
   };
 
-  // Ensure the single entitlement exists.
+  // Ensure the single entitlement exists. RevenueCat treats lookup keys as
+  // unique case/punctuation-insensitively (e.g. "Trader Subscription" collides
+  // with "trader_subscription"), so match on a normalised key and reuse any
+  // entitlement the user already created in the dashboard rather than failing.
   let entitlement: Entitlement | undefined;
   const { data: existingEntitlements, error: listEntitlementsError } = await listEntitlements({
     client,
@@ -209,10 +223,15 @@ async function seedRevenueCat() {
   if (listEntitlementsError) throw new Error("Failed to list entitlements");
 
   const existingEntitlement = existingEntitlements.items?.find(
-    (e) => e.lookup_key === ENTITLEMENT_IDENTIFIER,
+    (e) => normalizeKey(e.lookup_key) === normalizeKey(ENTITLEMENT_IDENTIFIER),
   );
   if (existingEntitlement) {
-    console.log("Entitlement already exists:", existingEntitlement.id);
+    console.log(
+      "Entitlement already exists:",
+      existingEntitlement.id,
+      "(lookup_key:",
+      existingEntitlement.lookup_key + ")",
+    );
     entitlement = existingEntitlement;
   } else {
     const { data: newEntitlement, error } = await createEntitlement({
@@ -223,7 +242,7 @@ async function seedRevenueCat() {
         display_name: ENTITLEMENT_DISPLAY_NAME,
       },
     });
-    if (error) throw new Error("Failed to create entitlement");
+    if (error) throw new Error("Failed to create entitlement: " + JSON.stringify(error));
     console.log("Created entitlement:", newEntitlement.id);
     entitlement = newEntitlement;
   }
