@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "@react-navigation/bottom-tabs": "7.15.6",
+    "expo-dev-client": "~6.0.21",
     "expo-device": "^8.0.10",
     "expo-document-picker": "^14.0.8",
     "expo-notifications": "^0.32.17",
