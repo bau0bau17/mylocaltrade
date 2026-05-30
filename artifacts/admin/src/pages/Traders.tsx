@@ -103,33 +103,30 @@ export default function Traders() {
   }, [status, debouncedQ, registerCheck, aiCheck, navigate]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["admin", "traders", status, debouncedQ],
+    queryKey: ["admin", "traders", status, debouncedQ, registerCheck],
     queryFn: () =>
       api<TraderListResponse>("/api/admin/traders", {
         query: {
           status: status === "ALL" ? undefined : status,
           q: debouncedQ || undefined,
+          register: registerCheck === "ALL" ? undefined : registerCheck,
           limit: 200,
         },
       }),
   });
 
   const counts = data?.counts ?? [];
+  const registerCounts = data?.registerCounts ?? [];
 
   const traders = useMemo(() => {
     let all = data?.traders ?? [];
-    if (registerCheck === "NONE") {
-      all = all.filter((t) => t.registerCheckStatus == null);
-    } else if (registerCheck !== "ALL") {
-      all = all.filter((t) => t.registerCheckStatus === registerCheck);
-    }
     if (aiCheck === "NONE") {
       all = all.filter((t) => t.aiVerificationStatus == null);
     } else if (aiCheck !== "ALL") {
       all = all.filter((t) => t.aiVerificationStatus === aiCheck);
     }
     return all;
-  }, [data?.traders, registerCheck, aiCheck]);
+  }, [data?.traders, aiCheck]);
 
   return (
     <div className="space-y-4">
@@ -180,11 +177,14 @@ export default function Traders() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All register checks</SelectItem>
-              {REGISTER_FILTER_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
+              {REGISTER_FILTER_OPTIONS.map((o) => {
+                const c = registerCounts.find((x) => x.status === o.value)?.count ?? 0;
+                return (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label} ({c})
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
           <Select
