@@ -19,28 +19,28 @@ type RegisterOverall = NonNullable<TraderDetailResponse["profile"]["registerChec
 type CompanyStatus = NonNullable<TraderDetailResponse["profile"]["registerCheckData"]>["company"]["status"];
 type VatStatus = NonNullable<TraderDetailResponse["profile"]["registerCheckData"]>["vat"]["status"];
 
-export function AiVerdictBadge({ verdict }: { verdict: AiVerdict }) {
-  const map: Record<string, { label: string; className: string }> = {
-    MATCH: { label: "AI: Match", className: CHECK_GREEN },
-    PARTIAL_MATCH: { label: "AI: Partial match", className: CHECK_AMBER },
-    NO_MATCH: { label: "AI: No match", className: CHECK_RED },
-    NOT_FOUND: { label: "AI: Not found on CH", className: CHECK_GREY },
-    ERROR: { label: "AI: Check failed", className: CHECK_GREY },
+export function AiVerdictBadge({ verdict, compact = false }: { verdict: AiVerdict; compact?: boolean }) {
+  const map: Record<string, { label: string; compactLabel: string; className: string }> = {
+    MATCH: { label: "AI: Match", compactLabel: "AI: Match", className: CHECK_GREEN },
+    PARTIAL_MATCH: { label: "AI: Partial match", compactLabel: "AI: Partial", className: CHECK_AMBER },
+    NO_MATCH: { label: "AI: No match", compactLabel: "AI: No match", className: CHECK_RED },
+    NOT_FOUND: { label: "AI: Not found on CH", compactLabel: "AI: Not found", className: CHECK_GREY },
+    ERROR: { label: "AI: Check failed", compactLabel: "AI: Error", className: CHECK_GREY },
   };
   const v = map[verdict] ?? map.ERROR;
-  return <CheckBadge label={v.label} className={v.className} testId="badge-ai-verdict" />;
+  return <CheckBadge label={compact ? v.compactLabel : v.label} className={v.className} testId="badge-ai-verdict" />;
 }
 
-export function RegisterOverallBadge({ overall }: { overall: RegisterOverall }) {
-  const map: Record<string, { label: string; className: string }> = {
-    PASS: { label: "Registers: Pass", className: CHECK_GREEN },
-    REVIEW: { label: "Registers: Review", className: CHECK_AMBER },
-    FAIL: { label: "Registers: Fail", className: CHECK_RED },
-    NOT_PROVIDED: { label: "Registers: Nothing to check", className: CHECK_GREY },
-    ERROR: { label: "Registers: Check failed", className: CHECK_GREY },
+export function RegisterOverallBadge({ overall, compact = false }: { overall: RegisterOverall; compact?: boolean }) {
+  const map: Record<string, { label: string; compactLabel: string; className: string }> = {
+    PASS: { label: "Registers: Pass", compactLabel: "Reg: Pass", className: CHECK_GREEN },
+    REVIEW: { label: "Registers: Review", compactLabel: "Reg: Review", className: CHECK_AMBER },
+    FAIL: { label: "Registers: Fail", compactLabel: "Reg: Fail", className: CHECK_RED },
+    NOT_PROVIDED: { label: "Registers: Nothing to check", compactLabel: "Reg: None", className: CHECK_GREY },
+    ERROR: { label: "Registers: Check failed", compactLabel: "Reg: Error", className: CHECK_GREY },
   };
   const v = map[overall] ?? map.ERROR;
-  return <CheckBadge label={v.label} className={v.className} testId="badge-register-overall" />;
+  return <CheckBadge label={compact ? v.compactLabel : v.label} className={v.className} testId="badge-register-overall" />;
 }
 
 const REGISTER_STATUS_MAP: Record<string, { label: string; className: string }> = {
