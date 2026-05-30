@@ -73,9 +73,15 @@ export interface StatusCount {
   count: number;
 }
 
+export interface RegisterCheckCount {
+  status: RegisterCheckStatus | "NONE";
+  count: number;
+}
+
 export interface TraderListResponse {
   traders: TraderListRow[];
   counts: StatusCount[];
+  registerCounts: RegisterCheckCount[];
 }
 
 export type DocumentType =

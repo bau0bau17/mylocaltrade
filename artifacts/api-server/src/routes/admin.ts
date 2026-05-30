@@ -220,16 +220,25 @@ router.get("/admin/stats", authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
-// GET /api/admin/traders?status=&q=&limit=
+// GET /api/admin/traders?status=&q=&register=&limit=
+const REGISTER_CHECK_STATUSES = ["PASS", "REVIEW", "FAIL", "NOT_PROVIDED", "ERROR"] as const;
 router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    // Register-check filter. A specific status value filters on it; the special
+    // value "NONE" selects traders whose check has not been run yet (null).
+    const register = typeof req.query.register === "string" ? req.query.register : undefined;
     const limit = Math.min(Number(req.query.limit) || 50, 200);
 
     const conds = [eq(usersTable.role, "trader")];
     if (status && (REVIEWABLE_STATUSES as readonly string[]).includes(status)) {
       conds.push(eq(traderProfilesTable.verificationStatus, status));
+    }
+    if (register === "NONE") {
+      conds.push(isNull(traderProfilesTable.registerCheckStatus));
+    } else if (register && (REGISTER_CHECK_STATUSES as readonly string[]).includes(register)) {
+      conds.push(eq(traderProfilesTable.registerCheckStatus, register));
     }
     if (q.length > 0) {
       const like = `%${q}%`;
@@ -282,7 +291,23 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
       .where(eq(usersTable.role, "trader"))
       .groupBy(traderProfilesTable.verificationStatus);
 
-    res.json({ traders: rows, counts });
+    // Counts by register-check status (null reported as "NONE" = not yet checked),
+    // so the register-check dropdown can show counts like the status filter.
+    const registerCountRows = await db
+      .select({
+        status: traderProfilesTable.registerCheckStatus,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(traderProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
+      .where(eq(usersTable.role, "trader"))
+      .groupBy(traderProfilesTable.registerCheckStatus);
+    const registerCounts = registerCountRows.map((r) => ({
+      status: r.status ?? "NONE",
+      count: r.count,
+    }));
+
+    res.json({ traders: rows, counts, registerCounts });
   } catch (error) {
     req.log.error({ err: error }, "Admin list traders failed");
     res.status(500).json({ error: "Failed to list traders" });

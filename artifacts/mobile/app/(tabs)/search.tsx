@@ -27,9 +27,10 @@ function FilterChip({ icon, label, active, onPress }: { icon: FeatherIconName; l
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={8}
       style={[chipStyles.chip, active && chipStyles.chipActive]}
     >
-      <Feather name={icon} size={12} color={active ? Colors.light.white : Colors.light.textSecondary} />
+      <Feather name={icon} size={13} color={active ? Colors.light.white : Colors.light.textSecondary} />
       <Text style={[chipStyles.chipText, active && chipStyles.chipTextActive]}>{label}</Text>
     </Pressable>
   );
@@ -39,10 +40,11 @@ const chipStyles = StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingHorizontal: 13,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: Colors.light.border,
     backgroundColor: Colors.light.card,
@@ -53,7 +55,7 @@ const chipStyles = StyleSheet.create({
     borderColor: Colors.light.primary,
   },
   chipText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.light.textSecondary,
     letterSpacing: 0.2,
@@ -455,17 +457,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filtersRow: {
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   clearAllChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
     gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingHorizontal: 13,
+    height: 34,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: Colors.light.primary,
     backgroundColor: Colors.light.primaryMuted,
