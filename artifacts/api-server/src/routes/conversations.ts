@@ -157,8 +157,8 @@ async function getActorContext(userId: number, userRole: string) {
 // cancelled) and surface it to the chosen party by bumping their unread counter
 // + last-message preview, so lifecycle actions notify whoever needs to act next.
 // notify: which side should see it as unread. "trader" for customer-driven
-// actions (accept/complete), "customer" when the trader marks work done, "both"
-// for cancellations so either party is alerted regardless of who cancelled.
+// actions (accept/complete), "customer" when the trader marks work done; for a
+// cancellation we notify only the opposite party (the canceller already knows).
 async function postSystemMessage(
   conversationId: number,
   body: string,
@@ -915,7 +915,8 @@ router.post("/conversations/:id/cancel", authMiddleware, async (req, res) => {
     await postSystemMessage(
       id,
       `The ${cancelledByRole} cancelled this job. Reason: ${body.reason}`,
-      "both",
+      // Notify only the other party — the canceller already knows.
+      isCustomer ? "trader" : "customer",
     );
 
     res.json({ ok: true });

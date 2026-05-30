@@ -174,20 +174,18 @@ export default function PricingScreen() {
         </View>
         <Text style={styles.title}>Choose Your Plan</Text>
         <Text style={styles.subtitle}>
-          Get more local leads, the verified badge and priority placement so customers find your trade business first.
+          Get more local leads and priority placement so customers find your trade business first.
         </Text>
       </View>
 
       <View style={styles.benefitsCard}>
         <Text style={styles.benefitsTitle}>Why upgrade</Text>
         {[
-          { icon: 'users' as const, label: 'More local leads from customers in your area' },
-          { icon: 'check-circle' as const, label: 'Verified trader badge displayed on every listing' },
-          { icon: 'eye' as const, label: 'Better visibility in search and category results' },
-          { icon: 'arrow-up' as const, label: 'Priority placement above unpaid traders' },
-          { icon: 'image' as const, label: 'Enhanced profile with photos, services and reviews' },
-          { icon: 'star' as const, label: 'Featured placement on the home screen' },
-          { icon: 'zap' as const, label: 'Specialist visibility for energy and property maintenance work' },
+          { icon: 'mail' as const, label: 'Receive enquiries from local customers' },
+          { icon: 'arrow-up' as const, label: 'Higher search ranking and priority placement' },
+          { icon: 'star' as const, label: 'Featured listing badge and home screen placement' },
+          { icon: 'image' as const, label: 'Unlimited gallery images' },
+          { icon: 'briefcase' as const, label: 'Enhanced profile with services, social and website links' },
         ].map((b, idx) => (
           <View key={idx} style={styles.benefitRow}>
             <View style={styles.benefitIconWrap}>
