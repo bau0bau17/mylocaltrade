@@ -37,9 +37,11 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   userId: integer("user_id").notNull().references(() => usersTable.id).unique(),
   businessName: varchar("business_name", { length: 255 }).notNull(),
   companyNumber: varchar("company_number", { length: 20 }),
-  // Optional VAT registration number. Like companyNumber it is never required
-  // (sole traders / self-employed may have neither); when supplied it is used
-  // purely as a supporting validation aid, not as a gate.
+  // Optional UK VAT registration number supplied by the trader. Like
+  // companyNumber it is never required (sole traders / self-employed may have
+  // neither). Stored normalised (digits only, no "GB" prefix or spaces) so it
+  // can be checked against the HMRC VAT lookup service. Supporting validation
+  // aid only, not a gate.
   vatNumber: varchar("vat_number", { length: 20 }),
   contactName: varchar("contact_name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }).notNull(),
@@ -188,6 +190,40 @@ export const traderProfilesTable = pgTable("trader_profiles", {
     error?: string;
   }>(),
   domainVerificationCheckedAt: timestamp("domain_verification_checked_at"),
+
+  // --- Official register checks (Companies House + HMRC VAT lookup) ---
+  // Deterministic cross-check of the trader-supplied company number and VAT
+  // number against the official registers. Distinct from the AI cross-check
+  // above: this validates the exact submitted identifiers rather than
+  // searching by business name. Null = not yet checked.
+  registerCheckStatus: varchar("register_check_status", { length: 30 }),
+  registerCheckData: json("register_check_data").$type<{
+    overall: "PASS" | "REVIEW" | "FAIL" | "NOT_PROVIDED" | "ERROR";
+    company: {
+      submittedNumber: string | null;
+      status: "MATCH" | "NAME_MISMATCH" | "INACTIVE" | "NOT_FOUND" | "INVALID" | "NOT_PROVIDED" | "ERROR";
+      detail: string;
+      companiesHouse: {
+        companyNumber?: string;
+        companyName?: string;
+        status?: string;
+        address?: string;
+        postcode?: string;
+      } | null;
+    };
+    vat: {
+      submittedNumber: string | null;
+      status: "MATCH" | "NAME_MISMATCH" | "NOT_FOUND" | "INVALID" | "NOT_PROVIDED" | "ERROR";
+      detail: string;
+      hmrc: {
+        vatNumber?: string;
+        name?: string;
+        address?: string;
+      } | null;
+    };
+    error?: string;
+  }>(),
+  registerCheckCheckedAt: timestamp("register_check_checked_at"),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

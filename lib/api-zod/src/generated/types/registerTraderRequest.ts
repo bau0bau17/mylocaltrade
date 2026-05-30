@@ -31,6 +31,11 @@ from the Companies House live search and skips the manual
 "under review" step for the business identity check.
  */
   companyNumber?: string;
+  /** Optional UK VAT registration number. When supplied it is checked
+against the HMRC VAT lookup service during review and the result
+is shown to admins alongside the Companies House cross-check.
+ */
+  vatNumber?: string;
   phone: string;
   mainCategory: string;
   /** Street address line(s) of the registered business. When the

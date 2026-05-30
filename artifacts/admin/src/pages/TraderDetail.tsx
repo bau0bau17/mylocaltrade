@@ -37,6 +37,7 @@ import {
   Loader2,
   ShieldAlert,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 
 interface Props {
@@ -183,6 +184,21 @@ export default function TraderDetail({ userId }: Props) {
     onError: (err) => {
       toast({
         title: "Update failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const registerCheckMutation = useMutation({
+    mutationFn: async () => api(`/api/admin/traders/${userId}/register-check/run`, { method: "POST" }),
+    onSuccess: () => {
+      toast({ title: "Register check complete" });
+      queryClient.invalidateQueries({ queryKey: detailKey });
+    },
+    onError: (err) => {
+      toast({
+        title: "Register check failed",
         description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
@@ -417,6 +433,7 @@ export default function TraderDetail({ userId }: Props) {
       <Tabs defaultValue="profile">
         <TabsList>
           <TabsTrigger value="profile" data-testid="tab-profile">Profile</TabsTrigger>
+          <TabsTrigger value="checks" data-testid="tab-checks">Checks</TabsTrigger>
           <TabsTrigger value="documents" data-testid="tab-documents">
             Documents ({documents.length})
           </TabsTrigger>
@@ -503,6 +520,161 @@ export default function TraderDetail({ userId }: Props) {
               />
               <Field label="Admin notes" value={profile.adminNotes || "—"} full />
               <Field label="Verification notes" value={profile.verificationNotes || "—"} full />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="checks" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Verification checks</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                AI cross-check of submitted business details against the Companies House
+                record. This is a support aid only — manual review remains the final decision.
+              </p>
+              {!profile.aiVerificationCheckedAt || !profile.aiVerificationData ? (
+                <p className="text-sm text-muted-foreground" data-testid="text-ai-none">
+                  No Companies House cross-check yet.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <AiVerdictBadge verdict={profile.aiVerificationData.verdict} />
+                    <span className="text-xs text-muted-foreground">
+                      Checked {formatDateTime(profile.aiVerificationCheckedAt)}
+                    </span>
+                  </div>
+                  <p className="text-sm">{profile.aiVerificationData.reasoning}</p>
+                  {profile.aiVerificationData.companiesHouse ? (
+                    <div className="rounded-md border bg-muted/40 p-3 space-y-1.5">
+                      <div className="text-xs font-medium text-muted-foreground">
+                        Submitted vs Companies House
+                      </div>
+                      <CompareRow
+                        label="Name"
+                        a={profile.aiVerificationData.submitted.businessName}
+                        b={profile.aiVerificationData.companiesHouse.companyName ?? "—"}
+                      />
+                      <CompareRow
+                        label="Address"
+                        a={profile.aiVerificationData.submitted.address || "—"}
+                        b={profile.aiVerificationData.companiesHouse.address ?? "—"}
+                      />
+                      <CompareRow
+                        label="Postcode"
+                        a={profile.aiVerificationData.submitted.postcode}
+                        b={profile.aiVerificationData.companiesHouse.postcode ?? "—"}
+                      />
+                      {profile.aiVerificationData.companiesHouse.companyNumber ? (
+                        <CompareRow label="Co. number" a="—" b={profile.aiVerificationData.companiesHouse.companyNumber} />
+                      ) : null}
+                      {profile.aiVerificationData.companiesHouse.status ? (
+                        <CompareRow label="CH status" a="—" b={profile.aiVerificationData.companiesHouse.status} />
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {profile.aiVerificationData.error ? (
+                    <p className="text-xs text-red-700">Error: {profile.aiVerificationData.error}</p>
+                  ) : null}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+              <CardTitle className="text-base">Register checks</CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => registerCheckMutation.mutate()}
+                disabled={registerCheckMutation.isPending}
+                data-testid="button-run-register-check"
+              >
+                {registerCheckMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-1.5" />
+                )}
+                {profile.registerCheckCheckedAt ? "Re-run register check" : "Run register check"}
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Validates the submitted company number against Companies House and the VAT
+                number against the HMRC register.
+              </p>
+              {!profile.registerCheckCheckedAt || !profile.registerCheckData ? (
+                <p className="text-sm text-muted-foreground" data-testid="text-register-none">
+                  No register check yet. Use the button above to run it.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <RegisterOverallBadge overall={profile.registerCheckData.overall} />
+                    <span className="text-xs text-muted-foreground">
+                      Checked {formatDateTime(profile.registerCheckCheckedAt)}
+                    </span>
+                  </div>
+
+                  <div className="rounded-md border p-3 space-y-1.5" data-testid="register-company">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-medium">Company number</span>
+                      <CompanyStatusBadge status={profile.registerCheckData.company.status} />
+                    </div>
+                    <p className="text-sm">{profile.registerCheckData.company.detail}</p>
+                    {profile.registerCheckData.company.submittedNumber ? (
+                      <p className="text-xs text-muted-foreground">
+                        Submitted: {profile.registerCheckData.company.submittedNumber}
+                      </p>
+                    ) : null}
+                    {profile.registerCheckData.company.companiesHouse ? (
+                      <div className="rounded-md border bg-muted/40 p-3 mt-2 space-y-1.5">
+                        <div className="text-xs font-medium text-muted-foreground">Companies House record</div>
+                        {profile.registerCheckData.company.companiesHouse.companyName ? (
+                          <CompareRow label="Name" a={profile.businessName} b={profile.registerCheckData.company.companiesHouse.companyName} />
+                        ) : null}
+                        {profile.registerCheckData.company.companiesHouse.status ? (
+                          <CompareRow label="Status" a="—" b={profile.registerCheckData.company.companiesHouse.status} />
+                        ) : null}
+                        {profile.registerCheckData.company.companiesHouse.address ? (
+                          <CompareRow label="Address" a="—" b={profile.registerCheckData.company.companiesHouse.address} />
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="rounded-md border p-3 space-y-1.5" data-testid="register-vat">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-medium">VAT number</span>
+                      <VatStatusBadge status={profile.registerCheckData.vat.status} />
+                    </div>
+                    <p className="text-sm">{profile.registerCheckData.vat.detail}</p>
+                    {profile.registerCheckData.vat.submittedNumber ? (
+                      <p className="text-xs text-muted-foreground">
+                        Submitted: {profile.registerCheckData.vat.submittedNumber}
+                      </p>
+                    ) : null}
+                    {profile.registerCheckData.vat.hmrc ? (
+                      <div className="rounded-md border bg-muted/40 p-3 mt-2 space-y-1.5">
+                        <div className="text-xs font-medium text-muted-foreground">HMRC record</div>
+                        {profile.registerCheckData.vat.hmrc.name ? (
+                          <CompareRow label="Name" a={profile.businessName} b={profile.registerCheckData.vat.hmrc.name} />
+                        ) : null}
+                        {profile.registerCheckData.vat.hmrc.address ? (
+                          <CompareRow label="Address" a="—" b={profile.registerCheckData.vat.hmrc.address} />
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {profile.registerCheckData.error ? (
+                    <p className="text-xs text-red-700">Error: {profile.registerCheckData.error}</p>
+                  ) : null}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -901,6 +1073,79 @@ function BackLink() {
     <Link href="/traders" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center">
       <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back to traders
     </Link>
+  );
+}
+
+const GREEN = "bg-emerald-100 text-emerald-800 border-transparent";
+const AMBER = "bg-amber-100 text-amber-900 border-transparent";
+const RED = "bg-red-100 text-red-800 border-transparent";
+const GREY = "bg-muted text-muted-foreground border-transparent";
+
+function CheckBadge({ label, className, testId }: { label: string; className: string; testId?: string }) {
+  return (
+    <Badge variant="outline" className={`${className} font-medium`} data-testid={testId}>
+      {label}
+    </Badge>
+  );
+}
+
+function AiVerdictBadge({ verdict }: { verdict: "MATCH" | "PARTIAL_MATCH" | "NO_MATCH" | "NOT_FOUND" | "ERROR" }) {
+  const map: Record<string, { label: string; className: string }> = {
+    MATCH: { label: "AI: Match", className: GREEN },
+    PARTIAL_MATCH: { label: "AI: Partial match", className: AMBER },
+    NO_MATCH: { label: "AI: No match", className: RED },
+    NOT_FOUND: { label: "AI: Not found on CH", className: GREY },
+    ERROR: { label: "AI: Check failed", className: GREY },
+  };
+  const v = map[verdict] ?? map.ERROR;
+  return <CheckBadge label={v.label} className={v.className} testId="badge-ai-verdict" />;
+}
+
+function RegisterOverallBadge({ overall }: { overall: "PASS" | "REVIEW" | "FAIL" | "NOT_PROVIDED" | "ERROR" }) {
+  const map: Record<string, { label: string; className: string }> = {
+    PASS: { label: "Registers: Pass", className: GREEN },
+    REVIEW: { label: "Registers: Review", className: AMBER },
+    FAIL: { label: "Registers: Fail", className: RED },
+    NOT_PROVIDED: { label: "Registers: Nothing to check", className: GREY },
+    ERROR: { label: "Registers: Check failed", className: GREY },
+  };
+  const v = map[overall] ?? map.ERROR;
+  return <CheckBadge label={v.label} className={v.className} testId="badge-register-overall" />;
+}
+
+const REGISTER_STATUS_MAP: Record<string, { label: string; className: string }> = {
+  MATCH: { label: "Match", className: GREEN },
+  NAME_MISMATCH: { label: "Name mismatch", className: AMBER },
+  INACTIVE: { label: "Inactive", className: RED },
+  NOT_FOUND: { label: "Not found", className: RED },
+  INVALID: { label: "Invalid format", className: RED },
+  NOT_PROVIDED: { label: "Not provided", className: GREY },
+  ERROR: { label: "Check failed", className: GREY },
+};
+
+type CompanyStatus = NonNullable<TraderDetailResponse["profile"]["registerCheckData"]>["company"]["status"];
+type VatStatus = NonNullable<TraderDetailResponse["profile"]["registerCheckData"]>["vat"]["status"];
+
+function CompanyStatusBadge({ status }: { status: CompanyStatus }) {
+  const v = REGISTER_STATUS_MAP[status] ?? REGISTER_STATUS_MAP.ERROR;
+  return <CheckBadge label={v.label} className={v.className} />;
+}
+
+function VatStatusBadge({ status }: { status: VatStatus }) {
+  const v = REGISTER_STATUS_MAP[status] ?? REGISTER_STATUS_MAP.ERROR;
+  return <CheckBadge label={v.label} className={v.className} />;
+}
+
+function CompareRow({ label, a, b }: { label: string; a: string; b: string }) {
+  const same = a.trim().toLowerCase() === b.trim().toLowerCase();
+  return (
+    <div className="grid grid-cols-[5rem_1fr] gap-2 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span>
+        <span className="block">{a}</span>
+        <span className={`block ${same ? "text-emerald-700" : "text-foreground"}`}>{b}</span>
+      </span>
+    </div>
   );
 }
 

@@ -144,6 +144,52 @@ export interface TraderProfileFull {
   rejectionReason: string | null;
   adminNotes: string | null;
   verificationNotes: string | null;
+  companyNumber: string | null;
+  vatNumber: string | null;
+  aiVerificationStatus: "MATCH" | "PARTIAL_MATCH" | "NO_MATCH" | "NOT_FOUND" | "ERROR" | null;
+  aiVerificationCheckedAt: string | null;
+  aiVerificationData: {
+    verdict: "MATCH" | "PARTIAL_MATCH" | "NO_MATCH" | "NOT_FOUND" | "ERROR";
+    reasoning: string;
+    submitted: { businessName: string; address: string; postcode: string };
+    companiesHouse: {
+      companyNumber?: string;
+      companyName?: string;
+      address?: string;
+      postcode?: string;
+      status?: string;
+      sicCodes?: string[];
+    } | null;
+    error?: string;
+  } | null;
+  registerCheckStatus: "PASS" | "REVIEW" | "FAIL" | "NOT_PROVIDED" | "ERROR" | null;
+  registerCheckCheckedAt: string | null;
+  registerCheckData: {
+    overall: "PASS" | "REVIEW" | "FAIL" | "NOT_PROVIDED" | "ERROR";
+    company: {
+      submittedNumber: string | null;
+      status: "MATCH" | "NAME_MISMATCH" | "INACTIVE" | "NOT_FOUND" | "INVALID" | "NOT_PROVIDED" | "ERROR";
+      detail: string;
+      companiesHouse: {
+        companyNumber?: string;
+        companyName?: string;
+        status?: string;
+        address?: string;
+        postcode?: string;
+      } | null;
+    };
+    vat: {
+      submittedNumber: string | null;
+      status: "MATCH" | "NAME_MISMATCH" | "NOT_FOUND" | "INVALID" | "NOT_PROVIDED" | "ERROR";
+      detail: string;
+      hmrc: {
+        vatNumber?: string;
+        name?: string;
+        address?: string;
+      } | null;
+    };
+    error?: string;
+  } | null;
   termsAcceptedAt: string | null;
   termsVersion: string | null;
   privacyAcceptedAt: string | null;

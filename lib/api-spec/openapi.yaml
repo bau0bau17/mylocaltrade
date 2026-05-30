@@ -1813,6 +1813,12 @@ components:
             backend treats the trader as having selected a confirmed match
             from the Companies House live search and skips the manual
             "under review" step for the business identity check.
+        vatNumber:
+          type: string
+          description: |
+            Optional UK VAT registration number. When supplied it is checked
+            against the HMRC VAT lookup service during review and the result
+            is shown to admins alongside the Companies House cross-check.
         phone:
           type: string
         mainCategory:

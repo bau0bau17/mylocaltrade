@@ -1,1 +1,2 @@
 - [Public trader visibility policy](trader-public-visibility.md) — every public trader retrieval path must apply the same hide rules; they are duplicated across routes and drift easily.
+- [HMRC VAT API auth](hmrc-vat-api.md) — Check-a-UK-VAT-number lookup is application-restricted (OAuth client_credentials server token), NOT open access; degrade gracefully if creds absent.
