@@ -78,10 +78,16 @@ export interface RegisterCheckCount {
   count: number;
 }
 
+export interface AiCheckCount {
+  status: AiVerificationStatus | "NONE";
+  count: number;
+}
+
 export interface TraderListResponse {
   traders: TraderListRow[];
   counts: StatusCount[];
   registerCounts: RegisterCheckCount[];
+  aiCounts: AiCheckCount[];
 }
 
 export type DocumentType =

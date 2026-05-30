@@ -103,13 +103,14 @@ export default function Traders() {
   }, [status, debouncedQ, registerCheck, aiCheck, navigate]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["admin", "traders", status, debouncedQ, registerCheck],
+    queryKey: ["admin", "traders", status, debouncedQ, registerCheck, aiCheck],
     queryFn: () =>
       api<TraderListResponse>("/api/admin/traders", {
         query: {
           status: status === "ALL" ? undefined : status,
           q: debouncedQ || undefined,
           register: registerCheck === "ALL" ? undefined : registerCheck,
+          ai: aiCheck === "ALL" ? undefined : aiCheck,
           limit: 200,
         },
       }),
@@ -117,16 +118,9 @@ export default function Traders() {
 
   const counts = data?.counts ?? [];
   const registerCounts = data?.registerCounts ?? [];
+  const aiCounts = data?.aiCounts ?? [];
 
-  const traders = useMemo(() => {
-    let all = data?.traders ?? [];
-    if (aiCheck === "NONE") {
-      all = all.filter((t) => t.aiVerificationStatus == null);
-    } else if (aiCheck !== "ALL") {
-      all = all.filter((t) => t.aiVerificationStatus === aiCheck);
-    }
-    return all;
-  }, [data?.traders, aiCheck]);
+  const traders = data?.traders ?? [];
 
   return (
     <div className="space-y-4">
@@ -196,11 +190,14 @@ export default function Traders() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All AI checks</SelectItem>
-              {AI_FILTER_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
+              {AI_FILTER_OPTIONS.map((o) => {
+                const c = aiCounts.find((x) => x.status === o.value)?.count ?? 0;
+                return (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label} ({c})
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </CardContent>

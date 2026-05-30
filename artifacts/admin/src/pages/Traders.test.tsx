@@ -46,7 +46,7 @@ function makeRow(overrides: Partial<TraderListRow> = {}): TraderListRow {
 }
 
 function buildResponse(traders: TraderListRow[]): TraderListResponse {
-  return { traders, counts: [], registerCounts: [] };
+  return { traders, counts: [], registerCounts: [], aiCounts: [] };
 }
 
 function renderList() {
