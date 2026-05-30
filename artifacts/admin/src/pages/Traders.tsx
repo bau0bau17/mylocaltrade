@@ -21,6 +21,26 @@ import { AiVerdictBadge, RegisterOverallBadge } from "@/components/CheckBadges";
 import { formatDate } from "@/lib/format";
 import { Search, ArrowRight } from "lucide-react";
 
+function rowRisk(t: TraderListResponse["traders"][number]): "high" | "medium" | null {
+  if (
+    t.verificationStatus === "REJECTED" ||
+    t.registerCheckStatus === "FAIL" ||
+    t.aiVerificationStatus === "NO_MATCH"
+  ) {
+    return "high";
+  }
+  if (
+    t.verificationStatus === "NEEDS_MORE_INFO" ||
+    t.verificationStatus === "EXPIRED_DOCUMENTS" ||
+    t.registerCheckStatus === "REVIEW" ||
+    t.aiVerificationStatus === "PARTIAL_MATCH" ||
+    t.aiVerificationStatus === "NOT_FOUND"
+  ) {
+    return "medium";
+  }
+  return null;
+}
+
 function useQueryParams() {
   const [location] = useLocation();
   return useMemo(() => {
@@ -141,9 +161,17 @@ export default function Traders() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {data?.traders.map((t) => (
+                  {data?.traders.map((t) => {
+                    const risk = rowRisk(t);
+                    const accent =
+                      risk === "high"
+                        ? "border-l-4 border-l-red-500"
+                        : risk === "medium"
+                          ? "border-l-4 border-l-amber-400"
+                          : "border-l-4 border-l-transparent";
+                    return (
                     <tr key={t.userId} className="hover:bg-muted/30" data-testid={`row-trader-${t.userId}`}>
-                      <td className="px-4 py-3">
+                      <td className={`px-4 py-3 ${accent}`}>
                         <div className="font-medium">{t.businessName ?? "—"}</div>
                         <div className="text-xs text-muted-foreground">{t.mainCategory ?? "Category not set"}</div>
                       </td>
@@ -159,10 +187,10 @@ export default function Traders() {
                         {t.registerCheckStatus || t.aiVerificationStatus ? (
                           <div className="flex flex-col gap-1 items-start">
                             {t.registerCheckStatus ? (
-                              <RegisterOverallBadge overall={t.registerCheckStatus} />
+                              <RegisterOverallBadge overall={t.registerCheckStatus} compact />
                             ) : null}
                             {t.aiVerificationStatus ? (
-                              <AiVerdictBadge verdict={t.aiVerificationStatus} />
+                              <AiVerdictBadge verdict={t.aiVerificationStatus} compact />
                             ) : null}
                           </div>
                         ) : (
@@ -180,7 +208,8 @@ export default function Traders() {
                         </Link>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
