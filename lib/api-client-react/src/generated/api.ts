@@ -22,6 +22,7 @@ import type {
   AdminListReviewsParams,
   AdminReviewsResponse,
   AuthResponse,
+  CancelConversationRequest,
   CategoriesResponse,
   CheckoutSessionResponse,
   CompaniesHouseSearchResponse,
@@ -4295,6 +4296,178 @@ export const useCompleteConversationJob = <
   TContext
 > => {
   return useMutation(getCompleteConversationJobMutationOptions(options));
+};
+
+/**
+ * @summary Trader signals the work is finished (notifies the customer to confirm; never unlocks the review)
+ */
+export const getTraderMarkConversationDoneUrl = (id: number) => {
+  return `/api/conversations/${id}/trader-mark-done`;
+};
+
+export const traderMarkConversationDone = async (
+  id: number,
+  options?: RequestInit,
+): Promise<OkResponse> => {
+  return customFetch<OkResponse>(getTraderMarkConversationDoneUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getTraderMarkConversationDoneMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof traderMarkConversationDone>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof traderMarkConversationDone>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["traderMarkConversationDone"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof traderMarkConversationDone>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return traderMarkConversationDone(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TraderMarkConversationDoneMutationResult = NonNullable<
+  Awaited<ReturnType<typeof traderMarkConversationDone>>
+>;
+
+export type TraderMarkConversationDoneMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Trader signals the work is finished (notifies the customer to confirm; never unlocks the review)
+ */
+export const useTraderMarkConversationDone = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof traderMarkConversationDone>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof traderMarkConversationDone>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getTraderMarkConversationDoneMutationOptions(options));
+};
+
+/**
+ * @summary Either party cancels the job before completion (a short reason is required)
+ */
+export const getCancelConversationJobUrl = (id: number) => {
+  return `/api/conversations/${id}/cancel`;
+};
+
+export const cancelConversationJob = async (
+  id: number,
+  cancelConversationRequest: CancelConversationRequest,
+  options?: RequestInit,
+): Promise<OkResponse> => {
+  return customFetch<OkResponse>(getCancelConversationJobUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(cancelConversationRequest),
+  });
+};
+
+export const getCancelConversationJobMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelConversationJob>>,
+    TError,
+    { id: number; data: BodyType<CancelConversationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelConversationJob>>,
+  TError,
+  { id: number; data: BodyType<CancelConversationRequest> },
+  TContext
+> => {
+  const mutationKey = ["cancelConversationJob"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelConversationJob>>,
+    { id: number; data: BodyType<CancelConversationRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return cancelConversationJob(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelConversationJobMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelConversationJob>>
+>;
+export type CancelConversationJobMutationBody =
+  BodyType<CancelConversationRequest>;
+export type CancelConversationJobMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Either party cancels the job before completion (a short reason is required)
+ */
+export const useCancelConversationJob = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelConversationJob>>,
+    TError,
+    { id: number; data: BodyType<CancelConversationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelConversationJob>>,
+  TError,
+  { id: number; data: BodyType<CancelConversationRequest> },
+  TContext
+> => {
+  return useMutation(getCancelConversationJobMutationOptions(options));
 };
 
 /**

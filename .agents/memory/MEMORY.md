@@ -8,3 +8,4 @@
 - [Conversation unread badge reset](unread-badge-reset.md) — always reset viewer counter on open (ungated) + invalidate both count & list queries; gated reset leaves badges stuck.
 - [Trader response-time display](trader-response-time.md) — exact "Replies in ~X" is the single source of truth; no loose qualitative badge that can contradict it (dropped "promptly" ≤24h, kept "fast" ≤60m).
 - [RN Web Alert.alert no-op](rn-web-alert-noop.md) — Alert.alert button onPress never fires on Expo web; never gate actions behind it, use lib/confirm.ts confirmAction (window.confirm fallback).
+- [Job lifecycle + review gating](job-lifecycle-review-gating.md) — reviews unlock only on customer-confirm; trader mark-done is notify-only; cancelled jobs never reviewable (gate create AND eligible); `stage` is UI source of truth.

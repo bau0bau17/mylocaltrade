@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ConversationSummaryStage } from "./conversationSummaryStage";
 import type { ConversationSummaryStatus } from "./conversationSummaryStatus";
 import type { ConversationSummaryTraderStatus } from "./conversationSummaryTraderStatus";
 
@@ -20,6 +21,11 @@ export interface ConversationSummary {
   postcode?: string | null;
   status: ConversationSummaryStatus;
   traderStatus: ConversationSummaryTraderStatus;
+  /** Derived lifecycle stage, the single source of truth for the headline
+status shown to both parties. Precedence: cancelled > job done >
+awaiting customer confirmation > hired > closed/blocked > awaiting reply.
+ */
+  stage: ConversationSummaryStage;
   unreadCount: number;
   muted: boolean;
   /** ISO timestamp when the current mute auto-expires. Null when the
@@ -32,8 +38,18 @@ conversation is unmuted or muted indefinitely.
   closedByRole?: string | null;
   /** When the customer accepted the trader's offer (hired them). Null until accepted. */
   customerAcceptedAt?: Date | null;
-  /** When the customer marked the job complete. Unlocks leaving a review. Null until complete. */
+  /** When the customer confirmed the job is done. Unlocks leaving a review. Null until confirmed. */
   customerCompletedAt?: Date | null;
+  /** When the trader signalled the work is finished. Notifies the customer only; never unlocks the review on its own. */
+  traderMarkedDoneAt?: Date | null;
+  /** When the job was cancelled. Cancelled jobs are never review-eligible. */
+  cancelledAt?: Date | null;
+  /** Who cancelled the job ("customer" or "trader"). */
+  cancelledByRole?: string | null;
+  /** The short reason supplied when cancelling. */
+  cancellationReason?: string | null;
+  /** When review submission became eligible (set at customer confirmation). */
+  reviewUnlockedAt?: Date | null;
   /** Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses. */
   hasReview?: boolean | null;
   createdAt: Date;
