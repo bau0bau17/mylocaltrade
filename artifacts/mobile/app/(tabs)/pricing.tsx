@@ -12,7 +12,8 @@ import { PlanCard } from '@/components/PlanCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { getApiUrl } from '@/lib/api-url';
-import { useSubscription } from '@/lib/revenuecat';
+import { useSubscription, isUserCancelledError } from '@/lib/revenuecat';
+import type { PurchasesPackage } from 'react-native-purchases';
 
 interface PromoPreview {
   code: string;
@@ -35,7 +36,7 @@ export default function PricingScreen() {
   const [promoApplied, setPromoApplied] = useState<PromoPreview | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
-  const [paywallBusy, setPaywallBusy] = useState(false);
+  const [purchasing, setPurchasing] = useState<'monthly' | 'annual' | null>(null);
 
   const { data: onboardingStatus, isLoading: isLoadingOnboarding } = useGetTraderOnboardingStatus({
     query: {
@@ -107,7 +108,11 @@ export default function PricingScreen() {
     );
   };
 
-  const handleOpenPaywall = async () => {
+  const handlePurchase = async (
+    pkg: PurchasesPackage | null,
+    key: 'monthly' | 'annual',
+  ) => {
+    if (!pkg) return;
     if (!isTrader) {
       Alert.alert('Trade account needed', 'Register as a tradesperson to subscribe to a plan.');
       return;
@@ -116,21 +121,24 @@ export default function PricingScreen() {
       Alert.alert('Get verified first', 'Finish your trader verification before subscribing.');
       return;
     }
-    if (paywallBusy) return;
-    setPaywallBusy(true);
+    if (purchasing) return;
+    setPurchasing(key);
     try {
-      const active = await subscription.presentPaywall();
+      const active = await subscription.purchase(pkg);
       if (active) {
         Alert.alert(
           'You are subscribed',
-          'Your Trader Subscription is active and your profile is now live for customers.',
+          'Your Premium plan is active and your profile is now live for customers.',
         );
         router.push('/trader-dashboard/billing');
       }
     } catch (e) {
-      Alert.alert('Could not open plans', e instanceof Error ? e.message : 'Please try again.');
+      // A user dismissing the Apple payment sheet is not an error worth surfacing.
+      if (!isUserCancelledError(e)) {
+        Alert.alert('Purchase failed', e instanceof Error ? e.message : 'Please try again.');
+      }
     } finally {
-      setPaywallBusy(false);
+      setPurchasing(null);
     }
   };
 
@@ -140,7 +148,7 @@ export default function PricingScreen() {
       Alert.alert(
         active ? 'Subscription restored' : 'Nothing to restore',
         active
-          ? 'Your Trader Subscription has been restored.'
+          ? 'Your Premium plan has been restored.'
           : 'We could not find an active subscription for this Apple ID.',
       );
     } catch (e) {
@@ -306,34 +314,80 @@ export default function PricingScreen() {
             </View>
           ) : (
             <>
-              <Text style={styles.iapHeading}>Trader Subscription</Text>
-              <View style={styles.paywallTeaser}>
-                {subscription.monthlyPackage && (
-                  <Text style={styles.paywallTeaserText}>
-                    {subscription.monthlyPackage.product.priceString} / month
-                  </Text>
-                )}
-                {subscription.annualPackage && (
-                  <Text style={styles.paywallTeaserText}>
-                    {subscription.annualPackage.product.priceString} / year
-                  </Text>
-                )}
+              <Text style={styles.iapHeading}>Choose your plan</Text>
+
+              <View style={[styles.planOption, styles.planOptionCurrent]}>
+                <View style={styles.planOptionHead}>
+                  <Text style={styles.planOptionName}>Basic</Text>
+                  <View style={styles.currentTag}>
+                    <Text style={styles.currentTagText}>Current</Text>
+                  </View>
+                </View>
+                <Text style={styles.planOptionPrice}>Free</Text>
+                <Text style={styles.planOptionDesc}>
+                  Limited trader access — a free public listing with standard search visibility.
+                </Text>
               </View>
-              <Pressable
-                style={[styles.paywallCta, paywallBusy && { opacity: 0.6 }]}
-                onPress={handleOpenPaywall}
-                disabled={paywallBusy}
-              >
-                {paywallBusy ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Feather name="credit-card" size={18} color="#fff" />
-                    <Text style={styles.paywallCtaText}>View plans & subscribe</Text>
-                  </>
-                )}
-              </Pressable>
-              <Pressable style={styles.restoreBtn} onPress={handleRestore} disabled={paywallBusy}>
+
+              {subscription.monthlyPackage && (
+                <View style={[styles.planOption, styles.planOptionPremium]}>
+                  <View style={styles.planOptionHead}>
+                    <Text style={styles.planOptionName}>Premium Monthly</Text>
+                    <View style={styles.popularTag}>
+                      <Text style={styles.popularTagText}>Popular</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.planOptionPrice}>
+                    {subscription.monthlyPackage.product.priceString}
+                    <Text style={styles.planOptionCadence}> / month</Text>
+                  </Text>
+                  <Text style={styles.planOptionDesc}>
+                    Full premium access, billed monthly. Cancel anytime.
+                  </Text>
+                  <Pressable
+                    style={[styles.subscribeBtn, !!purchasing && { opacity: 0.6 }]}
+                    onPress={() => handlePurchase(subscription.monthlyPackage, 'monthly')}
+                    disabled={!!purchasing}
+                  >
+                    {purchasing === 'monthly' ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.subscribeBtnText}>Subscribe monthly</Text>
+                    )}
+                  </Pressable>
+                </View>
+              )}
+
+              {subscription.annualPackage && (
+                <View style={[styles.planOption, styles.planOptionPremium]}>
+                  <View style={styles.planOptionHead}>
+                    <Text style={styles.planOptionName}>Premium Yearly</Text>
+                    <View style={styles.saveTag}>
+                      <Text style={styles.saveTagText}>Best value</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.planOptionPrice}>
+                    {subscription.annualPackage.product.priceString}
+                    <Text style={styles.planOptionCadence}> / year</Text>
+                  </Text>
+                  <Text style={styles.planOptionDesc}>
+                    Full premium access, billed yearly. Cancel anytime.
+                  </Text>
+                  <Pressable
+                    style={[styles.subscribeBtn, !!purchasing && { opacity: 0.6 }]}
+                    onPress={() => handlePurchase(subscription.annualPackage, 'annual')}
+                    disabled={!!purchasing}
+                  >
+                    {purchasing === 'annual' ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.subscribeBtnText}>Subscribe yearly</Text>
+                    )}
+                  </Pressable>
+                </View>
+              )}
+
+              <Pressable style={styles.restoreBtn} onPress={handleRestore} disabled={!!purchasing}>
                 <Text style={styles.restoreBtnText}>Restore purchases</Text>
               </Pressable>
             </>
@@ -429,39 +483,64 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginBottom: 12,
   },
-  iapPlanBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    borderRadius: 14,
+  restoreBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 4 },
+  restoreBtnText: { fontSize: 14, fontWeight: '600', color: Colors.light.primary },
+  planOption: {
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: Colors.light.border,
     backgroundColor: Colors.light.card,
-    marginBottom: 12,
+    padding: 18,
+    marginBottom: 14,
   },
-  iapPlanBtnHighlight: {
-    backgroundColor: Colors.light.primary,
+  planOptionCurrent: {
+    backgroundColor: Colors.light.surface,
+  },
+  planOptionPremium: {
     borderColor: Colors.light.primary,
+    backgroundColor: Colors.light.primaryMuted,
   },
-  iapPlanLabel: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
-  iapPlanCadence: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
-  iapPlanPrice: { fontSize: 16, fontWeight: '700', color: Colors.light.primary },
-  iapPlanPriceHighlight: { color: '#fff' },
-  restoreBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 4 },
-  restoreBtnText: { fontSize: 14, fontWeight: '600', color: Colors.light.primary },
-  paywallTeaser: { flexDirection: 'row', gap: 16, marginBottom: 14 },
-  paywallTeaserText: { fontSize: 14, fontWeight: '600', color: Colors.light.textSecondary },
-  paywallCta: {
+  planOptionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  planOptionName: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
+  planOptionPrice: { fontSize: 24, fontWeight: '800', color: Colors.light.text, marginBottom: 6 },
+  planOptionCadence: { fontSize: 14, fontWeight: '600', color: Colors.light.textSecondary },
+  planOptionDesc: { fontSize: 13, color: Colors.light.textSecondary, lineHeight: 18, marginBottom: 14 },
+  currentTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: Colors.light.secondaryMuted,
+  },
+  currentTagText: { fontSize: 11, fontWeight: '700', color: Colors.light.secondary, letterSpacing: 0.4 },
+  popularTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+  },
+  popularTagText: { fontSize: 11, fontWeight: '700', color: '#fff', letterSpacing: 0.4 },
+  saveTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: Colors.light.featured ?? Colors.light.primary,
+  },
+  saveTagText: { fontSize: 11, fontWeight: '700', color: '#fff', letterSpacing: 0.4 },
+  subscribeBtn: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 14,
     backgroundColor: Colors.light.primary,
   },
-  paywallCtaText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  subscribeBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
   iapActiveCard: {
     flexDirection: 'row',
     gap: 12,

@@ -42,7 +42,7 @@ export default function BillingScreen() {
       Alert.alert(
         active ? 'Subscription restored' : 'Nothing to restore',
         active
-          ? 'Your Trader Subscription has been restored.'
+          ? 'Your Premium plan has been restored.'
           : 'We could not find an active subscription for this Apple ID.',
       );
     } catch (e) {
