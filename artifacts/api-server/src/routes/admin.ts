@@ -262,6 +262,8 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
         submittedForReviewAt: traderProfilesTable.submittedForReviewAt,
         verifiedAt: traderProfilesTable.verifiedAt,
         rejectedAt: traderProfilesTable.rejectedAt,
+        aiVerificationStatus: traderProfilesTable.aiVerificationStatus,
+        registerCheckStatus: traderProfilesTable.registerCheckStatus,
       })
       .from(traderProfilesTable)
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
