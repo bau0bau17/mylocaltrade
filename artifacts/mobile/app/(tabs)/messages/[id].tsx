@@ -233,8 +233,8 @@ export default function ConversationThreadScreen() {
         onSuccess: () => {
           if (s === "COMPLETED") {
             Alert.alert(
-              "Marked as completed",
-              "The customer can now leave you a review.",
+              "Status updated",
+              "This only updates your work status. The customer still needs to confirm the job before they can leave a review.",
             );
           }
         },
@@ -544,7 +544,7 @@ export default function ConversationThreadScreen() {
                 {s}
               </Text>
               {s === "COMPLETED" ? (
-                <Text style={styles.statusMenuHint}>Unlocks customer review</Text>
+                <Text style={styles.statusMenuHint}>Customer confirms to unlock review</Text>
               ) : null}
             </Pressable>
           ))}
@@ -677,7 +677,7 @@ export default function ConversationThreadScreen() {
             </>
           )}
         </View>
-      ) : isTrader && !closed && (conv.stage === "HIRED" || conv.stage === "AWAITING_CUSTOMER_CONFIRMATION") ? (
+      ) : isTrader && !closed ? (
         <View style={styles.lifecycleBar}>
           {conv.stage === "AWAITING_CUSTOMER_CONFIRMATION" ? (
             <View style={styles.lifecycleDone}>
@@ -686,7 +686,7 @@ export default function ConversationThreadScreen() {
                 Waiting for the customer to confirm the job is done.
               </Text>
             </View>
-          ) : (
+          ) : conv.stage === "HIRED" ? (
             <Pressable
               style={styles.lifecycleBtn}
               onPress={onMarkDone}
@@ -701,6 +701,14 @@ export default function ConversationThreadScreen() {
                 </>
               )}
             </Pressable>
+          ) : (
+            <View style={styles.lifecycleDone}>
+              <Feather name="clock" size={14} color={Colors.light.textSecondary} />
+              <Text style={styles.lifecycleDoneText}>
+                Waiting for {otherName} to hire you. Once hired, you can mark the work
+                as completed.
+              </Text>
+            </View>
           )}
         </View>
       ) : null}
