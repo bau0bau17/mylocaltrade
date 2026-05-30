@@ -283,7 +283,7 @@ export default function HomeScreen() {
                   : 'Be the first to get featured in your area'}
               </Text>
               <Pressable style={styles.emptyCtaBtn} onPress={() => router.push('/pricing')}>
-                <Text style={styles.emptyCtaText}>Get featured · from £20/month</Text>
+                <Text style={styles.emptyCtaText}>Get featured · from £9.99/month</Text>
               </Pressable>
             </View>
           )}
@@ -295,7 +295,7 @@ export default function HomeScreen() {
               <Text style={styles.traderCtaBadgeText}>FOR TRADERS</Text>
             </View>
             <Text style={styles.traderCtaTitle}>List your business</Text>
-            <Text style={styles.traderCtaSub}>Join MyLocalTrade from £10/month</Text>
+            <Text style={styles.traderCtaSub}>Go Premium from £9.99/month</Text>
           </View>
           <View style={styles.traderCtaArrow}>
             <Feather name="arrow-right" size={18} color={Colors.light.primary} />
