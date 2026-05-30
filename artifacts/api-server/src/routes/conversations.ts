@@ -269,6 +269,17 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
             inArray(messagesTable.id, unreadIds),
           ),
         );
+    }
+    // Always clear the viewer's unread counter when they open the conversation,
+    // not only when message rows needed flipping. If the counter ever drifts
+    // out of sync with message read state (e.g. a stuck count with no matching
+    // unread rows) gating the reset on unreadIds would leave the badge red
+    // forever. Resetting whenever the counter is non-zero is idempotent and
+    // self-heals any drift for both customers and traders.
+    const viewerUnread = isCustomer
+      ? row.conv.customerUnreadCount
+      : row.conv.traderUnreadCount;
+    if (viewerUnread > 0) {
       await db
         .update(conversationsTable)
         .set(isCustomer ? { customerUnreadCount: 0 } : { traderUnreadCount: 0 })

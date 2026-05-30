@@ -5,3 +5,4 @@
 - [Plan model + legacy "trader"](plan-model-legacy-trader.md) — two tiers basic/premium only (no elite); treat any non-basic plan as Premium to cover legacy "trader" rows until RC re-sync.
 - [Mobile filter discoverability](mobile-filter-discoverability.md) — Search filters must NOT use horizontal scroll (not discoverable); use the "Filters" button + bottom-sheet pattern.
 - [Mobile oversized image assets](mobile-oversized-image-assets.md) — never require() the 1024px store icon for in-app/web display; use small derived variants.
+- [Conversation unread badge reset](unread-badge-reset.md) — always reset viewer counter on open (ungated) + invalidate both count & list queries; gated reset leaves badges stuck.
