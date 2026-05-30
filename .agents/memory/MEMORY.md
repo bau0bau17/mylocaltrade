@@ -4,3 +4,4 @@
 - [api-spec codegen + composite refs](codegen-composite-refs.md) — after openapi codegen, run root `pnpm run typecheck` (tsc --build) or artifacts read stale generated `.d.ts`; orval clean shows transient resolve errors.
 - [Plan model + legacy "trader"](plan-model-legacy-trader.md) — two tiers basic/premium only (no elite); treat any non-basic plan as Premium to cover legacy "trader" rows until RC re-sync.
 - [Mobile filter discoverability](mobile-filter-discoverability.md) — Search filters must NOT use horizontal scroll (not discoverable); use the "Filters" button + bottom-sheet pattern.
+- [Mobile oversized image assets](mobile-oversized-image-assets.md) — never require() the 1024px store icon for in-app/web display; use small derived variants.
