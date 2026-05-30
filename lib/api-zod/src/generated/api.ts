@@ -147,6 +147,9 @@ export const GetTraderOnboardingStatusResponse = zod.object({
   needsMoreInfoReason: zod.string().nullish(),
   businessRole: zod.string().nullish(),
   authorisedRepresentative: zod.boolean().nullish(),
+  revalidationDueAt: zod.date().nullish(),
+  revalidationRemindedAt: zod.date().nullish(),
+  revalidationOverdue: zod.boolean().optional(),
   checklist: zod.array(
     zod.object({
       key: zod.string(),
@@ -374,6 +377,9 @@ export const ListTradersResponse = zod.object({
         .describe(
           "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
         ),
+      revalidationDueAt: zod.date().nullish(),
+      revalidationRemindedAt: zod.date().nullish(),
+      revalidationOverdue: zod.boolean().optional(),
       createdAt: zod.date().optional(),
     }),
   ),
@@ -450,6 +456,9 @@ export const GetFeaturedTradersResponse = zod.object({
         .describe(
           "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
         ),
+      revalidationDueAt: zod.date().nullish(),
+      revalidationRemindedAt: zod.date().nullish(),
+      revalidationOverdue: zod.boolean().optional(),
       createdAt: zod.date().optional(),
     }),
   ),
@@ -522,6 +531,9 @@ export const GetTraderResponse = zod.object({
     .describe(
       "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
     ),
+  revalidationDueAt: zod.date().nullish(),
+  revalidationRemindedAt: zod.date().nullish(),
+  revalidationOverdue: zod.boolean().optional(),
   createdAt: zod.date().optional(),
 });
 
@@ -585,6 +597,9 @@ export const GetTraderProfileResponse = zod.object({
     .describe(
       "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
     ),
+  revalidationDueAt: zod.date().nullish(),
+  revalidationRemindedAt: zod.date().nullish(),
+  revalidationOverdue: zod.boolean().optional(),
   createdAt: zod.date().optional(),
 });
 
@@ -686,7 +701,19 @@ export const UpdateTraderProfileResponse = zod.object({
     .describe(
       "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
     ),
+  revalidationDueAt: zod.date().nullish(),
+  revalidationRemindedAt: zod.date().nullish(),
+  revalidationOverdue: zod.boolean().optional(),
   createdAt: zod.date().optional(),
+});
+
+/**
+ * @summary Re-confirm key documents are current, resetting the re-validation clock
+ */
+export const RevalidateTraderProfileResponse = zod.object({
+  revalidationDueAt: zod.date().nullish(),
+  revalidationRemindedAt: zod.date().nullish(),
+  revalidationOverdue: zod.boolean(),
 });
 
 /**
@@ -1207,6 +1234,9 @@ export const GetSavedTradersResponse = zod.object({
         .describe(
           "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
         ),
+      revalidationDueAt: zod.date().nullish(),
+      revalidationRemindedAt: zod.date().nullish(),
+      revalidationOverdue: zod.boolean().optional(),
       createdAt: zod.date().optional(),
     }),
   ),

@@ -70,6 +70,7 @@ import type {
   ResolveReportRequest,
   ResolveReportResponse,
   RetryAfterErrorResponse,
+  RevalidateProfileResponse,
   Review,
   SearchCompaniesHouseParams,
   SendMessageRequest,
@@ -1372,6 +1373,90 @@ export const useUpdateTraderProfile = <
   TContext
 > => {
   return useMutation(getUpdateTraderProfileMutationOptions(options));
+};
+
+/**
+ * @summary Re-confirm key documents are current, resetting the re-validation clock
+ */
+export const getRevalidateTraderProfileUrl = () => {
+  return `/api/profile/revalidate`;
+};
+
+export const revalidateTraderProfile = async (
+  options?: RequestInit,
+): Promise<RevalidateProfileResponse> => {
+  return customFetch<RevalidateProfileResponse>(
+    getRevalidateTraderProfileUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getRevalidateTraderProfileMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof revalidateTraderProfile>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof revalidateTraderProfile>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["revalidateTraderProfile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof revalidateTraderProfile>>,
+    void
+  > = () => {
+    return revalidateTraderProfile(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RevalidateTraderProfileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof revalidateTraderProfile>>
+>;
+
+export type RevalidateTraderProfileMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Re-confirm key documents are current, resetting the re-validation clock
+ */
+export const useRevalidateTraderProfile = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof revalidateTraderProfile>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof revalidateTraderProfile>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRevalidateTraderProfileMutationOptions(options));
 };
 
 /**

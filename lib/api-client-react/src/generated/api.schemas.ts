@@ -138,6 +138,9 @@ export interface TraderOnboardingStatus {
   needsMoreInfoReason?: string | null;
   businessRole?: string | null;
   authorisedRepresentative?: boolean | null;
+  revalidationDueAt?: string | null;
+  revalidationRemindedAt?: string | null;
+  revalidationOverdue?: boolean;
   checklist: TraderOnboardingChecklistStep[];
   legal?: TraderLegalAcceptance;
   email: string;
@@ -301,7 +304,16 @@ export interface TraderProfile {
   reviewCount: number;
   /** Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data. */
   responseTimeMinutes?: number | null;
+  revalidationDueAt?: string | null;
+  revalidationRemindedAt?: string | null;
+  revalidationOverdue?: boolean;
   createdAt?: string;
+}
+
+export interface RevalidateProfileResponse {
+  revalidationDueAt?: string | null;
+  revalidationRemindedAt?: string | null;
+  revalidationOverdue: boolean;
 }
 
 export type UpdateTraderProfileRequestSocialLinks = {

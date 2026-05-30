@@ -20,7 +20,7 @@ router.get("/saved-traders", authMiddleware, customerOnly, async (req, res) => {
       .where(eq(savedTradersTable.userId, userId));
 
     const traders = saved
-      .filter(({ trader: t }) => t.isActive && t.verificationStatus === "VERIFIED")
+      .filter(({ trader: t }) => t.isActive && t.verificationStatus === "VERIFIED" && !t.revalidationOverdue)
       .map(({ trader: t }) => ({
       id: t.id,
       userId: t.userId,

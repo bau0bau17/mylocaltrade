@@ -480,6 +480,20 @@ export default function TraderDetail({ userId }: Props) {
               <Field label="Rating" value={profile.rating != null ? `${profile.rating} / 5 (${profile.reviewCount})` : "No reviews"} />
               <Field label="Submitted for review" value={formatDateTime(profile.submittedForReviewAt)} />
               <Field label="Verified at" value={formatDateTime(profile.verifiedAt)} />
+              {profile.verificationStatus === "VERIFIED" && (
+                <Field
+                  label="Re-validation"
+                  value={
+                    profile.revalidationOverdue
+                      ? "Overdue — hidden from search"
+                      : profile.revalidationRemindedAt
+                        ? `Re-confirmation requested ${formatDateTime(profile.revalidationRemindedAt)}`
+                        : profile.revalidationDueAt
+                          ? `Next due ${formatDateTime(profile.revalidationDueAt)}`
+                          : "—"
+                  }
+                />
+              )}
               <Field label="Terms accepted" value={`${formatDateTime(profile.termsAcceptedAt)} (v${profile.termsVersion ?? "—"})`} />
               <Field label="Privacy accepted" value={`${formatDateTime(profile.privacyAcceptedAt)} (v${profile.privacyVersion ?? "—"})`} />
               <Field

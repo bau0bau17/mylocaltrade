@@ -752,6 +752,13 @@ router.get("/trader/onboarding-status", authMiddleware, async (req, res) => {
       needsMoreInfoReason: profile.needsMoreInfoReason,
       businessRole: profile.businessRole,
       authorisedRepresentative: profile.authorisedRepresentative,
+      revalidationDueAt: profile.revalidationDueAt
+        ? profile.revalidationDueAt.toISOString()
+        : null,
+      revalidationRemindedAt: profile.revalidationRemindedAt
+        ? profile.revalidationRemindedAt.toISOString()
+        : null,
+      revalidationOverdue: profile.revalidationOverdue,
       checklist: buildOnboardingChecklist(user, profile, subscription),
       businessProfile,
       documents,

@@ -1,0 +1,1 @@
+- [Public trader visibility policy](trader-public-visibility.md) — every public trader retrieval path must apply the same hide rules; they are duplicated across routes and drift easily.

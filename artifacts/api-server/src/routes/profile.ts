@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { UpdateTraderProfileBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
-import { TRADER_STATUS, evaluateBusinessProfileComplete, logAudit } from "../lib/trader-status";
+import { TRADER_STATUS, evaluateBusinessProfileComplete, logAudit, REVALIDATION_INTERVAL_MS } from "../lib/trader-status";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { reconcileDocumentsState } from "./trader-documents";
 import { extractDomain } from "../lib/domain-check";
@@ -87,6 +87,13 @@ router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
       isActive: trader.isActive,
       rating: trader.rating,
       reviewCount: trader.reviewCount,
+      revalidationDueAt: trader.revalidationDueAt
+        ? trader.revalidationDueAt.toISOString()
+        : null,
+      revalidationRemindedAt: trader.revalidationRemindedAt
+        ? trader.revalidationRemindedAt.toISOString()
+        : null,
+      revalidationOverdue: trader.revalidationOverdue,
       createdAt: trader.createdAt.toISOString(),
     });
   } catch (error) {
@@ -611,6 +618,60 @@ router.get("/profile/business-email/confirm", async (req, res) => {
     res
       .status(500)
       .send(businessEmailResultPage("Error", "Something went wrong. Please try again.", false));
+  }
+});
+
+// Trader re-confirms their key documents are still current, resetting the
+// periodic re-validation clock and clearing any "due"/"overdue" state. This is
+// the action prompted by the scheduler's re-validation sweep.
+router.post("/profile/revalidate", authMiddleware, traderOnly, async (req, res) => {
+  try {
+    const { userId } = req as AuthenticatedRequest;
+
+    const [trader] = await db
+      .select()
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+
+    if (!trader) {
+      res.status(404).json({ error: "Trader profile not found" });
+      return;
+    }
+
+    if (trader.verificationStatus !== TRADER_STATUS.VERIFIED) {
+      res.status(409).json({ error: "Only verified profiles can be re-confirmed." });
+      return;
+    }
+
+    const nextDueAt = new Date(Date.now() + REVALIDATION_INTERVAL_MS);
+    const [updated] = await db
+      .update(traderProfilesTable)
+      .set({
+        revalidationDueAt: nextDueAt,
+        revalidationRemindedAt: null,
+        revalidationOverdue: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(traderProfilesTable.userId, userId))
+      .returning();
+
+    await logAudit({
+      userId,
+      action: "REVALIDATION_CONFIRMED",
+      performedBy: userId,
+    });
+
+    res.json({
+      revalidationDueAt: updated?.revalidationDueAt
+        ? updated.revalidationDueAt.toISOString()
+        : nextDueAt.toISOString(),
+      revalidationRemindedAt: null,
+      revalidationOverdue: false,
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Profile re-validation failed");
+    res.status(500).json({ error: "Failed to re-confirm profile" });
   }
 });
 

@@ -4,6 +4,14 @@ import { traderAuditLogTable, type TraderAuditAction, type TraderProfile, type U
 // Baseline documents required of every trader regardless of role.
 export const REQUIRED_DOCUMENT_TYPES: TraderDocumentType[] = ["ID_DOCUMENT", "INSURANCE"];
 
+// --- Periodic re-validation (trust maintenance) ---
+// How long after verification (or a re-confirmation) a trader is next asked to
+// re-confirm their key documents so the "Documents reviewed" badge stays current.
+export const REVALIDATION_INTERVAL_MS = 365 * 24 * 60 * 60 * 1000;
+// Grace window after the trader is first prompted. If they still haven't
+// re-confirmed when it lapses, the profile is hidden from public search.
+export const REVALIDATION_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
+
 export const DOCUMENT_TYPE_LABELS: Record<TraderDocumentType, string> = {
   ID_DOCUMENT: "Photo ID",
   PROOF_OF_ADDRESS: "Proof of address",
@@ -168,7 +176,7 @@ export type TraderStatus = (typeof TRADER_STATUS)[keyof typeof TRADER_STATUS];
  */
 export function isTraderProfilePublic(
   user: Pick<User, "emailVerified" | "isActive" | "role" | "deletedAt" | "deletionStatus">,
-  profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive" | "businessRole" | "authorisedRepresentative">,
+  profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive" | "businessRole" | "authorisedRepresentative" | "revalidationOverdue">,
   subscription?: { status: string | null } | null,
   documents?: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[] | null,
 ): boolean {
@@ -180,6 +188,9 @@ export function isTraderProfilePublic(
   if (!user.emailVerified) return false;
   if (profile.verificationStatus !== TRADER_STATUS.VERIFIED) return false;
   if (!profile.isActive) return false;
+  // Periodic re-validation: a verified trader who let the grace period lapse
+  // without re-confirming their key documents is hidden until they re-confirm.
+  if (profile.revalidationOverdue) return false;
   // Phase 6: subscription must be active for the profile to be public.
   // If a caller doesn't pass subscription info, fall back on profile.isActive — the
   // subscription activation flow flips that flag on, and cancellation flips it off,

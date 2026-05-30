@@ -101,6 +101,7 @@ router.get("/traders", async (req, res) => {
     const conditions = [
       eq(traderProfilesTable.isActive, true),
       inArray(traderProfilesTable.verificationStatus, VISIBLE_STATUSES as unknown as string[]),
+      eq(traderProfilesTable.revalidationOverdue, false),
       eq(traderProfilesTable.businessProfileCompleted, true),
       // GDPR: hide any trader account in the deletion lifecycle.
       isNull(usersTable.deletionStatus),
@@ -255,6 +256,7 @@ router.get("/traders/featured", async (req, res) => {
       .where(and(
         eq(traderProfilesTable.isActive, true),
         eq(traderProfilesTable.verificationStatus, "VERIFIED"),
+        eq(traderProfilesTable.revalidationOverdue, false),
         eq(traderProfilesTable.isFeatured, true),
         isNull(usersTable.deletionStatus),
         isNull(usersTable.deletedAt),
@@ -302,6 +304,7 @@ router.get("/traders/:id", async (req, res) => {
     if (
       !row ||
       !row.profile.isActive ||
+      row.profile.revalidationOverdue ||
       row.deletionStatus ||
       row.deletedAt ||
       !(VISIBLE_STATUSES as readonly string[]).includes(row.profile.verificationStatus)

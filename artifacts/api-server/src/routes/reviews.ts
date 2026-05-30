@@ -16,6 +16,14 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
+// Statuses considered publicly discoverable for review retrieval. Mirrors the
+// visibility used by the public trader detail endpoint.
+const PUBLIC_TRADER_STATUSES: readonly string[] = [
+  "VERIFIED",
+  "UNDER_REVIEW",
+  "PENDING_DOCUMENTS",
+];
+
 const CreateReviewBody = z.object({
   traderId: z.number().int().positive(),
   enquiryId: z.number().int().positive(),
@@ -209,11 +217,29 @@ router.get("/traders/:id/reviews", async (req, res) => {
     }
 
     const [trader] = await db
-      .select({ id: traderProfilesTable.id })
+      .select({
+        id: traderProfilesTable.id,
+        isActive: traderProfilesTable.isActive,
+        verificationStatus: traderProfilesTable.verificationStatus,
+        revalidationOverdue: traderProfilesTable.revalidationOverdue,
+        deletionStatus: usersTable.deletionStatus,
+        deletedAt: usersTable.deletedAt,
+      })
       .from(traderProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(eq(traderProfilesTable.id, traderId))
       .limit(1);
-    if (!trader) {
+    // Hide reviews for any trader not publicly discoverable — including those
+    // whose periodic re-validation lapsed (revalidationOverdue) — so the
+    // reviews endpoint can't be used to retrieve hidden profiles by ID.
+    if (
+      !trader ||
+      !trader.isActive ||
+      trader.revalidationOverdue ||
+      trader.deletionStatus ||
+      trader.deletedAt ||
+      !PUBLIC_TRADER_STATUSES.includes(trader.verificationStatus)
+    ) {
       res.status(404).json({ error: "Trader not found" });
       return;
     }
