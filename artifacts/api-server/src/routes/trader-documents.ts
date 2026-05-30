@@ -10,6 +10,7 @@ import { TRADER_STATUS, evaluateDocumentsComplete, logAudit } from "../lib/trade
 import { triggerAiVerification } from "../lib/trader-ai-verification";
 import { triggerVatCheck } from "../lib/vat-check";
 import { triggerDomainCheck } from "../lib/domain-check";
+import { triggerRegisterCheck } from "../lib/register-check";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -157,6 +158,14 @@ export async function reconcileDocumentsState(userId: number) {
         userId: profile.userId,
         businessEmailDomain: profile.businessEmailDomain,
         website: profile.website,
+      });
+      // Fire-and-forget deterministic register check (Companies House +
+      // HMRC VAT lookup) of the submitted company/VAT numbers.
+      triggerRegisterCheck({
+        userId: profile.userId,
+        businessName: profile.businessName,
+        companyNumber: profile.companyNumber,
+        vatNumber: profile.vatNumber,
       });
     }
     if (stateChange.verificationStatus === TRADER_STATUS.EXPIRED_DOCUMENTS) {

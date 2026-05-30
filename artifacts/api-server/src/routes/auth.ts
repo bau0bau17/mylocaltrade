@@ -25,6 +25,7 @@ import { ACCOUNT_DELETION_STATUSES, type User } from "@workspace/db/schema";
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, evaluateLegalAcceptance } from "../lib/legal";
 import { getCompanyProfile, formatChAddress } from "../lib/companies-house";
 import type { AiVerificationResult } from "../lib/trader-ai-verification";
+import { normaliseVatNumber } from "../lib/hmrc-vat";
 import { traderDocumentsTable } from "@workspace/db/schema";
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -188,6 +189,10 @@ router.post("/auth/register/trader", async (req, res) => {
     let aiVerificationData: AiVerificationResult | null = null;
     let aiVerificationCheckedAt: Date | null = null;
     let companyNumber: string | null = null;
+    // Normalise the optional VAT number to the canonical 9-digit VRN; store
+    // null when it's absent or malformed. It's validated against HMRC during
+    // review (see register-check), not at signup.
+    const vatNumber: string | null = normaliseVatNumber(body.vatNumber);
     const rawCompanyNumber = body.companyNumber?.trim().toUpperCase() ?? "";
     if (rawCompanyNumber && /^[A-Z0-9]{6,10}$/.test(rawCompanyNumber)) {
       try {
@@ -272,6 +277,7 @@ router.post("/auth/register/trader", async (req, res) => {
         userId: user.id,
         businessName: body.businessName,
         companyNumber,
+        vatNumber,
         contactName: body.contactName,
         email: body.email,
         phone: body.phone,

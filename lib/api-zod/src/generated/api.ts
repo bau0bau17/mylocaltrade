@@ -69,6 +69,12 @@ export const RegisterTraderBody = zod.object({
     .describe(
       'Optional UK Companies House registration number. If present, the\nbackend treats the trader as having selected a confirmed match\nfrom the Companies House live search and skips the manual\n\"under review\" step for the business identity check.\n',
     ),
+  vatNumber: zod
+    .string()
+    .optional()
+    .describe(
+      "Optional UK VAT registration number. When supplied it is checked\nagainst the HMRC VAT lookup service during review and the result\nis shown to admins alongside the Companies House cross-check.\n",
+    ),
   phone: zod.string(),
   mainCategory: zod.string(),
   businessAddress: zod

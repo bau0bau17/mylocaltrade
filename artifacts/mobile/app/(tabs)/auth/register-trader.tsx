@@ -38,6 +38,7 @@ export default function RegisterTraderScreen() {
     postcode: '',
   });
   const [companyNumber, setCompanyNumber] = useState<string | null>(null);
+  const [vatNumber, setVatNumber] = useState('');
   const [confirmedName, setConfirmedName] = useState<string | null>(null);
   const [chSuggestions, setChSuggestions] = useState<ChHit[]>([]);
   const [chLoading, setChLoading] = useState(false);
@@ -166,6 +167,7 @@ export default function RegisterTraderScreen() {
       const payload = {
         businessName: formData.businessName.trim(),
         ...(companyNumber ? { companyNumber } : {}),
+        ...(vatNumber.trim() ? { vatNumber: vatNumber.trim() } : {}),
         contactName: formData.contactName.trim(),
         email: formData.email.trim(),
         password: formData.password,
@@ -319,6 +321,25 @@ export default function RegisterTraderScreen() {
               </Pressable>
             </View>
           ) : null}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>VAT Number</Text>
+          <View style={styles.inputWrap}>
+            <Feather name="hash" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. GB123456789 (optional)"
+              placeholderTextColor={Colors.light.textMuted}
+              value={vatNumber}
+              onChangeText={setVatNumber}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+          </View>
+          <Text style={styles.hintText}>
+            If you're VAT registered, add your number — we'll verify it against HMRC during review.
+          </Text>
         </View>
 
         <View style={styles.inputGroup}>

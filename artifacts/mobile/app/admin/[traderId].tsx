@@ -53,6 +53,8 @@ interface TraderDetail {
   };
   profile: {
     businessName: string;
+    companyNumber: string | null;
+    vatNumber: string | null;
     contactName: string;
     phone: string;
     mainCategory: string;
@@ -102,7 +104,6 @@ interface TraderDetail {
       } | null;
       error?: string;
     } | null;
-    vatNumber: string | null;
     vatVerificationStatus: 'REGISTERED' | 'NOT_REGISTERED' | 'VALID_FORMAT' | 'INVALID_FORMAT' | 'ERROR' | null;
     vatVerificationCheckedAt: string | null;
     vatVerificationData: {
@@ -122,6 +123,34 @@ interface TraderDetail {
       domain: string;
       hasMailRecords: boolean;
       matchesWebsite: boolean | null;
+      error?: string;
+    } | null;
+    registerCheckStatus: 'PASS' | 'REVIEW' | 'FAIL' | 'NOT_PROVIDED' | 'ERROR' | null;
+    registerCheckCheckedAt: string | null;
+    registerCheckData: {
+      overall: 'PASS' | 'REVIEW' | 'FAIL' | 'NOT_PROVIDED' | 'ERROR';
+      company: {
+        submittedNumber: string | null;
+        status: 'MATCH' | 'NAME_MISMATCH' | 'INACTIVE' | 'NOT_FOUND' | 'INVALID' | 'NOT_PROVIDED' | 'ERROR';
+        detail: string;
+        companiesHouse: {
+          companyNumber?: string;
+          companyName?: string;
+          status?: string;
+          address?: string;
+          postcode?: string;
+        } | null;
+      };
+      vat: {
+        submittedNumber: string | null;
+        status: 'MATCH' | 'NAME_MISMATCH' | 'NOT_FOUND' | 'INVALID' | 'NOT_PROVIDED' | 'ERROR';
+        detail: string;
+        hmrc: {
+          vatNumber?: string;
+          name?: string;
+          address?: string;
+        } | null;
+      };
       error?: string;
     } | null;
   };
@@ -162,6 +191,7 @@ export default function AdminTraderDetail() {
 
   const apiUrl = getApiUrl();
   const [aiBusy, setAiBusy] = useState(false);
+  const [registerBusy, setRegisterBusy] = useState(false);
 
   const runAiVerification = useCallback(async () => {
     if (!traderId || !token) return;
@@ -181,6 +211,28 @@ export default function AdminTraderDetail() {
       Alert.alert('AI verification failed', e?.message || 'Network error');
     } finally {
       setAiBusy(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiUrl, traderId, token]);
+
+  const runRegisterCheck = useCallback(async () => {
+    if (!traderId || !token) return;
+    setRegisterBusy(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/traders/${traderId}/register-check/run`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        Alert.alert('Register check failed', j.error || `HTTP ${res.status}`);
+      } else {
+        await load();
+      }
+    } catch (e: any) {
+      Alert.alert('Register check failed', e?.message || 'Network error');
+    } finally {
+      setRegisterBusy(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiUrl, traderId, token]);
@@ -475,6 +527,8 @@ export default function AdminTraderDetail() {
           <Field label="Email" value={user.email} extra={user.emailVerified ? '✓ verified' : 'unverified'} />
           <Field label="Phone" value={profile.phone} extra={profile.phoneVerified ? '✓ verified' : 'unverified'} />
           <Field label="Trade" value={profile.mainCategory} />
+          <Field label="Company no." value={profile.companyNumber} />
+          <Field label="VAT no." value={profile.vatNumber} />
           {profile.businessRole ? (
             <Field label="Role in business" value={ROLE_LABELS[profile.businessRole] ?? profile.businessRole} />
           ) : null}
@@ -672,6 +726,97 @@ export default function AdminTraderDetail() {
               )}
             </View>
           ) : null}
+        </View>
+
+        {/* Official register checks (Companies House number + HMRC VAT) */}
+        <View style={styles.aiHeaderRow}>
+          <Text style={styles.sectionLabel}>Register checks</Text>
+          <Pressable
+            style={[styles.aiRunBtn, registerBusy && { opacity: 0.5 }]}
+            disabled={registerBusy}
+            onPress={runRegisterCheck}
+          >
+            {registerBusy ? (
+              <ActivityIndicator size="small" color={Colors.light.primary} />
+            ) : (
+              <Feather name="refresh-cw" size={12} color={Colors.light.primary} />
+            )}
+            <Text style={styles.aiRunBtnText}>
+              {profile.registerCheckCheckedAt ? 'Re-run check' : 'Run check'}
+            </Text>
+          </Pressable>
+        </View>
+        <View style={styles.card}>
+          {!profile.registerCheckCheckedAt || !profile.registerCheckData ? (
+            <Text style={styles.muted}>
+              No register check yet. Tap Run check to validate the submitted company number
+              against Companies House and the VAT number against HMRC.
+            </Text>
+          ) : (
+            <>
+              <View style={styles.aiVerdictRow}>
+                <RegisterOverallPill overall={profile.registerCheckData.overall} />
+                <Text style={styles.aiCheckedAt}>
+                  Checked {formatDate(profile.registerCheckCheckedAt)}
+                </Text>
+              </View>
+
+              <View style={styles.registerItem}>
+                <View style={styles.registerItemHead}>
+                  <Text style={styles.registerItemTitle}>Company number</Text>
+                  <RegisterStatusPill status={profile.registerCheckData.company.status} />
+                </View>
+                <Text style={styles.aiReasoning}>{profile.registerCheckData.company.detail}</Text>
+                {profile.registerCheckData.company.submittedNumber ? (
+                  <Text style={styles.registerSubmitted}>
+                    Submitted: {profile.registerCheckData.company.submittedNumber}
+                  </Text>
+                ) : null}
+                {profile.registerCheckData.company.companiesHouse ? (
+                  <View style={styles.aiCompareBox}>
+                    <Text style={styles.aiCompareTitle}>Companies House record</Text>
+                    {profile.registerCheckData.company.companiesHouse.companyName ? (
+                      <CompareRow label="Name" a={profile.businessName} b={profile.registerCheckData.company.companiesHouse.companyName} />
+                    ) : null}
+                    {profile.registerCheckData.company.companiesHouse.status ? (
+                      <CompareRow label="Status" a="—" b={profile.registerCheckData.company.companiesHouse.status} />
+                    ) : null}
+                    {profile.registerCheckData.company.companiesHouse.address ? (
+                      <CompareRow label="Address" a="—" b={profile.registerCheckData.company.companiesHouse.address} />
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={styles.registerItem}>
+                <View style={styles.registerItemHead}>
+                  <Text style={styles.registerItemTitle}>VAT number</Text>
+                  <RegisterStatusPill status={profile.registerCheckData.vat.status} />
+                </View>
+                <Text style={styles.aiReasoning}>{profile.registerCheckData.vat.detail}</Text>
+                {profile.registerCheckData.vat.submittedNumber ? (
+                  <Text style={styles.registerSubmitted}>
+                    Submitted: {profile.registerCheckData.vat.submittedNumber}
+                  </Text>
+                ) : null}
+                {profile.registerCheckData.vat.hmrc ? (
+                  <View style={styles.aiCompareBox}>
+                    <Text style={styles.aiCompareTitle}>HMRC record</Text>
+                    {profile.registerCheckData.vat.hmrc.name ? (
+                      <CompareRow label="Name" a={profile.businessName} b={profile.registerCheckData.vat.hmrc.name} />
+                    ) : null}
+                    {profile.registerCheckData.vat.hmrc.address ? (
+                      <CompareRow label="Address" a="—" b={profile.registerCheckData.vat.hmrc.address} />
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+
+              {profile.registerCheckData.error ? (
+                <Text style={styles.aiErrorText}>Error: {profile.registerCheckData.error}</Text>
+              ) : null}
+            </>
+          )}
         </View>
 
         {/* Documents */}
@@ -1143,6 +1288,22 @@ function VatVerdictPill({ verdict }: { verdict: 'REGISTERED' | 'NOT_REGISTERED' 
   );
 }
 
+function RegisterOverallPill({ overall }: { overall: 'PASS' | 'REVIEW' | 'FAIL' | 'NOT_PROVIDED' | 'ERROR' }) {
+  const map: Record<string, { label: string; bg: string; fg: string }> = {
+    PASS: { label: 'Registers: Pass', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+    REVIEW: { label: 'Registers: Review', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
+    FAIL: { label: 'Registers: Fail', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
+    NOT_PROVIDED: { label: 'Registers: Nothing to check', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+    ERROR: { label: 'Registers: Check failed', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+  };
+  const v = map[overall] ?? map.ERROR;
+  return (
+    <View style={[styles.pill, { backgroundColor: v.bg }]}>
+      <Text style={[styles.pillText, { color: v.fg }]}>{v.label}</Text>
+    </View>
+  );
+}
+
 function DomainVerdictPill({ verdict }: { verdict: 'RESOLVES_MATCHES_WEBSITE' | 'RESOLVES' | 'NO_MAIL_RECORDS' | 'NOT_RESOLVED' | 'ERROR' }) {
   const map: Record<string, { label: string; bg: string; fg: string }> = {
     RESOLVES_MATCHES_WEBSITE: { label: 'Domain: Matches website', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
@@ -1155,6 +1316,24 @@ function DomainVerdictPill({ verdict }: { verdict: 'RESOLVES_MATCHES_WEBSITE' | 
   return (
     <View style={[styles.pill, { backgroundColor: v.bg }]}>
       <Text style={[styles.pillText, { color: v.fg }]}>{v.label}</Text>
+    </View>
+  );
+}
+
+function RegisterStatusPill({ status }: { status: string }) {
+  const map: Record<string, { label: string; bg: string; fg: string }> = {
+    MATCH: { label: 'Match', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+    NAME_MISMATCH: { label: 'Name mismatch', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
+    INACTIVE: { label: 'Inactive', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
+    NOT_FOUND: { label: 'Not found', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
+    INVALID: { label: 'Invalid format', bg: 'rgba(239, 68, 68, 0.14)', fg: '#B91C1C' },
+    NOT_PROVIDED: { label: 'Not provided', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+    ERROR: { label: 'Check failed', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+  };
+  const v = map[status] ?? map.ERROR;
+  return (
+    <View style={[styles.smallPill, { backgroundColor: v.bg }]}>
+      <Text style={[styles.smallPillText, { color: v.fg }]}>{v.label}</Text>
     </View>
   );
 }
@@ -1247,6 +1426,10 @@ const styles = StyleSheet.create({
   emailVerifyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: Colors.light.border },
   emailVerifyConfirmed: { flex: 1, fontSize: 12, color: Colors.light.success, fontWeight: '600', lineHeight: 17 },
   emailVerifySelf: { flex: 1, fontSize: 12, color: Colors.light.textMuted, lineHeight: 17 },
+  registerItem: { borderTopWidth: 1, borderTopColor: Colors.light.border, paddingTop: 10, gap: 6 },
+  registerItemHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  registerItemTitle: { fontSize: 13, fontWeight: '700', color: Colors.light.text },
+  registerSubmitted: { fontSize: 11, color: Colors.light.textMuted },
 
   pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   pillText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
