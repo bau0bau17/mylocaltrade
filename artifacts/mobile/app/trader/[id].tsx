@@ -13,7 +13,7 @@ import {
   getGetSavedTradersQueryKey,
 } from '@workspace/api-client-react';
 import { ReviewsSection } from '@/components/ReviewsSection';
-import { formatResponseTime, isTopRated, isFastResponder, isPromptResponder } from '@/components/TraderCard';
+import { formatResponseTime, isTopRated, isFastResponder } from '@/components/TraderCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { detectSpecialisms, SPECIALISM_BY_KEY } from '@/constants/specialisms';
 
@@ -174,11 +174,6 @@ export default function TraderProfileScreen() {
               <View style={[styles.planBadge, { backgroundColor: Colors.light.primaryMuted }]}>
                 <Feather name="zap" size={11} color={Colors.light.primary} />
                 <Text style={[styles.planTextColored, { color: Colors.light.primary }]}>Replies fast</Text>
-              </View>
-            ) : isPromptResponder(trader.responseTimeMinutes) ? (
-              <View style={[styles.planBadge, { backgroundColor: Colors.light.border }]}>
-                <Feather name="clock" size={11} color={Colors.light.textSecondary} />
-                <Text style={[styles.planTextColored, { color: Colors.light.textSecondary }]}>Replies promptly</Text>
               </View>
             ) : null}
           </View>
