@@ -590,6 +590,24 @@ export const ConversationSummaryTraderStatus = {
   COMPLETED: "COMPLETED",
 } as const;
 
+/**
+ * Derived lifecycle stage, the single source of truth for the headline
+status shown to both parties. Precedence: cancelled > job done >
+awaiting customer confirmation > hired > closed/blocked > awaiting reply.
+
+ */
+export type ConversationSummaryStage =
+  (typeof ConversationSummaryStage)[keyof typeof ConversationSummaryStage];
+
+export const ConversationSummaryStage = {
+  AWAITING_REPLY: "AWAITING_REPLY",
+  HIRED: "HIRED",
+  AWAITING_CUSTOMER_CONFIRMATION: "AWAITING_CUSTOMER_CONFIRMATION",
+  JOB_DONE: "JOB_DONE",
+  CANCELLED: "CANCELLED",
+  CLOSED: "CLOSED",
+} as const;
+
 export interface ConversationSummary {
   id: number;
   customerId: number;
@@ -602,6 +620,11 @@ export interface ConversationSummary {
   postcode?: string | null;
   status: ConversationSummaryStatus;
   traderStatus: ConversationSummaryTraderStatus;
+  /** Derived lifecycle stage, the single source of truth for the headline
+status shown to both parties. Precedence: cancelled > job done >
+awaiting customer confirmation > hired > closed/blocked > awaiting reply.
+ */
+  stage: ConversationSummaryStage;
   unreadCount: number;
   muted: boolean;
   /** ISO timestamp when the current mute auto-expires. Null when the
@@ -614,8 +637,18 @@ conversation is unmuted or muted indefinitely.
   closedByRole?: string | null;
   /** When the customer accepted the trader's offer (hired them). Null until accepted. */
   customerAcceptedAt?: string | null;
-  /** When the customer marked the job complete. Unlocks leaving a review. Null until complete. */
+  /** When the customer confirmed the job is done. Unlocks leaving a review. Null until confirmed. */
   customerCompletedAt?: string | null;
+  /** When the trader signalled the work is finished. Notifies the customer only; never unlocks the review on its own. */
+  traderMarkedDoneAt?: string | null;
+  /** When the job was cancelled. Cancelled jobs are never review-eligible. */
+  cancelledAt?: string | null;
+  /** Who cancelled the job ("customer" or "trader"). */
+  cancelledByRole?: string | null;
+  /** The short reason supplied when cancelling. */
+  cancellationReason?: string | null;
+  /** When review submission became eligible (set at customer confirmation). */
+  reviewUnlockedAt?: string | null;
   /** Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses. */
   hasReview?: boolean | null;
   createdAt: string;
@@ -715,6 +748,15 @@ export interface ReportConversationRequest {
   /**
    * @minLength 5
    * @maxLength 2000
+   */
+  reason: string;
+}
+
+export interface CancelConversationRequest {
+  /**
+   * A short reason for cancelling, recorded in the audit trail.
+   * @minLength 3
+   * @maxLength 500
    */
   reason: string;
 }

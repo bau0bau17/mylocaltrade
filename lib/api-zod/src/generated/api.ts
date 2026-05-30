@@ -1400,6 +1400,18 @@ export const GetConversationsResponse = zod.object({
         "REPORTED",
       ]),
       traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
+      stage: zod
+        .enum([
+          "AWAITING_REPLY",
+          "HIRED",
+          "AWAITING_CUSTOMER_CONFIRMATION",
+          "JOB_DONE",
+          "CANCELLED",
+          "CLOSED",
+        ])
+        .describe(
+          "Derived lifecycle stage, the single source of truth for the headline\nstatus shown to both parties. Precedence: cancelled > job done >\nawaiting customer confirmation > hired > closed\/blocked > awaiting reply.\n",
+        ),
       unreadCount: zod.number(),
       muted: zod.boolean(),
       mutedUntil: zod
@@ -1422,7 +1434,33 @@ export const GetConversationsResponse = zod.object({
         .date()
         .nullish()
         .describe(
-          "When the customer marked the job complete. Unlocks leaving a review. Null until complete.",
+          "When the customer confirmed the job is done. Unlocks leaving a review. Null until confirmed.",
+        ),
+      traderMarkedDoneAt: zod
+        .date()
+        .nullish()
+        .describe(
+          "When the trader signalled the work is finished. Notifies the customer only; never unlocks the review on its own.",
+        ),
+      cancelledAt: zod
+        .date()
+        .nullish()
+        .describe(
+          "When the job was cancelled. Cancelled jobs are never review-eligible.",
+        ),
+      cancelledByRole: zod
+        .string()
+        .nullish()
+        .describe('Who cancelled the job (\"customer\" or \"trader\").'),
+      cancellationReason: zod
+        .string()
+        .nullish()
+        .describe("The short reason supplied when cancelling."),
+      reviewUnlockedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          "When review submission became eligible (set at customer confirmation).",
         ),
       hasReview: zod
         .boolean()
@@ -1462,6 +1500,18 @@ export const GetConversationResponse = zod.object({
       "REPORTED",
     ]),
     traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
+    stage: zod
+      .enum([
+        "AWAITING_REPLY",
+        "HIRED",
+        "AWAITING_CUSTOMER_CONFIRMATION",
+        "JOB_DONE",
+        "CANCELLED",
+        "CLOSED",
+      ])
+      .describe(
+        "Derived lifecycle stage, the single source of truth for the headline\nstatus shown to both parties. Precedence: cancelled > job done >\nawaiting customer confirmation > hired > closed\/blocked > awaiting reply.\n",
+      ),
     unreadCount: zod.number(),
     muted: zod.boolean(),
     mutedUntil: zod
@@ -1484,7 +1534,33 @@ export const GetConversationResponse = zod.object({
       .date()
       .nullish()
       .describe(
-        "When the customer marked the job complete. Unlocks leaving a review. Null until complete.",
+        "When the customer confirmed the job is done. Unlocks leaving a review. Null until confirmed.",
+      ),
+    traderMarkedDoneAt: zod
+      .date()
+      .nullish()
+      .describe(
+        "When the trader signalled the work is finished. Notifies the customer only; never unlocks the review on its own.",
+      ),
+    cancelledAt: zod
+      .date()
+      .nullish()
+      .describe(
+        "When the job was cancelled. Cancelled jobs are never review-eligible.",
+      ),
+    cancelledByRole: zod
+      .string()
+      .nullish()
+      .describe('Who cancelled the job (\"customer\" or \"trader\").'),
+    cancellationReason: zod
+      .string()
+      .nullish()
+      .describe("The short reason supplied when cancelling."),
+    reviewUnlockedAt: zod
+      .date()
+      .nullish()
+      .describe(
+        "When review submission became eligible (set at customer confirmation).",
       ),
     hasReview: zod
       .boolean()
@@ -1569,6 +1645,39 @@ export const CompleteConversationJobParams = zod.object({
 });
 
 export const CompleteConversationJobResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Trader signals the work is finished (notifies the customer to confirm; never unlocks the review)
+ */
+export const TraderMarkConversationDoneParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const TraderMarkConversationDoneResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Either party cancels the job before completion (a short reason is required)
+ */
+export const CancelConversationJobParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const cancelConversationJobBodyReasonMin = 3;
+export const cancelConversationJobBodyReasonMax = 500;
+
+export const CancelConversationJobBody = zod.object({
+  reason: zod
+    .string()
+    .min(cancelConversationJobBodyReasonMin)
+    .max(cancelConversationJobBodyReasonMax)
+    .describe("A short reason for cancelling, recorded in the audit trail."),
+});
+
+export const CancelConversationJobResponse = zod.object({
   ok: zod.boolean(),
 });
 

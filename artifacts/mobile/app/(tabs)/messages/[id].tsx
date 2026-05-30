@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
@@ -28,6 +29,8 @@ import {
   useMuteConversation,
   useAcceptConversationOffer,
   useCompleteConversationJob,
+  useTraderMarkConversationDone,
+  useCancelConversationJob,
   getGetConversationQueryKey,
   getGetConversationsQueryKey,
   getGetConversationsUnreadCountQueryKey,
@@ -103,6 +106,24 @@ export default function ConversationThreadScreen() {
     },
   });
 
+  const traderMarkDoneMutation = useTraderMarkConversationDone({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      },
+    },
+  });
+
+  const cancelMutation = useCancelConversationJob({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      },
+    },
+  });
+
   const reportMutation = useReportConversation();
 
   const muteMutation = useMuteConversation({
@@ -116,6 +137,8 @@ export default function ConversationThreadScreen() {
 
   const [text, setText] = useState("");
   const [showStatus, setShowStatus] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   if (isAdmin) {
     return (
@@ -140,6 +163,23 @@ export default function ConversationThreadScreen() {
     if (!conv) return "";
     return isTrader ? conv.customerName : conv.traderBusinessName;
   }, [conv, isTrader]);
+
+  const stageDisplay = useMemo(() => {
+    switch (conv?.stage) {
+      case "CANCELLED":
+        return { label: "Cancelled", pill: styles.cancelledPill, text: styles.cancelledPillText };
+      case "JOB_DONE":
+        return { label: "Job done", pill: styles.donePill, text: styles.donePillText };
+      case "AWAITING_CUSTOMER_CONFIRMATION":
+        return { label: "Awaiting confirmation", pill: styles.awaitingPill, text: styles.awaitingPillText };
+      case "HIRED":
+        return { label: "Hired", pill: styles.hiredPill, text: styles.hiredPillText };
+      case "CLOSED":
+        return { label: "Closed", pill: styles.closedPill, text: styles.closedPillText };
+      default:
+        return { label: "Awaiting reply", pill: styles.statusPill, text: styles.statusPillText };
+    }
+  }, [conv?.stage]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -218,19 +258,60 @@ export default function ConversationThreadScreen() {
 
   const onComplete = () => {
     confirmAction({
-      title: "Mark job as complete",
-      message: "Confirm this job is finished? You'll then be able to leave a review.",
-      confirmLabel: "Mark complete",
+      title: "Confirm the job is done",
+      message:
+        "Only confirm once the work is finished to your satisfaction. You'll then be able to leave a review. This can't be undone.",
+      confirmLabel: "Confirm job done",
       onConfirm: () =>
         completeMutation.mutate(
           { id: conversationId },
           {
             onSuccess: () =>
-              Alert.alert("Job complete", "Thanks! You can now leave a review."),
-            onError: () => Alert.alert("Error", "Could not mark the job complete."),
+              Alert.alert("Job confirmed", "Thanks! You can now leave a review."),
+            onError: () => Alert.alert("Error", "Could not confirm the job."),
           },
         ),
     });
+  };
+
+  const onMarkDone = () => {
+    confirmAction({
+      title: "Mark work as completed",
+      message:
+        "This lets the customer know you've finished. They still need to confirm before they can leave a review.",
+      confirmLabel: "Notify customer",
+      onConfirm: () =>
+        traderMarkDoneMutation.mutate(
+          { id: conversationId },
+          {
+            onSuccess: () =>
+              Alert.alert(
+                "Customer notified",
+                "We've let the customer know the work is done. They'll confirm to unlock a review.",
+              ),
+            onError: () => Alert.alert("Error", "Could not notify the customer."),
+          },
+        ),
+    });
+  };
+
+  const onSubmitCancel = () => {
+    const reason = cancelReason.trim();
+    if (reason.length < 3) {
+      Alert.alert("Add a reason", "Please give a short reason for cancelling.");
+      return;
+    }
+    cancelMutation.mutate(
+      { id: conversationId, data: { reason } },
+      {
+        onSuccess: () => {
+          setCancelOpen(false);
+          setCancelReason("");
+          Alert.alert("Job cancelled", "This job has been cancelled and the conversation closed.");
+        },
+        onError: () => Alert.alert("Error", "Could not cancel the job."),
+      },
+    );
   };
 
   const onLeaveReview = () => {
@@ -391,10 +472,10 @@ export default function ConversationThreadScreen() {
             </Text>
           ) : null}
           <View style={styles.headerPills}>
-            <View style={styles.statusPill}>
-              <Text style={styles.statusPillText}>{conv.status.replace(/_/g, " ")}</Text>
+            <View style={[styles.statusPill, stageDisplay.pill]}>
+              <Text style={[styles.statusPillText, stageDisplay.text]}>{stageDisplay.label}</Text>
             </View>
-            {isTrader ? (
+            {isTrader && conv.stage !== "CANCELLED" ? (
               <Pressable
                 style={[styles.statusPill, styles.tStatusPill]}
                 onPress={() => !closed && setShowStatus((s) => !s)}
@@ -403,28 +484,13 @@ export default function ConversationThreadScreen() {
                   {conv.traderStatus} {!closed ? "▾" : ""}
                 </Text>
               </Pressable>
-            ) : (
-              <View style={[styles.statusPill, styles.tStatusPill]}>
-                <Text style={[styles.statusPillText, styles.tStatusText]}>
-                  {conv.traderStatus}
-                </Text>
-              </View>
-            )}
+            ) : null}
             {conv.muted ? (
               <View style={[styles.statusPill, styles.mutedPill]}>
                 <Feather name="bell-off" size={10} color={Colors.light.textSecondary} />
                 <Text style={[styles.statusPillText, styles.mutedPillText]}>
                   {mutedRemainingLabel ? `Muted · ${mutedRemainingLabel}` : "Muted"}
                 </Text>
-              </View>
-            ) : null}
-            {conv.customerCompletedAt ? (
-              <View style={[styles.statusPill, styles.donePill]}>
-                <Text style={[styles.statusPillText, styles.donePillText]}>Job done</Text>
-              </View>
-            ) : conv.customerAcceptedAt ? (
-              <View style={[styles.statusPill, styles.hiredPill]}>
-                <Text style={[styles.statusPillText, styles.hiredPillText]}>Hired</Text>
               </View>
             ) : null}
           </View>
@@ -438,6 +504,15 @@ export default function ConversationThreadScreen() {
                 text: conv.muted ? "Unmute notifications" : "Mute notifications",
                 onPress: onShowMuteOptions,
               },
+              ...(conv.stage === "HIRED" || conv.stage === "AWAITING_CUSTOMER_CONFIRMATION"
+                ? [
+                    {
+                      text: "Cancel this job",
+                      onPress: () => setCancelOpen(true),
+                      style: "destructive" as const,
+                    },
+                  ]
+                : []),
               ...(!closed
                 ? [{ text: "Close conversation", onPress: onClose, style: "destructive" as const }]
                 : []),
@@ -525,8 +600,22 @@ export default function ConversationThreadScreen() {
         }
       />
 
-      {!isTrader && conv.customerCompletedAt && !conv.hasReview ? (
+      {conv.stage === "CANCELLED" ? (
         <View style={styles.lifecycleBar}>
+          <View style={styles.lifecycleDone}>
+            <Feather name="x-circle" size={14} color={Colors.light.error} />
+            <Text style={styles.lifecycleDoneText}>
+              Job cancelled{conv.cancelledByRole ? ` by the ${conv.cancelledByRole}` : ""}
+              {conv.cancellationReason ? ` · ${conv.cancellationReason}` : ""}
+            </Text>
+          </View>
+        </View>
+      ) : !isTrader && conv.stage === "JOB_DONE" && !conv.hasReview ? (
+        <View style={styles.lifecycleBar}>
+          <Text style={styles.trustText}>
+            Your review is public and helps other customers hire with confidence. Only the
+            customer who hired can review, and only after confirming the job is done.
+          </Text>
           <Pressable
             style={[styles.lifecycleBtn, styles.reviewBtn]}
             onPress={onLeaveReview}
@@ -535,16 +624,18 @@ export default function ConversationThreadScreen() {
             <Text style={styles.lifecycleBtnText}>Leave a review</Text>
           </Pressable>
         </View>
-      ) : !isTrader && conv.customerCompletedAt && conv.hasReview ? (
+      ) : conv.stage === "JOB_DONE" && (isTrader || conv.hasReview) ? (
         <View style={styles.lifecycleBar}>
           <View style={styles.lifecycleDone}>
             <Feather name="check-circle" size={14} color={Colors.light.success} />
-            <Text style={styles.lifecycleDoneText}>Job complete · review submitted</Text>
+            <Text style={styles.lifecycleDoneText}>
+              {conv.hasReview ? "Job complete · review submitted" : "Job complete"}
+            </Text>
           </View>
         </View>
       ) : !isTrader && !closed ? (
         <View style={styles.lifecycleBar}>
-          {!conv.customerAcceptedAt ? (
+          {conv.stage === "AWAITING_REPLY" || (!conv.customerAcceptedAt && conv.stage !== "CLOSED") ? (
             <Pressable
               style={styles.lifecycleBtn}
               onPress={onAccept}
@@ -562,17 +653,51 @@ export default function ConversationThreadScreen() {
               )}
             </Pressable>
           ) : (
+            <>
+              {conv.stage === "AWAITING_CUSTOMER_CONFIRMATION" ? (
+                <Text style={styles.lifecycleHint}>
+                  {otherName} marked the work as completed. Confirm once you're happy it's done,
+                  or reply above if there's a problem.
+                </Text>
+              ) : null}
+              <Pressable
+                style={styles.lifecycleBtn}
+                onPress={onComplete}
+                disabled={completeMutation.isPending}
+              >
+                {completeMutation.isPending ? (
+                  <ActivityIndicator size="small" color={Colors.light.white} />
+                ) : (
+                  <>
+                    <Feather name="flag" size={16} color={Colors.light.white} />
+                    <Text style={styles.lifecycleBtnText}>Confirm the job is done</Text>
+                  </>
+                )}
+              </Pressable>
+            </>
+          )}
+        </View>
+      ) : isTrader && !closed && (conv.stage === "HIRED" || conv.stage === "AWAITING_CUSTOMER_CONFIRMATION") ? (
+        <View style={styles.lifecycleBar}>
+          {conv.stage === "AWAITING_CUSTOMER_CONFIRMATION" ? (
+            <View style={styles.lifecycleDone}>
+              <Feather name="clock" size={14} color={Colors.light.textSecondary} />
+              <Text style={styles.lifecycleDoneText}>
+                Waiting for the customer to confirm the job is done.
+              </Text>
+            </View>
+          ) : (
             <Pressable
               style={styles.lifecycleBtn}
-              onPress={onComplete}
-              disabled={completeMutation.isPending}
+              onPress={onMarkDone}
+              disabled={traderMarkDoneMutation.isPending}
             >
-              {completeMutation.isPending ? (
+              {traderMarkDoneMutation.isPending ? (
                 <ActivityIndicator size="small" color={Colors.light.white} />
               ) : (
                 <>
                   <Feather name="flag" size={16} color={Colors.light.white} />
-                  <Text style={styles.lifecycleBtnText}>Mark job as complete</Text>
+                  <Text style={styles.lifecycleBtnText}>Mark work as completed</Text>
                 </>
               )}
             </Pressable>
@@ -619,6 +744,59 @@ export default function ConversationThreadScreen() {
           </View>
         </View>
       )}
+
+      <Modal
+        visible={cancelOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCancelOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Cancel this job</Text>
+            <Text style={styles.modalSub}>
+              Let {otherName} know why you're cancelling. This closes the conversation and the
+              job can't be reviewed.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              placeholder="Reason for cancelling…"
+              placeholderTextColor={Colors.light.textMuted}
+              multiline
+              maxLength={500}
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnGhost]}
+                onPress={() => {
+                  setCancelOpen(false);
+                  setCancelReason("");
+                }}
+              >
+                <Text style={styles.modalBtnGhostText}>Keep job</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.modalBtn,
+                  styles.modalBtnDanger,
+                  (cancelReason.trim().length < 3 || cancelMutation.isPending) &&
+                    styles.modalBtnDisabled,
+                ]}
+                disabled={cancelReason.trim().length < 3 || cancelMutation.isPending}
+                onPress={onSubmitCancel}
+              >
+                {cancelMutation.isPending ? (
+                  <ActivityIndicator size="small" color={Colors.light.white} />
+                ) : (
+                  <Text style={styles.modalBtnDangerText}>Cancel job</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -680,6 +858,12 @@ const styles = StyleSheet.create({
   hiredPillText: { color: Colors.light.primary },
   donePill: { backgroundColor: "rgba(6, 214, 160, 0.14)" },
   donePillText: { color: Colors.light.success },
+  awaitingPill: { backgroundColor: Colors.light.featuredMuted },
+  awaitingPillText: { color: Colors.light.featured },
+  closedPill: { backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border },
+  closedPillText: { color: Colors.light.textSecondary },
+  cancelledPill: { backgroundColor: "rgba(239, 71, 111, 0.14)" },
+  cancelledPillText: { color: Colors.light.error },
   lifecycleBar: {
     paddingHorizontal: 12,
     paddingTop: 8,
@@ -711,10 +895,70 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   lifecycleDoneText: {
+    flexShrink: 1,
     fontSize: 12,
     fontWeight: "600",
     color: Colors.light.textSecondary,
   },
+  trustText: {
+    fontSize: 11,
+    color: Colors.light.textSecondary,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  lifecycleHint: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    lineHeight: 17,
+    marginBottom: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: Colors.light.surface,
+    borderRadius: 16,
+    padding: 18,
+  },
+  modalTitle: { fontSize: 16, fontWeight: "700", color: Colors.light.text },
+  modalSub: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    lineHeight: 17,
+    marginTop: 6,
+  },
+  modalInput: {
+    marginTop: 12,
+    minHeight: 80,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    color: Colors.light.text,
+    backgroundColor: Colors.light.card,
+    textAlignVertical: "top",
+  },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 14 },
+  modalBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBtnGhost: {
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  modalBtnGhostText: { color: Colors.light.text, fontWeight: "700", fontSize: 14 },
+  modalBtnDanger: { backgroundColor: Colors.light.error },
+  modalBtnDangerText: { color: Colors.light.white, fontWeight: "700", fontSize: 14 },
+  modalBtnDisabled: { opacity: 0.5 },
   iconBtn: {
     width: 36,
     height: 36,

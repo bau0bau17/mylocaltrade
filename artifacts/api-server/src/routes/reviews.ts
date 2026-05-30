@@ -7,7 +7,7 @@ import {
   usersTable,
   conversationsTable,
 } from "@workspace/db/schema";
-import { and, eq, ne, sql, desc, isNotNull } from "drizzle-orm";
+import { and, eq, ne, sql, desc, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { authMiddleware, adminOnly, customerOnly, traderOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
@@ -109,16 +109,27 @@ router.post("/reviews", authMiddleware, customerOnly, async (req, res) => {
       return;
     }
 
-    // Review is gated on the customer having marked the job complete in the
-    // linked conversation (customer-driven lifecycle: accept offer -> complete).
+    // Review is gated on the customer having CONFIRMED the job complete in the
+    // linked conversation (customer-driven lifecycle: hire -> confirm done).
+    // Cancelled jobs are never review-eligible, even if a stale completion
+    // timestamp somehow exists.
     const [conv] = await db
-      .select({ customerCompletedAt: conversationsTable.customerCompletedAt })
+      .select({
+        customerCompletedAt: conversationsTable.customerCompletedAt,
+        cancelledAt: conversationsTable.cancelledAt,
+      })
       .from(conversationsTable)
       .where(eq(conversationsTable.enquiryId, body.enquiryId))
       .limit(1);
-    if (!conv || !conv.customerCompletedAt) {
+    if (!conv || conv.cancelledAt) {
       res.status(403).json({
-        error: "You can leave a review once you've marked the job as complete.",
+        error: "This job was cancelled, so it can't be reviewed.",
+      });
+      return;
+    }
+    if (!conv.customerCompletedAt) {
+      res.status(403).json({
+        error: "You can leave a review once you've confirmed the job is done.",
       });
       return;
     }
@@ -195,6 +206,7 @@ router.get("/reviews/eligible", authMiddleware, customerOnly, async (req, res) =
         and(
           eq(enquiriesTable.customerId, userId),
           isNotNull(conversationsTable.customerCompletedAt),
+          isNull(conversationsTable.cancelledAt),
         ),
       )
       .orderBy(desc(enquiriesTable.createdAt));

@@ -30,11 +30,23 @@ export const conversationsTable = pgTable(
     traderMutedAt: timestamp("trader_muted_at"),
     traderMutedUntil: timestamp("trader_muted_until"),
     traderViewedAt: timestamp("trader_viewed_at"),
-    // Customer-driven job lifecycle: when the customer accepts the trader's
-    // offer (hires them) and when the customer marks the job complete. Review
-    // eligibility is gated on customerCompletedAt being set.
+    // Customer-driven job lifecycle. customerAcceptedAt = hiredAt (customer
+    // accepted the trader's offer). customerCompletedAt = customerConfirmedDoneAt
+    // (customer confirmed the job is done). Review eligibility requires
+    // customerCompletedAt set AND cancelledAt null.
     customerAcceptedAt: timestamp("customer_accepted_at"),
     customerCompletedAt: timestamp("customer_completed_at"),
+    // Trader can signal they finished the work. This ONLY notifies the customer
+    // to confirm — it never finalises the job or unlocks the review on its own.
+    traderMarkedDoneAt: timestamp("trader_marked_done_at"),
+    // Cancellation audit trail. Either party may cancel before completion, with
+    // a short reason. Cancelled jobs are never review-eligible.
+    cancelledAt: timestamp("cancelled_at"),
+    cancelledByRole: varchar("cancelled_by_role", { length: 16 }),
+    cancellationReason: varchar("cancellation_reason", { length: 500 }),
+    // Stamped when the customer confirms completion (mirrors customerCompletedAt)
+    // — the single moment that unlocks review submission.
+    reviewUnlockedAt: timestamp("review_unlocked_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

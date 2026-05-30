@@ -28,6 +28,10 @@ const ReportBody = z.object({
   reason: z.string().trim().min(5).max(2000),
 });
 
+const CancelConversationBody = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
 const TraderStatusBody = z.object({
   traderStatus: z.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
 });
@@ -87,6 +91,7 @@ function serializeConversation(
     postcode: c.postcode,
     status: c.status,
     traderStatus: c.traderStatus,
+    stage: deriveStage(c),
     unreadCount: extras.unreadCount,
     muted,
     mutedUntil: muted && mutedUntil ? mutedUntil.toISOString() : null,
@@ -96,9 +101,29 @@ function serializeConversation(
     closedByRole: c.closedByRole,
     customerAcceptedAt: c.customerAcceptedAt?.toISOString() ?? null,
     customerCompletedAt: c.customerCompletedAt?.toISOString() ?? null,
+    traderMarkedDoneAt: c.traderMarkedDoneAt?.toISOString() ?? null,
+    cancelledAt: c.cancelledAt?.toISOString() ?? null,
+    cancelledByRole: c.cancelledByRole,
+    cancellationReason: c.cancellationReason,
+    reviewUnlockedAt: c.reviewUnlockedAt?.toISOString() ?? null,
     hasReview: extras.hasReview ?? null,
     createdAt: c.createdAt.toISOString(),
   };
+}
+
+// Single source of truth for the lifecycle stage shown to both parties. Derived
+// from the audit timestamps so the headline pill never contradicts the actual
+// state (e.g. showing "Awaiting trader reply" after the customer has hired).
+// Precedence: cancelled > job done > awaiting customer confirmation > hired >
+// closed/blocked > awaiting reply.
+function deriveStage(c: ConversationRow) {
+  if (c.cancelledAt) return "CANCELLED" as const;
+  if (c.customerCompletedAt) return "JOB_DONE" as const;
+  if (c.traderMarkedDoneAt && c.customerAcceptedAt)
+    return "AWAITING_CUSTOMER_CONFIRMATION" as const;
+  if (c.customerAcceptedAt) return "HIRED" as const;
+  if (c.status === "CLOSED" || c.status === "BLOCKED") return "CLOSED" as const;
+  return "AWAITING_REPLY" as const;
 }
 
 function serializeMessage(m: MessageRow) {
@@ -128,10 +153,17 @@ async function getActorContext(userId: number, userRole: string) {
   return { role: userRole as "customer" | "admin", traderProfileId: null };
 }
 
-// Insert a system milestone message (e.g. offer accepted / job complete) and
-// surface it to the trader by bumping their unread counter + last-message
-// preview, so customer-driven lifecycle actions notify the trader.
-async function postSystemMessage(conversationId: number, body: string) {
+// Insert a system milestone message (e.g. offer accepted / work done / job
+// cancelled) and surface it to the chosen party by bumping their unread counter
+// + last-message preview, so lifecycle actions notify whoever needs to act next.
+// notify: which side should see it as unread. "trader" for customer-driven
+// actions (accept/complete), "customer" when the trader marks work done, "both"
+// for cancellations so either party is alerted regardless of who cancelled.
+async function postSystemMessage(
+  conversationId: number,
+  body: string,
+  notify: "trader" | "customer" | "both" = "trader",
+) {
   const now = new Date();
   await db.insert(messagesTable).values({
     conversationId,
@@ -145,7 +177,12 @@ async function postSystemMessage(conversationId: number, body: string) {
     .set({
       lastMessageAt: now,
       lastMessagePreview: body.slice(0, 200),
-      traderUnreadCount: sql`${conversationsTable.traderUnreadCount} + 1`,
+      ...(notify === "trader" || notify === "both"
+        ? { traderUnreadCount: sql`${conversationsTable.traderUnreadCount} + 1` }
+        : {}),
+      ...(notify === "customer" || notify === "both"
+        ? { customerUnreadCount: sql`${conversationsTable.customerUnreadCount} + 1` }
+        : {}),
       updatedAt: now,
     })
     .where(eq(conversationsTable.id, conversationId));
@@ -658,6 +695,10 @@ router.post("/conversations/:id/accept", authMiddleware, async (req, res) => {
       res.status(409).json({ error: "This conversation is closed." });
       return;
     }
+    if (conv.cancelledAt) {
+      res.status(409).json({ error: "This job has been cancelled." });
+      return;
+    }
     if (conv.customerCompletedAt) {
       res.status(409).json({ error: "This job has already been completed." });
       return;
@@ -707,16 +748,28 @@ router.post("/conversations/:id/complete", authMiddleware, async (req, res) => {
       res.status(409).json({ error: "This conversation is closed." });
       return;
     }
+    if (conv.cancelledAt) {
+      res.status(409).json({ error: "This job has been cancelled and cannot be completed." });
+      return;
+    }
     if (!conv.customerAcceptedAt) {
-      res.status(409).json({ error: "Accept the offer before marking the job complete." });
+      res.status(409).json({ error: "Accept the offer before confirming the job is done." });
       return;
     }
 
     if (!conv.customerCompletedAt) {
       const now = new Date();
+      // customerCompletedAt = customer confirmed done; reviewUnlockedAt records
+      // the single moment review submission becomes eligible. The trader marking
+      // work done never reaches this branch — only the customer can.
       await db
         .update(conversationsTable)
-        .set({ customerCompletedAt: now, traderStatus: "COMPLETED", updatedAt: now })
+        .set({
+          customerCompletedAt: now,
+          reviewUnlockedAt: now,
+          traderStatus: "COMPLETED",
+          updatedAt: now,
+        })
         .where(eq(conversationsTable.id, id));
       // Keep the linked enquiry past "pending" so review eligibility holds.
       if (conv.enquiryId) {
@@ -725,13 +778,154 @@ router.post("/conversations/:id/complete", authMiddleware, async (req, res) => {
           .set({ status: "responded" })
           .where(and(eq(enquiriesTable.id, conv.enquiryId), eq(enquiriesTable.status, "pending")));
       }
-      await postSystemMessage(id, "The customer marked the job as complete. You can now be reviewed.");
+      await postSystemMessage(
+        id,
+        "The customer confirmed the job is done. You can now be reviewed.",
+      );
     }
 
     res.json({ ok: true });
   } catch (error) {
     req.log.error({ err: error }, "Complete job failed");
     res.status(500).json({ error: "Failed to complete job" });
+  }
+});
+
+// POST /api/conversations/:id/trader-mark-done — trader signals the work is
+// finished. This ONLY notifies the customer to confirm or report a problem; it
+// never finalises the job or unlocks the review (that requires customer
+// confirmation via /complete).
+router.post("/conversations/:id/trader-mark-done", authMiddleware, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid conversation id" });
+      return;
+    }
+    const { userId, userRole } = req as AuthenticatedRequest;
+    const actor = await getActorContext(userId, userRole);
+
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, id))
+      .limit(1);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    if (!(actor.role === "trader" && actor.traderProfileId === conv.traderProfileId)) {
+      res.status(403).json({ error: "Only the assigned trader can mark the work as done" });
+      return;
+    }
+    if (conv.status === "CLOSED" || conv.status === "BLOCKED") {
+      res.status(409).json({ error: "This conversation is closed." });
+      return;
+    }
+    if (conv.cancelledAt) {
+      res.status(409).json({ error: "This job has been cancelled." });
+      return;
+    }
+    if (!conv.customerAcceptedAt) {
+      res.status(409).json({ error: "The customer must hire you before you can mark the work done." });
+      return;
+    }
+    if (conv.customerCompletedAt) {
+      res.status(409).json({ error: "The customer has already confirmed this job is done." });
+      return;
+    }
+
+    if (!conv.traderMarkedDoneAt) {
+      const now = new Date();
+      await db
+        .update(conversationsTable)
+        .set({ traderMarkedDoneAt: now, updatedAt: now })
+        .where(eq(conversationsTable.id, id));
+      await postSystemMessage(
+        id,
+        "The trader marked the work as completed. Please confirm the job is done to leave a review, or reply here if there's a problem.",
+        "customer",
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    req.log.error({ err: error }, "Trader mark done failed");
+    res.status(500).json({ error: "Failed to mark the work as done" });
+  }
+});
+
+// POST /api/conversations/:id/cancel — either party cancels the job before it is
+// completed. A short reason is required. Cancelled jobs are never review-eligible
+// and the conversation is closed to further messaging. Full audit trail recorded
+// (cancelledAt, cancelledByRole, cancellationReason).
+router.post("/conversations/:id/cancel", authMiddleware, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid conversation id" });
+      return;
+    }
+    const body = CancelConversationBody.parse(req.body);
+    const { userId, userRole } = req as AuthenticatedRequest;
+    const actor = await getActorContext(userId, userRole);
+
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, id))
+      .limit(1);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    const isCustomer = actor.role === "customer" && conv.customerId === userId;
+    const isTrader = actor.role === "trader" && actor.traderProfileId === conv.traderProfileId;
+    if (!isCustomer && !isTrader) {
+      res.status(403).json({ error: "You do not have access to this conversation" });
+      return;
+    }
+    if (conv.cancelledAt) {
+      res.status(409).json({ error: "This job has already been cancelled." });
+      return;
+    }
+    if (conv.customerCompletedAt) {
+      res.status(409).json({ error: "A completed job cannot be cancelled." });
+      return;
+    }
+    if (conv.status === "CLOSED" || conv.status === "BLOCKED") {
+      res.status(409).json({ error: "This conversation is already closed." });
+      return;
+    }
+
+    const now = new Date();
+    const cancelledByRole = isCustomer ? "customer" : "trader";
+    await db
+      .update(conversationsTable)
+      .set({
+        cancelledAt: now,
+        cancelledByRole,
+        cancellationReason: body.reason,
+        status: "CLOSED",
+        closedAt: now,
+        closedByRole: cancelledByRole,
+        updatedAt: now,
+      })
+      .where(eq(conversationsTable.id, id));
+    await postSystemMessage(
+      id,
+      `The ${cancelledByRole} cancelled this job. Reason: ${body.reason}`,
+      "both",
+    );
+
+    res.json({ ok: true });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "A short reason is required to cancel.", details: error.issues });
+      return;
+    }
+    req.log.error({ err: error }, "Cancel job failed");
+    res.status(500).json({ error: "Failed to cancel the job" });
   }
 });
 

@@ -62,6 +62,21 @@ const STATUS_LABEL: Record<string, string> = {
   REPORTED: "Reported",
 };
 
+const STAGE_LABEL: Record<string, string> = {
+  CANCELLED: "Cancelled",
+  JOB_DONE: "Job done",
+  AWAITING_CUSTOMER_CONFIRMATION: "Awaiting confirmation",
+  HIRED: "Hired",
+};
+
+// The headline pill prefers the lifecycle stage once a job is underway (hired ->
+// awaiting confirmation -> done/cancelled); before that it falls back to the
+// raw conversation status (awaiting trader/you).
+function stagePillLabel(stage: string | null | undefined, status: string): string {
+  if (stage && STAGE_LABEL[stage]) return STAGE_LABEL[stage];
+  return STATUS_LABEL[status] ?? status;
+}
+
 export default function MessagesIndexScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -160,7 +175,8 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
           const remaining = muted ? mutedRemaining(item.mutedUntil) : null;
           const muteLabel = muted ? (remaining ? `Muted · ${remaining}` : "Muted") : null;
           const spokenName = otherName ?? (isTrader ? "a customer" : "a trader");
-          const statusSpoken = (STATUS_LABEL[item.status] ?? item.status).toLowerCase();
+          const stageLabel = stagePillLabel(item.stage, item.status);
+          const statusSpoken = stageLabel.toLowerCase();
           const unreadPhrase = unread
             ? `${item.unreadCount} unread message${item.unreadCount === 1 ? "" : "s"}`
             : null;
@@ -230,11 +246,9 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
                 </Text>
                 <View style={styles.rowFooter}>
                   <View style={styles.statusPill}>
-                    <Text style={styles.statusText}>
-                      {STATUS_LABEL[item.status] ?? item.status}
-                    </Text>
+                    <Text style={styles.statusText}>{stageLabel}</Text>
                   </View>
-                  {isTrader ? (
+                  {isTrader && item.stage !== "CANCELLED" ? (
                     <View style={[styles.statusPill, styles.tStatusPill]}>
                       <Text style={[styles.statusText, styles.tStatusText]}>
                         {item.traderStatus}
