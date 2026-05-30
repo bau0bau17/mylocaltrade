@@ -169,7 +169,7 @@ export default function AccountScreen() {
         >
         <View style={styles.unauthContent}>
           <Image
-            source={require('@/assets/images/icon.png')}
+            source={require('@/assets/images/logo.png')}
             style={styles.unauthIcon}
             resizeMode="contain"
           />
