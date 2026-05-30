@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, fireEvent, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { TraderListResponse, TraderListRow } from "@/lib/types";
 
@@ -46,18 +46,29 @@ function makeRow(overrides: Partial<TraderListRow> = {}): TraderListRow {
 }
 
 function buildResponse(traders: TraderListRow[]): TraderListResponse {
-  return { traders, counts: [], registerCounts: [] };
+  return {
+    traders,
+    counts: [],
+    registerCounts: [],
+    aiCounts: [],
+    total: traders.length,
+    limit: 50,
+    offset: 0,
+  };
 }
 
 function renderList() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={client}>
-      <Traders />
-    </QueryClientProvider>,
-  );
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <Traders />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 describe("Traders list — at-a-glance check badges", () => {
@@ -173,5 +184,108 @@ describe("Traders list — at-a-glance check badges", () => {
 
     const cleanRow = screen.getByTestId("row-trader-9");
     expect(cleanRow.querySelector("td")?.className).toContain("border-l-transparent");
+  });
+});
+
+describe("Traders list — pagination", () => {
+  beforeEach(() => {
+    apiMock.mockReset();
+  });
+
+  function paged(total: number) {
+    return (
+      _url: string,
+      opts: { query: { offset?: number; limit?: number } },
+    ) => {
+      const offset = opts.query.offset ?? 0;
+      const limit = opts.query.limit ?? 50;
+      const traders = Array.from({ length: Math.min(limit, total - offset) }, (_, i) =>
+        makeRow({ userId: offset + i + 1, businessName: `Trader ${offset + i + 1}` }),
+      );
+      return Promise.resolve({
+        traders,
+        counts: [],
+        registerCounts: [],
+        aiCounts: [],
+        total,
+        limit,
+        offset,
+      } satisfies TraderListResponse);
+    };
+  }
+
+  it("loads only the first page and shows the total result count", async () => {
+    apiMock.mockImplementation(paged(70));
+    renderList();
+
+    await screen.findByTestId("row-trader-1");
+    expect(screen.getByTestId("text-trader-count")).toHaveTextContent("Showing 50 of 70 traders");
+    expect(screen.queryByTestId("row-trader-51")).not.toBeInTheDocument();
+    expect(screen.getByTestId("button-load-more")).toBeInTheDocument();
+  });
+
+  it("appends the next page on 'Load more', requesting the right offset, and hides the control on the last page", async () => {
+    apiMock.mockImplementation(paged(70));
+    renderList();
+
+    await screen.findByTestId("row-trader-1");
+    expect(apiMock.mock.calls[0][1].query.offset).toBe(0);
+
+    fireEvent.click(screen.getByTestId("button-load-more"));
+
+    await screen.findByTestId("row-trader-51");
+
+    const loadMoreCall = apiMock.mock.calls.find(([, opts]) => opts.query.offset === 50);
+    expect(loadMoreCall).toBeTruthy();
+    expect(loadMoreCall![1].query.limit).toBe(50);
+
+    expect(screen.getByTestId("text-trader-count")).toHaveTextContent("Showing 70 of 70 traders");
+    expect(screen.queryByTestId("button-load-more")).not.toBeInTheDocument();
+    expect(screen.getByTestId("row-trader-70")).toBeInTheDocument();
+  });
+
+  it("resets accumulation back to the first page when a filter changes", async () => {
+    apiMock.mockImplementation(paged(70));
+    renderList();
+
+    await screen.findByTestId("row-trader-1");
+    fireEvent.click(screen.getByTestId("button-load-more"));
+    await screen.findByTestId("row-trader-51");
+    expect(screen.getByTestId("text-trader-count")).toHaveTextContent("Showing 70 of 70 traders");
+
+    fireEvent.change(screen.getByTestId("input-search-traders"), {
+      target: { value: "plumbing" },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("text-trader-count")).toHaveTextContent("Showing 50 of 70 traders"),
+    );
+    expect(screen.queryByTestId("row-trader-51")).not.toBeInTheDocument();
+    expect(screen.getByTestId("button-load-more")).toBeInTheDocument();
+
+    const resetCall = apiMock.mock.calls.find(
+      ([, opts]) => opts.query.q === "plumbing" && opts.query.offset === 0,
+    );
+    expect(resetCall).toBeTruthy();
+  });
+
+  it("does not duplicate rows when the loaded pages are refetched", async () => {
+    apiMock.mockImplementation(paged(70));
+    const { client } = renderList();
+
+    await screen.findByTestId("row-trader-1");
+    fireEvent.click(screen.getByTestId("button-load-more"));
+    await screen.findByTestId("row-trader-51");
+
+    await act(async () => {
+      await client.invalidateQueries();
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("text-trader-count")).toHaveTextContent("Showing 70 of 70 traders"),
+    );
+    expect(screen.getAllByTestId("row-trader-1")).toHaveLength(1);
+    expect(screen.getAllByTestId("row-trader-51")).toHaveLength(1);
+    expect(screen.getAllByTestId("row-trader-70")).toHaveLength(1);
   });
 });

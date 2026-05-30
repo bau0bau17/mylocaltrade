@@ -220,8 +220,9 @@ router.get("/admin/stats", authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
-// GET /api/admin/traders?status=&q=&register=&limit=
+// GET /api/admin/traders?status=&q=&register=&ai=&limit=
 const REGISTER_CHECK_STATUSES = ["PASS", "REVIEW", "FAIL", "NOT_PROVIDED", "ERROR"] as const;
+const AI_VERIFICATION_STATUSES = ["MATCH", "PARTIAL_MATCH", "NO_MATCH", "NOT_FOUND", "ERROR"] as const;
 router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -229,7 +230,11 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
     // Register-check filter. A specific status value filters on it; the special
     // value "NONE" selects traders whose check has not been run yet (null).
     const register = typeof req.query.register === "string" ? req.query.register : undefined;
+    // AI-verification filter. Same convention: a specific status value filters on
+    // it; the special value "NONE" selects traders whose check has not been run yet (null).
+    const ai = typeof req.query.ai === "string" ? req.query.ai : undefined;
     const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
 
     const conds = [eq(usersTable.role, "trader")];
     if (status && (REVIEWABLE_STATUSES as readonly string[]).includes(status)) {
@@ -239,6 +244,11 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
       conds.push(isNull(traderProfilesTable.registerCheckStatus));
     } else if (register && (REGISTER_CHECK_STATUSES as readonly string[]).includes(register)) {
       conds.push(eq(traderProfilesTable.registerCheckStatus, register));
+    }
+    if (ai === "NONE") {
+      conds.push(isNull(traderProfilesTable.aiVerificationStatus));
+    } else if (ai && (AI_VERIFICATION_STATUSES as readonly string[]).includes(ai)) {
+      conds.push(eq(traderProfilesTable.aiVerificationStatus, ai));
     }
     if (q.length > 0) {
       const like = `%${q}%`;
@@ -278,7 +288,16 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(and(...conds))
       .orderBy(desc(traderProfilesTable.submittedForReviewAt), desc(traderProfilesTable.updatedAt))
-      .limit(limit);
+      .limit(limit)
+      .offset(offset);
+
+    // Total number of traders matching the current filters (drives pagination).
+    const [totalRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(traderProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
+      .where(and(...conds));
+    const total = totalRow?.count ?? 0;
 
     // Counts by status (for dashboard summary)
     const counts = await db
@@ -307,7 +326,23 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
       count: r.count,
     }));
 
-    res.json({ traders: rows, counts, registerCounts });
+    // Counts by AI-verification status (null reported as "NONE" = not yet checked),
+    // so the AI-check dropdown can show counts like the register-check filter.
+    const aiCountRows = await db
+      .select({
+        status: traderProfilesTable.aiVerificationStatus,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(traderProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
+      .where(eq(usersTable.role, "trader"))
+      .groupBy(traderProfilesTable.aiVerificationStatus);
+    const aiCounts = aiCountRows.map((r) => ({
+      status: r.status ?? "NONE",
+      count: r.count,
+    }));
+
+    res.json({ traders: rows, counts, registerCounts, aiCounts, total, limit, offset });
   } catch (error) {
     req.log.error({ err: error }, "Admin list traders failed");
     res.status(500).json({ error: "Failed to list traders" });

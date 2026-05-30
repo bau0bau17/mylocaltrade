@@ -245,65 +245,75 @@ export default function SearchScreen() {
         </View>
       ) : (
         <View style={styles.resultsContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filtersRow}
-          >
-            {(verifiedOnly || planFilter !== 'all' || specialismFilter !== null || sort !== 'recommended') && (
-              <Pressable
-                onPress={() => {
-                  setVerifiedOnly(false);
-                  setPlanFilter('all');
-                  setSpecialismFilter(null);
-                  setSort('recommended');
-                }}
-                style={styles.clearAllChip}
-                accessibilityRole="button"
-                accessibilityLabel="Clear all filters"
-                hitSlop={6}
-              >
-                <Feather name="x" size={12} color={Colors.light.primary} />
-                <Text style={styles.clearAllChipText}>Clear all</Text>
-              </Pressable>
-            )}
-            <FilterChip
-              icon="sliders"
-              label={`Sort: ${SORT_LABELS[sort]}`}
-              active={sort !== 'recommended'}
-              onPress={() => {
-                const order: typeof sort[] = ['recommended', 'rating', 'reviews', 'newest'];
-                setSort(order[(order.indexOf(sort) + 1) % order.length]);
-              }}
-            />
-            <FilterChip
-              icon="check-circle"
-              label="Verified only"
-              active={verifiedOnly}
-              onPress={() => setVerifiedOnly(v => !v)}
-            />
-            <FilterChip
-              icon="star"
-              label="Premium+"
-              active={planFilter === 'premium_plus'}
-              onPress={() => setPlanFilter(p => p === 'premium_plus' ? 'all' : 'premium_plus')}
-            />
-            <FilterChip
-              icon="zap"
-              label="Elite"
-              active={planFilter === 'elite'}
-              onPress={() => setPlanFilter(p => p === 'elite' ? 'all' : 'elite')}
-            />
-            {SPECIALISMS.map((spec) => (
+          <View style={styles.filtersWrap}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterScroll}
+              contentContainerStyle={styles.filtersRow}
+            >
+              {(verifiedOnly || planFilter !== 'all' || specialismFilter !== null || sort !== 'recommended') && (
+                <Pressable
+                  onPress={() => {
+                    setVerifiedOnly(false);
+                    setPlanFilter('all');
+                    setSpecialismFilter(null);
+                    setSort('recommended');
+                  }}
+                  style={styles.clearAllChip}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear all filters"
+                  hitSlop={6}
+                >
+                  <Feather name="x" size={12} color={Colors.light.primary} />
+                  <Text style={styles.clearAllChipText}>Clear all</Text>
+                </Pressable>
+              )}
               <FilterChip
-                key={spec.key}
-                icon={spec.icon}
-                label={spec.label}
-                active={specialismFilter === spec.key}
-                onPress={() => toggleSpecialism(spec.key)}
+                icon="sliders"
+                label={`Sort: ${SORT_LABELS[sort]}`}
+                active={sort !== 'recommended'}
+                onPress={() => {
+                  const order: typeof sort[] = ['recommended', 'rating', 'reviews', 'newest'];
+                  setSort(order[(order.indexOf(sort) + 1) % order.length]);
+                }}
               />
-            ))}
-          </ScrollView>
+              <FilterChip
+                icon="check-circle"
+                label="Verified only"
+                active={verifiedOnly}
+                onPress={() => setVerifiedOnly(v => !v)}
+              />
+              <FilterChip
+                icon="star"
+                label="Premium+"
+                active={planFilter === 'premium_plus'}
+                onPress={() => setPlanFilter(p => p === 'premium_plus' ? 'all' : 'premium_plus')}
+              />
+              <FilterChip
+                icon="zap"
+                label="Elite"
+                active={planFilter === 'elite'}
+                onPress={() => setPlanFilter(p => p === 'elite' ? 'all' : 'elite')}
+              />
+            </ScrollView>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterScroll}
+              contentContainerStyle={styles.filtersRow}
+            >
+              {SPECIALISMS.map((spec) => (
+                <FilterChip
+                  key={spec.key}
+                  icon={spec.icon}
+                  label={spec.label}
+                  active={specialismFilter === spec.key}
+                  onPress={() => toggleSpecialism(spec.key)}
+                />
+              ))}
+            </ScrollView>
+          </View>
           <Text style={styles.resultsCount}>
             {isLoading ? 'Searching...' : `${data?.total || 0} results found`}
             {!isLoading && locationQuery ? ` near ${locationQuery}` : ''}
@@ -456,11 +466,16 @@ const styles = StyleSheet.create({
   resultsContainer: {
     flex: 1,
   },
+  filtersWrap: {
+    paddingTop: 10,
+    gap: 8,
+  },
+  filterScroll: {
+    flexGrow: 0,
+  },
   filtersRow: {
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
   },
   clearAllChip: {
     flexDirection: 'row',

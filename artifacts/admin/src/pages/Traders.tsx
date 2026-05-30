@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type {
   TraderListResponse,
@@ -45,6 +45,8 @@ function rowRisk(t: TraderListResponse["traders"][number]): "high" | "medium" | 
   }
   return null;
 }
+
+const PAGE_SIZE = 50;
 
 const REGISTER_FILTER_OPTIONS: { value: RegisterCheckStatus | "NONE"; label: string }[] = [
   { value: "PASS", label: "Pass" },
@@ -102,31 +104,37 @@ export default function Traders() {
     navigate(`/traders${qs ? `?${qs}` : ""}`, { replace: true });
   }, [status, debouncedQ, registerCheck, aiCheck, navigate]);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["admin", "traders", status, debouncedQ, registerCheck],
-    queryFn: () =>
-      api<TraderListResponse>("/api/admin/traders", {
-        query: {
-          status: status === "ALL" ? undefined : status,
-          q: debouncedQ || undefined,
-          register: registerCheck === "ALL" ? undefined : registerCheck,
-          limit: 200,
-        },
-      }),
-  });
+  const { data, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage, error } =
+    useInfiniteQuery({
+      queryKey: ["admin", "traders", status, debouncedQ, registerCheck, aiCheck],
+      initialPageParam: 0,
+      queryFn: ({ pageParam }) =>
+        api<TraderListResponse>("/api/admin/traders", {
+          query: {
+            status: status === "ALL" ? undefined : status,
+            q: debouncedQ || undefined,
+            register: registerCheck === "ALL" ? undefined : registerCheck,
+            ai: aiCheck === "ALL" ? undefined : aiCheck,
+            limit: PAGE_SIZE,
+            offset: pageParam,
+          },
+        }),
+      getNextPageParam: (lastPage, allPages) => {
+        const loaded = allPages.reduce((n, p) => n + p.traders.length, 0);
+        return loaded < lastPage.total ? loaded : undefined;
+      },
+    });
 
-  const counts = data?.counts ?? [];
-  const registerCounts = data?.registerCounts ?? [];
+  const pages = data?.pages ?? [];
+  const firstPage = pages[0];
+  const counts = firstPage?.counts ?? [];
+  const registerCounts = firstPage?.registerCounts ?? [];
+  const aiCounts = firstPage?.aiCounts ?? [];
 
-  const traders = useMemo(() => {
-    let all = data?.traders ?? [];
-    if (aiCheck === "NONE") {
-      all = all.filter((t) => t.aiVerificationStatus == null);
-    } else if (aiCheck !== "ALL") {
-      all = all.filter((t) => t.aiVerificationStatus === aiCheck);
-    }
-    return all;
-  }, [data?.traders, aiCheck]);
+  const total = firstPage?.total ?? 0;
+  const traders = pages.flatMap((p) => p.traders);
+  const isLoadingFirstPage = isLoading;
+  const isLoadingMore = isFetchingNextPage;
 
   return (
     <div className="space-y-4">
@@ -196,11 +204,14 @@ export default function Traders() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All AI checks</SelectItem>
-              {AI_FILTER_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
+              {AI_FILTER_OPTIONS.map((o) => {
+                const c = aiCounts.find((x) => x.status === o.value)?.count ?? 0;
+                return (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label} ({c})
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </CardContent>
@@ -214,7 +225,7 @@ export default function Traders() {
 
       <Card>
         <CardContent className="p-0">
-          {isLoading ? (
+          {isLoadingFirstPage ? (
             <div className="p-4 space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton key={i} className="h-12" />
@@ -290,6 +301,22 @@ export default function Traders() {
                   })}
                 </tbody>
               </table>
+              <div className="flex items-center justify-between gap-3 border-t px-4 py-3">
+                <p className="text-xs text-muted-foreground" data-testid="text-trader-count">
+                  Showing {traders.length} of {total} trader{total === 1 ? "" : "s"}
+                </p>
+                {hasNextPage && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => fetchNextPage()}
+                    disabled={isLoadingMore}
+                    data-testid="button-load-more"
+                  >
+                    {isLoadingMore ? "Loading…" : "Load more"}
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         </CardContent>
