@@ -1,0 +1,135 @@
+The app subscription structure I want is:
+
+- Basic = free, limited trader access
+
+- Premium Monthly = paid premium trader access
+
+- Premium Yearly = paid premium trader access
+
+There should be no Elite plan in the final app subscription model.
+
+Please inspect the current app and backend and align everything to this structure.
+
+Requirements:
+
+1. App UI audit
+
+Find all places in the app where old pricing or plan structure is shown, referenced, or implied, including any old Basic / Premium / Elite wording.
+
+Update all app pricing and subscription surfaces so they match the new target model:
+
+- Basic (free)
+
+- Premium Monthly
+
+- Premium Yearly
+
+2. Basic plan
+
+Basic must remain available for traders who do not want to pay.
+
+Basic should still allow access to the platform, but in a limited way.
+
+3. Premium plan
+
+Premium is the paid plan.
+
+Premium should be available as:
+
+- Monthly
+
+- Yearly
+
+4. Remove Elite
+
+Remove Elite from app pricing, subscription messaging, and entitlement logic unless there is a strong technical reason it must temporarily remain.
+
+If it must temporarily remain anywhere, tell me exactly where and why.
+
+5. Backend audit
+
+Inspect whether the backend still uses old Basic / Premium / Elite tier logic for things such as:
+
+- feature access
+
+- gallery limits
+
+- profile enhancements
+
+- search visibility
+
+- badges
+
+- service area display
+
+- social links
+
+- website link
+
+- featured placement
+
+- priority leads
+
+- any other trader entitlement logic
+
+6. Feature mapping
+
+Define and implement a clean final split between:
+
+- Basic = free, limited access
+
+- Premium = paid extra features
+
+7. RevenueCat / Apple alignment
+
+Make sure the app logic matches the Apple / RevenueCat setup for:
+
+- Premium Monthly
+
+- Premium Yearly
+
+8. Important
+
+Do not guess.
+
+Inspect first.
+
+If something is already correct, keep it.
+
+Only change what is necessary to align the app and backend with this final structure.
+
+9. Safety
+
+Do not break:
+
+- auth
+
+- profiles
+
+- trader dashboard
+
+- enquiries
+
+- messaging
+
+- reviews
+
+- admin
+
+- existing non-payment flows
+
+10. Output
+
+After inspection and changes, tell me clearly:
+
+- where old plan logic still existed
+
+- what was only UI copy
+
+- what was actual backend logic
+
+- what changed
+
+- what the final Basic vs Premium feature split is
+
+- whether the app now matches the new subscription model properly
