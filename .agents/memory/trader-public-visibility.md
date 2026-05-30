@@ -20,6 +20,12 @@ saved/list paths) that still leaked hidden traders after a new flag was added to
 only some routes. The reviews endpoint is especially easy to miss because it
 lives in a different file and originally only checked trader existence by ID.
 
+**Test fixtures trap:** any test hitting a public trader/reviews endpoint must
+create its trader profile with `verificationStatus: "VERIFIED"` (and usually
+`businessProfileCompleted: true`). The schema default is
+`PENDING_EMAIL_VERIFICATION`, which is NOT publicly discoverable, so a fixture
+that omits it gets a 404 and silently turns the test into a non-regression-guard.
+
 **How to apply:** whenever you add a new condition that makes a trader non-public
 (suspension, expiry, lapsed re-validation, deletion lifecycle, subscription
 gating), grep for all of the above routes and update each one. Prefer adding the

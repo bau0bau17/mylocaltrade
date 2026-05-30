@@ -76,6 +76,8 @@ async function createTraderProfile(userId: number, label: string): Promise<numbe
       town: "London",
       postcode: "SW1A 1AA",
       isActive: true,
+      businessProfileCompleted: true,
+      verificationStatus: "VERIFIED",
     })
     .returning({ id: traderProfilesTable.id });
   createdProfileIds.push(p.id);
