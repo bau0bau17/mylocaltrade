@@ -132,10 +132,8 @@ export default function SearchScreen() {
   });
 
   const handleSearch = () => {
-    if (searchQuery || locationQuery || activeSpecialism) {
-      setHasSearched(true);
-      if (searchQuery) saveRecentSearch(searchQuery);
-    }
+    setHasSearched(true);
+    if (searchQuery) saveRecentSearch(searchQuery);
   };
 
   const toggleSpecialism = (key: SpecialismKey) => {
