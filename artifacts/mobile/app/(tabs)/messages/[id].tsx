@@ -18,6 +18,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
+import { confirmAction } from "@/lib/confirm";
 import {
   useGetConversation,
   useSendConversationMessage,
@@ -203,43 +204,33 @@ export default function ConversationThreadScreen() {
   };
 
   const onAccept = () => {
-    Alert.alert(
-      "Hire this trader",
-      `Confirm you're going with ${otherName} for this job?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Accept offer",
-          onPress: () =>
-            acceptMutation.mutate(
-              { id: conversationId },
-              { onError: () => Alert.alert("Error", "Could not accept the offer.") },
-            ),
-        },
-      ],
-    );
+    confirmAction({
+      title: "Hire this trader",
+      message: `Confirm you're going with ${otherName} for this job?`,
+      confirmLabel: "Accept offer",
+      onConfirm: () =>
+        acceptMutation.mutate(
+          { id: conversationId },
+          { onError: () => Alert.alert("Error", "Could not accept the offer.") },
+        ),
+    });
   };
 
   const onComplete = () => {
-    Alert.alert(
-      "Mark job as complete",
-      "Confirm this job is finished? You'll then be able to leave a review.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Mark complete",
-          onPress: () =>
-            completeMutation.mutate(
-              { id: conversationId },
-              {
-                onSuccess: () =>
-                  Alert.alert("Job complete", "Thanks! You can now leave a review."),
-                onError: () => Alert.alert("Error", "Could not mark the job complete."),
-              },
-            ),
-        },
-      ],
-    );
+    confirmAction({
+      title: "Mark job as complete",
+      message: "Confirm this job is finished? You'll then be able to leave a review.",
+      confirmLabel: "Mark complete",
+      onConfirm: () =>
+        completeMutation.mutate(
+          { id: conversationId },
+          {
+            onSuccess: () =>
+              Alert.alert("Job complete", "Thanks! You can now leave a review."),
+            onError: () => Alert.alert("Error", "Could not mark the job complete."),
+          },
+        ),
+    });
   };
 
   const onLeaveReview = () => {
@@ -252,18 +243,13 @@ export default function ConversationThreadScreen() {
   };
 
   const onClose = () => {
-    Alert.alert(
-      "Close conversation",
-      "You won't be able to send any more messages. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Close",
-          style: "destructive",
-          onPress: () => closeMutation.mutate({ id: conversationId }),
-        },
-      ],
-    );
+    confirmAction({
+      title: "Close conversation",
+      message: "You won't be able to send any more messages. Continue?",
+      confirmLabel: "Close",
+      destructive: true,
+      onConfirm: () => closeMutation.mutate({ id: conversationId }),
+    });
   };
 
   const applyMute = (mutedUntil: string | null, label: string) => {
