@@ -6,3 +6,4 @@
 - [Mobile filter discoverability](mobile-filter-discoverability.md) — Search filters must NOT use horizontal scroll (not discoverable); use the "Filters" button + bottom-sheet pattern.
 - [Mobile oversized image assets](mobile-oversized-image-assets.md) — never require() the 1024px store icon for in-app/web display; use small derived variants.
 - [Conversation unread badge reset](unread-badge-reset.md) — always reset viewer counter on open (ungated) + invalidate both count & list queries; gated reset leaves badges stuck.
+- [Trader response-time display](trader-response-time.md) — exact "Replies in ~X" is the single source of truth; no loose qualitative badge that can contradict it (dropped "promptly" ≤24h, kept "fast" ≤60m).
