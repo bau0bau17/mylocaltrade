@@ -318,18 +318,55 @@ describe("sweepRevalidations two-stage flow", () => {
   });
 });
 
+/**
+ * Wrap a drizzle query builder in a Proxy that runs `onTerminal` exactly once,
+ * just before the underlying query is actually awaited (its `.then` fires).
+ * Method chaining (`.set().where().returning()`) is preserved by re-wrapping
+ * whatever each method returns. This lets a test slip a concurrent operation
+ * into the gap between a read and a write inside production code.
+ */
+function wrapBuilderWithBarrier<T extends object>(builder: T, onTerminal: () => Promise<void>): T {
+  return new Proxy(builder, {
+    get(target, prop, receiver) {
+      if (prop === "then") {
+        return (
+          resolve?: (value: unknown) => unknown,
+          reject?: (reason: unknown) => unknown,
+        ) =>
+          Promise.resolve()
+            .then(() => onTerminal())
+            .then(
+              () => (target as PromiseLike<unknown>).then(resolve, reject),
+              reject,
+            );
+      }
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value === "function") {
+        return (...args: unknown[]) => {
+          const result = (value as (...a: unknown[]) => unknown).apply(target, args);
+          if (result === target) return receiver;
+          if (result !== null && typeof result === "object") {
+            return wrapBuilderWithBarrier(result, onTerminal);
+          }
+          return result;
+        };
+      }
+      return value;
+    },
+  });
+}
+
 describe("re-validation reset vs sweep (concurrency guard)", () => {
-  it("a trader who re-confirms is not re-hidden by a subsequent sweep", async () => {
-    // Trader is past due and past grace, but still flagged not-overdue — the
-    // exact window where a sweep would hide them.
-    const racing = await createTrader("race", {
+  it("a trader who already re-confirmed is not selected by a later sweep", async () => {
+    // Sequential baseline: the trader re-confirms (due date pushed to the
+    // future) BEFORE the sweep even reads, so they fall outside the sweep's
+    // `revalidationDueAt <= now` selection entirely.
+    const racing = await createTrader("race-sequential", {
       revalidationDueAt: new Date(Date.now() - 40 * DAY_MS),
       revalidationRemindedAt: new Date(Date.now() - REVALIDATION_GRACE_MS - DAY_MS),
       revalidationOverdue: false,
     });
 
-    // The trader re-confirms first (pushes due date into the future, clears
-    // reminder + overdue). The hardened sweep CAS predicate must now skip them.
     const reval = await request(app)
       .post("/api/profile/revalidate")
       .set("Authorization", `Bearer ${racing.token}`);
@@ -345,5 +382,61 @@ describe("re-validation reset vs sweep (concurrency guard)", () => {
     expect(row.revalidationDueAt!.getTime()).toBeGreaterThan(Date.now());
     expect(await countAudit(racing.userId, "REVALIDATION_OVERDUE")).toBe(0);
     expect(await countAudit(racing.userId, "REVALIDATION_CONFIRMED")).toBe(1);
+  });
+
+  it("revalidate landing BETWEEN the sweep's read and its overdue write is not clobbered", async () => {
+    // The true read/write race. The trader is eligible to be hidden at the
+    // moment the sweep takes its snapshot (past due, past grace, not yet
+    // overdue) — so they ARE in the sweep's selection. We then force a
+    // /profile/revalidate to complete in the gap between that read and the
+    // stage-2 CAS write, and assert the trader is NOT wrongly hidden.
+    const racing = await createTrader("race-true", {
+      revalidationDueAt: new Date(Date.now() - 40 * DAY_MS),
+      revalidationRemindedAt: new Date(Date.now() - REVALIDATION_GRACE_MS - DAY_MS),
+      revalidationOverdue: false,
+    });
+
+    // Clear notification spies so we can assert the overdue path never fires.
+    (emailModule.sendTraderRevalidationOverdueEmail as Mock).mockClear();
+
+    let raceTriggered = false;
+    const runRevalidateOnce = async () => {
+      if (raceTriggered) return;
+      raceTriggered = true;
+      const reval = await request(app)
+        .post("/api/profile/revalidate")
+        .set("Authorization", `Bearer ${racing.token}`);
+      expect(reval.status).toBe(200);
+    };
+
+    // Intercept the sweep's UPDATE: the first time it is awaited, run the
+    // concurrent revalidate to completion FIRST, then let the real CAS write
+    // execute. Because revalidate reset revalidationRemindedAt to null and
+    // pushed revalidationDueAt forward, the stage-2 CAS predicate (pinned to the
+    // old reminder timestamp + dueAt <= now) no longer matches and claims
+    // nothing.
+    const realUpdate = db.update.bind(db);
+    const updateSpy = vi
+      .spyOn(db, "update")
+      .mockImplementation(((table: Parameters<typeof realUpdate>[0]) =>
+        wrapBuilderWithBarrier(realUpdate(table), runRevalidateOnce)) as typeof db.update);
+
+    try {
+      await sweepRevalidations();
+    } finally {
+      updateSpy.mockRestore();
+    }
+    await flushAsync();
+
+    // The race must actually have been exercised.
+    expect(raceTriggered).toBe(true);
+
+    const row = await getProfile(racing.profileId);
+    expect(row.revalidationOverdue).toBe(false);
+    expect(row.revalidationRemindedAt).toBeNull();
+    expect(row.revalidationDueAt!.getTime()).toBeGreaterThan(Date.now());
+    expect(await countAudit(racing.userId, "REVALIDATION_OVERDUE")).toBe(0);
+    expect(await countAudit(racing.userId, "REVALIDATION_CONFIRMED")).toBe(1);
+    expect(emailModule.sendTraderRevalidationOverdueEmail as Mock).not.toHaveBeenCalled();
   });
 });
