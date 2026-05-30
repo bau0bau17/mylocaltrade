@@ -224,17 +224,49 @@ describe("Traders list — pagination", () => {
     expect(screen.getByTestId("button-load-more")).toBeInTheDocument();
   });
 
-  it("appends the next page on 'Load more' and hides the control on the last page", async () => {
+  it("appends the next page on 'Load more', requesting the right offset, and hides the control on the last page", async () => {
+    apiMock.mockImplementation(paged(70));
+    renderList();
+
+    await screen.findByTestId("row-trader-1");
+    expect(apiMock.mock.calls[0][1].query.offset).toBe(0);
+
+    fireEvent.click(screen.getByTestId("button-load-more"));
+
+    await screen.findByTestId("row-trader-51");
+
+    const loadMoreCall = apiMock.mock.calls.find(([, opts]) => opts.query.offset === 50);
+    expect(loadMoreCall).toBeTruthy();
+    expect(loadMoreCall![1].query.limit).toBe(50);
+
+    expect(screen.getByTestId("text-trader-count")).toHaveTextContent("Showing 70 of 70 traders");
+    expect(screen.queryByTestId("button-load-more")).not.toBeInTheDocument();
+    expect(screen.getByTestId("row-trader-70")).toBeInTheDocument();
+  });
+
+  it("resets accumulation back to the first page when a filter changes", async () => {
     apiMock.mockImplementation(paged(70));
     renderList();
 
     await screen.findByTestId("row-trader-1");
     fireEvent.click(screen.getByTestId("button-load-more"));
-
     await screen.findByTestId("row-trader-51");
     expect(screen.getByTestId("text-trader-count")).toHaveTextContent("Showing 70 of 70 traders");
-    expect(screen.queryByTestId("button-load-more")).not.toBeInTheDocument();
-    expect(screen.getByTestId("row-trader-70")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("input-search-traders"), {
+      target: { value: "plumbing" },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("text-trader-count")).toHaveTextContent("Showing 50 of 70 traders"),
+    );
+    expect(screen.queryByTestId("row-trader-51")).not.toBeInTheDocument();
+    expect(screen.getByTestId("button-load-more")).toBeInTheDocument();
+
+    const resetCall = apiMock.mock.calls.find(
+      ([, opts]) => opts.query.q === "plumbing" && opts.query.offset === 0,
+    );
+    expect(resetCall).toBeTruthy();
   });
 
   it("does not duplicate rows when the loaded pages are refetched", async () => {
