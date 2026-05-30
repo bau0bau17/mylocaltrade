@@ -78,6 +78,9 @@ interface TraderDetail {
     documentsSubmitted: boolean;
     submittedForReviewAt: string | null;
     verifiedAt: string | null;
+    revalidationDueAt: string | null;
+    revalidationRemindedAt: string | null;
+    revalidationOverdue: boolean;
     rejectedAt: string | null;
     rejectionReason: string | null;
     adminNotes: string | null;
@@ -495,6 +498,18 @@ export default function AdminTraderDetail() {
               <Text style={styles.fieldLabel}>Description</Text>
               <Text style={styles.descText}>{profile.businessDescription}</Text>
             </View>
+          ) : null}
+          {profile.verificationStatus === 'VERIFIED' && profile.revalidationDueAt ? (
+            <Field
+              label="Re-validation"
+              value={
+                profile.revalidationOverdue
+                  ? 'Overdue — profile hidden from search'
+                  : profile.revalidationRemindedAt
+                    ? `Re-confirmation requested ${formatDate(profile.revalidationRemindedAt)}`
+                    : `Next due ${formatDate(profile.revalidationDueAt)}`
+              }
+            />
           ) : null}
         </View>
 

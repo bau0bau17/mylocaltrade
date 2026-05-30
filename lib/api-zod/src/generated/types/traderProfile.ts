@@ -46,5 +46,8 @@ export interface TraderProfile {
   reviewCount: number;
   /** Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data. */
   responseTimeMinutes?: number | null;
+  revalidationDueAt?: Date | null;
+  revalidationRemindedAt?: Date | null;
+  revalidationOverdue?: boolean;
   createdAt?: Date;
 }

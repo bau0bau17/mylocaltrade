@@ -815,6 +815,129 @@ export async function sendTraderApprovedEmail(opts: {
   });
 }
 
+export async function sendTraderRevalidationDueEmail(opts: {
+  toEmail: string;
+  toName: string;
+  businessName?: string | null;
+  /** Number of days the trader has to re-confirm before being hidden. */
+  graceDays: number;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : null;
+  const html = emailShell({
+    title: "Time to re-confirm your MyLocalTrade details",
+    preheader: "A quick check to keep your verified profile up to date.",
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        It's time for the periodic re-check of your MyLocalTrade trader profile${safeBusiness ? ` for <strong style="color: #00B4D8;">${safeBusiness}</strong>` : ""}. This keeps your "Documents reviewed" trust badge current for customers.
+      </p>
+      <div style="background: #0E1A2A; border-left: 3px solid #F59E0B; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #F59E0B; font-size: 13px; font-weight: 600; margin: 0 0 6px;">What we need</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">
+          Please open the app and confirm your key documents (such as your public liability insurance) are still valid and up to date.
+        </p>
+      </div>
+      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 12px;"><strong>Next steps</strong></p>
+      <ul style="color: #E5E7EB; font-size: 14px; line-height: 1.7; margin: 0 0 20px; padding-left: 20px;">
+        <li>Open the MyLocalTrade app and go to your trader dashboard.</li>
+        <li>Re-confirm your details, or upload a fresh document if anything has expired.</li>
+        <li>If you do not re-confirm within ${opts.graceDays} days, your profile will be temporarily hidden from search until you do.</li>
+      </ul>
+      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
+        If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
+      </p>`,
+  });
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: "Time to re-confirm your MyLocalTrade details",
+    html,
+    tag: "trader-revalidation-due",
+  });
+}
+
+export async function sendTraderRevalidationOverdueEmail(opts: {
+  toEmail: string;
+  toName: string;
+  businessName?: string | null;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : null;
+  const html = emailShell({
+    title: "Your MyLocalTrade profile is hidden until you re-confirm",
+    preheader: "Re-confirm your details to restore your profile in search.",
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        We asked you to re-confirm the details on your MyLocalTrade trader profile${safeBusiness ? ` for <strong style="color: #00B4D8;">${safeBusiness}</strong>` : ""}, but we haven't heard back. To keep customers safe, your profile is now temporarily hidden from search.
+      </p>
+      <div style="background: #0E1A2A; border-left: 3px solid #EF4444; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
+        <p style="color: #EF4444; font-size: 13px; font-weight: 600; margin: 0 0 6px;">How to restore your profile</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">
+          Open the app, re-confirm your key documents are still valid, and your profile will be visible to customers again straight away.
+        </p>
+      </div>
+      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
+        If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
+      </p>`,
+  });
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: "Your MyLocalTrade profile is hidden until you re-confirm",
+    html,
+    tag: "trader-revalidation-overdue",
+  });
+}
+
+export async function sendAdminRevalidationAlertEmail(opts: {
+  traderEmail: string;
+  traderName: string;
+  businessName?: string | null;
+  /** "due" when first prompted, "overdue" when the grace period lapsed. */
+  stage: "due" | "overdue";
+}): Promise<void> {
+  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
+  const safeEmail = escapeHtml(opts.traderEmail);
+  const safeName = escapeHtml(opts.traderName);
+  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : "(none)";
+  const isOverdue = opts.stage === "overdue";
+  const accent = isOverdue ? "#EF4444" : "#F59E0B";
+  const headline = isOverdue
+    ? "A verified trader missed their re-validation and has been hidden"
+    : "A verified trader is due for re-validation";
+  const html = emailShell({
+    title: headline,
+    preheader: `${safeName} — re-validation ${opts.stage}`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">${escapeHtml(headline)}.</p>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 130px;">Trader</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeName}</td></tr>
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Business</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeBusiness}</td></tr>
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Email</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeEmail}</td></tr>
+      </table>
+      <div style="background: #0E1A2A; border-left: 3px solid ${accent}; padding: 14px 16px; border-radius: 8px; margin: 0 0 16px;">
+        <p style="color: ${accent}; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Status</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">${isOverdue
+          ? "The trader did not re-confirm within the grace period and is now hidden from public search."
+          : "The trader has been prompted to re-confirm their key documents."}</p>
+      </div>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">Open the admin console to review this trader if needed.</p>`,
+  });
+  await dispatchEmail({
+    category: "contact",
+    to: { email: SUPPORT_EMAIL },
+    from: { email: FROM_EMAIL, name: "MyLocalTrade Re-validation" },
+    subject: `[RE-VALIDATION ${isOverdue ? "OVERDUE" : "DUE"}] ${sanitizeHeaderValue(opts.traderEmail)}`,
+    html,
+    headers: {
+      "X-MyLocalTrade-Type": "trader-revalidation-admin-alert",
+    },
+    tag: "trader-revalidation-admin",
+  });
+}
+
 export async function sendTraderRejectedEmail(opts: {
   toEmail: string;
   toName: string;

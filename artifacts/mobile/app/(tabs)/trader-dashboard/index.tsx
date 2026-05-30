@@ -12,6 +12,7 @@ import {
   useGetTraderOnboardingStatus,
   useGetMyTraderReviews,
   useGetNewLeadCount,
+  useRevalidateTraderProfile,
   type TraderOnboardingStatus,
   type TraderOnboardingChecklistStep,
 } from '@workspace/api-client-react';
@@ -29,6 +30,10 @@ export default function TraderOnboardingDashboard() {
   const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [acceptingLegal, setAcceptingLegal] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [revalidateMsg, setRevalidateMsg] = useState<string | null>(null);
+
+  const { mutateAsync: revalidateProfile, isPending: revalidating } =
+    useRevalidateTraderProfile();
 
   const {
     data: status,
@@ -104,6 +109,18 @@ export default function TraderOnboardingDashboard() {
       setAcceptError(e instanceof Error ? e.message : 'Failed to record acceptance');
     } finally {
       setAcceptingLegal(false);
+    }
+  };
+
+  const handleRevalidate = async () => {
+    if (revalidating) return;
+    setRevalidateMsg(null);
+    try {
+      await revalidateProfile();
+      setRevalidateMsg('Thanks — your details have been re-confirmed.');
+      await refetchStatus();
+    } catch (e) {
+      setRevalidateMsg(e instanceof Error ? e.message : 'Could not re-confirm your details.');
     }
   };
 
@@ -204,6 +221,51 @@ export default function TraderOnboardingDashboard() {
               {acceptingLegal ? 'Saving…' : 'Review & accept'}
             </Text>
           </Pressable>
+        </View>
+      ) : null}
+
+      {/* Periodic re-validation prompt */}
+      {status.verificationStatus === 'VERIFIED' &&
+      (status.revalidationOverdue || status.revalidationRemindedAt) ? (
+        <View style={[styles.legalBanner, status.revalidationOverdue && styles.revalOverdueBanner]}>
+          <View style={styles.legalBannerHeader}>
+            <Feather
+              name={status.revalidationOverdue ? 'eye-off' : 'refresh-cw'}
+              size={16}
+              color={status.revalidationOverdue ? Colors.light.error : WARNING}
+            />
+            <Text
+              style={[
+                styles.legalBannerTitle,
+                status.revalidationOverdue && { color: Colors.light.error },
+              ]}
+            >
+              {status.revalidationOverdue
+                ? 'Your profile is hidden'
+                : 'Time to re-confirm your details'}
+            </Text>
+          </View>
+          <Text style={styles.legalBannerBody}>
+            {status.revalidationOverdue
+              ? 'You did not re-confirm in time, so your profile is hidden from search. Re-confirm your key documents are still valid to make it visible again.'
+              : 'Please confirm your key documents (such as your insurance) are still valid to keep your verified profile up to date.'}
+          </Text>
+          <Pressable
+            onPress={handleRevalidate}
+            disabled={revalidating}
+            style={[
+              styles.legalBannerBtn,
+              status.revalidationOverdue && { backgroundColor: Colors.light.error },
+              revalidating && { opacity: 0.6 },
+            ]}
+          >
+            <Text style={styles.legalBannerBtnText}>
+              {revalidating ? 'Saving…' : 'Re-confirm my details'}
+            </Text>
+          </Pressable>
+          {revalidateMsg ? (
+            <Text style={styles.revalMsg}>{revalidateMsg}</Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -561,4 +623,6 @@ const styles = StyleSheet.create({
   legalBannerBody: { fontSize: 13, color: Colors.light.text, lineHeight: 18 },
   legalBannerBtn: { marginTop: 10, alignSelf: 'flex-start', backgroundColor: WARNING, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   legalBannerBtnText: { color: Colors.light.white, fontSize: 13, fontWeight: '700' },
+  revalOverdueBanner: { backgroundColor: Colors.light.errorMuted, borderColor: Colors.light.error },
+  revalMsg: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 8, lineHeight: 17 },
 });

@@ -480,6 +480,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /profile/revalidate:
+    post:
+      operationId: revalidateTraderProfile
+      tags: [profile]
+      summary: Re-confirm key documents are current, resetting the re-validation clock
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Re-validation re-confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevalidateProfileResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Trader profile not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Profile is not verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /subscriptions/plans:
     get:
       operationId: getSubscriptionPlans
@@ -1936,6 +1969,16 @@ components:
         authorisedRepresentative:
           type: boolean
           nullable: true
+        revalidationDueAt:
+          type: string
+          format: date-time
+          nullable: true
+        revalidationRemindedAt:
+          type: string
+          format: date-time
+          nullable: true
+        revalidationOverdue:
+          type: boolean
         checklist:
           type: array
           items:
@@ -2177,6 +2220,16 @@ components:
           type: integer
           nullable: true
           description: Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.
+        revalidationDueAt:
+          type: string
+          format: date-time
+          nullable: true
+        revalidationRemindedAt:
+          type: string
+          format: date-time
+          nullable: true
+        revalidationOverdue:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -2199,6 +2252,22 @@ components:
         - businessProfileCompleted
         - documentsSubmitted
         - reviewCount
+
+    RevalidateProfileResponse:
+      type: object
+      properties:
+        revalidationDueAt:
+          type: string
+          format: date-time
+          nullable: true
+        revalidationRemindedAt:
+          type: string
+          format: date-time
+          nullable: true
+        revalidationOverdue:
+          type: boolean
+      required:
+        - revalidationOverdue
 
     UpdateTraderProfileRequest:
       type: object

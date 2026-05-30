@@ -22,6 +22,7 @@ import {
   TRADER_STATUS,
   evaluateDocumentsComplete,
   logAudit,
+  REVALIDATION_INTERVAL_MS,
 } from "../lib/trader-status";
 import {
   getAttemptCountsByConversation,
@@ -714,6 +715,10 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
         rejectedAt: null,
         rejectionReason: null,
         needsMoreInfoReason: null,
+        // Start the periodic re-validation clock so the trust signal stays current.
+        revalidationDueAt: new Date(Date.now() + REVALIDATION_INTERVAL_MS),
+        revalidationRemindedAt: null,
+        revalidationOverdue: false,
         adminNotes: body.notes ?? profile.adminNotes,
         verificationNotes: body.notes ?? profile.verificationNotes,
         ...(restoreActive ? { isActive: true } : {}),

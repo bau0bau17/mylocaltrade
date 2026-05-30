@@ -137,6 +137,9 @@ export interface TraderProfileFull {
   documentsSubmitted: boolean;
   submittedForReviewAt: string | null;
   verifiedAt: string | null;
+  revalidationDueAt: string | null;
+  revalidationRemindedAt: string | null;
+  revalidationOverdue: boolean;
   rejectedAt: string | null;
   rejectionReason: string | null;
   adminNotes: string | null;

@@ -95,8 +95,16 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   // When the admin asks for more information, the human-readable reason shown
   // to the trader so they know exactly what to supply.
   needsMoreInfoReason: text("needs_more_info_reason"),
-  // Reserved for a future periodic re-validation flow.
+  // --- Periodic re-validation (trust maintenance) ---
+  // When a verified trader is next due to re-confirm their key documents so the
+  // "Documents reviewed" trust signal stays current. Set at approval/re-confirm.
   revalidationDueAt: timestamp("revalidation_due_at"),
+  // When we last prompted the trader to re-confirm (and started the grace clock).
+  // Null once they re-confirm or before the first prompt fires.
+  revalidationRemindedAt: timestamp("revalidation_reminded_at"),
+  // Flipped on when a due trader fails to re-confirm within the grace period.
+  // While true the profile is hidden from public search/listings.
+  revalidationOverdue: boolean("revalidation_overdue").notNull().default(false),
 
   // --- Verification state machine (Phase 1+) ---
   verificationStatus: varchar("verification_status", { length: 40 })

@@ -22,6 +22,9 @@ export interface TraderOnboardingStatus {
   needsMoreInfoReason?: string | null;
   businessRole?: string | null;
   authorisedRepresentative?: boolean | null;
+  revalidationDueAt?: Date | null;
+  revalidationRemindedAt?: Date | null;
+  revalidationOverdue?: boolean;
   checklist: TraderOnboardingChecklistStep[];
   legal?: TraderLegalAcceptance;
   email: string;

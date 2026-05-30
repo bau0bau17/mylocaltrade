@@ -90,6 +90,7 @@ export * from "./resolveReportRequest";
 export * from "./resolveReportRequestAction";
 export * from "./resolveReportResponse";
 export * from "./retryAfterErrorResponse";
+export * from "./revalidateProfileResponse";
 export * from "./review";
 export * from "./reviewStatus";
 export * from "./searchCompaniesHouseParams";

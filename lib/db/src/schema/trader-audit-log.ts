@@ -51,6 +51,10 @@ export const TRADER_AUDIT_ACTIONS = [
   "ADMIN_APPROVED_DELETION_PROCESSING",
   "ADMIN_MARKED_RETENTION_REQUIRED",
   "ACCOUNT_REOPENED",
+  // --- Periodic re-validation (trust maintenance) ---
+  "REVALIDATION_DUE",
+  "REVALIDATION_OVERDUE",
+  "REVALIDATION_CONFIRMED",
 ] as const;
 export type TraderAuditAction = (typeof TRADER_AUDIT_ACTIONS)[number];
 
