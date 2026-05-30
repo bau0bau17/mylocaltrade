@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, Pressable, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, Pressable, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
@@ -23,15 +23,34 @@ const SORT_LABELS: Record<'recommended' | 'rating' | 'reviews' | 'newest', strin
   newest: 'Newest',
 };
 
-function FilterChip({ icon, label, active, onPress }: { icon: FeatherIconName; label: string; active: boolean; onPress: () => void }) {
+function FilterChip({ icon, label, active, onPress }: { icon?: FeatherIconName; label: string; active: boolean; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
       hitSlop={8}
       style={[chipStyles.chip, active && chipStyles.chipActive]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
     >
-      <Feather name={icon} size={13} color={active ? Colors.light.white : Colors.light.textSecondary} />
+      {icon ? (
+        <Feather name={icon} size={13} color={active ? Colors.light.white : Colors.light.textSecondary} />
+      ) : null}
       <Text style={[chipStyles.chipText, active && chipStyles.chipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function ActiveChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <Pressable
+      onPress={onRemove}
+      hitSlop={8}
+      style={chipStyles.activeChip}
+      accessibilityRole="button"
+      accessibilityLabel={`Remove ${label} filter`}
+    >
+      <Text style={chipStyles.activeChipText}>{label}</Text>
+      <Feather name="x" size={13} color={Colors.light.primary} />
     </Pressable>
   );
 }
@@ -48,7 +67,6 @@ const chipStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.light.border,
     backgroundColor: Colors.light.card,
-    marginRight: 8,
   },
   chipActive: {
     backgroundColor: Colors.light.primary,
@@ -62,6 +80,25 @@ const chipStyles = StyleSheet.create({
   },
   chipTextActive: {
     color: Colors.light.white,
+  },
+  activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 6,
+    paddingLeft: 13,
+    paddingRight: 10,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    backgroundColor: Colors.light.primaryMuted,
+  },
+  activeChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.light.primary,
+    letterSpacing: 0.2,
   },
 });
 
@@ -78,10 +115,37 @@ export default function SearchScreen() {
   const [planFilter, setPlanFilter] = useState<'all' | 'premium_plus' | 'elite'>('all');
   const [specialismFilter, setSpecialismFilter] = useState<SpecialismKey | null>(null);
   const [sort, setSort] = useState<'recommended' | 'rating' | 'reviews' | 'newest'>('recommended');
+  const [showFilters, setShowFilters] = useState(false);
 
   const activeSpecialism = specialismFilter
     ? SPECIALISMS.find((s) => s.key === specialismFilter) ?? null
     : null;
+
+  const clearAllFilters = () => {
+    setVerifiedOnly(false);
+    setPlanFilter('all');
+    setSpecialismFilter(null);
+    setSort('recommended');
+  };
+
+  const activeFilters: { key: string; label: string; onRemove: () => void }[] = [
+    ...(sort !== 'recommended'
+      ? [{ key: 'sort', label: SORT_LABELS[sort], onRemove: () => setSort('recommended') }]
+      : []),
+    ...(verifiedOnly
+      ? [{ key: 'verified', label: 'Verified only', onRemove: () => setVerifiedOnly(false) }]
+      : []),
+    ...(planFilter === 'premium_plus'
+      ? [{ key: 'plan', label: 'Premium+', onRemove: () => setPlanFilter('all') }]
+      : []),
+    ...(planFilter === 'elite'
+      ? [{ key: 'plan', label: 'Elite', onRemove: () => setPlanFilter('all') }]
+      : []),
+    ...(activeSpecialism
+      ? [{ key: 'specialism', label: activeSpecialism.label, onRemove: () => setSpecialismFilter(null) }]
+      : []),
+  ];
+  const activeCount = activeFilters.length;
 
   useEffect(() => {
     loadRecentSearches();
@@ -245,75 +309,125 @@ export default function SearchScreen() {
         </View>
       ) : (
         <View style={styles.resultsContainer}>
-          <View style={styles.filtersWrap}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filterScroll}
-              contentContainerStyle={styles.filtersRow}
+          <View style={styles.filterBar}>
+            <Pressable
+              style={styles.filtersButton}
+              onPress={() => setShowFilters(true)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Open filters"
             >
-              {(verifiedOnly || planFilter !== 'all' || specialismFilter !== null || sort !== 'recommended') && (
-                <Pressable
-                  onPress={() => {
-                    setVerifiedOnly(false);
-                    setPlanFilter('all');
-                    setSpecialismFilter(null);
-                    setSort('recommended');
-                  }}
-                  style={styles.clearAllChip}
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear all filters"
-                  hitSlop={6}
-                >
-                  <Feather name="x" size={12} color={Colors.light.primary} />
-                  <Text style={styles.clearAllChipText}>Clear all</Text>
-                </Pressable>
+              <Feather name="sliders" size={14} color={Colors.light.white} />
+              <Text style={styles.filtersButtonText}>Filters</Text>
+              {activeCount > 0 && (
+                <View style={styles.filterCountBadge}>
+                  <Text style={styles.filterCountText}>{activeCount}</Text>
+                </View>
               )}
-              <FilterChip
-                icon="sliders"
-                label={`Sort: ${SORT_LABELS[sort]}`}
-                active={sort !== 'recommended'}
-                onPress={() => {
-                  const order: typeof sort[] = ['recommended', 'rating', 'reviews', 'newest'];
-                  setSort(order[(order.indexOf(sort) + 1) % order.length]);
-                }}
-              />
-              <FilterChip
-                icon="check-circle"
-                label="Verified only"
-                active={verifiedOnly}
-                onPress={() => setVerifiedOnly(v => !v)}
-              />
-              <FilterChip
-                icon="star"
-                label="Premium+"
-                active={planFilter === 'premium_plus'}
-                onPress={() => setPlanFilter(p => p === 'premium_plus' ? 'all' : 'premium_plus')}
-              />
-              <FilterChip
-                icon="zap"
-                label="Elite"
-                active={planFilter === 'elite'}
-                onPress={() => setPlanFilter(p => p === 'elite' ? 'all' : 'elite')}
-              />
-            </ScrollView>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filterScroll}
-              contentContainerStyle={styles.filtersRow}
-            >
-              {SPECIALISMS.map((spec) => (
-                <FilterChip
-                  key={spec.key}
-                  icon={spec.icon}
-                  label={spec.label}
-                  active={specialismFilter === spec.key}
-                  onPress={() => toggleSpecialism(spec.key)}
-                />
-              ))}
-            </ScrollView>
+            </Pressable>
+            {activeFilters.length > 0 ? (
+              activeFilters.map((f) => (
+                <ActiveChip key={f.key + f.label} label={f.label} onRemove={f.onRemove} />
+              ))
+            ) : (
+              <Text style={styles.filterHint}>Sort, verify, plan &amp; specialisms</Text>
+            )}
           </View>
+
+          <Modal
+            visible={showFilters}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setShowFilters(false)}
+          >
+            <View style={styles.sheetBackdrop}>
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFilters(false)} />
+              <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+                <View style={styles.sheetHandle} />
+                <View style={styles.sheetHeader}>
+                  <Text style={styles.sheetTitle}>Filters</Text>
+                  <Pressable
+                    onPress={() => setShowFilters(false)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close filters"
+                  >
+                    <Feather name="x" size={22} color={Colors.light.textSecondary} />
+                  </Pressable>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
+                  <Text style={styles.sheetSection}>Sort by</Text>
+                  <View style={styles.sheetGroup}>
+                    {(['recommended', 'rating', 'reviews', 'newest'] as const).map((key) => (
+                      <FilterChip
+                        key={key}
+                        label={SORT_LABELS[key]}
+                        active={sort === key}
+                        onPress={() => setSort(key)}
+                      />
+                    ))}
+                  </View>
+
+                  <Text style={styles.sheetSection}>Verification</Text>
+                  <View style={styles.sheetGroup}>
+                    <FilterChip
+                      icon="check-circle"
+                      label="Verified only"
+                      active={verifiedOnly}
+                      onPress={() => setVerifiedOnly((v) => !v)}
+                    />
+                  </View>
+
+                  <Text style={styles.sheetSection}>Plan</Text>
+                  <View style={styles.sheetGroup}>
+                    <FilterChip
+                      icon="star"
+                      label="Premium+"
+                      active={planFilter === 'premium_plus'}
+                      onPress={() => setPlanFilter((p) => (p === 'premium_plus' ? 'all' : 'premium_plus'))}
+                    />
+                    <FilterChip
+                      icon="zap"
+                      label="Elite"
+                      active={planFilter === 'elite'}
+                      onPress={() => setPlanFilter((p) => (p === 'elite' ? 'all' : 'elite'))}
+                    />
+                  </View>
+
+                  <Text style={styles.sheetSection}>Specialism</Text>
+                  <View style={styles.sheetGroup}>
+                    {SPECIALISMS.map((spec) => (
+                      <FilterChip
+                        key={spec.key}
+                        icon={spec.icon}
+                        label={spec.label}
+                        active={specialismFilter === spec.key}
+                        onPress={() => toggleSpecialism(spec.key)}
+                      />
+                    ))}
+                  </View>
+                </ScrollView>
+                <View style={styles.sheetFooter}>
+                  <Pressable
+                    onPress={clearAllFilters}
+                    hitSlop={8}
+                    disabled={activeCount === 0}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear all filters"
+                  >
+                    <Text style={[styles.sheetClear, activeCount === 0 && styles.sheetClearDisabled]}>
+                      Clear all
+                    </Text>
+                  </Pressable>
+                  <Pressable style={styles.sheetApply} onPress={() => setShowFilters(false)}>
+                    <Text style={styles.sheetApplyText}>
+                      {isLoading ? 'Show results' : `Show ${data?.total ?? 0} results`}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          </Modal>
           <Text style={styles.resultsCount}>
             {isLoading ? 'Searching...' : `${data?.total || 0} results found`}
             {!isLoading && locationQuery ? ` near ${locationQuery}` : ''}
@@ -342,14 +456,10 @@ export default function SearchScreen() {
                   ? 'No traders match these filters. Try clearing them, or widen your location.'
                   : 'Try adjusting your search or location.'}
               </Text>
-              {(verifiedOnly || planFilter !== 'all' || specialismFilter !== null) && (
+              {activeCount > 0 && (
                 <Pressable
                   style={styles.emptyAction}
-                  onPress={() => {
-                    setVerifiedOnly(false);
-                    setPlanFilter('all');
-                    setSpecialismFilter(null);
-                  }}
+                  onPress={clearAllFilters}
                   accessibilityRole="button"
                   accessibilityLabel="Clear filters"
                 >
@@ -466,35 +576,135 @@ const styles = StyleSheet.create({
   resultsContainer: {
     flex: 1,
   },
-  filtersWrap: {
-    paddingTop: 10,
-    gap: 8,
-  },
-  filterScroll: {
-    flexGrow: 0,
-  },
-  filtersRow: {
+  filterBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 2,
   },
-  clearAllChip: {
+  filtersButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'center',
-    gap: 5,
-    paddingHorizontal: 13,
+    gap: 7,
     height: 34,
+    paddingHorizontal: 14,
     borderRadius: 17,
-    borderWidth: 1,
-    borderColor: Colors.light.primary,
-    backgroundColor: Colors.light.primaryMuted,
-    marginRight: 8,
+    backgroundColor: Colors.light.primary,
   },
-  clearAllChipText: {
+  filtersButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.light.white,
+    letterSpacing: 0.2,
+  },
+  filterCountBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    backgroundColor: Colors.light.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.light.primary,
+  },
+  filterHint: {
+    fontSize: 13,
+    color: Colors.light.textMuted,
+    letterSpacing: 0.2,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: Colors.light.surface,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 8,
+    paddingHorizontal: 20,
+    maxHeight: '85%',
+    borderTopWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.light.borderLight,
+    marginBottom: 12,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+    letterSpacing: 0.3,
+  },
+  sheetContent: {
+    paddingTop: 4,
+    paddingBottom: 16,
+  },
+  sheetSection: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.light.primary,
-    letterSpacing: 0.2,
+    color: Colors.light.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: 14,
+    marginBottom: 10,
+  },
+  sheetGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  sheetFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 14,
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  sheetClear: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.textSecondary,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  sheetClearDisabled: {
+    color: Colors.light.textMuted,
+    opacity: 0.6,
+  },
+  sheetApply: {
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 24,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetApplyText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.light.white,
+    letterSpacing: 0.3,
   },
   resultsCount: {
     fontSize: 12,
