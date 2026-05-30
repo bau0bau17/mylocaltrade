@@ -127,10 +127,13 @@ export default function ConversationThreadScreen() {
   }, [messages.length]);
 
   // The GET conversation endpoint marks unread messages as read server-side,
-  // so once we've loaded the thread refresh the global unread badge.
+  // so once we've loaded the thread refresh both the global unread badge and
+  // the conversations list (whose per-row red badge would otherwise stay stale
+  // until the list happens to refetch).
   useEffect(() => {
     if (data) {
       qc.invalidateQueries({ queryKey: getGetConversationsUnreadCountQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
     }
   }, [data, qc]);
 
