@@ -6,6 +6,7 @@ import type {
   TraderListResponse,
   TraderStatus,
   RegisterCheckStatus,
+  AiVerificationStatus,
 } from "@/lib/types";
 import { REVIEW_FILTER_STATUSES, STATUS_LABELS } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +55,15 @@ const REGISTER_FILTER_OPTIONS: { value: RegisterCheckStatus | "NONE"; label: str
   { value: "NONE", label: "Not yet checked" },
 ];
 
+const AI_FILTER_OPTIONS: { value: AiVerificationStatus | "NONE"; label: string }[] = [
+  { value: "MATCH", label: "Match" },
+  { value: "PARTIAL_MATCH", label: "Partial match" },
+  { value: "NO_MATCH", label: "No match" },
+  { value: "NOT_FOUND", label: "Not found on CH" },
+  { value: "ERROR", label: "Check failed" },
+  { value: "NONE", label: "Not yet checked" },
+];
+
 function useQueryParams() {
   const [location] = useLocation();
   return useMemo(() => {
@@ -73,6 +83,9 @@ export default function Traders() {
   const [registerCheck, setRegisterCheck] = useState<RegisterCheckStatus | "NONE" | "ALL">(
     (params.get("register") as RegisterCheckStatus | "NONE" | null) ?? "ALL",
   );
+  const [aiCheck, setAiCheck] = useState<AiVerificationStatus | "NONE" | "ALL">(
+    (params.get("ai") as AiVerificationStatus | "NONE" | null) ?? "ALL",
+  );
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQ(q), 300);
@@ -84,9 +97,10 @@ export default function Traders() {
     if (status && status !== "ALL") sp.set("status", status);
     if (debouncedQ) sp.set("q", debouncedQ);
     if (registerCheck !== "ALL") sp.set("register", registerCheck);
+    if (aiCheck !== "ALL") sp.set("ai", aiCheck);
     const qs = sp.toString();
     navigate(`/traders${qs ? `?${qs}` : ""}`, { replace: true });
-  }, [status, debouncedQ, registerCheck, navigate]);
+  }, [status, debouncedQ, registerCheck, aiCheck, navigate]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "traders", status, debouncedQ],
@@ -103,11 +117,19 @@ export default function Traders() {
   const counts = data?.counts ?? [];
 
   const traders = useMemo(() => {
-    const all = data?.traders ?? [];
-    if (registerCheck === "ALL") return all;
-    if (registerCheck === "NONE") return all.filter((t) => t.registerCheckStatus == null);
-    return all.filter((t) => t.registerCheckStatus === registerCheck);
-  }, [data?.traders, registerCheck]);
+    let all = data?.traders ?? [];
+    if (registerCheck === "NONE") {
+      all = all.filter((t) => t.registerCheckStatus == null);
+    } else if (registerCheck !== "ALL") {
+      all = all.filter((t) => t.registerCheckStatus === registerCheck);
+    }
+    if (aiCheck === "NONE") {
+      all = all.filter((t) => t.aiVerificationStatus == null);
+    } else if (aiCheck !== "ALL") {
+      all = all.filter((t) => t.aiVerificationStatus === aiCheck);
+    }
+    return all;
+  }, [data?.traders, registerCheck, aiCheck]);
 
   return (
     <div className="space-y-4">
@@ -159,6 +181,22 @@ export default function Traders() {
             <SelectContent>
               <SelectItem value="ALL">All register checks</SelectItem>
               {REGISTER_FILTER_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={aiCheck}
+            onValueChange={(v) => setAiCheck(v as AiVerificationStatus | "NONE" | "ALL")}
+          >
+            <SelectTrigger className="w-full sm:w-56" data-testid="select-ai-check">
+              <SelectValue placeholder="AI check" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All AI checks</SelectItem>
+              {AI_FILTER_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
                 </SelectItem>
