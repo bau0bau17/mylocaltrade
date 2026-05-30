@@ -25,6 +25,8 @@ import {
   useCloseConversation,
   useReportConversation,
   useMuteConversation,
+  useAcceptConversationOffer,
+  useCompleteConversationJob,
   getGetConversationQueryKey,
   getGetConversationsQueryKey,
   getGetConversationsUnreadCountQueryKey,
@@ -74,6 +76,24 @@ export default function ConversationThreadScreen() {
   });
 
   const closeMutation = useCloseConversation({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      },
+    },
+  });
+
+  const acceptMutation = useAcceptConversationOffer({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      },
+    },
+  });
+
+  const completeMutation = useCompleteConversationJob({
     mutation: {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
@@ -179,6 +199,55 @@ export default function ConversationThreadScreen() {
         },
         onError: () => Alert.alert("Error", "Could not update status."),
       },
+    );
+  };
+
+  const onAccept = () => {
+    Alert.alert(
+      "Hire this trader",
+      `Confirm you're going with ${otherName} for this job?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Accept offer",
+          onPress: () =>
+            acceptMutation.mutate(
+              { id: conversationId },
+              { onError: () => Alert.alert("Error", "Could not accept the offer.") },
+            ),
+        },
+      ],
+    );
+  };
+
+  const onComplete = () => {
+    Alert.alert(
+      "Mark job as complete",
+      "Confirm this job is finished? You'll then be able to leave a review.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Mark complete",
+          onPress: () =>
+            completeMutation.mutate(
+              { id: conversationId },
+              {
+                onSuccess: () =>
+                  Alert.alert("Job complete", "Thanks! You can now leave a review."),
+                onError: () => Alert.alert("Error", "Could not mark the job complete."),
+              },
+            ),
+        },
+      ],
+    );
+  };
+
+  const onLeaveReview = () => {
+    if (!conv) return;
+    router.push(
+      `/write-review/${conv.traderProfileId}${
+        conv.enquiryId ? `?enquiryId=${conv.enquiryId}` : ""
+      }`,
     );
   };
 
@@ -363,6 +432,15 @@ export default function ConversationThreadScreen() {
                 </Text>
               </View>
             ) : null}
+            {conv.customerCompletedAt ? (
+              <View style={[styles.statusPill, styles.donePill]}>
+                <Text style={[styles.statusPillText, styles.donePillText]}>Job done</Text>
+              </View>
+            ) : conv.customerAcceptedAt ? (
+              <View style={[styles.statusPill, styles.hiredPill]}>
+                <Text style={[styles.statusPillText, styles.hiredPillText]}>Hired</Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <Pressable
@@ -461,6 +539,61 @@ export default function ConversationThreadScreen() {
         }
       />
 
+      {!isTrader && conv.customerCompletedAt && !conv.hasReview ? (
+        <View style={styles.lifecycleBar}>
+          <Pressable
+            style={[styles.lifecycleBtn, styles.reviewBtn]}
+            onPress={onLeaveReview}
+          >
+            <Feather name="star" size={16} color={Colors.light.white} />
+            <Text style={styles.lifecycleBtnText}>Leave a review</Text>
+          </Pressable>
+        </View>
+      ) : !isTrader && conv.customerCompletedAt && conv.hasReview ? (
+        <View style={styles.lifecycleBar}>
+          <View style={styles.lifecycleDone}>
+            <Feather name="check-circle" size={14} color={Colors.light.success} />
+            <Text style={styles.lifecycleDoneText}>Job complete · review submitted</Text>
+          </View>
+        </View>
+      ) : !isTrader && !closed ? (
+        <View style={styles.lifecycleBar}>
+          {!conv.customerAcceptedAt ? (
+            <Pressable
+              style={styles.lifecycleBtn}
+              onPress={onAccept}
+              disabled={acceptMutation.isPending}
+            >
+              {acceptMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.light.white} />
+              ) : (
+                <>
+                  <Feather name="check-circle" size={16} color={Colors.light.white} />
+                  <Text style={styles.lifecycleBtnText} numberOfLines={1}>
+                    Accept offer & hire {otherName}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          ) : (
+            <Pressable
+              style={styles.lifecycleBtn}
+              onPress={onComplete}
+              disabled={completeMutation.isPending}
+            >
+              {completeMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.light.white} />
+              ) : (
+                <>
+                  <Feather name="flag" size={16} color={Colors.light.white} />
+                  <Text style={styles.lifecycleBtnText}>Mark job as complete</Text>
+                </>
+              )}
+            </Pressable>
+          )}
+        </View>
+      ) : null}
+
       {closed ? (
         <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
           <Text style={styles.closedText}>This conversation is {conv.status.toLowerCase()}.</Text>
@@ -557,6 +690,45 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   mutedPillText: { color: Colors.light.textSecondary },
+  hiredPill: { backgroundColor: Colors.light.primaryMuted },
+  hiredPillText: { color: Colors.light.primary },
+  donePill: { backgroundColor: "rgba(6, 214, 160, 0.14)" },
+  donePillText: { color: Colors.light.success },
+  lifecycleBar: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    backgroundColor: Colors.light.surface,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  lifecycleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primary,
+    paddingHorizontal: 16,
+  },
+  reviewBtn: { backgroundColor: Colors.light.featured },
+  lifecycleBtnText: {
+    color: Colors.light.white,
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  lifecycleDone: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+  },
+  lifecycleDoneText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.light.textSecondary,
+  },
   iconBtn: {
     width: 36,
     height: 36,

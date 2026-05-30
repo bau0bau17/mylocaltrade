@@ -1412,6 +1412,24 @@ export const GetConversationsResponse = zod.object({
       lastMessagePreview: zod.string().nullish(),
       closedAt: zod.date().nullish(),
       closedByRole: zod.string().nullish(),
+      customerAcceptedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          "When the customer accepted the trader's offer (hired them). Null until accepted.",
+        ),
+      customerCompletedAt: zod
+        .date()
+        .nullish()
+        .describe(
+          "When the customer marked the job complete. Unlocks leaving a review. Null until complete.",
+        ),
+      hasReview: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses.",
+        ),
       createdAt: zod.date(),
     }),
   ),
@@ -1456,6 +1474,24 @@ export const GetConversationResponse = zod.object({
     lastMessagePreview: zod.string().nullish(),
     closedAt: zod.date().nullish(),
     closedByRole: zod.string().nullish(),
+    customerAcceptedAt: zod
+      .date()
+      .nullish()
+      .describe(
+        "When the customer accepted the trader's offer (hired them). Null until accepted.",
+      ),
+    customerCompletedAt: zod
+      .date()
+      .nullish()
+      .describe(
+        "When the customer marked the job complete. Unlocks leaving a review. Null until complete.",
+      ),
+    hasReview: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses.",
+      ),
     createdAt: zod.date(),
   }),
   messages: zod.array(
@@ -1512,6 +1548,28 @@ export const UpdateConversationTraderStatusBody = zod.object({
 export const UpdateConversationTraderStatusResponse = zod.object({
   ok: zod.boolean(),
   traderStatus: zod.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
+});
+
+/**
+ * @summary Customer accepts the trader's offer (hires them)
+ */
+export const AcceptConversationOfferParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AcceptConversationOfferResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Customer marks the job as complete (unlocks leaving a review)
+ */
+export const CompleteConversationJobParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CompleteConversationJobResponse = zod.object({
+  ok: zod.boolean(),
 });
 
 /**

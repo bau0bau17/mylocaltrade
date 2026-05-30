@@ -4,7 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
-import { useCreateReview, useGetEligibleEnquiriesForReview } from '@workspace/api-client-react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  useCreateReview,
+  useGetEligibleEnquiriesForReview,
+  getGetConversationsQueryKey,
+  getGetEligibleEnquiriesForReviewQueryKey,
+} from '@workspace/api-client-react';
 
 export default function WriteReviewScreen() {
   const { traderId, enquiryId } = useLocalSearchParams<{ traderId: string; enquiryId?: string }>();
@@ -25,6 +31,7 @@ export default function WriteReviewScreen() {
     initialEnquiryId ?? eligibleForThisTrader[0]?.enquiryId ?? null,
   );
   const { mutateAsync: createReview, isPending } = useCreateReview();
+  const qc = useQueryClient();
 
   React.useEffect(() => {
     if (selectedEnquiryId == null && eligibleForThisTrader[0]) {
@@ -45,6 +52,17 @@ export default function WriteReviewScreen() {
       await createReview({
         data: { traderId: traderIdNum, enquiryId: selectedEnquiryId, rating, text: text.trim() },
       });
+      // Refresh conversation detail/list (hasReview) and review eligibility so the
+      // lifecycle action bar transitions to "review submitted" deterministically.
+      qc.invalidateQueries({
+        predicate: (q) => {
+          const key = q.queryKey?.[0];
+          return typeof key === "string" && key.startsWith("/api/conversations");
+        },
+      });
+      qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+      qc.invalidateQueries({ queryKey: getGetEligibleEnquiriesForReviewQueryKey() });
+      qc.invalidateQueries({ queryKey: ["/api/reviews/eligible"] });
       Alert.alert(
         'Review submitted',
         'Thanks! Your review will be visible after our moderators have reviewed it.',
@@ -69,7 +87,7 @@ export default function WriteReviewScreen() {
         <Feather name="info" size={28} color={Colors.light.textMuted} />
         <Text style={styles.emptyTitle}>No reviewable jobs</Text>
         <Text style={styles.emptyText}>
-          You can leave a review once this trader has responded to one of your enquiries.
+          You can leave a review once you've marked the job as complete in your conversation with this trader.
         </Text>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
           <Text style={styles.backBtnText}>Go back</Text>

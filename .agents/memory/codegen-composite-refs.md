@@ -26,4 +26,10 @@ codegen until libs have been rebuilt.
 
 **Also:** Metro logs a transient `Unable to resolve "./generated/api"` during
 codegen because orval's "Cleaning output folder" briefly deletes the files.
-It self-resolves once codegen finishes; restart the expo workflow if it sticks.
+It usually self-resolves once codegen finishes, but if Metro's haste map cached
+the missing-module resolution, a plain expo workflow **restart is not enough** —
+the error sticks even though the file exists on disk. Clear Metro's caches first
+(`rm -rf $TMPDIR/metro-* /tmp/metro-* /tmp/haste-map-* node_modules/.cache/metro
+artifacts/mobile/node_modules/.cache`) then restart the expo workflow. Verify by
+screenshotting the app (it bundles/renders) rather than trusting the non-rotating
+workflow log, whose tail can show a stale pre-clear error line.
