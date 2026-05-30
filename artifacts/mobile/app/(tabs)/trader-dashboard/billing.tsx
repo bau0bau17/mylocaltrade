@@ -11,12 +11,6 @@ import {
 } from '@workspace/api-client-react';
 import { useSubscription } from '@/lib/revenuecat';
 
-const PLAN_LABEL: Record<string, string> = {
-  basic: 'Basic',
-  premium: 'Premium',
-  trader: 'Premium',
-};
-
 export default function BillingScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -95,9 +89,12 @@ export default function BillingScreen() {
   }
 
   const plan = status?.plan ?? null;
-  const planLabel = plan ? (PLAN_LABEL[plan] ?? plan) : 'No plan';
+  // Single paid plan: anything that is not the free "basic" tier is Premium.
+  // This also normalises any legacy plan values (e.g. "trader", "elite") so the
+  // label never shows a raw/unknown value to the trader.
+  const isPremium = plan != null && plan !== 'basic';
+  const planLabel = !plan ? 'No plan' : isPremium ? 'Premium' : 'Basic';
   const isActive = status?.status === 'active';
-  const isPremium = plan === 'premium' || plan === 'trader';
   const periodEnd = status?.currentPeriodEnd ? new Date(status.currentPeriodEnd) : null;
 
   return (
@@ -194,22 +191,11 @@ export default function BillingScreen() {
       <View style={s.featuresSection}>
         <Text style={s.sectionTitle}>Your Plan Features</Text>
         <View style={s.featuresCard}>
-          {subscription.isSupported ? (
-            <>
-              <Feature included={isActive} text="Public business profile" />
-              <Feature included={isActive} text="Receive customer enquiries" />
-              <Feature included={isActive} text="Verified trader badge on your listing" />
-              <Feature included={isActive} text="Visible in search and category results" />
-            </>
-          ) : (
-            <>
-              <Feature included={isActive} text="Public business profile" />
-              <Feature included={isActive} text="Receive customer enquiries" />
-              <Feature included={isActive && isPremium} text="Higher search ranking" />
-              <Feature included={isActive && isPremium} text="Featured listing badge" />
-              <Feature included={isActive && isPremium} text="Unlimited gallery images" />
-            </>
-          )}
+          <Feature included={isActive && isPremium} text="Receive customer enquiries" />
+          <Feature included={isActive && isPremium} text="Higher search ranking and priority placement" />
+          <Feature included={isActive && isPremium} text="Featured listing badge and home screen placement" />
+          <Feature included={isActive && isPremium} text="Unlimited gallery images" />
+          <Feature included={isActive && isPremium} text="Enhanced profile with services, social and website links" />
         </View>
       </View>
 

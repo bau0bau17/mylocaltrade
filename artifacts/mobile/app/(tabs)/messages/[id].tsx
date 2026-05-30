@@ -504,7 +504,9 @@ export default function ConversationThreadScreen() {
                 text: conv.muted ? "Unmute notifications" : "Mute notifications",
                 onPress: onShowMuteOptions,
               },
-              ...(conv.stage === "HIRED" || conv.stage === "AWAITING_CUSTOMER_CONFIRMATION"
+              ...(conv.stage === "AWAITING_REPLY" ||
+              conv.stage === "HIRED" ||
+              conv.stage === "AWAITING_CUSTOMER_CONFIRMATION"
                 ? [
                     {
                       text: "Cancel this job",

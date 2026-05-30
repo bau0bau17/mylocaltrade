@@ -31,16 +31,11 @@ const IS_DEMO_MODE = !process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== 
 // the native iOS app come from the App Store via RevenueCat — the values below
 // drive the informational fallback pricing cards on web / Expo Go only.
 const PREMIUM_FEATURES = [
-  "Everything in Basic",
-  "Enhanced profile page",
+  "Receive customer enquiries",
+  "Higher search ranking and priority placement",
+  "Featured listing badge and home screen placement",
   "Unlimited gallery images",
-  "Priority & featured search placement",
-  "Premium badge on your listing",
-  "Social media links",
-  "Service area coverage display",
-  "Business website link",
-  "Featured placement on the home screen",
-  "Priority customer leads",
+  "Enhanced profile with services, social and website links",
 ];
 
 const PLANS = [
@@ -51,9 +46,8 @@ const PLANS = [
     currency: "GBP",
     interval: "month",
     features: [
-      "Business listing",
+      "Free public business listing",
       "Standard profile page",
-      "Contact details displayed",
       "Up to 3 gallery images",
       "Standard search visibility",
     ],
