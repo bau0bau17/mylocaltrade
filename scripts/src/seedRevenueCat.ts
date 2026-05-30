@@ -35,8 +35,9 @@ const PLAY_STORE_APP_NAME = "MyLocalTrade Android";
 const PLAY_STORE_PACKAGE_NAME = "com.mylocaltrade.app";
 
 // Single entitlement model: one "Trader Subscription" granted by either the
-// Monthly or the Annual product. NO basic/premium/elite tiers — the iOS app has
-// a single subscription. The tiered model only exists on the web (Stripe) side.
+// Monthly or the Annual product. NO separate plan tiers — the iOS app has
+// a single Premium subscription. The Basic (free) vs Premium split is applied
+// server-side once the entitlement is synced.
 const ENTITLEMENT_IDENTIFIER = "trader_subscription";
 const ENTITLEMENT_DISPLAY_NAME = "Trader Subscription";
 

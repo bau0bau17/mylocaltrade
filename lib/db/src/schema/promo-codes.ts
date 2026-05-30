@@ -19,7 +19,7 @@ import { usersTable } from "./users";
  *   total. Once that many redemptions exist, validation rejects further
  *   attempts even if the code is still flagged active.
  * - `applicablePlans`: list of plan ids the code can be applied to. For the
- *   launch promo this is `["premium", "elite"]` (the £20 and £30 plans).
+ *   launch promo this is `["premium"]` (the single paid plan).
  * - `validForDays`: how long the discount stays active for an individual
  *   trader after they redeem. Drives the countdown shown in the trader app.
  */

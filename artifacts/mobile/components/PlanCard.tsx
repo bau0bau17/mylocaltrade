@@ -13,7 +13,6 @@ interface PlanCardProps {
 const PLAN_ACCENTS: Record<string, { border: string; bg: string; accent: string }> = {
   basic: { border: Colors.light.border, bg: Colors.light.card, accent: Colors.light.textSecondary },
   premium: { border: Colors.light.primary, bg: Colors.light.primaryMuted, accent: Colors.light.primary },
-  elite: { border: Colors.light.elite, bg: Colors.light.eliteMuted, accent: Colors.light.elite },
 };
 
 export function PlanCard({ plan, onSelect, isLoading }: PlanCardProps) {

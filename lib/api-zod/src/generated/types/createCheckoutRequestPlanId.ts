@@ -12,5 +12,4 @@ export type CreateCheckoutRequestPlanId =
 export const CreateCheckoutRequestPlanId = {
   basic: "basic",
   premium: "premium",
-  elite: "elite",
 } as const;

@@ -1,4 +1,6 @@
 - [Public trader visibility policy](trader-public-visibility.md) — every public trader retrieval path must apply the same hide rules; they are duplicated across routes and drift easily.
 - [HMRC VAT API auth](hmrc-vat-api.md) — Check-a-UK-VAT-number lookup is application-restricted (OAuth client_credentials server token), NOT open access; degrade gracefully if creds absent.
 - [Stale dist breaks typecheck](monorepo-stale-dist-typecheck.md) — typecheck errors on symbols that exist in lib/db or lib/api-zod source? rebuild their dist via `tsc -b` before assuming a real bug.
+- [api-spec codegen + composite refs](codegen-composite-refs.md) — after openapi codegen, run root `pnpm run typecheck` (tsc --build) or artifacts read stale generated `.d.ts`; orval clean shows transient resolve errors.
+- [Plan model + legacy "trader"](plan-model-legacy-trader.md) — two tiers basic/premium only (no elite); treat any non-basic plan as Premium to cover legacy "trader" rows until RC re-sync.
 - [Mobile filter discoverability](mobile-filter-discoverability.md) — Search filters must NOT use horizontal scroll (not discoverable); use the "Filters" button + bottom-sheet pattern.

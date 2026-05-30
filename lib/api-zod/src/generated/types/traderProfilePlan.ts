@@ -13,5 +13,4 @@ export type TraderProfilePlan =
 export const TraderProfilePlan = {
   basic: "basic",
   premium: "premium",
-  elite: "elite",
 } as const;

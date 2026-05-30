@@ -159,13 +159,7 @@ export default function TraderProfileScreen() {
                 <Feather name="info" size={10} color={Colors.light.success} style={{ marginLeft: 3 }} />
               </Pressable>
             )}
-            {trader.plan === 'elite' && (
-              <View style={[styles.planBadge, { backgroundColor: Colors.light.eliteMuted }]}>
-                <Feather name="zap" size={10} color={Colors.light.elite} />
-                <Text style={[styles.planTextColored, { color: Colors.light.elite }]}>Elite</Text>
-              </View>
-            )}
-            {trader.plan === 'premium' && (
+            {!!trader.plan && trader.plan !== 'basic' && (
               <View style={[styles.planBadge, { backgroundColor: Colors.light.primaryMuted }]}>
                 <Text style={[styles.planTextColored, { color: Colors.light.primary }]}>Premium</Text>
               </View>

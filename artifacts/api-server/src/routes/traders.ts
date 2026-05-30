@@ -135,10 +135,11 @@ router.get("/traders", async (req, res) => {
       conditions.push(eq(traderProfilesTable.verificationStatus, "VERIFIED"));
     }
 
-    if (plan === "premium_plus") {
-      conditions.push(inArray(traderProfilesTable.plan, ["premium", "elite"]));
-    } else if (plan === "elite") {
-      conditions.push(eq(traderProfilesTable.plan, "elite"));
+    if (plan === "premium") {
+      // Any non-basic plan counts as Premium. `inArray` also covers legacy
+      // "trader" rows that predate the unified "premium" plan id, so existing
+      // paid traders remain discoverable until their plan is re-synced.
+      conditions.push(inArray(traderProfilesTable.plan, ["premium", "trader"]));
     }
 
     // Specialism filter: a free-text keyword (e.g. "solar", "heat pump") that

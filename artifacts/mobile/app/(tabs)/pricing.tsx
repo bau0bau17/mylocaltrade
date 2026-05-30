@@ -186,7 +186,7 @@ export default function PricingScreen() {
           { icon: 'eye' as const, label: 'Better visibility in search and category results' },
           { icon: 'arrow-up' as const, label: 'Priority placement above unpaid traders' },
           { icon: 'image' as const, label: 'Enhanced profile with photos, services and reviews' },
-          { icon: 'star' as const, label: 'Featured placement on the home screen (Elite)' },
+          { icon: 'star' as const, label: 'Featured placement on the home screen' },
           { icon: 'zap' as const, label: 'Specialist visibility for energy and property maintenance work' },
         ].map((b, idx) => (
           <View key={idx} style={styles.benefitRow}>
@@ -345,7 +345,7 @@ export default function PricingScreen() {
         <View style={styles.plansContainer}>
           {plansData?.plans.map(plan => (
             <PlanCard
-              key={plan.id}
+              key={`${plan.id}-${plan.interval}-${plan.price}`}
               plan={plan}
               onSelect={(planId) => {
                 if (!isTrader) {
@@ -367,7 +367,7 @@ export default function PricingScreen() {
         <Text style={styles.faqTitle}>FAQ</Text>
         <View style={styles.faqItem}>
           <Text style={styles.faqQuestion}>Can I cancel anytime?</Text>
-          <Text style={styles.faqAnswer}>Yes, all plans are monthly with no penalty for cancellation.</Text>
+          <Text style={styles.faqAnswer}>Yes, you can cancel anytime with no penalty. Premium is available on a monthly or yearly basis.</Text>
         </View>
         <View style={styles.faqItem}>
           <Text style={styles.faqQuestion}>How do verified reviews work?</Text>

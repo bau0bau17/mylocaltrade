@@ -25,16 +25,34 @@ const router: IRouter = Router();
 
 const IS_DEMO_MODE = !process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== "production";
 
+// Subscription model: Basic (free, limited) + a single paid Premium tier,
+// billed either Monthly or Yearly. Both premium cards map to the same stored
+// plan id ("premium"); only the billing interval/price differ. Real prices on
+// the native iOS app come from the App Store via RevenueCat — the values below
+// drive the informational fallback pricing cards on web / Expo Go only.
+const PREMIUM_FEATURES = [
+  "Everything in Basic",
+  "Enhanced profile page",
+  "Unlimited gallery images",
+  "Priority & featured search placement",
+  "Premium badge on your listing",
+  "Social media links",
+  "Service area coverage display",
+  "Business website link",
+  "Featured placement on the home screen",
+  "Priority customer leads",
+];
+
 const PLANS = [
   {
     id: "basic",
-    name: "Basic Plan",
-    price: 10,
+    name: "Basic",
+    price: 0,
     currency: "GBP",
     interval: "month",
     features: [
       "Business listing",
-      "Basic profile page",
+      "Standard profile page",
       "Contact details displayed",
       "Up to 3 gallery images",
       "Standard search visibility",
@@ -43,45 +61,26 @@ const PLANS = [
   },
   {
     id: "premium",
-    name: "Premium Plan",
-    price: 20,
+    name: "Premium Monthly",
+    price: 9.99,
     currency: "GBP",
     interval: "month",
-    features: [
-      "Everything in Basic",
-      "Enhanced profile page",
-      "Up to 10 gallery images",
-      "Priority search placement",
-      "Social media links",
-      "Service area coverage display",
-      "Premium badge on listing",
-    ],
+    features: PREMIUM_FEATURES,
     isPopular: true,
   },
   {
-    id: "elite",
-    name: "Elite Plan",
-    price: 30,
+    id: "premium",
+    name: "Premium Yearly",
+    price: 99.99,
     currency: "GBP",
-    interval: "month",
-    features: [
-      "Everything in Premium",
-      "Featured trader placement",
-      "Top search visibility",
-      "Unlimited gallery images",
-      "Featured badge with star",
-      "Homepage featured section",
-      "Priority customer leads",
-      "Business website link",
-    ],
+    interval: "year",
+    features: PREMIUM_FEATURES,
     isPopular: false,
   },
 ];
 
 const STRIPE_PRICE_MAP: Record<string, string> = {
-  basic: process.env.STRIPE_PRICE_BASIC || "",
   premium: process.env.STRIPE_PRICE_PREMIUM || "",
-  elite: process.env.STRIPE_PRICE_ELITE || "",
 };
 
 router.get("/subscriptions/plans", (_req, res) => {
@@ -105,7 +104,7 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
       .optional()
       .parse((req.body as { promoCode?: unknown })?.promoCode);
 
-    if (!["basic", "premium", "elite"].includes(planId)) {
+    if (!["basic", "premium"].includes(planId)) {
       res.status(400).json({ error: "Invalid plan selected" });
       return;
     }
@@ -320,7 +319,7 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
     const planId = req.query.planId as string;
     const sessionId = req.query.sessionId as string;
 
-    if (!planId || !["basic", "premium", "elite"].includes(planId)) {
+    if (!planId || !["basic", "premium"].includes(planId)) {
       res.status(400).json({ error: "Invalid plan" });
       return;
     }
@@ -363,7 +362,7 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
         .set({
           plan: planId,
           isActive: true,
-          isFeatured: planId === "premium" || planId === "elite",
+          isFeatured: planId === "premium",
           updatedAt: new Date(),
         })
         .where(eq(traderProfilesTable.userId, userId));
@@ -388,7 +387,11 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
 const REVENUECAT_ENTITLEMENT_ID =
   process.env.REVENUECAT_ENTITLEMENT_ID || "trader_subscription";
 const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
-const RC_PLAN_ID = "trader";
+// A valid RevenueCat entitlement (Apple IAP, monthly or yearly) grants the
+// single paid tier: Premium. Storing "premium" (not "trader") is what makes
+// premium entitlements — premium badge, featured placement, unlimited gallery,
+// priority search — actually apply to native subscribers.
+const RC_PLAN_ID = "premium";
 
 // Entitlement lookup keys differ between display names ("Trader Subscription")
 // and identifiers ("trader_subscription"). Normalise both sides before
@@ -549,7 +552,7 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
           .where(eq(usersTable.id, userId));
         await tx
           .update(traderProfilesTable)
-          .set({ plan: RC_PLAN_ID, isActive: true, updatedAt: new Date() })
+          .set({ plan: RC_PLAN_ID, isActive: true, isFeatured: true, updatedAt: new Date() })
           .where(eq(traderProfilesTable.userId, userId));
       }
     });
@@ -767,7 +770,7 @@ async function activateSubscription(customerId: string, planId: string | null, s
       .set({
         plan: planId,
         isActive: true,
-        isFeatured: planId === "premium" || planId === "elite",
+        isFeatured: planId === "premium",
         updatedAt: new Date(),
       })
       .where(eq(traderProfilesTable.userId, user.id));

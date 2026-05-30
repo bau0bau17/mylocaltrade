@@ -22,7 +22,7 @@ import { getApiUrl } from '@/lib/api-url';
  * RevenueCat (Apple In-App Purchase) integration for the iOS app.
  *
  * Single entitlement model: one "Trader Subscription" entitlement granted by
- * either a Monthly or an Annual product. There are NO basic/premium/elite tiers
+ * either a Monthly or an Annual product. There are NO separate plan tiers
  * in the iOS app — that tiered model only exists on the web (Stripe) side.
  *
  * react-native-purchases is a NATIVE module: it is not present in Expo Go nor on

@@ -112,7 +112,7 @@ export default function SearchScreen() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [hasSearched, setHasSearched] = useState(!!params.category);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [planFilter, setPlanFilter] = useState<'all' | 'premium_plus' | 'elite'>('all');
+  const [planFilter, setPlanFilter] = useState<'all' | 'premium'>('all');
   const [specialismFilter, setSpecialismFilter] = useState<SpecialismKey | null>(null);
   const [sort, setSort] = useState<'recommended' | 'rating' | 'reviews' | 'newest'>('recommended');
   const [showFilters, setShowFilters] = useState(false);
@@ -135,11 +135,8 @@ export default function SearchScreen() {
     ...(verifiedOnly
       ? [{ key: 'verified', label: 'Verified only', onRemove: () => setVerifiedOnly(false) }]
       : []),
-    ...(planFilter === 'premium_plus'
-      ? [{ key: 'plan', label: 'Premium+', onRemove: () => setPlanFilter('all') }]
-      : []),
-    ...(planFilter === 'elite'
-      ? [{ key: 'plan', label: 'Elite', onRemove: () => setPlanFilter('all') }]
+    ...(planFilter === 'premium'
+      ? [{ key: 'plan', label: 'Premium', onRemove: () => setPlanFilter('all') }]
       : []),
     ...(activeSpecialism
       ? [{ key: 'specialism', label: activeSpecialism.label, onRemove: () => setSpecialismFilter(null) }]
@@ -382,15 +379,9 @@ export default function SearchScreen() {
                   <View style={styles.sheetGroup}>
                     <FilterChip
                       icon="star"
-                      label="Premium+"
-                      active={planFilter === 'premium_plus'}
-                      onPress={() => setPlanFilter((p) => (p === 'premium_plus' ? 'all' : 'premium_plus'))}
-                    />
-                    <FilterChip
-                      icon="zap"
-                      label="Elite"
-                      active={planFilter === 'elite'}
-                      onPress={() => setPlanFilter((p) => (p === 'elite' ? 'all' : 'elite'))}
+                      label="Premium"
+                      active={planFilter === 'premium'}
+                      onPress={() => setPlanFilter((p) => (p === 'premium' ? 'all' : 'premium'))}
                     />
                   </View>
 

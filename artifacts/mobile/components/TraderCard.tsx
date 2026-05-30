@@ -6,7 +6,6 @@ import Colors from '@/constants/colors';
 import type { TraderProfile } from '@workspace/api-client-react';
 
 const PLAN_STYLES = {
-  elite: { bg: Colors.light.eliteMuted, color: Colors.light.elite, label: 'Elite' },
   premium: { bg: Colors.light.primaryMuted, color: Colors.light.primary, label: 'Premium' },
   basic: { bg: Colors.light.border, color: Colors.light.textSecondary, label: 'Basic' },
 };
@@ -68,7 +67,10 @@ export function formatTenureSince(createdAt: Date | string | null | undefined): 
 
 export function TraderCard({ trader }: { trader: TraderProfile }) {
   const router = useRouter();
-  const planStyle = PLAN_STYLES[trader.plan as keyof typeof PLAN_STYLES];
+  // Any non-basic, non-empty plan is Premium. This also normalises legacy
+  // "trader" rows that predate the unified "premium" plan id.
+  const isPremiumPlan = !!trader.plan && trader.plan !== 'basic';
+  const planStyle = isPremiumPlan ? PLAN_STYLES.premium : undefined;
   const topRated = isTopRated(trader.rating, trader.reviewCount);
   const fastResponder = isFastResponder(trader.responseTimeMinutes);
   const promptResponder = !fastResponder && isPromptResponder(trader.responseTimeMinutes);
@@ -88,9 +90,7 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
     : `${trader.reviewCount} ${reviewWord}`;
 
   const planTierLabel =
-    trader.plan === 'elite' || trader.plan === 'premium'
-      ? `${PLAN_STYLES[trader.plan].label.toLowerCase()} member`
-      : null;
+    isPremiumPlan ? `${PLAN_STYLES.premium.label.toLowerCase()} member` : null;
   const accessibilityLabel = [
     trader.businessName,
     trader.mainCategory,
@@ -132,7 +132,6 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
             )}
             {planStyle && (
               <View style={[styles.planBadge, { backgroundColor: planStyle.bg }]}>
-                {trader.plan === 'elite' && <Feather name="zap" size={10} color={planStyle.color} />}
                 <Text style={[styles.planText, { color: planStyle.color }]}>{planStyle.label}</Text>
               </View>
             )}

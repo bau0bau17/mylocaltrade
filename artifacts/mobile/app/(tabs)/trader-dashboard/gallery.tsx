@@ -42,12 +42,15 @@ export default function GalleryScreen() {
   }, [profileData]);
 
   const plan = profileData?.plan;
-  const maxImages = plan === 'elite' ? 999 : plan === 'premium' ? 10 : 3;
+  // Any non-basic, non-empty plan grants Premium entitlements. This also covers
+  // legacy "trader" rows that predate the unified "premium" plan id.
+  const isPremium = !!plan && plan !== 'basic';
+  const maxImages = isPremium ? Infinity : 3;
 
   const pickAndUpload = async () => {
     if (uploading) return;
     if (galleryUrls.length >= maxImages) {
-      Alert.alert('Limit Reached', `Your ${plan || 'Basic'} plan allows up to ${maxImages} gallery images. Upgrade for more.`);
+      Alert.alert('Limit Reached', 'Your Basic plan allows up to 3 gallery images. Upgrade to Premium for unlimited photos.');
       return;
     }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
