@@ -423,7 +423,7 @@ export default function PricingScreen() {
         </View>
         <View style={styles.faqItem}>
           <Text style={styles.faqQuestion}>How do verified reviews work?</Text>
-          <Text style={styles.faqAnswer}>Only customers who have contacted you through MyLocalTrade and received a response can leave a review, and only one review per enquiry.</Text>
+          <Text style={styles.faqAnswer}>A customer can only leave a review after they have hired you through MyLocalTrade and marked the job as completed. One review is allowed per job.</Text>
         </View>
       </View>
     </ScrollView>
