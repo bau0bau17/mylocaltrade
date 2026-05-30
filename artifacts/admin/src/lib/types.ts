@@ -88,6 +88,9 @@ export interface TraderListResponse {
   counts: StatusCount[];
   registerCounts: RegisterCheckCount[];
   aiCounts: AiCheckCount[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export type DocumentType =
