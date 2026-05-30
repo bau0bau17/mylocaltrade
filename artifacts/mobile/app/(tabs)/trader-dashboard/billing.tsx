@@ -14,8 +14,7 @@ import { useSubscription } from '@/lib/revenuecat';
 const PLAN_LABEL: Record<string, string> = {
   basic: 'Basic',
   premium: 'Premium',
-  elite: 'Elite',
-  trader: 'Trader Subscription',
+  trader: 'Premium',
 };
 
 export default function BillingScreen() {
@@ -98,7 +97,7 @@ export default function BillingScreen() {
   const plan = status?.plan ?? null;
   const planLabel = plan ? (PLAN_LABEL[plan] ?? plan) : 'No plan';
   const isActive = status?.status === 'active';
-  const isPremiumOrElite = plan === 'premium' || plan === 'elite';
+  const isPremium = plan === 'premium' || plan === 'trader';
   const periodEnd = status?.currentPeriodEnd ? new Date(status.currentPeriodEnd) : null;
 
   return (
@@ -206,9 +205,9 @@ export default function BillingScreen() {
             <>
               <Feature included={isActive} text="Public business profile" />
               <Feature included={isActive} text="Receive customer enquiries" />
-              <Feature included={isActive && isPremiumOrElite} text="Higher search ranking" />
-              <Feature included={isActive && isPremiumOrElite} text="Featured listing badge" />
-              <Feature included={isActive && plan === 'elite'} text="Top-of-search Elite placement" />
+              <Feature included={isActive && isPremium} text="Higher search ranking" />
+              <Feature included={isActive && isPremium} text="Featured listing badge" />
+              <Feature included={isActive && isPremium} text="Unlimited gallery images" />
             </>
           )}
         </View>

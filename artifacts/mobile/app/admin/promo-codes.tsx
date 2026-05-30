@@ -55,7 +55,7 @@ function formatRemaining(expiresAt: string): { text: string; expired: boolean } 
   return { text: `${hours}h ${minutes}m left`, expired: false };
 }
 
-const PLANS: ReadonlyArray<'basic' | 'premium' | 'elite'> = ['basic', 'premium', 'elite'];
+const PLANS: ReadonlyArray<'basic' | 'premium'> = ['basic', 'premium'];
 
 export default function AdminPromoCodesScreen() {
   const insets = useSafeAreaInsets();
@@ -276,7 +276,7 @@ function CreateForm({ token, onDone }: { token: string | null; onDone: () => voi
   const [discountGbp, setDiscountGbp] = useState('5');
   const [maxRedemptions, setMaxRedemptions] = useState('20');
   const [validForDays, setValidForDays] = useState('30');
-  const [plans, setPlans] = useState<Record<string, boolean>>({ basic: false, premium: true, elite: true });
+  const [plans, setPlans] = useState<Record<string, boolean>>({ basic: false, premium: true });
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 

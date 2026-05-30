@@ -242,7 +242,7 @@ function CreatePromoForm({ onDone }: { onDone: () => void }) {
   const [discountGbp, setDiscountGbp] = useState("5");
   const [maxRedemptions, setMaxRedemptions] = useState("20");
   const [validForDays, setValidForDays] = useState("30");
-  const [plans, setPlans] = useState<Record<string, boolean>>({ basic: false, premium: true, elite: true });
+  const [plans, setPlans] = useState<Record<string, boolean>>({ basic: false, premium: true });
   const [error, setError] = useState<string | null>(null);
 
   const create = useMutation({
@@ -305,7 +305,7 @@ function CreatePromoForm({ onDone }: { onDone: () => void }) {
         <div className="space-y-1">
           <Label>Applicable plans</Label>
           <div className="flex gap-4 pt-1">
-            {(["basic", "premium", "elite"] as const).map((p) => (
+            {(["basic", "premium"] as const).map((p) => (
               <label key={p} className="flex items-center gap-2 text-sm">
                 <Checkbox
                   checked={plans[p]}

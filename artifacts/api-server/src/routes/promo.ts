@@ -28,9 +28,8 @@ function rejectIfNotDemo(res: import("express").Response): boolean {
 }
 
 export const PLAN_PRICES_GBP: Record<string, number> = {
-  basic: 10,
-  premium: 20,
-  elite: 30,
+  basic: 0,
+  premium: 9.99,
 };
 
 export type ClaimPromoResult =
@@ -161,7 +160,7 @@ export async function claimPromoForUser(
 
 const ValidatePromoBody = z.object({
   code: z.string().min(1).max(50),
-  planId: z.enum(["basic", "premium", "elite"]),
+  planId: z.enum(["basic", "premium"]),
 });
 
 // POST /api/promo/validate — preview before checkout (does not claim a slot)
@@ -286,7 +285,7 @@ const CreatePromoBody = z.object({
   description: z.string().max(500).optional(),
   discountGbp: z.number().int().min(1).max(1000),
   maxRedemptions: z.number().int().min(1).max(100000),
-  applicablePlans: z.array(z.enum(["basic", "premium", "elite"])).min(1),
+  applicablePlans: z.array(z.enum(["basic", "premium"])).min(1),
   validForDays: z.number().int().min(1).max(365).default(30),
   isActive: z.boolean().optional().default(true),
 });

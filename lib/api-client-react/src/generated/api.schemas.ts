@@ -269,7 +269,6 @@ export type TraderProfilePlan =
 export const TraderProfilePlan = {
   basic: "basic",
   premium: "premium",
-  elite: "elite",
 } as const;
 
 export interface TraderProfile {
@@ -375,7 +374,6 @@ export type SubscriptionPlanId =
 export const SubscriptionPlanId = {
   basic: "basic",
   premium: "premium",
-  elite: "elite",
 } as const;
 
 export interface SubscriptionPlan {
@@ -398,7 +396,6 @@ export type CreateCheckoutRequestPlanId =
 export const CreateCheckoutRequestPlanId = {
   basic: "basic",
   premium: "premium",
-  elite: "elite",
 } as const;
 
 export interface CreateCheckoutRequest {
@@ -1087,8 +1084,7 @@ export type ListTradersPlan =
   (typeof ListTradersPlan)[keyof typeof ListTradersPlan];
 
 export const ListTradersPlan = {
-  premium_plus: "premium_plus",
-  elite: "elite",
+  premium: "premium",
 } as const;
 
 export type ListTradersSort =
@@ -1116,7 +1112,6 @@ export type DemoActivateSubscriptionPlanId =
 export const DemoActivateSubscriptionPlanId = {
   basic: "basic",
   premium: "premium",
-  elite: "elite",
 } as const;
 
 export type AdminListReviewsParams = {

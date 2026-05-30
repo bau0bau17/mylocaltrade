@@ -10,6 +10,5 @@ export type ListTradersPlan =
   (typeof ListTradersPlan)[keyof typeof ListTradersPlan];
 
 export const ListTradersPlan = {
-  premium_plus: "premium_plus",
-  elite: "elite",
+  premium: "premium",
 } as const;

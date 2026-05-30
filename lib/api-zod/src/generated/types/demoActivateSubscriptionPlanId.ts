@@ -12,5 +12,4 @@ export type DemoActivateSubscriptionPlanId =
 export const DemoActivateSubscriptionPlanId = {
   basic: "basic",
   premium: "premium",
-  elite: "elite",
 } as const;

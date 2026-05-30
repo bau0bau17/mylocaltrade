@@ -307,7 +307,7 @@ export const ListTradersQueryParams = zod.object({
     .optional()
     .describe("Only return fully verified traders."),
   plan: zod
-    .enum(["premium_plus", "elite"])
+    .enum(["premium"])
     .optional()
     .describe("Filter by subscription plan tier."),
   specialism: zod.coerce
@@ -365,7 +365,7 @@ export const ListTradersResponse = zod.object({
       authorisedRepresentative: zod.boolean().nullish(),
       businessEmailDomain: zod.string().nullish(),
       vatNumber: zod.string().nullish(),
-      plan: zod.enum(["basic", "premium", "elite"]).nullish(),
+      plan: zod.enum(["basic", "premium"]).nullish(),
       isFeatured: zod.boolean(),
       isActive: zod.boolean(),
       isVerified: zod.boolean(),
@@ -444,7 +444,7 @@ export const GetFeaturedTradersResponse = zod.object({
       authorisedRepresentative: zod.boolean().nullish(),
       businessEmailDomain: zod.string().nullish(),
       vatNumber: zod.string().nullish(),
-      plan: zod.enum(["basic", "premium", "elite"]).nullish(),
+      plan: zod.enum(["basic", "premium"]).nullish(),
       isFeatured: zod.boolean(),
       isActive: zod.boolean(),
       isVerified: zod.boolean(),
@@ -519,7 +519,7 @@ export const GetTraderResponse = zod.object({
   authorisedRepresentative: zod.boolean().nullish(),
   businessEmailDomain: zod.string().nullish(),
   vatNumber: zod.string().nullish(),
-  plan: zod.enum(["basic", "premium", "elite"]).nullish(),
+  plan: zod.enum(["basic", "premium"]).nullish(),
   isFeatured: zod.boolean(),
   isActive: zod.boolean(),
   isVerified: zod.boolean(),
@@ -585,7 +585,7 @@ export const GetTraderProfileResponse = zod.object({
   authorisedRepresentative: zod.boolean().nullish(),
   businessEmailDomain: zod.string().nullish(),
   vatNumber: zod.string().nullish(),
-  plan: zod.enum(["basic", "premium", "elite"]).nullish(),
+  plan: zod.enum(["basic", "premium"]).nullish(),
   isFeatured: zod.boolean(),
   isActive: zod.boolean(),
   isVerified: zod.boolean(),
@@ -689,7 +689,7 @@ export const UpdateTraderProfileResponse = zod.object({
   authorisedRepresentative: zod.boolean().nullish(),
   businessEmailDomain: zod.string().nullish(),
   vatNumber: zod.string().nullish(),
-  plan: zod.enum(["basic", "premium", "elite"]).nullish(),
+  plan: zod.enum(["basic", "premium"]).nullish(),
   isFeatured: zod.boolean(),
   isActive: zod.boolean(),
   isVerified: zod.boolean(),
@@ -728,7 +728,7 @@ export const RevalidateTraderProfileResponse = zod.object({
 export const GetSubscriptionPlansResponse = zod.object({
   plans: zod.array(
     zod.object({
-      id: zod.enum(["basic", "premium", "elite"]),
+      id: zod.enum(["basic", "premium"]),
       name: zod.string(),
       price: zod.number(),
       currency: zod.string(),
@@ -743,7 +743,7 @@ export const GetSubscriptionPlansResponse = zod.object({
  * @summary Create Stripe checkout session
  */
 export const CreateCheckoutSessionBody = zod.object({
-  planId: zod.enum(["basic", "premium", "elite"]),
+  planId: zod.enum(["basic", "premium"]),
 });
 
 export const CreateCheckoutSessionResponse = zod
@@ -781,7 +781,7 @@ the `active` state immediately.
  */
 export const DemoActivateSubscriptionQueryParams = zod.object({
   sessionId: zod.coerce.string(),
-  planId: zod.enum(["basic", "premium", "elite"]),
+  planId: zod.enum(["basic", "premium"]),
 });
 
 export const DemoActivateSubscriptionResponse = zod.object({
@@ -1222,7 +1222,7 @@ export const GetSavedTradersResponse = zod.object({
       authorisedRepresentative: zod.boolean().nullish(),
       businessEmailDomain: zod.string().nullish(),
       vatNumber: zod.string().nullish(),
-      plan: zod.enum(["basic", "premium", "elite"]).nullish(),
+      plan: zod.enum(["basic", "premium"]).nullish(),
       isFeatured: zod.boolean(),
       isActive: zod.boolean(),
       isVerified: zod.boolean(),

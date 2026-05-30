@@ -55,7 +55,7 @@ export default function TermsScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>4. Trader Subscriptions</Text>
         <Text style={styles.paragraph}>
-          Tradespeople may subscribe to paid features (Basic, Premium or Elite). Subscriptions are billed monthly through our payment provider (Stripe) and renew automatically until cancelled. You can cancel your subscription at any time from inside the app; access continues until the end of the current billing period. Prices are subject to change with 30 days' notice. Your right to cancel is set out in our Refund &amp; Cancellation Policy.
+          Basic listings are free. Tradespeople may upgrade to Premium for additional features, billed either monthly or yearly through the Apple App Store, and renewing automatically until cancelled. You can cancel your subscription at any time from inside the app; access continues until the end of the current billing period. Prices are subject to change with 30 days' notice. Your right to cancel is set out in our Refund &amp; Cancellation Policy.
         </Text>
       </View>
 

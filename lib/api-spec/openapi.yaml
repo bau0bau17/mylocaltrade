@@ -359,7 +359,7 @@ paths:
           description: Filter by subscription plan tier.
           schema:
             type: string
-            enum: [premium_plus, elite]
+            enum: [premium]
         - name: specialism
           in: query
           description: Filter to traders whose main category or additional services match a known specialism keyword (e.g. "solar", "heat pump", "ev charger").
@@ -596,7 +596,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [basic, premium, elite]
+            enum: [basic, premium]
       responses:
         "200":
           description: Demo subscription activated
@@ -2195,7 +2195,7 @@ components:
           nullable: true
         plan:
           type: string
-          enum: [basic, premium, elite]
+          enum: [basic, premium]
           nullable: true
         isFeatured:
           type: boolean
@@ -2357,7 +2357,7 @@ components:
       properties:
         id:
           type: string
-          enum: [basic, premium, elite]
+          enum: [basic, premium]
         name:
           type: string
         price:
@@ -2396,7 +2396,7 @@ components:
       properties:
         planId:
           type: string
-          enum: [basic, premium, elite]
+          enum: [basic, premium]
       required:
         - planId
 
