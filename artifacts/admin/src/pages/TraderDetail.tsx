@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge, DocumentStatusBadge } from "@/components/StatusBadge";
+import { AiVerdictBadge, RegisterOverallBadge, CompanyStatusBadge, VatStatusBadge } from "@/components/CheckBadges";
 import {
   Dialog,
   DialogContent,
@@ -1074,66 +1075,6 @@ function BackLink() {
       <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back to traders
     </Link>
   );
-}
-
-const GREEN = "bg-emerald-100 text-emerald-800 border-transparent";
-const AMBER = "bg-amber-100 text-amber-900 border-transparent";
-const RED = "bg-red-100 text-red-800 border-transparent";
-const GREY = "bg-muted text-muted-foreground border-transparent";
-
-function CheckBadge({ label, className, testId }: { label: string; className: string; testId?: string }) {
-  return (
-    <Badge variant="outline" className={`${className} font-medium`} data-testid={testId}>
-      {label}
-    </Badge>
-  );
-}
-
-function AiVerdictBadge({ verdict }: { verdict: "MATCH" | "PARTIAL_MATCH" | "NO_MATCH" | "NOT_FOUND" | "ERROR" }) {
-  const map: Record<string, { label: string; className: string }> = {
-    MATCH: { label: "AI: Match", className: GREEN },
-    PARTIAL_MATCH: { label: "AI: Partial match", className: AMBER },
-    NO_MATCH: { label: "AI: No match", className: RED },
-    NOT_FOUND: { label: "AI: Not found on CH", className: GREY },
-    ERROR: { label: "AI: Check failed", className: GREY },
-  };
-  const v = map[verdict] ?? map.ERROR;
-  return <CheckBadge label={v.label} className={v.className} testId="badge-ai-verdict" />;
-}
-
-function RegisterOverallBadge({ overall }: { overall: "PASS" | "REVIEW" | "FAIL" | "NOT_PROVIDED" | "ERROR" }) {
-  const map: Record<string, { label: string; className: string }> = {
-    PASS: { label: "Registers: Pass", className: GREEN },
-    REVIEW: { label: "Registers: Review", className: AMBER },
-    FAIL: { label: "Registers: Fail", className: RED },
-    NOT_PROVIDED: { label: "Registers: Nothing to check", className: GREY },
-    ERROR: { label: "Registers: Check failed", className: GREY },
-  };
-  const v = map[overall] ?? map.ERROR;
-  return <CheckBadge label={v.label} className={v.className} testId="badge-register-overall" />;
-}
-
-const REGISTER_STATUS_MAP: Record<string, { label: string; className: string }> = {
-  MATCH: { label: "Match", className: GREEN },
-  NAME_MISMATCH: { label: "Name mismatch", className: AMBER },
-  INACTIVE: { label: "Inactive", className: RED },
-  NOT_FOUND: { label: "Not found", className: RED },
-  INVALID: { label: "Invalid format", className: RED },
-  NOT_PROVIDED: { label: "Not provided", className: GREY },
-  ERROR: { label: "Check failed", className: GREY },
-};
-
-type CompanyStatus = NonNullable<TraderDetailResponse["profile"]["registerCheckData"]>["company"]["status"];
-type VatStatus = NonNullable<TraderDetailResponse["profile"]["registerCheckData"]>["vat"]["status"];
-
-function CompanyStatusBadge({ status }: { status: CompanyStatus }) {
-  const v = REGISTER_STATUS_MAP[status] ?? REGISTER_STATUS_MAP.ERROR;
-  return <CheckBadge label={v.label} className={v.className} />;
-}
-
-function VatStatusBadge({ status }: { status: VatStatus }) {
-  const v = REGISTER_STATUS_MAP[status] ?? REGISTER_STATUS_MAP.ERROR;
-  return <CheckBadge label={v.label} className={v.className} />;
 }
 
 function CompareRow({ label, a, b }: { label: string; a: string; b: string }) {

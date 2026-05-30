@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/StatusBadge";
+import { AiVerdictBadge, RegisterOverallBadge } from "@/components/CheckBadges";
 import { formatDate } from "@/lib/format";
 import { Search, ArrowRight } from "lucide-react";
 
@@ -134,6 +135,7 @@ export default function Traders() {
                     <th className="text-left px-4 py-2.5 font-medium">Contact</th>
                     <th className="text-left px-4 py-2.5 font-medium">Location</th>
                     <th className="text-left px-4 py-2.5 font-medium">Status</th>
+                    <th className="text-left px-4 py-2.5 font-medium">Checks</th>
                     <th className="text-left px-4 py-2.5 font-medium">Submitted</th>
                     <th className="text-right px-4 py-2.5 font-medium">Action</th>
                   </tr>
@@ -153,6 +155,20 @@ export default function Traders() {
                         {t.town ? `${t.town}${t.postcode ? `, ${t.postcode}` : ""}` : "—"}
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={t.verificationStatus} /></td>
+                      <td className="px-4 py-3" data-testid={`checks-trader-${t.userId}`}>
+                        {t.registerCheckStatus || t.aiVerificationStatus ? (
+                          <div className="flex flex-col gap-1 items-start">
+                            {t.registerCheckStatus ? (
+                              <RegisterOverallBadge overall={t.registerCheckStatus} />
+                            ) : null}
+                            {t.aiVerificationStatus ? (
+                              <AiVerdictBadge verdict={t.aiVerificationStatus} />
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Not run</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {formatDate(t.submittedForReviewAt)}
                       </td>
