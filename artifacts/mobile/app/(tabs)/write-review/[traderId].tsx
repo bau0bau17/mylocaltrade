@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -25,7 +25,7 @@ export default function WriteReviewScreen() {
   });
   const eligibleForThisTrader = (eligibleData?.enquiries ?? []).filter((e) => e.traderId === traderIdNum);
 
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(0);
   const [text, setText] = useState('');
   const [selectedEnquiryId, setSelectedEnquiryId] = useState<number | null>(
     initialEnquiryId ?? eligibleForThisTrader[0]?.enquiryId ?? null,
@@ -42,6 +42,10 @@ export default function WriteReviewScreen() {
   const submit = async () => {
     if (!selectedEnquiryId) {
       Alert.alert('No eligible job', 'You can only review a trader after they respond to one of your enquiries.');
+      return;
+    }
+    if (rating < 1) {
+      Alert.alert('Add a rating', 'Tap a star to rate this trader before submitting.');
       return;
     }
     if (text.trim().length < 10) {
@@ -135,11 +139,25 @@ export default function WriteReviewScreen() {
       <View style={styles.section}>
         <Text style={styles.label}>Rating</Text>
         <View style={styles.starsRow}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Pressable key={n} onPress={() => setRating(n)} hitSlop={6}>
-              <Feather name="star" size={36} color={n <= rating ? Colors.light.featured : Colors.light.border} />
-            </Pressable>
-          ))}
+          {[1, 2, 3, 4, 5].map((n) => {
+            const filled = n <= rating;
+            return (
+              <Pressable
+                key={n}
+                onPress={() => setRating(n)}
+                hitSlop={10}
+                style={styles.starBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`${n} star${n > 1 ? 's' : ''}`}
+              >
+                <Ionicons
+                  name={filled ? 'star' : 'star-outline'}
+                  size={40}
+                  color={filled ? Colors.light.featured : Colors.light.textMuted}
+                />
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
@@ -184,6 +202,7 @@ const styles = StyleSheet.create({
   enquiryService: { fontSize: 13, fontWeight: '600', color: Colors.light.text },
   enquiryDate: { fontSize: 11, color: Colors.light.textMuted, marginTop: 2 },
   starsRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: 8 },
+  starBtn: { padding: 6 },
   textArea: { backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 12, padding: 12, color: Colors.light.text, fontSize: 14, minHeight: 130, textAlignVertical: 'top' },
   charCount: { fontSize: 11, color: Colors.light.textMuted, textAlign: 'right', marginTop: 4 },
   submitBtn: { backgroundColor: Colors.light.primary, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
