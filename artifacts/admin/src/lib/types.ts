@@ -61,9 +61,12 @@ export interface TraderListRow {
   submittedForReviewAt: string | null;
   verifiedAt: string | null;
   rejectedAt: string | null;
-  aiVerificationStatus: "MATCH" | "PARTIAL_MATCH" | "NO_MATCH" | "NOT_FOUND" | "ERROR" | null;
-  registerCheckStatus: "PASS" | "REVIEW" | "FAIL" | "NOT_PROVIDED" | "ERROR" | null;
+  registerCheckStatus: RegisterCheckStatus | null;
+  aiVerificationStatus: AiVerificationStatus | null;
 }
+
+export type RegisterCheckStatus = "PASS" | "REVIEW" | "FAIL" | "NOT_PROVIDED" | "ERROR";
+export type AiVerificationStatus = "MATCH" | "PARTIAL_MATCH" | "NO_MATCH" | "NOT_FOUND" | "ERROR";
 
 export interface StatusCount {
   status: TraderStatus;

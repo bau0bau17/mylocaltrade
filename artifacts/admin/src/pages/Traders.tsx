@@ -2,7 +2,12 @@ import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { TraderListResponse, TraderStatus } from "@/lib/types";
+import type {
+  TraderListResponse,
+  TraderStatus,
+  RegisterCheckStatus,
+  AiVerificationStatus,
+} from "@/lib/types";
 import { REVIEW_FILTER_STATUSES, STATUS_LABELS } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,6 +46,24 @@ function rowRisk(t: TraderListResponse["traders"][number]): "high" | "medium" | 
   return null;
 }
 
+const REGISTER_FILTER_OPTIONS: { value: RegisterCheckStatus | "NONE"; label: string }[] = [
+  { value: "PASS", label: "Pass" },
+  { value: "REVIEW", label: "Review" },
+  { value: "FAIL", label: "Fail" },
+  { value: "NOT_PROVIDED", label: "Nothing to check" },
+  { value: "ERROR", label: "Check failed" },
+  { value: "NONE", label: "Not yet checked" },
+];
+
+const AI_FILTER_OPTIONS: { value: AiVerificationStatus | "NONE"; label: string }[] = [
+  { value: "MATCH", label: "Match" },
+  { value: "PARTIAL_MATCH", label: "Partial match" },
+  { value: "NO_MATCH", label: "No match" },
+  { value: "NOT_FOUND", label: "Not found on CH" },
+  { value: "ERROR", label: "Check failed" },
+  { value: "NONE", label: "Not yet checked" },
+];
+
 function useQueryParams() {
   const [location] = useLocation();
   return useMemo(() => {
@@ -57,6 +80,12 @@ export default function Traders() {
   const [status, setStatus] = useState<TraderStatus | "ALL">(initialStatus ?? "UNDER_REVIEW");
   const [q, setQ] = useState(params.get("q") ?? "");
   const [debouncedQ, setDebouncedQ] = useState(q);
+  const [registerCheck, setRegisterCheck] = useState<RegisterCheckStatus | "NONE" | "ALL">(
+    (params.get("register") as RegisterCheckStatus | "NONE" | null) ?? "ALL",
+  );
+  const [aiCheck, setAiCheck] = useState<AiVerificationStatus | "NONE" | "ALL">(
+    (params.get("ai") as AiVerificationStatus | "NONE" | null) ?? "ALL",
+  );
 
   useEffect(() => {
     const id = setTimeout(() => setDebouncedQ(q), 300);
@@ -67,9 +96,11 @@ export default function Traders() {
     const sp = new URLSearchParams();
     if (status && status !== "ALL") sp.set("status", status);
     if (debouncedQ) sp.set("q", debouncedQ);
+    if (registerCheck !== "ALL") sp.set("register", registerCheck);
+    if (aiCheck !== "ALL") sp.set("ai", aiCheck);
     const qs = sp.toString();
     navigate(`/traders${qs ? `?${qs}` : ""}`, { replace: true });
-  }, [status, debouncedQ, navigate]);
+  }, [status, debouncedQ, registerCheck, aiCheck, navigate]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "traders", status, debouncedQ],
@@ -84,6 +115,21 @@ export default function Traders() {
   });
 
   const counts = data?.counts ?? [];
+
+  const traders = useMemo(() => {
+    let all = data?.traders ?? [];
+    if (registerCheck === "NONE") {
+      all = all.filter((t) => t.registerCheckStatus == null);
+    } else if (registerCheck !== "ALL") {
+      all = all.filter((t) => t.registerCheckStatus === registerCheck);
+    }
+    if (aiCheck === "NONE") {
+      all = all.filter((t) => t.aiVerificationStatus == null);
+    } else if (aiCheck !== "ALL") {
+      all = all.filter((t) => t.aiVerificationStatus === aiCheck);
+    }
+    return all;
+  }, [data?.traders, registerCheck, aiCheck]);
 
   return (
     <div className="space-y-4">
@@ -125,6 +171,38 @@ export default function Traders() {
               })}
             </SelectContent>
           </Select>
+          <Select
+            value={registerCheck}
+            onValueChange={(v) => setRegisterCheck(v as RegisterCheckStatus | "NONE" | "ALL")}
+          >
+            <SelectTrigger className="w-full sm:w-56" data-testid="select-register-check">
+              <SelectValue placeholder="Register check" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All register checks</SelectItem>
+              {REGISTER_FILTER_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={aiCheck}
+            onValueChange={(v) => setAiCheck(v as AiVerificationStatus | "NONE" | "ALL")}
+          >
+            <SelectTrigger className="w-full sm:w-56" data-testid="select-ai-check">
+              <SelectValue placeholder="AI check" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All AI checks</SelectItem>
+              {AI_FILTER_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
@@ -142,7 +220,7 @@ export default function Traders() {
                 <Skeleton key={i} className="h-12" />
               ))}
             </div>
-          ) : data?.traders.length === 0 ? (
+          ) : traders.length === 0 ? (
             <div className="p-10 text-center text-muted-foreground text-sm">
               No traders match the current filters.
             </div>
@@ -161,7 +239,7 @@ export default function Traders() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {data?.traders.map((t) => {
+                  {traders.map((t) => {
                     const risk = rowRisk(t);
                     const accent =
                       risk === "high"
