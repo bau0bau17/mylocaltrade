@@ -19,6 +19,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import Traders from "./Traders";
+import { ApiError } from "@/lib/api";
 
 function makeRow(overrides: Partial<TraderListRow> = {}): TraderListRow {
   return {
@@ -287,5 +288,39 @@ describe("Traders list — pagination", () => {
     expect(screen.getAllByTestId("row-trader-1")).toHaveLength(1);
     expect(screen.getAllByTestId("row-trader-51")).toHaveLength(1);
     expect(screen.getAllByTestId("row-trader-70")).toHaveLength(1);
+  });
+});
+
+describe("Traders list — loading, empty, and error states", () => {
+  beforeEach(() => {
+    apiMock.mockReset();
+  });
+
+  it("renders skeleton placeholders while the first page is still loading", () => {
+    apiMock.mockReturnValue(new Promise(() => {}));
+    const { container } = renderList();
+
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(6);
+    expect(screen.queryByText("No traders match the current filters.")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("text-trader-count")).not.toBeInTheDocument();
+  });
+
+  it("renders the empty-state message when the API returns no traders", async () => {
+    apiMock.mockResolvedValue(buildResponse([]));
+    renderList();
+
+    expect(
+      await screen.findByText("No traders match the current filters."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("renders the error alert with the message when the request fails", async () => {
+    apiMock.mockRejectedValue(new ApiError("Failed to load traders", 500));
+    renderList();
+
+    const alert = await screen.findByText("Failed to load traders");
+    expect(alert).toBeInTheDocument();
+    expect(alert.closest('[role="alert"]')).not.toBeNull();
   });
 });
