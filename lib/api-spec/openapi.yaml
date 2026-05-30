@@ -1422,6 +1422,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/UpdateTraderStatusResponse"
 
+  /conversations/{id}/accept:
+    post:
+      operationId: acceptConversationOffer
+      tags: [conversations]
+      summary: Customer accepts the trader's offer (hires them)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
+  /conversations/{id}/complete:
+    post:
+      operationId: completeConversationJob
+      tags: [conversations]
+      summary: Customer marks the job as complete (unlocks leaving a review)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+
   /conversations/{id}/mute:
     patch:
       operationId: muteConversation
@@ -2674,6 +2716,20 @@ components:
         closedByRole:
           type: string
           nullable: true
+        customerAcceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the customer accepted the trader's offer (hired them). Null until accepted.
+        customerCompletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the customer marked the job complete. Unlocks leaving a review. Null until complete.
+        hasReview:
+          type: boolean
+          nullable: true
+          description: Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses.
         createdAt:
           type: string
           format: date-time

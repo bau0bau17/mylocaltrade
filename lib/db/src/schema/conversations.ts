@@ -30,6 +30,11 @@ export const conversationsTable = pgTable(
     traderMutedAt: timestamp("trader_muted_at"),
     traderMutedUntil: timestamp("trader_muted_until"),
     traderViewedAt: timestamp("trader_viewed_at"),
+    // Customer-driven job lifecycle: when the customer accepts the trader's
+    // offer (hires them) and when the customer marks the job complete. Review
+    // eligibility is gated on customerCompletedAt being set.
+    customerAcceptedAt: timestamp("customer_accepted_at"),
+    customerCompletedAt: timestamp("customer_completed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

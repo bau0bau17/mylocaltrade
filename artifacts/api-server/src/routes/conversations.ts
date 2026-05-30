@@ -8,6 +8,7 @@ import {
   usersTable,
   traderProfilesTable,
   enquiriesTable,
+  reviewsTable,
 } from "@workspace/db/schema";
 import { and, eq, desc, sql, inArray } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
@@ -64,6 +65,7 @@ function serializeConversation(
     traderVerified?: boolean;
     unreadCount: number;
     viewerRole: "customer" | "trader";
+    hasReview?: boolean | null;
   },
 ) {
   const mutedAt =
@@ -92,6 +94,9 @@ function serializeConversation(
     lastMessagePreview: c.lastMessagePreview,
     closedAt: c.closedAt?.toISOString() ?? null,
     closedByRole: c.closedByRole,
+    customerAcceptedAt: c.customerAcceptedAt?.toISOString() ?? null,
+    customerCompletedAt: c.customerCompletedAt?.toISOString() ?? null,
+    hasReview: extras.hasReview ?? null,
     createdAt: c.createdAt.toISOString(),
   };
 }
@@ -121,6 +126,29 @@ async function getActorContext(userId: number, userRole: string) {
     return { role: "trader" as const, traderProfileId: profile?.id ?? null };
   }
   return { role: userRole as "customer" | "admin", traderProfileId: null };
+}
+
+// Insert a system milestone message (e.g. offer accepted / job complete) and
+// surface it to the trader by bumping their unread counter + last-message
+// preview, so customer-driven lifecycle actions notify the trader.
+async function postSystemMessage(conversationId: number, body: string) {
+  const now = new Date();
+  await db.insert(messagesTable).values({
+    conversationId,
+    senderUserId: null,
+    senderRole: "system",
+    body,
+    systemMessage: true,
+  });
+  await db
+    .update(conversationsTable)
+    .set({
+      lastMessageAt: now,
+      lastMessagePreview: body.slice(0, 200),
+      traderUnreadCount: sql`${conversationsTable.traderUnreadCount} + 1`,
+      updatedAt: now,
+    })
+    .where(eq(conversationsTable.id, conversationId));
 }
 
 // GET /api/conversations/unread-count — total unread across my conversations
@@ -297,6 +325,18 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         .where(eq(conversationsTable.id, id));
     }
 
+    // Whether the customer has already left a review for this job, so the
+    // thread can show "Leave a review" vs "Review submitted".
+    let hasReview = false;
+    if (row.conv.enquiryId) {
+      const [rev] = await db
+        .select({ id: reviewsTable.id })
+        .from(reviewsTable)
+        .where(eq(reviewsTable.enquiryId, row.conv.enquiryId))
+        .limit(1);
+      hasReview = !!rev;
+    }
+
     res.json({
       conversation: serializeConversation(row.conv, {
         customerName: row.customerName,
@@ -305,6 +345,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         traderVerified: row.traderVerificationStatus === "VERIFIED",
         unreadCount: 0,
         viewerRole: isCustomer ? "customer" : "trader",
+        hasReview,
       }),
       messages: messages.map(serializeMessage),
     });
@@ -586,6 +627,111 @@ router.patch("/conversations/:id/trader-status", authMiddleware, async (req, res
     }
     req.log.error({ err: error }, "Update trader status failed");
     res.status(500).json({ error: "Failed to update trader status" });
+  }
+});
+
+// POST /api/conversations/:id/accept — customer accepts the trader's offer
+router.post("/conversations/:id/accept", authMiddleware, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid conversation id" });
+      return;
+    }
+    const { userId, userRole } = req as AuthenticatedRequest;
+    const actor = await getActorContext(userId, userRole);
+
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, id))
+      .limit(1);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    if (!(actor.role === "customer" && conv.customerId === userId)) {
+      res.status(403).json({ error: "Only the customer can accept the offer" });
+      return;
+    }
+    if (conv.status === "CLOSED" || conv.status === "BLOCKED") {
+      res.status(409).json({ error: "This conversation is closed." });
+      return;
+    }
+    if (conv.customerCompletedAt) {
+      res.status(409).json({ error: "This job has already been completed." });
+      return;
+    }
+
+    if (!conv.customerAcceptedAt) {
+      const now = new Date();
+      await db
+        .update(conversationsTable)
+        .set({ customerAcceptedAt: now, updatedAt: now })
+        .where(eq(conversationsTable.id, id));
+      await postSystemMessage(id, "The customer accepted the offer and hired the trader.");
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    req.log.error({ err: error }, "Accept offer failed");
+    res.status(500).json({ error: "Failed to accept offer" });
+  }
+});
+
+// POST /api/conversations/:id/complete — customer marks the job complete
+router.post("/conversations/:id/complete", authMiddleware, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid conversation id" });
+      return;
+    }
+    const { userId, userRole } = req as AuthenticatedRequest;
+    const actor = await getActorContext(userId, userRole);
+
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, id))
+      .limit(1);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    if (!(actor.role === "customer" && conv.customerId === userId)) {
+      res.status(403).json({ error: "Only the customer can complete the job" });
+      return;
+    }
+    if (conv.status === "CLOSED" || conv.status === "BLOCKED") {
+      res.status(409).json({ error: "This conversation is closed." });
+      return;
+    }
+    if (!conv.customerAcceptedAt) {
+      res.status(409).json({ error: "Accept the offer before marking the job complete." });
+      return;
+    }
+
+    if (!conv.customerCompletedAt) {
+      const now = new Date();
+      await db
+        .update(conversationsTable)
+        .set({ customerCompletedAt: now, traderStatus: "COMPLETED", updatedAt: now })
+        .where(eq(conversationsTable.id, id));
+      // Keep the linked enquiry past "pending" so review eligibility holds.
+      if (conv.enquiryId) {
+        await db
+          .update(enquiriesTable)
+          .set({ status: "responded" })
+          .where(and(eq(enquiriesTable.id, conv.enquiryId), eq(enquiriesTable.status, "pending")));
+      }
+      await postSystemMessage(id, "The customer marked the job as complete. You can now be reviewed.");
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    req.log.error({ err: error }, "Complete job failed");
+    res.status(500).json({ error: "Failed to complete job" });
   }
 });
 

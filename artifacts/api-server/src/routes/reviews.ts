@@ -5,6 +5,7 @@ import {
   enquiriesTable,
   traderProfilesTable,
   usersTable,
+  conversationsTable,
 } from "@workspace/db/schema";
 import { and, eq, ne, sql, desc, isNotNull } from "drizzle-orm";
 import { z } from "zod";
@@ -95,21 +96,29 @@ router.post("/reviews", authMiddleware, customerOnly, async (req, res) => {
     const { userId } = req as AuthenticatedRequest;
     const body = CreateReviewBody.parse(req.body);
 
-    // Enquiry must exist, belong to this customer, target this trader,
-    // and be past the initial "pending" stage (i.e. trader has engaged).
+    // Enquiry must exist, belong to this customer, and target this trader.
     const [enq] = await db
       .select()
       .from(enquiriesTable)
       .where(eq(enquiriesTable.id, body.enquiryId))
       .limit(1);
-    if (
-      !enq ||
-      enq.customerId !== userId ||
-      enq.traderId !== body.traderId ||
-      enq.status === "pending"
-    ) {
+    if (!enq || enq.customerId !== userId || enq.traderId !== body.traderId) {
       res.status(403).json({
-        error: "You can only review a trader after they have responded to your enquiry.",
+        error: "You can only review a trader for one of your own jobs.",
+      });
+      return;
+    }
+
+    // Review is gated on the customer having marked the job complete in the
+    // linked conversation (customer-driven lifecycle: accept offer -> complete).
+    const [conv] = await db
+      .select({ customerCompletedAt: conversationsTable.customerCompletedAt })
+      .from(conversationsTable)
+      .where(eq(conversationsTable.enquiryId, body.enquiryId))
+      .limit(1);
+    if (!conv || !conv.customerCompletedAt) {
+      res.status(403).json({
+        error: "You can leave a review once you've marked the job as complete.",
       });
       return;
     }
@@ -180,11 +189,12 @@ router.get("/reviews/eligible", authMiddleware, customerOnly, async (req, res) =
       })
       .from(enquiriesTable)
       .innerJoin(traderProfilesTable, eq(enquiriesTable.traderId, traderProfilesTable.id))
+      .innerJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
       .leftJoin(reviewsTable, eq(reviewsTable.enquiryId, enquiriesTable.id))
       .where(
         and(
           eq(enquiriesTable.customerId, userId),
-          ne(enquiriesTable.status, "pending"),
+          isNotNull(conversationsTable.customerCompletedAt),
         ),
       )
       .orderBy(desc(enquiriesTable.createdAt));

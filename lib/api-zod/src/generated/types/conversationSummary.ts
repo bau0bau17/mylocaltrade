@@ -30,5 +30,11 @@ conversation is unmuted or muted indefinitely.
   lastMessagePreview?: string | null;
   closedAt?: Date | null;
   closedByRole?: string | null;
+  /** When the customer accepted the trader's offer (hired them). Null until accepted. */
+  customerAcceptedAt?: Date | null;
+  /** When the customer marked the job complete. Unlocks leaving a review. Null until complete. */
+  customerCompletedAt?: Date | null;
+  /** Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses. */
+  hasReview?: boolean | null;
   createdAt: Date;
 }
