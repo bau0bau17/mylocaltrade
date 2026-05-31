@@ -1,1 +1,2 @@
-- [GestureHandlerRootView flex](gesturehandlerrootview-release-touches.md) — native release taps/nav die if root GestureHandlerRootView lacks style flex:1; works in dev, fails in EAS build.
+- [expo-router NativeTabs hidden triggers](expo-router-native-tabs-hidden-triggers.md) — native iOS build opens but inner screens (login/legal/pricing) won't navigate; unstable NativeTabs can't router.push to hidden triggers; force classic Tabs.
+- [GestureHandlerRootView flex](gesturehandlerrootview-release-touches.md) — root GestureHandlerRootView needs style flex:1 (best practice); note plain RN Pressable does NOT route through RNGH so this alone rarely kills all taps.
