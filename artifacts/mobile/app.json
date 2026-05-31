@@ -54,6 +54,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fe424bdb-6c5d-4d9e-a687-0704074b2f04"
+      }
+    },
+    "owner": "luciansabau"
   }
 }
