@@ -212,14 +212,13 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
-  // NativeTabs (expo-router/unstable-native-tabs) requires custom native code
-  // and does not work reliably inside Expo Go — the screens render but become
-  // unresponsive (taps don't fire, navigation to hidden triggers freezes).
-  // Force the classic JS-based Tabs layout whenever we're running in Expo Go.
-  const isExpoGo =
-    Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-  if (!isExpoGo && isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
+  // NativeTabs (expo-router/unstable-native-tabs) is experimental: it renders
+  // the four primary tabs natively, but navigation to the hidden inner-route
+  // triggers (login, legal-support, pricing, contact-support, the trader
+  // dashboard, etc.) silently fails — taps don't fire and the screens never
+  // open. This reproduces both in Expo Go AND in native release builds on
+  // iOS 26 (where liquid glass is available), which is where it bit users.
+  // Until expo-router native tabs supports hidden-trigger pushes reliably,
+  // always use the classic JS-based Tabs layout (BlurView tab bar on iOS).
   return <ClassicTabLayout />;
 }
