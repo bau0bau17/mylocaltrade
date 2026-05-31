@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Pressable, ScrollView } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useGetTraderReviews, type Review } from '@workspace/api-client-react';
 
@@ -24,9 +24,9 @@ function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
     <View style={{ flexDirection: 'row', gap: 2 }}>
       {[1, 2, 3, 4, 5].map((n) => (
-        <Feather
+        <FontAwesome
           key={n}
-          name="star"
+          name={n <= rating ? 'star' : 'star-o'}
           size={size}
           color={n <= rating ? Colors.light.featured : Colors.light.border}
         />
