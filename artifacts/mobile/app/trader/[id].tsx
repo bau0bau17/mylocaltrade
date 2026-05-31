@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, Alert, Image, Modal, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
@@ -166,7 +166,7 @@ export default function TraderProfileScreen() {
             )}
             {isTopRated(trader.rating, trader.reviewCount) && (
               <View style={[styles.planBadge, { backgroundColor: 'rgba(245, 158, 11, 0.14)' }]}>
-                <Feather name="star" size={11} color={Colors.light.featured} />
+                <FontAwesome name="star" size={11} color={Colors.light.featured} />
                 <Text style={[styles.planTextColored, { color: '#B45309' }]}>Top rated</Text>
               </View>
             )}
@@ -204,7 +204,7 @@ export default function TraderProfileScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <View style={[styles.statIconWrap, { backgroundColor: Colors.light.featuredMuted }]}>
-                <Feather name="star" size={16} color={Colors.light.featured} />
+                <FontAwesome name="star" size={16} color={Colors.light.featured} />
               </View>
               <Text style={styles.statValue}>
                 {typeof trader.rating === 'number' && Number.isFinite(trader.rating)

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import type { TraderProfile } from '@workspace/api-client-react';
@@ -125,7 +125,7 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
             )}
             {topRated && (
               <View style={styles.topRatedBadge}>
-                <Feather name="star" size={10} color={Colors.light.featured} />
+                <FontAwesome name="star" size={10} color={Colors.light.featured} />
                 <Text style={styles.topRatedText}>Top rated</Text>
               </View>
             )}
@@ -159,7 +159,7 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
           <Text style={styles.footerText}>{trader.town}</Text>
         </View>
         <View style={styles.footerItem}>
-          <Feather name="star" size={12} color={Colors.light.featured} />
+          <FontAwesome name="star" size={12} color={Colors.light.featured} />
           <Text style={styles.footerText}>
             {hasReviews ? `${ratingLabel} (${trader.reviewCount})` : 'New'}
           </Text>
