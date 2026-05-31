@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
@@ -423,9 +423,9 @@ function ReviewsSummaryCard({
           </Text>
           <View style={summaryStyles.starsRow}>
             {[1, 2, 3, 4, 5].map((n) => (
-              <Feather
+              <FontAwesome
                 key={n}
-                name="star"
+                name={n <= Math.round(averageRating ?? 0) ? 'star' : 'star-o'}
                 size={14}
                 color={n <= Math.round(averageRating ?? 0) ? Colors.light.featured : Colors.light.border}
               />
