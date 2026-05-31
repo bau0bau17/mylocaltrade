@@ -1,0 +1,49 @@
+Thanks — the database/API diagnosis makes sense, but one important clarification:
+
+The Apple subscriptions and RevenueCat setup already exist.
+We already configured:
+- App Store Connect subscription products
+- RevenueCat products imported from Apple
+- default offering
+- Monthly and Yearly packages
+- Trader Subscription entitlement
+- iOS product mapping
+
+So the issue is no longer “products need to be created”.
+The issue is that the native preview build still does not receive usable monthly/annual packages from RevenueCat / StoreKit.
+
+Please investigate the actual runtime path in the preview build.
+
+I need you to verify all of the following precisely:
+
+1. Which RevenueCat API key is the preview build using at runtime?
+- confirm whether preview is using the real iOS app key or the test/store key
+- print/log which key path is selected in preview
+
+2. What does RevenueCat actually return in the preview build?
+- log the full result of getOfferings()
+- log offerings.current
+- log all available packages and packageType values
+- log the underlying product identifiers returned on device
+
+3. Confirm the preview build is talking to the correct RevenueCat app/project
+- not Test Store
+- not stale config
+- not another RC app
+
+4. Confirm the package matching logic
+- the screen expects MONTHLY and ANNUAL
+- verify the returned packages are actually typed that way in the live preview build
+
+5. Confirm Apple product availability on device
+- verify whether StoreKit is returning the products at all
+- if not, tell me whether the remaining “Missing Metadata” state in App Store Connect is the real blocker
+
+6. Confirm entitlement / offering consistency
+- default offering
+- Monthly -> com.mylocaltrade.app.trader.monthly
+- Yearly -> com.mylocaltrade.app.trader.yearly
+- entitlement -> Trader Subscription
+
+Please diagnose the live preview runtime behaviour rather than giving generic setup steps that are already completed.
+I want the actual logs / reason why offerings.current does not provide usable monthly/annual packages in the preview build.
