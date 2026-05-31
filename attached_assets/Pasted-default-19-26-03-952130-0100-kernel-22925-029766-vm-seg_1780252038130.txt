@@ -1,0 +1,211 @@
+default	19:26:03.952130+0100	kernel	[22925.029766]: vm: segments queued for swapout: 0 regular, 16 freezer, 0 donate, 0 ripe, 0 darwkwake, 16 totalvm: segments queued for swapout: 0 regular, 214 freezer, 0 donate, 0 ripe, 0 darwkwake, 214 totalvm: segments queued for swapout: 0 regular, 253 freezer, 0 donate, 0 ripe, 0 darwkwake, 253 totalvm: segments queued for swapout: 0 regular, 369 freezer, 0 donate, 0 ripe, 0 darwkwake, 369 totalvm: segments queued for swapout: 0 regular, 556 freezer, 0 donate, 0 ripe, 0 darwkwake, 556 totalvm: segments queued for swapout: 0 regular, 439 freezer, 0 donate, 0 ripe, 0 darwkwake, 439 totalvm: segments queued for swapout: 0 regular, 163 freezer, 0 donate, 0 ripe, 0 darwkwake, 163 totalvm: segments queued for swapout: 0 regular, 129 freezer, 0 donate, 0 ripe, 0 darwkwake, 129 totalvm: segments queued for swapout: 0 regular, 214 freezer, 0 donate, 0 ripe, 0 darwkwake, 214 totalvm: segments queued for swapout: 0 regular, 126 freezer, 0 donate, 0 ripe, 0 darwkwake, 126 tota
+default	19:26:03.979202+0100	containermanagerd	[0x73cce0000] invalidated because the client process (pid 159) either cancelled the connection or exited
+error	19:26:04.025950+0100	wifid	WiFiLQAMgrLinkRecommendationNotify: channel score: chq=3, tx-lat=5, rx-lat=5, tx-loss=5, rx-loss=5, txPer=0.0%, p95-lat=4, RT=0x0, link-recommendation=0x0
+default	19:26:04.067807+0100	locationd	os_transaction created: (<private>) <private>
+default	19:26:04.070199+0100	locationd	os_transaction released: (<private>) <private>
+default	19:26:04.072515+0100	backboardd	[ALS] ts=14638.713 lux=42.252<private> xy=(0.342 0.349) chs=[521 1484 1345 1423 1535] CCT1=5088.343 gain=512x mode=<private> subsamples=24 rawLux=43.099 nits=105 xTalk=[0 4 4 4 3] status=0x9B copyEvent=0
+default	19:26:04.072736+0100	locationd	os_transaction created: (0xc4e544438) CLNameValuePair.SaveToBinaryFile
+default	19:26:04.084526+0100	locationd	os_transaction releasing: (0xc4e544438) CLNameValuePair.SaveToBinaryFile
+default	19:26:04.085014+0100	locationd	saving rebase info to cache, timestamp <private>, bias, <private>, uncertainty, <private>, weather estimate, <private>, sig elevation, <private>, pressure, <private>
+default	19:26:04.112611+0100	backboardd	[TS] Dispatching digitizer event with 2 children, _eventMask=0x23 _childEventMask=0x3 Cancel=0 Touching=1 inRange=1
+default	19:26:04.115835+0100	backboardd	contact 4 presence: touching
+default	19:26:04.115878+0100	backboardd	Touch entered (insideExclusive) <BKSHitTestRegion: 0x6734b3f70; {{0, 0}, {430, 932}}; exclusive: {{0, 0}, {430, 932}}>
+default	19:26:04.116066+0100	liveactivitiesd	Device activity state may have changed to true
+default	19:26:04.116550+0100	liveactivitiesd	No precise wake tasks scheduled
+default	19:26:04.116739+0100	liveactivitiesd	Earliest nonwaking date from task "Push server budget timeout expiration": 2026-05-31T19:42:06+01:00, finalWakeTarget: 2026-05-31T19:42:06+01:00 962.536442
+default	19:26:04.116765+0100	liveactivitiesd	Earliest waking date from task "Push server budget timeout expiration": 2026-05-31T19:42:06+01:00, finalWakeTarget: 2026-05-31T19:42:06+01:00 962.536371
+default	19:26:04.116775+0100	liveactivitiesd	Cancelling precise waking task
+default	19:26:04.116909+0100	liveactivitiesd	Scheduling nonwaking task for: 2026-05-31T19:42:06+01:00 in 962.536157s
+default	19:26:04.116964+0100	liveactivitiesd	Scheduling waking task for: 2026-05-31T19:42:06+01:00 in 962.536079s
+default	19:26:04.117007+0100	liveactivitiesd	Acquiring keep-alive with reason: wake scheduling
+default	19:26:04.117197+0100	liveactivitiesd	Keep-alive reasons: ["wake scheduling": 1]
+default	19:26:04.117214+0100	liveactivitiesd	__xpc_activity_unregister: com.apple.sessionkit.wake (0x65b0428a0) seqno: 1, (is registered)
+default	19:26:04.117224+0100	liveactivitiesd	_xpc_activity_dispose: com.apple.sessionkit.wake (0x65b0428a0) seqno: 1, (not running)
+default	19:26:04.117275+0100	liveactivitiesd	_xpc_activity_unregister: com.apple.sessionkit.wake 1, last registration: true
+default	19:26:04.117666+0100	liveactivitiesd	Scheduling waking task for adjusted date: 2026-05-31T19:42:06+01:00 in 962.535625s
+default	19:26:04.117779+0100	liveactivitiesd	xpc_activity_register: com.apple.sessionkit.wake, criteria: dictionary
+default	19:26:04.117791+0100	liveactivitiesd	_xpc_activity_register: com.apple.sessionkit.wake (0x65b0428a0), 0
+default	19:26:04.117813+0100	liveactivitiesd	xpc_activity_set_criteria: com.apple.sessionkit.wake (0x65b0428a0), dict
+default	19:26:04.117822+0100	liveactivitiesd	Device is active; publishing budget level change event
+default	19:26:04.117842+0100	liveactivitiesd	Releasing keep-alive with reason: wake scheduling
+default	19:26:04.120693+0100	liveactivitiesd	Keep-alive reasons: [:]
+default	19:26:04.120735+0100	liveactivitiesd	Budget level resolver published a change
+default	19:26:04.122668+0100	backboardd	  14638.77614: notify client com.apple.siri.AttentionAwareness.Touch of <AWDigitizerButtonKeyboardAttentionEvent: 0x67bd5f480> (timestamp:   14638.75221 sender 27773255296 displayUUID (null) tagIndex 0 (tag not present in server))
+default	19:26:04.122811+0100	SpringBoard	Evaluating dispatch of UIEvent: 0x9821f0c00; type: 0; subtype: 0; backing type: 11; shouldSend: 1; ignoreInteractionEvents: 0, systemGestureStateChange: 0
+default	19:26:04.122828+0100	SpringBoard	Sending UIEvent type: 0; subtype: 0; to windows: 1
+default	19:26:04.122848+0100	SpringBoard	Sending UIEvent type: 0; subtype: 0; to window: <_UISystemGestureWindow: 0x976dc9400>; contextId: 0x10A0E5CE
+default	19:26:04.123078+0100	backboardd	  14638.77755: notify client com.apple.SpringBoard.HomeGrabberView-4 of <AWDigitizerButtonKeyboardAttentionEvent: 0x67bd5e7c0> (timestamp:   14638.75221 sender 27773255296 displayUUID (null) tagIndex 0 (tag not present in server))
+default	19:26:04.123187+0100	backboardd	  14638.77790: notify client com.apple.SpringBoard.HomeGrabberView-5 of <AWDigitizerButtonKeyboardAttentionEvent: 0x67bd5ee80> (timestamp:   14638.75221 sender 27773255296 displayUUID (null) tagIndex 0 (tag not present in server))
+default	19:26:04.123251+0100	backboardd	  14638.77801: notify client com.apple.SpringBoard.HomeGrabberView-6 of <AWDigitizerButtonKeyboardAttentionEvent: 0x67bd5e600> (timestamp:   14638.75221 sender 27773255296 displayUUID (null) tagIndex 0 (tag not present in server))
+default	19:26:04.123344+0100	backboardd	  14638.77812: notify client com.apple.SpringBoard.HomeGrabberView-1 of <AWDigitizerButtonKeyboardAttentionEvent: 0x67bd5f9c0> (timestamp:   14638.75221 sender 27773255296 displayUUID (null) tagIndex 0 (tag not present in server))
+default	19:26:04.123424+0100	backboardd	  14638.77821: notify client com.apple.SpringBoard.HomeGrabberView-3 of <AWDigitizerButtonKeyboardAttentionEvent: 0x67bd5c280> (timestamp:   14638.75221 sender 27773255296 displayUUID (null) tagIndex 0 (tag not present in server))
+default	19:26:04.125123+0100	SpringBoard	RX com.mylocaltrade.app(1836) focusApplicationWithPID:1836 stealKeyboard:Y
+    context:<contextID:1594594280 sceneID:com.mylocaltrade.app-default>
+default	19:26:04.125909+0100	backboardd	  14638.77848: notify client com.apple.SpringBoard.HomeGrabberView-124 of <AWDigitizerButtonKeyboardAttentionEvent: 0x67bd5fc40> (timestamp:   14638.75221 sender 27773255296 displayUUID (null) tagIndex 0 (tag not present in server))
+default	19:26:04.127182+0100	MyLocalTrade	TX focusApplication (peekAppEvent) stealKB:Y scene:com.mylocaltrade.app-default
+default	19:26:04.127245+0100	MyLocalTrade	Evaluating dispatch of UIEvent: 0x10a09c800; type: 0; subtype: 0; backing type: 11; shouldSend: 1; ignoreInteractionEvents: 0, systemGestureStateChange: 0
+default	19:26:04.127274+0100	MyLocalTrade	Sending UIEvent type: 0; subtype: 0; to windows: 1
+default	19:26:04.127305+0100	MyLocalTrade	Sending UIEvent type: 0; subtype: 0; to window: <UIWindow: 0x10549f5e0>; contextId: 0x5F0B93E8
+default	19:26:04.127708+0100	SpringBoard	Focused scene identity did change to: (null)
+default	19:26:04.128330+0100	liveactivitiesd	xpc_activity_set_criteria, lower half: com.apple.sessionkit.wake (0x65b0428a0), dict
+default	19:26:04.128390+0100	UserEventAgent	Unregistered on XPC remove event: com.apple.sessionkit.wake (0x8c8f5d2c0)
+default	19:26:04.128554+0100	liveactivitiesd	_xpc_activity_set_criteria: com.apple.sessionkit.wake (0x65b0428a0), dict
+default	19:26:04.128760+0100	liveactivitiesd	_xpc_activity_set_criteria: xpc_set_event com.apple.sessionkit.wake, 1
+default	19:26:04.129511+0100	liveactivitiesd	xpc_activity_set_criteria: com.apple.sessionkit.wake (0x65b0428a0), setting state now to 1
+default	19:26:04.129539+0100	liveactivitiesd	_xpc_activity_set_state: com.apple.sessionkit.wake (0x65b0428a0), 1
+default	19:26:04.132275+0100	dasd	CANCELED: com.apple.sessionkit.wake:5AB123 at priority 30
+default	19:26:04.132369+0100	UserEventAgent	Creating on XPC add event: com.apple.sessionkit.wake
+default	19:26:04.132988+0100	UserEventAgent	Created: com.apple.sessionkit.wake (0x8c8f5d2c0)
+default	19:26:04.133259+0100	dasd	[<private>] Ending progress monitoring
+default	19:26:04.133443+0100	UserEventAgent	SUBMITTING: com.apple.sessionkit.wake:9484D0
+default	19:26:04.133479+0100	dasd	NO LONGER RUNNING com.apple.sessionkit.wake:5AB123 ...Tasks running in group [com.apple.dasd.default] are 0!
+default	19:26:04.133584+0100	UserEventAgent	<private> is rate limited by submission rate limiter by 120 min from now
+default	19:26:04.133841+0100	UserEventAgent	Registered: com.apple.sessionkit.wake (0x8c8f5d2c0)
+default	19:26:04.134416+0100	dasd	Submitted: com.apple.sessionkit.wake:9484D0 at priority 30 (Sun May 31 21:26:04 2026 - Sun May 31 19:42:07 2026)
+default	19:26:04.135020+0100	dasd	<private>: Optimal Score 0.7700 at <private> (Valid Until: <private>)
+default	19:26:04.185586+0100	backboardd	[TS] Dispatching digitizer event with 2 children, _eventMask=0x23 _childEventMask=0x3 Cancel=0 Touching=0 inRange=0
+default	19:26:04.186402+0100	backboardd	contact 4 presence: none
+default	19:26:04.187248+0100	backboardd	not removing destination (external): <BKTouchDestination: 0x6770f1d70; (touchStream|filterDetachedTouches); contextID: 0x10A0E5CE; clientPort: 0x2927; externalReferences: 1>
+default	19:26:04.194525+0100	MyLocalTrade	Evaluating dispatch of UIEvent: 0x10a09c800; type: 0; subtype: 0; backing type: 11; shouldSend: 0; ignoreInteractionEvents: 0, systemGestureStateChange: 0
+default	19:26:04.195552+0100	MyLocalTrade	Evaluating dispatch of UIEvent: 0x10a09c800; type: 0; subtype: 0; backing type: 11; shouldSend: 1; ignoreInteractionEvents: 0, systemGestureStateChange: 0
+default	19:26:04.195626+0100	MyLocalTrade	Sending UIEvent type: 0; subtype: 0; to windows: 1
+default	19:26:04.195671+0100	MyLocalTrade	Sending UIEvent type: 0; subtype: 0; to window: <UIWindow: 0x10549f5e0>; contextId: 0x5F0B93E8
+default	19:26:04.195707+0100	SpringBoard	Evaluating dispatch of UIEvent: 0x9821f0c00; type: 0; subtype: 0; backing type: 11; shouldSend: 0; ignoreInteractionEvents: 0, systemGestureStateChange: 0
+default	19:26:04.195729+0100	SpringBoard	Evaluating dispatch of UIEvent: 0x9821f0c00; type: 0; subtype: 0; backing type: 11; shouldSend: 1; ignoreInteractionEvents: 0, systemGestureStateChange: 0
+default	19:26:04.195772+0100	SpringBoard	Sending UIEvent type: 0; subtype: 0; to windows: 1
+default	19:26:04.196048+0100	SpringBoard	Sending UIEvent type: 0; subtype: 0; to window: <_UISystemGestureWindow: 0x976dc9400>; contextId: 0x10A0E5CE
+default	19:26:04.209222+0100	MyLocalTrade	Evaluating dispatch of UIEvent: 0x10a09c800; type: 0; subtype: 0; backing type: 11; shouldSend: 0; ignoreInteractionEvents: 0, systemGestureStateChange: 1
+default	19:26:04.214680+0100	MyLocalTrade	Task <5118DE79-4F95-4A8F-9552-FF615C8EEA04>.<6> resuming, timeouts(5.0, 60.0) qos(0x19) voucher((null)) activity(00000000-0000-0000-0000-000000000000)
+default	19:26:04.216960+0100	MyLocalTrade	[C2] event: client:connection_reused @40.010s
+default	19:26:04.217840+0100	MyLocalTrade	nw_protocol_tcp_notify [C2.1.1.1:3] nw_protocol_notification_type_connection_idle is false
+default	19:26:04.217869+0100	MyLocalTrade	nw_protocol_tcp_set_connection_idle [C2.1.1.1:3] os_nexus_flow_set_connection_idle returned 0
+default	19:26:04.218029+0100	MyLocalTrade	Task <5118DE79-4F95-4A8F-9552-FF615C8EEA04>.<6> now using Connection 2
+default	19:26:04.218322+0100	MyLocalTrade	Task <5118DE79-4F95-4A8F-9552-FF615C8EEA04>.<6> sent request, body N 0
+default	19:26:04.277070+0100	backboardd	  14638.93164: notify client com.apple.siri.AttentionAwareness.Touch of <AWAttentionLostEvent: 0x67bd5c0c0> (timestamp:   14638.93152 attentionLostTimeout       0.10000 tagIndex 0 (tag not present in server))
+default	19:26:04.320820+0100	backboardd	[ALS] ts=14638.963 lux=41.567<private> xy=(0.344 0.349) chs=[485 1449 1331 1395 1507] CCT1=5007.228 gain=512x mode=<private> subsamples=24 rawLux=42.521 nits=105 xTalk=[2 5 4 5 4] status=0x9B copyEvent=0
+default	19:26:04.414222+0100	MyLocalTrade	Task <5118DE79-4F95-4A8F-9552-FF615C8EEA04>.<6> received response, status 304 content U
+default	19:26:04.414412+0100	MyLocalTrade	Task <5118DE79-4F95-4A8F-9552-FF615C8EEA04>.<6> done using Connection 2
+default	19:26:04.414534+0100	MyLocalTrade	[C2] event: client:connection_idle @40.207s
+default	19:26:04.414701+0100	MyLocalTrade	nw_protocol_tcp_notify [C2.1.1.1:3] nw_protocol_notification_type_connection_idle is true
+default	19:26:04.414729+0100	MyLocalTrade	nw_protocol_tcp_set_connection_idle [C2.1.1.1:3] os_nexus_flow_set_connection_idle returned 0
+default	19:26:04.414793+0100	MyLocalTrade	Task <5118DE79-4F95-4A8F-9552-FF615C8EEA04>.<6> response ended
+default	19:26:04.414989+0100	MyLocalTrade	Task <5118DE79-4F95-4A8F-9552-FF615C8EEA04>.<6> summary for task success {transaction_duration_ms=199, response_status=304, connection=2, reused=1, reused_after_ms=21735, request_start_ms=2, request_duration_ms=0, response_start_ms=198, response_duration_ms=0, request_bytes=132, request_throughput_kbps=6437, response_bytes=871, response_throughput_kbps=7846, cache_hit=false}
+default	19:26:04.415215+0100	MyLocalTrade	Task <5118DE79-4F95-4A8F-9552-FF615C8EEA04>.<6> finished successfully
+default	19:26:04.423144+0100	MyLocalTrade	[0x10f3f0000] activating connection: mach=true listener=false peer=false name=com.apple.storekitd
+error	19:26:04.429398+0100	storekitd	Failed to parse receipt at /private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt: Error Domain=NSCocoaErrorDomain Code=260 "The file “sandboxReceipt” couldn’t be opened because there is no such file." UserInfo={NSFilePath=/private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSURL=file:///private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSUnderlyingError=0x6d2e42b20 {Error Domain=NSPOSIXErrorDomain Code=2 "No such file or directory"}}
+default	19:26:04.429588+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.431972+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.433201+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.433228+0100	storekitd	Accepting new connection MyLocalTrade[1836]
+default	19:26:04.433576+0100	storekitd	[0x6d30f4180] activating connection: mach=false listener=false peer=true name=com.apple.storekitd.peer[1836].0x6d30f4180
+default	19:26:04.434130+0100	storekitd	[Default] products(with:receiver:reply:)
+default	19:26:04.434230+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.435269+0100	storekitd	[Default] Running task with context: ([Client] com.mylocaltrade.app (My Local Trade) Sandbox)
+default	19:26:04.435457+0100	storekitd	Starting product request
+default	19:26:04.435491+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.436367+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.438087+0100	storekitd	Requesting products from Media API using in-app-purchasables endpoint
+default	19:26:04.438143+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.439291+0100	storekitd	Requesting Media API product batch ["com.mylocaltrade.app.trader.monthly", "com.mylocaltrade.app.trader.yearly"]
+default	19:26:04.439340+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.440411+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.441356+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.442497+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.443326+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.443990+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.444561+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.444601+0100	distnoted	register name: com.apple.AppleMediaServices.mediaTokenChanged.apple.com.apple.storekit.sandbox object: kCFNotificationAnyObject token: 15c00000001 pid: 625
+default	19:26:04.444689+0100	distnoted	register name: com.apple.AppleMediaServices.mediaTokenChanged.apple.PrivateAccessToken-com.apple.storekit.sandbox object: kCFNotificationAnyObject token: 15d00000002 pid: 625
+default	19:26:04.445183+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.445935+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.446511+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.447113+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.447808+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.448319+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.449395+0100	storekitd	container_create_or_lookup_app_group_path_by_app_group_identifier: success
+default	19:26:04.450701+0100	storekitd	[0x6d3093840] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+default	19:26:04.450954+0100	storekitd	"The connection to ACDAccountStore was invalidated."
+default	19:26:04.450998+0100	accountsd	[0xd394f8f00] invalidated because the client process (pid 625) either cancelled the connection or exited
+default	19:26:04.451019+0100	storekitd	SecSecurityClientGet new thread!
+default	19:26:04.460875+0100	storekitd	AMSMediaTokenServiceKeychainStore: [com.apple.storekit.sandbox] Retrieved media token data from keychain
+error	19:26:04.461882+0100	storekitd	ACAccount: [Default] We can't update this account's storefront because the source account has no storefront.
+default	19:26:04.462184+0100	storekitd	AMSURLRequestEncoder: [Default] Encoding request for URL: https://amp-api.sandbox.apple.com/v1/catalog/gb/in-app-purchasables?extend=kind,supportsRuntimePricing&filter%5BappBundleId%5D=com.mylocaltrade.app&filter%5BofferName%5D=com.mylocaltrade.app.trader.monthly,com.mylocaltrade.app.trader.yearly&include%5Bsubscription-bundles%5D=in-app-purchasables&l=en-GB&omit%5Bresource%5D=autos&platform=iphone&types=in-apps,subscription-bundles&with=adHocOffers,payOverTimeSubscriptions,winbackOffers { 
+	account = <ACAccount: 0x6d2c5c800 type = iTunesStore.sandbox | backingID = 879871B6-2152-4BBA-8DE5-6058D659C8C8 | username = local | storefront = (null)> 
+	mediaType = com.apple.AppleMediaServices.accountmediatype.appstore.sandbox 
+}
+default	19:26:04.462487+0100	storekitd	StorefrontHeaderValueCreation: [9F2471FB] Returning nil suffix as bag didn't contain one
+default	19:26:04.462622+0100	storekitd	AMSURLRequestEncoder: [Default] Request is unpersonalized, adding cookies. account = <ACAccount: 0x6d2c5c800 type = iTunesStore.sandbox | backingID = 879871B6-2152-4BBA-8DE5-6058D659C8C8 | username = local | storefront = (null)>
+default	19:26:04.462971+0100	storekitd	AMSURLRequest: [Default] ams_addCookiesAsynchronouslyForAccount:clientInfo:bag:cleanupGlobalCookies: Creating cookie-promise for account: <ACAccount: 0x6d2c5c800 type = iTunesStore.sandbox | backingID = 879871B6-2152-4BBA-8DE5-6058D659C8C8 | username = local | storefront = (null)>
+default	19:26:04.463068+0100	storekitd	ACAccount: [Default] ams_cookies Fetching cookies from cookie storage for account: <ACAccount: 0x6d2c5c800 type = iTunesStore.sandbox | backingID = 879871B6-2152-4BBA-8DE5-6058D659C8C8 | username = local | storefront = (null)>
+default	19:26:04.463182+0100	storekitd	ACAccount: [Default] ams_cookies Fetched 0 cookies from cookie storage for account: <ACAccount: 0x6d2c5c800 type = iTunesStore.sandbox | backingID = 879871B6-2152-4BBA-8DE5-6058D659C8C8 | username = local | storefront = (null)>
+default	19:26:04.463213+0100	storekitd	ACAccount: [Default] ams_cookiesForURL:bag:cleanupGlobalCookies: Fetched 0 cookies for account: <ACAccount: 0x6d2c5c800 type = iTunesStore.sandbox | backingID = 879871B6-2152-4BBA-8DE5-6058D659C8C8 | username = local | storefront = (null)>
+default	19:26:04.463629+0100	storekitd	elided platform fast path for key: re6Zb+zwFKJNlkQTUeT+/w
+default	19:26:04.463851+0100	storekitd	[0x6d3093840] activating connection: mach=true listener=false peer=false name=com.apple.mobilegestalt.xpc
+default	19:26:04.464272+0100	MobileGestaltHelper	[0x6c306c000] activating connection: mach=false listener=false peer=true name=com.apple.mobilegestalt.xpc.peer[625].0x6c306c000
+default	19:26:04.464668+0100	storekitd	[0x6d3093840] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+default	19:26:04.464682+0100	MobileGestaltHelper	[0x6c306c000] invalidated because the client process (pid 625) either cancelled the connection or exited
+default	19:26:04.465193+0100	storekitd	AMSAbsinthe: [Default] Determining signing data for request <AMSURLRequest: 0x6d2e239c0> { URL: https://amp-api.sandbox.apple.com/v1/catalog/gb/in-app-purchasables?extend=kind,supportsRuntimePricing&filter%5BappBundleId%5D=com.mylocaltrade.app&filter%5BofferName%5D=com.mylocaltrade.app.trader.monthly,com.mylocaltrade.app.trader.yearly&include%5Bsubscription-bundles%5D=in-app-purchasables&l=en-GB&omit%5Bresource%5D=autos&platform=iphone&types=in-apps,subscription-bundles&with=adHocOffers,payOverTimeSubscriptions,winbackOffers }
+default	19:26:04.465558+0100	storekitd	AMSAbsinthe: [Default] Skipping absinthe
+default	19:26:04.465862+0100	storekitd	AMSMescal: [Default] Skipping mescal - unable to locate data to sign
+default	19:26:04.465879+0100	storekitd	AMSURLRequestDecoration: [Default] No Mescal signature was generated. No headers will be created for additon to request.
+default	19:26:04.468748+0100	storekitd	AMSMediaRequestEncoder: [Default] We received a valid media token.
+default	19:26:04.468983+0100	storekitd	AMSURLSession: [Default] Preparing request: <AMSURLRequest: 0x6d2e222a0> { URL: https://amp-api.sandbox.apple.com/v1/catalog/gb/in-app-purchasables?extend=kind,supportsRuntimePricing&filter%5BappBundleId%5D=com.mylocaltrade.app&filter%5BofferName%5D=com.mylocaltrade.app.trader.monthly,com.mylocaltrade.app.trader.yearly&include%5Bsubscription-bundles%5D=in-app-purchasables&l=en-GB&omit%5Bresource%5D=autos&platform=iphone&types=in-apps,subscription-bundles&with=adHocOffers,payOverTimeSubscriptions,winbackOffers }
+default	19:26:04.469573+0100	storekitd	AMSURLSession: [Default] Task created: LocalDataTask <7CA5C74A-4BBD-4759-AF15-E59757D998B0>.<1> Session: <__NSURLSessionLocal: 0x6d30c1c00>
+default	19:26:04.469599+0100	storekitd	Task <7CA5C74A-4BBD-4759-AF15-E59757D998B0>.<1> resuming, timeouts(60.0, 604800.0) qos(0x19) voucher(<private>) activity(00000000-0000-0000-0000-000000000000)
+default	19:26:04.470417+0100	storekitd	AMSURLSession: [Default] Task received response
+default	19:26:04.470721+0100	storekitd	AMSMediaProtocolHandler: [Default] StatusCode: 200; <private>; Environment: SB-ST
+default	19:26:04.471785+0100	storekitd	Task <7CA5C74A-4BBD-4759-AF15-E59757D998B0>.<1> summary for task success {transaction_duration_ms=1, response_status=200, cache_hit=true}
+default	19:26:04.471843+0100	storekitd	Task <7CA5C74A-4BBD-4759-AF15-E59757D998B0>.<1> finished successfully
+default	19:26:04.471966+0100	storekitd	AMSURLSession: [Default] Task finished loading for URL request <AMSURLRequest: 0x6d2e22fc0> { URL: https://amp-api.sandbox.apple.com/v1/catalog/gb/in-app-purchasables?extend=kind,supportsRuntimePricing&filter%5BappBundleId%5D=com.mylocaltrade.app&filter%5BofferName%5D=com.mylocaltrade.app.trader.monthly,com.mylocaltrade.app.trader.yearly&include%5Bsubscription-bundles%5D=in-app-purchasables&l=en-GB&omit%5Bresource%5D=autos&platform=iphone&types=in-apps,subscription-bundles&with=adHocOffers,payOverTimeSubscriptions,winbackOffers }
+default	19:26:04.472459+0100	storekitd	AMSURLSession: [Default] Task completed successfully
+default	19:26:04.472560+0100	storekitd	[Default] Media request MediaAPIProductRequest correlation key: DYYQURCPOFLGKQR4D6QEHRKN6Y
+default	19:26:04.472841+0100	distnoted	unregister token: 15d00000002 pid: 625
+default	19:26:04.472855+0100	distnoted	unregister token: 15c00000001 pid: 625
+default	19:26:04.472870+0100	storekitd	Ignoring empty product response
+default	19:26:04.473067+0100	MyLocalTrade	[0x10f3f0000] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()
+default	19:26:04.473128+0100	MyLocalTrade	AAFService connection invalidated
+default	19:26:04.473146+0100	storekitd	[0x6d30f4180] invalidated because the client process (pid 1836) either cancelled the connection or exited
+default	19:26:04.473165+0100	storekitd	Connection to MyLocalTrade[1836] invalidated
+error	19:26:04.473226+0100	MyLocalTrade	[RevenueCat] 🍎‼️ Error fetching offerings - The operation couldn’t be completed. (RevenueCat.OfferingsManager.Error error 1.)
+There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+error	19:26:04.473498+0100	MyLocalTrade	[RevenueCat] 😿‼️ There is an issue with your configuration. Check the underlying error for more details.
+More information: https://rev.cat/sdk-troubleshooting There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+default	19:26:04.473906+0100	runningboardd	Acquiring assertion targeting [osservice<com.apple.storekitd>:625] from originator [osservice<com.apple.storekitd>:625] with description <RBSAssertionDescriptor| "com.apple.CFNetwork.StorageDB" ID:34-625-13753 target:625 attributes:[
+	<RBSDomainAttribute| domain:"com.apple.common" name:"FinishTaskUninterruptable" sourceEnvironment:"(null)">,
+	<RBSAcquisitionCompletionAttribute| policy:AfterApplication>
+	]>
+default	19:26:04.474077+0100	runningboardd	Assertion 34-625-13753 (target:[osservice<com.apple.storekitd>:625]) will be created as active as no start-time-defining assertions exist
+default	19:26:04.474803+0100	runningboardd	[osservice<com.apple.storekitd>:625] Ignoring jetsam update because this process is not memory-managed
+default	19:26:04.474817+0100	runningboardd	[osservice<com.apple.storekitd>:625] Ignoring suspend because this process is not lifecycle managed
+default	19:26:04.474838+0100	runningboardd	[osservice<com.apple.storekitd>:625] Ignoring role changes because this process is not role managed
+default	19:26:04.474843+0100	runningboardd	[osservice<com.apple.storekitd>:625] Ignoring GPU update because this process is not GPU managed
+default	19:26:04.474854+0100	runningboardd	[osservice<com.apple.storekitd>:625] Ignoring memory limit update because this process is not memory-managed
+default	19:26:04.477380+0100	audiomxd	Received state update for 625 (osservice<com.apple.storekitd>, running-NotVisible
+default	19:26:04.477427+0100	SpringBoard	Received state update for 625 (osservice<com.apple.storekitd>, running-NotVisible
+default	19:26:04.478537+0100	powerd	Sleep revert state: 1
+default	19:26:04.478580+0100	powerd	Process runningboardd.34 Created SystemIsActive "osservice<com.apple.storekitd>34-625-13753:com.apple.CFNetwork.StorageDB" age:00:00:00  id:51539646378 [System: PrevIdle SysAct]
+default	19:26:04.478612+0100	runningboardd	Acquired process power assertion with ID 38826 for pid 625
+default	19:26:04.479079+0100	UserEventAgent	Received state update for 625 (osservice<com.apple.storekitd>, running-NotVisible
+default	19:26:04.517795+0100	locationd	visitKFFilteredPressure,nowAP,801944764.517456,nowAOP,22925687776,filteredPressure,100366.367188,pressureTimestamp,22922937852,kfElevation,110.354393,wallTimePressureCorrected,801944761.747792,wallTimeKFCorrected,801944764.463582,temperatureDerivative,0.000000,absAltUnc,4.536833
+default	19:26:04.522697+0100	useractivityd	lostDevice timer firing deviceIdentifier=<private>; _recentlyLostDeviceIDs is <private>, will remove is 1
+default	19:26:04.522844+0100	useractivityd	lostDevice, deviceIdentifier=<private>
+default	19:26:04.525090+0100	kernel	[22925.623064]: vm: segments queued for swapout: 0 regular, 44 freezer, 0 donate, 0 ripe, 0 darwkwake, 44 tota
+default	19:26:04.526231+0100	kernel	wlan0:com.apple.p2p.awdl0: isInfraRealtimePacketThresholdAllowed allowed:1 option:32 threshold:50 noRegistrations:1 cachedPeerCount:0 fastDiscoveryInactive:1 fastDiscoveryOnSince:14639179
+default	19:26:04.526273+0100	kernel	wlan0:com.apple.p2p.awdl0: currentInfraTrafficType:9274 checking if realtime upgrade required with inputPackets:7 outputPackets:8 packetThreshold:50
+default	19:26:04.530389+0100	searchd	<private>: processItemsForImport starting. Slowly? 0
+default	19:26:04.548671+0100	WirelessRadioManagerd	<private>
+default	19:26:04.570331+0100	backboardd	[ALS] ts=14639.213 lux=41.244<private> xy=(0.338 0.343) chs=[535 1456 1317 1374 1521] CCT1=5197.123 gain=512x mode=<private> subsamples=24 rawLux=42.097 nits=105 xTalk=[1 4 4 4 4] status=0x9B copyEvent=0
+default	19:26:04.572674+0100	backboardd	[WP update: Harmony]: (0.339231;0.353254) -> (0.334605;0.349249) t: 15.000000 brightnessScaler: 1.000000 interruptible: 1
+error	19:26:04.596653+0100	thermalmonitord	<Error> could not find `cpu-avg-limiter-input-w2r property
+error	19:26:04.596772+0100	thermalmonitord	<Error> Failed to read `cpu-avg-limiter-input-w2r
+default	19:26:04.698416+0100	suggestd	HVQueue<ProactiveHarvesting.ThirdPartyApp>: Flushing memory queue to disk (3 items)
+default	19:26:04.698589+0100	suggestd	HVQueue<ProactiveHarvesting.ThirdPartyApp>: _writeEventsToDisk will write 3 items to disk: <private>
+default	19:26:04.744703+0100	symptomsd	Data Usage for itunesstored(viaNEHelper) on flow 113815 - WiFi in/out: 159745519/573829, WiFi delta_in/delta_out: 660/735, Cell in/out: 19899724/88010, Cell delta_in/delta_out: 0/0, RNF: 0, subscriber tag: 1, total duration: 121.186
+default	19:26:04.806389+0100	configd	DHCP en2: ARP router: No leases to query for
+default	19:26:04.806715+0100	kernel	bpf0 attached to en2 by configd:45
+default	19:26:04.806782+0100	kernel	bpf0 closed and detached from en2 fcount 0 dcount 0 by configd:45
+default	19:26:04.807054+0100	configd	DHCP en2: INIT waiting at 41.9586 for 8.699888
+default	19:26:04.820800+0100	backboardd	[ALS] ts=14639.463 lux=41.322<private> xy=(0.343 0.349) chs=[485 1477 1303 1395 1528] CCT1=5007.350 gain=512x mode=<private> subsamples=24 rawLux=42.276 nits=105 xTalk=[2 5 4 5 4] status=0x9B copyEvent=0
+default	19:26:04.822830+0100	backboardd	[WP update: Harmony]: (0.334605;0.349249) -> (0.339858;0.353796) t: 15.000000 brightnessScaler: 1.000000 interruptible: 1
