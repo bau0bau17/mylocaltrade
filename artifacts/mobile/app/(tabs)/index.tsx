@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import {
@@ -152,7 +152,7 @@ export default function HomeScreen() {
           <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
             <View style={[styles.trustIconWrap, { backgroundColor: Colors.light.featuredMuted }]}>
-              <Feather name="star" size={17} color={Colors.light.featured} />
+              <FontAwesome name="star" size={17} color={Colors.light.featured} />
             </View>
             <Text style={styles.trustLabel}>Top</Text>
             <Text style={styles.trustSub}>Rated</Text>

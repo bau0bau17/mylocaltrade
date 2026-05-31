@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import {
   useGetMyTraderReviews,
@@ -21,7 +21,7 @@ function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
     <View style={{ flexDirection: 'row', gap: 2 }}>
       {[1, 2, 3, 4, 5].map((n) => (
-        <Feather key={n} name="star" size={size} color={n <= rating ? Colors.light.featured : Colors.light.border} />
+        <FontAwesome key={n} name={n <= rating ? 'star' : 'star-o'} size={size} color={n <= rating ? Colors.light.featured : Colors.light.border} />
       ))}
     </View>
   );
