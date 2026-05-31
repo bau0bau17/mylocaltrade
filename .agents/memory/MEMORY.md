@@ -1,11 +1,1 @@
-- [Public trader visibility policy](trader-public-visibility.md) — every public trader retrieval path must apply the same hide rules; they are duplicated across routes and drift easily.
-- [HMRC VAT API auth](hmrc-vat-api.md) — Check-a-UK-VAT-number lookup is application-restricted (OAuth client_credentials server token), NOT open access; degrade gracefully if creds absent.
-- [Stale dist breaks typecheck](monorepo-stale-dist-typecheck.md) — typecheck errors on symbols that exist in lib/db or lib/api-zod source? rebuild their dist via `tsc -b` before assuming a real bug.
-- [api-spec codegen + composite refs](codegen-composite-refs.md) — after openapi codegen, run root `pnpm run typecheck` (tsc --build) or artifacts read stale generated `.d.ts`; orval clean shows transient resolve errors.
-- [Plan model + legacy "trader"](plan-model-legacy-trader.md) — two tiers basic/premium only (no elite); treat any non-basic plan as Premium to cover legacy "trader" rows until RC re-sync.
-- [Mobile filter discoverability](mobile-filter-discoverability.md) — Search filters must NOT use horizontal scroll (not discoverable); use the "Filters" button + bottom-sheet pattern.
-- [Mobile oversized image assets](mobile-oversized-image-assets.md) — never require() the 1024px store icon for in-app/web display; use small derived variants.
-- [Conversation unread badge reset](unread-badge-reset.md) — always reset viewer counter on open (ungated) + invalidate both count & list queries; gated reset leaves badges stuck.
-- [Trader response-time display](trader-response-time.md) — exact "Replies in ~X" is the single source of truth; no loose qualitative badge that can contradict it (dropped "promptly" ≤24h, kept "fast" ≤60m).
-- [RN Web Alert.alert no-op](rn-web-alert-noop.md) — Alert.alert button onPress never fires on Expo web; never gate actions behind it, use lib/confirm.ts confirmAction (window.confirm fallback).
-- [Job lifecycle + review gating](job-lifecycle-review-gating.md) — reviews unlock only on customer-confirm; trader mark-done is notify-only; cancelled jobs never reviewable (gate create AND eligible); `stage` is UI source of truth.
+- [GestureHandlerRootView flex](gesturehandlerrootview-release-touches.md) — native release taps/nav die if root GestureHandlerRootView lacks style flex:1; works in dev, fails in EAS build.
