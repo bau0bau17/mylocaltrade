@@ -495,7 +495,7 @@ export default function TraderDetail({ userId }: Props) {
               />
               <Field label="Website" value={profile.website || "—"} />
               <Field label="Plan" value={profile.plan?.toUpperCase() ?? "—"} />
-              <Field label="Rating" value={profile.rating != null ? `${profile.rating} / 5 (${profile.reviewCount})` : "No reviews"} />
+              <Field label="Rating" value={profile.rating != null ? `${profile.rating.toFixed(1)} / 5 (${profile.reviewCount})` : "No reviews"} />
               <Field label="Submitted for review" value={formatDateTime(profile.submittedForReviewAt)} />
               <Field label="Verified at" value={formatDateTime(profile.verifiedAt)} />
               {profile.verificationStatus === "VERIFIED" && (
