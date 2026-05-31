@@ -51,6 +51,13 @@ function resolvePlatformApiKey(): string {
 
 const platformApiKey = resolvePlatformApiKey();
 
+// Diagnostics run in dev AND preview (both ship the Test Store key in their EAS
+// env) but never in production (which omits the Test Store key). This lets us
+// see RevenueCat's native logs and the resolved offering on a real preview
+// device via Console.app / Xcode "Devices & Simulators" — release builds still
+// emit console.* to the system log.
+const DIAGNOSTICS_ENABLED = TEST_API_KEY.length > 0;
+
 // RevenueCat enforces entitlement lookup keys case/punctuation-insensitively, so
 // the identifier the SDK reports back may differ in casing/spacing from our
 // configured id (e.g. a dashboard-created "Trader Subscription" vs
@@ -103,8 +110,15 @@ async function ensureConfigured(): Promise<PurchasesDefault | null> {
       try {
         const mod = await import('react-native-purchases');
         const P = mod.default;
-        if (__DEV__) {
-          P.setLogLevel(mod.LOG_LEVEL.WARN);
+        P.setLogLevel(
+          DIAGNOSTICS_ENABLED ? mod.LOG_LEVEL.VERBOSE : mod.LOG_LEVEL.WARN,
+        );
+        if (DIAGNOSTICS_ENABLED) {
+          console.log(
+            `[RC] configure platform=${Platform.OS} __DEV__=${__DEV__} ` +
+              `keyPrefix=${platformApiKey.slice(0, 5)} ` +
+              `usingTestKey=${__DEV__ && TEST_API_KEY.length > 0}`,
+          );
         }
         await P.configure({ apiKey: platformApiKey });
         purchases = P;
@@ -219,6 +233,25 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!P) return;
     try {
       const offerings = await P.getOfferings();
+      if (DIAGNOSTICS_ENABLED) {
+        const cur = offerings.current;
+        console.log(
+          '[RC] getOfferings ->',
+          JSON.stringify({
+            allOfferingIds: Object.keys(offerings.all ?? {}),
+            currentId: cur?.identifier ?? null,
+            currentPackageCount: cur?.availablePackages?.length ?? 0,
+            hasMonthlyShortcut: !!cur?.monthly,
+            hasAnnualShortcut: !!cur?.annual,
+            packages: (cur?.availablePackages ?? []).map((p) => ({
+              packageId: p.identifier,
+              packageType: p.packageType,
+              productId: p.product.identifier,
+              priceString: p.product.priceString,
+            })),
+          }),
+        );
+      }
       setOffering(offerings.current ?? null);
     } catch (e) {
       console.warn('RevenueCat getOfferings failed', e);
