@@ -1,0 +1,48 @@
+error	19:30:04.588774+0100	thermalmonitord	<Error> could not find `cpu-avg-limiter-input-w2r property
+error	19:30:04.588824+0100	thermalmonitord	<Error> Failed to read `cpu-avg-limiter-input-w2r
+error	19:30:05.448019+0100	MyLocalTrade	nw_protocol_instance_set_output_handler Not calling remove_input_handler on 0x119a4e580:<private>
+error	19:30:05.605894+0100	storekitd	Failed to parse receipt at /private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt: Error Domain=NSCocoaErrorDomain Code=260 "The file “sandboxReceipt” couldn’t be opened because there is no such file." UserInfo={NSFilePath=/private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSURL=file:///private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSUnderlyingError=0x6d2e41a10 {Error Domain=NSPOSIXErrorDomain Code=2 "No such file or directory"}}
+error	19:30:05.633209+0100	storekitd	ACAccount: [Default] We can't update this account's storefront because the source account has no storefront.
+error	19:30:05.644648+0100	MyLocalTrade	[RevenueCat] 🍎‼️ Error fetching offerings - The operation couldn’t be completed. (RevenueCat.OfferingsManager.Error error 1.)
+There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+error	19:30:05.644864+0100	MyLocalTrade	[RevenueCat] 😿‼️ There is an issue with your configuration. Check the underlying error for more details.
+More information: https://rev.cat/sdk-troubleshooting There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+error	19:30:05.828694+0100	storekitd	Failed to parse receipt at /private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt: Error Domain=NSCocoaErrorDomain Code=260 "The file “sandboxReceipt” couldn’t be opened because there is no such file." UserInfo={NSFilePath=/private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSURL=file:///private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSUnderlyingError=0x6d2e42be0 {Error Domain=NSPOSIXErrorDomain Code=2 "No such file or directory"}}
+error	19:30:05.858491+0100	storekitd	ACAccount: [Default] We can't update this account's storefront because the source account has no storefront.
+error	19:30:05.868825+0100	MyLocalTrade	[RevenueCat] 🍎‼️ Error fetching offerings - The operation couldn’t be completed. (RevenueCat.OfferingsManager.Error error 1.)
+There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+error	19:30:05.869101+0100	MyLocalTrade	[RevenueCat] 😿‼️ There is an issue with your configuration. Check the underlying error for more details.
+More information: https://rev.cat/sdk-troubleshooting There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+error	19:30:06.161066+0100	storekitd	Failed to parse receipt at /private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt: Error Domain=NSCocoaErrorDomain Code=260 "The file “sandboxReceipt” couldn’t be opened because there is no such file." UserInfo={NSFilePath=/private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSURL=file:///private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSUnderlyingError=0x6d2e40f60 {Error Domain=NSPOSIXErrorDomain Code=2 "No such file or directory"}}
+error	19:30:06.190603+0100	storekitd	ACAccount: [Default] We can't update this account's storefront because the source account has no storefront.
+error	19:30:06.199801+0100	MyLocalTrade	[RevenueCat] 🍎‼️ Error fetching offerings - The operation couldn’t be completed. (RevenueCat.OfferingsManager.Error error 1.)
+There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+error	19:30:06.199978+0100	MyLocalTrade	[RevenueCat] 😿‼️ There is an issue with your configuration. Check the underlying error for more details.
+More information: https://rev.cat/sdk-troubleshooting There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+error	19:30:06.458117+0100	storekitd	Failed to parse receipt at /private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt: Error Domain=NSCocoaErrorDomain Code=260 "The file “sandboxReceipt” couldn’t be opened because there is no such file." UserInfo={NSFilePath=/private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSURL=file:///private/var/mobile/Containers/Data/Application/5AC87ED0-CC4B-48CF-AAD0-0EFDFCA6D05C/StoreKit/sandboxReceipt, NSUnderlyingError=0x6d2e42cd0 {Error Domain=NSPOSIXErrorDomain Code=2 "No such file or directory"}}
+error	19:30:06.487159+0100	storekitd	ACAccount: [Default] We can't update this account's storefront because the source account has no storefront.
+error	19:30:06.496766+0100	MyLocalTrade	[RevenueCat] 🍎‼️ Error fetching offerings - The operation couldn’t be completed. (RevenueCat.OfferingsManager.Error error 1.)
+There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+error	19:30:06.496892+0100	MyLocalTrade	[RevenueCat] 😿‼️ There is an issue with your configuration. Check the underlying error for more details.
+More information: https://rev.cat/sdk-troubleshooting There's a problem with your configuration. None of the products registered in the RevenueCat dashboard could be fetched from App Store Connect (or the StoreKit Configuration file if one is being used). 
+More information: https://rev.cat/why-are-offerings-empty
+error	19:30:06.530000+0100	wifid	LQM-WiFi: WeightAvgLQM rssi=-67 snr=12 txRate=540312 rxRate=416812
+error	19:30:06.531707+0100	wifid	LQM-WiFi:  (HighBand) rxCrsGlitch=1 rxBphyCrsGlitch=0 rxStart=126 rxBadPLCP=1 rxBphyBadPLCP=0 rxBadFCS=0 rxFifo0Ovfl=0 rxFifo1Ovfl=0 rx_nobuf=0 rxAnyErr=40 rxResponseTimeout=1 rxNoDelim=22 rxFrmTooLong=0 rxFrmTooShort=0
+error	19:30:06.531905+0100	wifid	LQM-WiFi: (HighBand) txRTSFrm=3 txRTSFail=0 rxCTSUcast=3 rxRTSUcast=0 txCTSFrm=0 txAMPDU=3 rxBACK=2 txPhyError=0 txAllFrm=14 txMPDU=0 txUcast=8 rxACKUcast=5 OfdmDesense=0 dB
+error	19:30:06.532129+0100	wifid	LQM-WiFi: (HighBand) rxBeaconMbss=20 rxBeaconObss=0 rxDataUcastMbss=3 rxMgmtUcastMbss=0 rxCNTRLUcast=18 txACKFrm=0 txBACK=3 ctxFifoFull=0 ctxFifo2Full=0 rxDataMcast=6 rxMgmtMcast=20 rxDrop20s=14
+error	19:30:06.532641+0100	wifid	LQM-WiFi: RX AMPDU (HighBand) rxAmpdu=3 txBACK(Ucode)=3 rxMpduInAmpdu=3 rxholes=0 rxdup=0 rxstuck=0 rxoow=0 rxoos=0 rxaddbareq=0 txaddbaresp=0 rxbar=0 txdelba=0 rxdelba=0 rxQueued=0 rxRetryNoBA=0
+error	19:30:06.532687+0100	wifid	LQM-WiFi: WME RX MPDUs (rxPER 0 %) in tids 0:7, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0
+error	19:30:06.533303+0100	wifid	LQM-WiFi:  (HighBand) rxToss=2 rxLastTossRsn=39 rxNoFrag=0 rxNoCmplId=0 rxNoHaddr=0 rxMulti=3 rxUndec=0
+error	19:30:06.533535+0100	wifid	LQM-WiFi: TX(00:00:00:00:00:00) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> BE<8 0 0 0 0 0 0 0 0 0 0> (5000ms)
+error	19:30:06.533723+0100	wifid	LQM-WiFi: TX(00:00:00:00:00:00) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> BK<0 0 0 0 0 0 0 0 0 0 0> (5000ms)
+error	19:30:06.533766+0100	wifid	LQM-WiFi: TX(00:00:00:00:00:00) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> VI<0 0 0 0 0 0 0 0 0 0 0> (5000ms)
+error	19:30:06.534115+0100	wifid	LQM-WiFi: TX(00:00:00:00:00:00) AC<SU MS NB NRS NA CM EX TF FFP MRET FLE> VO<1 0 0 0 0 0 0 0 0 0 0> (5000ms)
+error	19:30:06.534380+0100	wifid	LQM-WiFi: L3 Control VO TX(00:00:00:00:00:00) Success=1 NoACK=0 Expired=0 OtherErr=0
+error	19:30:06.534435+0100	wifid	__WiFiLQAMgrCheckForPossibleRoam waitForRoam: 1, plausibleRoamCandidateFound: 0, lastScanAge: 801945006.53, largeNetworkEnvironment: 0, isRealTimeApplication: 0, isEdgeBss: 1
