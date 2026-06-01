@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "UpD8wjBjUd1ATP_WkJ40y"
+uri = "file://.local/handoff/mylocaltrade-loop-fix.zip"
+type = "unspecified"
+title = "Fix buclă infinită — 2 fișiere (revenuecat.tsx + billing.tsx)"
