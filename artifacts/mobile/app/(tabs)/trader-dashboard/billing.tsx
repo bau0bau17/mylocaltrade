@@ -23,10 +23,14 @@ export default function BillingScreen() {
   const subscription = useSubscription();
   const busy = cancelling || resuming;
 
+  // Depend on the stable members, NOT the whole `subscription` object: the
+  // provider rebuilds that object every render, so depending on it would make
+  // this focus effect run on every render and spin an infinite refresh loop.
+  const { isSupported: subSupported, refresh: subRefresh } = subscription;
   useFocusEffect(useCallback(() => {
     refetch();
-    if (subscription.isSupported) subscription.refresh();
-  }, [refetch, subscription]));
+    if (subSupported) subRefresh();
+  }, [refetch, subSupported, subRefresh]));
 
   const manageApple = async () => {
     // Customer Center is the full self-service surface (manage, cancel, refund,
