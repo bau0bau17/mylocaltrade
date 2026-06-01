@@ -31,3 +31,28 @@ is gated on the Test Store key being present (dev + preview, never production).
 **How to apply:** triage order for empty iOS offerings = (1) device sandbox
 storefront, (2) territory availability + product state, (3) RC package types /
 current offering. Always read storekitd before blaming metadata.
+
+## Test Store variant — "no Test Store products registered" with a test_ key
+Different cause from the StoreKit one above. With a development build (__DEV__,
+test_ key) the SDK reads the **RevenueCat Test Store**, not StoreKit. If it
+errors "configured with a Test Store API key, but there are no Test Store
+products registered", the real cause is usually that the current offering's
+packages ($rc_monthly / $rc_annual) have only the **App Store** product attached
+and NOT the Test Store product. The test_store app can have valid products +
+prices, yet the packages never link them → SDK sees no test-store product in the
+offering. Fix: attach the test_store product to each package
+(attachProductsToPackage). **Why:** a package can hold one product per platform;
+missing the test_store one makes the offering "empty" for a test key only.
+
+**Verify attachments via `GET /projects/{pid}/packages/{package_id}/products`** —
+NOT `GET /offerings/{oid}/packages/{package_id}` (that returns undefined/no
+product list and falsely looks empty).
+
+**Test store prices API is POST-only, upsert-per-currency.** PUT and DELETE on
+`/products/{id}/test_store_prices` both return 405; there is no per-currency
+delete (DELETE /test_store_prices/{currency} → resource_missing). POST a new
+currency ADDS it (does not replace), and POSTing an existing currency errors
+resource_already_exists. So you cannot remove a wrong currency (e.g. a leftover
+USD price) via the API — leave it and force the displayed currency by setting the
+**iOS Simulator region** (Settings → General → Language & Region → United
+Kingdom) so the Test Store picks the GBP price.
