@@ -25,5 +25,4 @@ for badges/entitlements; the traders list filter uses
 discoverable and badged before they re-sync.
 
 **Note:** plan columns are `varchar(20)`; the id change was values-only, no
-migration. User is NOT VAT registered — this is an accounting note only; never
-change Apple IAP price display because of it.
+migration.

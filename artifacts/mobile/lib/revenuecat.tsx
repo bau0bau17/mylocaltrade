@@ -38,14 +38,24 @@ const TEST_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '';
 const IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
 const ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY ?? '';
 
+// Opt-in flag that forces the RevenueCat Test Store key even in a release
+// (standalone, __DEV__=false) build. Set ONLY by the "uat" EAS profile so the
+// pricing UI can be verified on a real device without Metro and without Apple
+// sandbox configuration. preview/production never set this flag, so their
+// behaviour is unchanged.
+const FORCE_TEST_STORE =
+  process.env.EXPO_PUBLIC_REVENUECAT_USE_TEST_STORE === 'true';
+
 // Pick the right RevenueCat SDK key for this build:
-//  - Development / preview builds use the RevenueCat Test Store key so the full
+//  - Development builds (__DEV__) use the RevenueCat Test Store key so the full
 //    purchase + paywall flow can be exercised without App Store / Play Store
 //    configuration.
-//  - Production builds use the platform App Store / Play Store key.
+//  - The "uat" profile opts in to the Test Store key in a standalone build via
+//    FORCE_TEST_STORE (device install, no Metro).
+//  - preview / production builds use the platform App Store / Play Store key.
 function resolvePlatformApiKey(): string {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') return '';
-  if (__DEV__ && TEST_API_KEY) return TEST_API_KEY;
+  if ((__DEV__ || FORCE_TEST_STORE) && TEST_API_KEY) return TEST_API_KEY;
   return Platform.OS === 'ios' ? IOS_API_KEY : ANDROID_API_KEY;
 }
 
@@ -116,8 +126,9 @@ async function ensureConfigured(): Promise<PurchasesDefault | null> {
         if (DIAGNOSTICS_ENABLED) {
           console.log(
             `[RC] configure platform=${Platform.OS} __DEV__=${__DEV__} ` +
+              `forceTestStore=${FORCE_TEST_STORE} ` +
               `keyPrefix=${platformApiKey.slice(0, 5)} ` +
-              `usingTestKey=${__DEV__ && TEST_API_KEY.length > 0}`,
+              `usingTestKey=${(__DEV__ || FORCE_TEST_STORE) && TEST_API_KEY.length > 0}`,
           );
         }
         await P.configure({ apiKey: platformApiKey });
