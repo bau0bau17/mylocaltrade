@@ -40,3 +40,4 @@ REVENUECAT_PROJECT_ID = "proja2b11716"
 
 [nix]
 channel = "stable-25_05"
+packages = ["zip"]
