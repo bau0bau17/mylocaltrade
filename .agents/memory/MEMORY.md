@@ -1,3 +1,4 @@
 - [expo-router NativeTabs hidden triggers](expo-router-native-tabs-hidden-triggers.md) — native iOS build opens but inner screens (login/legal/pricing) won't navigate; unstable NativeTabs can't router.push to hidden triggers; force classic Tabs.
 - [RevenueCat empty offerings debugging](revenuecat-empty-offerings-debugging.md) — RC "offerings empty" error is generic; read device storekitd: storefront=(null) means no sandbox account, not Missing Metadata. Triage order inside.
+- [RevenueCat Test Store is debug-only](revenuecat-test-store-debug-only.md) — test_ key fatally crashes Release builds at configure; no standalone/no-Metro Test Store build exists. Don't force it.
 - [GestureHandlerRootView flex](gesturehandlerrootview-release-touches.md) — root GestureHandlerRootView needs style flex:1 (best practice); note plain RN Pressable does NOT route through RNGH so this alone rarely kills all taps.
