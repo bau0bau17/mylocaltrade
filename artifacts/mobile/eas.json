@@ -29,6 +29,19 @@
         "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_qHukXmrQAVympYwzJvgUmuuFcrW"
       }
     },
+    "uat": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://mylocaltrade.replit.app",
+        "EXPO_PUBLIC_REVENUECAT_USE_TEST_STORE": "true",
+        "EXPO_PUBLIC_REVENUECAT_TEST_API_KEY": "test_qbWESyJrXDmlctafkOtDEaJqYTW",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_BIVAfGioOyQNZKAYqDNZkTtBnOk",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_qHukXmrQAVympYwzJvgUmuuFcrW"
+      }
+    },
     "production": {
       "autoIncrement": true,
       "env": {
