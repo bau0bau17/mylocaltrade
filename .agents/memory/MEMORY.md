@@ -2,3 +2,4 @@
 - [RevenueCat empty offerings debugging](revenuecat-empty-offerings-debugging.md) — RC "offerings empty" error is generic; read device storekitd: storefront=(null) means no sandbox account, not Missing Metadata. Triage order inside.
 - [RevenueCat Test Store is debug-only](revenuecat-test-store-debug-only.md) — test_ key fatally crashes Release builds at configure; no standalone/no-Metro Test Store build exists. Don't force it.
 - [GestureHandlerRootView flex](gesturehandlerrootview-release-touches.md) — root GestureHandlerRootView needs style flex:1 (best practice); note plain RN Pressable does NOT route through RNGH so this alone rarely kills all taps.
+- [.replit [nix] change kills workflows](replit-nix-change-needs-rebuild.md) — after a .replit [nix] packages edit (e.g. export adds zip), workflows start then die; restart_workflow lies; fix = user reloads workspace to rebuild env.
