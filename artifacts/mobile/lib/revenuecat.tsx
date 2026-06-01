@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -107,6 +108,19 @@ function customerInfoSignature(info: CustomerInfo | null): string {
     subs: [...(info.activeSubscriptions ?? [])].sort(),
     products: [...(info.allPurchasedProductIdentifiers ?? [])].sort(),
     mgmt: info.managementURL ?? '',
+  });
+}
+
+// getOfferings() likewise returns a fresh PurchasesOffering object every call.
+// Same loop risk as customer info, so we set state only when the meaningful
+// shape (offering id + each package's id/product/price) actually changes.
+function offeringSignature(offering: PurchasesOffering | null): string {
+  if (!offering) return 'null';
+  return JSON.stringify({
+    id: offering.identifier,
+    pkgs: (offering.availablePackages ?? []).map(
+      (p) => `${p.identifier}:${p.product.identifier}:${p.product.priceString}`,
+    ),
   });
 }
 
@@ -250,6 +264,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const lastUserIdRef = useRef<string | null>(null);
   const lastInfoSigRef = useRef<string | undefined>(undefined);
+  const lastOfferingSigRef = useRef<string | undefined>(undefined);
 
   const applyCustomerInfo = useCallback((info: CustomerInfo | null) => {
     // Skip redundant updates: RevenueCat returns a fresh object on every fetch,
@@ -285,7 +300,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           }),
         );
       }
-      setOffering(offerings.current ?? null);
+      const next = offerings.current ?? null;
+      // Skip redundant updates (see offeringSignature): an identical re-fetch
+      // must not change state, or it re-renders subscribers and can spin a loop.
+      const sig = offeringSignature(next);
+      if (sig !== lastOfferingSigRef.current) {
+        lastOfferingSigRef.current = sig;
+        setOffering(next);
+      }
     } catch (e) {
       console.warn('RevenueCat getOfferings failed', e);
     }
@@ -430,22 +452,40 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const activeEntitlement = findActiveTraderEntitlement(customerInfo);
 
-  const value: SubscriptionContextValue = {
-    isSupported: isPurchasesSupported,
-    isReady,
-    isLoading,
-    monthlyPackage: pickPackage(offering, 'monthly'),
-    annualPackage: pickPackage(offering, 'annual'),
-    hasTraderSubscription: !!activeEntitlement,
-    activeProductId: activeEntitlement?.productIdentifier ?? null,
-    expiresAt: activeEntitlement?.expirationDate ?? null,
-    refresh,
-    purchase,
-    restore,
-    manageSubscriptions,
-    presentPaywall,
-    presentCustomerCenter,
-  };
+  // Memoize so the context value only changes when its inputs actually change.
+  // Without this the object is rebuilt every render, and any consumer that
+  // depends on the whole `subscription` object in effect deps would re-run on
+  // every render (a classic infinite-loop footgun).
+  const value: SubscriptionContextValue = useMemo(
+    () => ({
+      isSupported: isPurchasesSupported,
+      isReady,
+      isLoading,
+      monthlyPackage: pickPackage(offering, 'monthly'),
+      annualPackage: pickPackage(offering, 'annual'),
+      hasTraderSubscription: !!activeEntitlement,
+      activeProductId: activeEntitlement?.productIdentifier ?? null,
+      expiresAt: activeEntitlement?.expirationDate ?? null,
+      refresh,
+      purchase,
+      restore,
+      manageSubscriptions,
+      presentPaywall,
+      presentCustomerCenter,
+    }),
+    [
+      isReady,
+      isLoading,
+      offering,
+      activeEntitlement,
+      refresh,
+      purchase,
+      restore,
+      manageSubscriptions,
+      presentPaywall,
+      presentCustomerCenter,
+    ],
+  );
 
   return (
     <SubscriptionContext.Provider value={value}>

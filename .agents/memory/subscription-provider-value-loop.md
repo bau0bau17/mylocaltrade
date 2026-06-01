@@ -24,8 +24,11 @@ this compounds into an infinite loop.
   (`const { refresh, isSupported } = subscription;` then deps `[refresh, isSupported]`),
   never the whole `subscription` object. `refresh` is a stable `useCallback` that
   only rotates on auth-token change; `isSupported` is a module constant.
-- Defensive backstop in `lib/revenuecat.tsx`: `applyCustomerInfo` skips
-  `setCustomerInfo` when a stable `customerInfoSignature` (active entitlements,
-  active subscriptions, purchased product ids, management URL) is unchanged.
-- Optional future hardening: wrap the context `value` in `useMemo` so accidental
-  whole-object deps stop being a footgun.
+- Defensive backstops in `lib/revenuecat.tsx` (BOTH are needed — guarding only one
+  setter just moves the loop to the other): `applyCustomerInfo` skips
+  `setCustomerInfo` when a stable `customerInfoSignature` is unchanged, and
+  `loadOfferings` skips `setOffering` when a stable `offeringSignature`
+  (offering id + each package's id/product/price) is unchanged. Symptom of a
+  half-fix: LogBox error hops from `setCustomerInfo` to `setOffering`.
+- The context `value` is wrapped in `useMemo` so accidental whole-object deps
+  stop being a footgun.
