@@ -87,6 +87,29 @@ function findActiveTraderEntitlement(
   return null;
 }
 
+// getCustomerInfo()/purchase()/restore() each return a BRAND NEW CustomerInfo
+// object every call (and the requestDate inside it changes every time). Setting
+// state with each one re-renders all subscribers even when nothing meaningful
+// changed, which can drive a render→refresh→setState loop in consumers. We
+// compare a stable signature of the fields the app actually cares about so
+// repeated identical refreshes become no-ops.
+function customerInfoSignature(info: CustomerInfo | null): string {
+  if (!info) return 'null';
+  const active = info.entitlements.active;
+  const ents = Object.keys(active)
+    .sort()
+    .map((k) => {
+      const e = active[k];
+      return `${k}:${e.productIdentifier}:${e.expirationDate ?? ''}:${e.isActive}:${e.willRenew}`;
+    });
+  return JSON.stringify({
+    ents,
+    subs: [...(info.activeSubscriptions ?? [])].sort(),
+    products: [...(info.allPurchasedProductIdentifiers ?? [])].sort(),
+    mgmt: info.managementURL ?? '',
+  });
+}
+
 // Expo Go ships as the "storeClient" execution environment and has no native
 // RevenueCat module. dev/production builds report "standalone" or "bare".
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
@@ -226,8 +249,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const lastUserIdRef = useRef<string | null>(null);
+  const lastInfoSigRef = useRef<string | undefined>(undefined);
 
   const applyCustomerInfo = useCallback((info: CustomerInfo | null) => {
+    // Skip redundant updates: RevenueCat returns a fresh object on every fetch,
+    // so without this guard an identical refresh still re-renders subscribers
+    // and can spin a render→refresh→setState loop.
+    const sig = customerInfoSignature(info);
+    if (sig === lastInfoSigRef.current) return;
+    lastInfoSigRef.current = sig;
     setCustomerInfo(info);
   }, []);
 
