@@ -34,25 +34,42 @@ current offering. Always read storekitd before blaming metadata.
 
 ## Test Store variant — "no Test Store products registered" with a test_ key
 Different cause from the StoreKit one above. With a development build (__DEV__,
-test_ key) the SDK reads the **RevenueCat Test Store**, not StoreKit. If it
-errors "configured with a Test Store API key, but there are no Test Store
-products registered", the real cause is usually that the current offering's
-packages ($rc_monthly / $rc_annual) have only the **App Store** product attached
-and NOT the Test Store product. The test_store app can have valid products +
-prices, yet the packages never link them → SDK sees no test-store product in the
-offering. Fix: attach the test_store product to each package
-(attachProductsToPackage). **Why:** a package can hold one product per platform;
-missing the test_store one makes the offering "empty" for a test key only.
+test_ key) the SDK reads the **RevenueCat Test Store**, not StoreKit. Error:
+"configured with a Test Store API key, but there are no Test Store products
+registered" == the served offerings response has zero packages.
+
+**REAL ROOT CAUSE (verified): the offerings response the SDK consumes (v2 admin
+API's edge-served config) is CACHED, and v2 writes to products / prices /
+package-attachments / entitlement-attachments do NOT bust that cache. The dashboard
+(v2 admin GET) shows everything correct while the SDK keeps getting empty packages.
+The fix that regenerates the served config is to UPDATE THE OFFERING itself:**
+`updateOffering({ ..., body: { display_name: <same value> } })` — a no-op touch is
+enough. Immediately after, packages appear. **Why:** RevenueCat rebuilds the
+offering's served payload on offering mutation, not on child-entity mutation.
+**How to apply:** after ANY scripted change to test-store products/prices/package
+links, always call updateOffering once to force a rebuild, then re-check.
+
+**Diagnose without the user's device — replicate the exact SDK fetch** with the
+public test_ key (it is a publishable client key, fine to use read-only):
+`GET https://api.revenuecat.com/v1/subscribers/{anyAnonId}/offerings`
+headers `Authorization: Bearer test_...`, `X-Platform: ios`, `X-Version: 8.0.0`.
+Response `offerings[0].packages` is EXACTLY what `getOfferings()` returns on
+device. `packages: []` here == currentPackageCount 0 on device. Use a fresh random
+anon id per call (the CONFIG cache is per-app, not per-user, so new ids don't bust
+it — only updateOffering does).
+
+Things that turned out NOT to be the cause (ruled out by experiment): missing
+product `title` (a create-only test-store field; absent on manually-made products
+yet they still serve fine once the offering is touched), missing entitlement
+attachment, GBP-vs-USD price, X-Platform/X-Version header values.
 
 **Verify attachments via `GET /projects/{pid}/packages/{package_id}/products`** —
-NOT `GET /offerings/{oid}/packages/{package_id}` (that returns undefined/no
-product list and falsely looks empty).
+NOT `GET /offerings/{oid}/packages/{package_id}` (returns no product list, looks
+falsely empty).
 
-**Test store prices API is POST-only, upsert-per-currency.** PUT and DELETE on
-`/products/{id}/test_store_prices` both return 405; there is no per-currency
-delete (DELETE /test_store_prices/{currency} → resource_missing). POST a new
-currency ADDS it (does not replace), and POSTing an existing currency errors
-resource_already_exists. So you cannot remove a wrong currency (e.g. a leftover
-USD price) via the API — leave it and force the displayed currency by setting the
-**iOS Simulator region** (Settings → General → Language & Region → United
-Kingdom) so the Test Store picks the GBP price.
+**Test store prices API is POST-only, upsert-per-currency.** PUT/DELETE on
+`/products/{id}/test_store_prices` return 405; no per-currency delete exists. POST
+a new currency ADDS it (does not replace); POSTing an existing currency errors
+resource_already_exists. Can't remove a leftover currency via API — force the
+displayed one by setting the iOS Simulator region (Settings → General → Language
+& Region → United Kingdom) so the Test Store picks GBP.
