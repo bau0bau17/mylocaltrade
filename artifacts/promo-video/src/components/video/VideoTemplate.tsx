@@ -10,7 +10,7 @@ import { Scene5 } from './video_scenes/Scene5';
 export const SCENE_DURATIONS = {
   hook: 5000,
   solution: 6000,
-  homeowner: 5000,
+  homeowner: 6500,
   trader: 5000,
   outro: 6000,
 };
