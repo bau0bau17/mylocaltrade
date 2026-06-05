@@ -65,13 +65,31 @@ export function Scene5() {
       </motion.p>
 
       <motion.div
-        className="mt-[6vh] flex space-x-[2vw] relative z-10"
+        className="mt-[6vh] flex space-x-[1.5vw] relative z-10"
         initial={{ opacity: 0, y: '3vh' }}
         animate={phase >= 3 ? { opacity: 1, y: 0 } : { opacity: 0, y: '3vh' }}
         transition={{ duration: 0.6 }}
       >
-        <div className="px-[3vw] py-[2vh] rounded-full bg-white text-[#0B1120] font-bold text-[1.5vw] shadow-[0_0_30px_rgba(255,255,255,0.3)] hover:scale-105 transition-transform cursor-default">
-          Download the App
+        {/* App Store badge */}
+        <div className="flex items-center gap-[1vw] px-[2vw] py-[1.4vh] rounded-[1vw] bg-black border border-white/25 shadow-[0_1vh_3vh_rgba(0,0,0,0.5)]">
+          <svg viewBox="0 0 24 24" fill="white" className="w-[2.6vw] h-[2.6vw] shrink-0">
+            <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.464 2.338-1.282 3.714 1.345.104 2.726-.688 3.57-1.701"/>
+          </svg>
+          <div className="flex flex-col leading-none text-white text-left">
+            <span className="text-[0.85vw] font-medium tracking-wide">Download on the</span>
+            <span className="text-[1.6vw] font-semibold -mt-[0.3vh]">App Store</span>
+          </div>
+        </div>
+
+        {/* Google Play badge */}
+        <div className="flex items-center gap-[1vw] px-[2vw] py-[1.4vh] rounded-[1vw] bg-black border border-white/25 shadow-[0_1vh_3vh_rgba(0,0,0,0.5)]">
+          <svg viewBox="0 0 24 24" fill="white" className="w-[2.4vw] h-[2.4vw] shrink-0">
+            <path d="M22.018 13.298l-3.919 2.218-3.515-3.493 3.543-3.521 3.891 2.202a1.49 1.49 0 0 1 0 2.594zM1.337.924a1.486 1.486 0 0 0-.112.568v21.017c0 .217.045.419.124.6l11.155-11.087L1.337.924zm12.207 10.065l3.258-3.238L3.45.195a1.466 1.466 0 0 0-.946-.179l11.04 10.973zm0 2.067l-11 10.933c.298.036.612-.016.906-.183l13.324-7.54-3.23-3.21z"/>
+          </svg>
+          <div className="flex flex-col leading-none text-white text-left">
+            <span className="text-[0.85vw] font-medium tracking-wide">GET IT ON</span>
+            <span className="text-[1.6vw] font-semibold -mt-[0.3vh]">Google Play</span>
+          </div>
         </div>
       </motion.div>
       
