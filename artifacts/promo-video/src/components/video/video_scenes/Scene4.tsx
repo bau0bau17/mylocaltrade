@@ -75,7 +75,7 @@ export function Scene4() {
           
           <div className="flex items-center space-x-[2vw] mb-[3vh]">
             <div className="w-[6vw] h-[6vw] rounded-full bg-gray-700 overflow-hidden border-2 border-[#F59E0B]">
-              <img src={`${import.meta.env.BASE_URL}images/plumber.jpg`} className="w-full h-full object-cover" />
+              <img src={`${import.meta.env.BASE_URL}images/plumber.jpg`} className="w-full h-full object-cover object-top" />
             </div>
             <div>
               <h3 className="text-[2vw] font-bold">John's Plumbing</h3>

@@ -33,7 +33,7 @@ export function Scene2() {
             animate={phase >= 2 ? { x: 0, opacity: 1, rotate: -6 } : { x: '-10vw', opacity: 0, rotate: -6 }}
             transition={{ type: 'spring', stiffness: 200, damping: 25 }}
           >
-            <img src={`${import.meta.env.BASE_URL}images/plumber.jpg`} className="w-full h-full object-cover" />
+            <img src={`${import.meta.env.BASE_URL}images/plumber.jpg`} className="w-full h-full object-cover object-top" />
             <div className="absolute bottom-0 left-0 right-0 p-[2vh] bg-gradient-to-t from-black/80 to-transparent">
               <p className="text-[1.5vw] font-semibold">Verified Plumbers</p>
             </div>
