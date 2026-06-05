@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/promo-video/"
+title = "MyLocalTrade Promo"
+version = "1.0.0"
+id = "artifacts/promo-video"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/promo-video/" ]
+localPort = 22228
+
+[services.development]
+run = "pnpm --filter @workspace/promo-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/promo-video", "run", "build" ]
+publicDir = "artifacts/promo-video/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22228"
+BASE_PATH = "/promo-video/"

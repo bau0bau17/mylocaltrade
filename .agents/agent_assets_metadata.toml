@@ -6,3 +6,27 @@ id = "UpD8wjBjUd1ATP_WkJ40y"
 uri = "file://.local/handoff/mylocaltrade-loop-fix.zip"
 type = "unspecified"
 title = "Fix buclă infinită — 2 fișiere (revenuecat.tsx + billing.tsx)"
+
+[[outputs]]
+id = "0DaxFDp3fBSAZKny1YMG8"
+uri = "file://artifacts/promo-video/public/images/plumber.jpg"
+type = "image"
+title = "professional plumber working confident smiling"
+
+[[outputs]]
+id = "IB2umH4QLTaVkSwhkmlra"
+uri = "file://artifacts/promo-video/public/images/home.jpg"
+type = "image"
+title = "modern beautiful home interior uk living room"
+
+[[outputs]]
+id = "ovoa7nt4HlioIsLiK56Ls"
+uri = "file://artifacts/promo-video/public/images/electrician.jpg"
+type = "image"
+title = "electrician working confident"
+
+[[outputs]]
+id = "MyTBhRps-rj3BcKJvuxHD"
+uri = "file://artifacts/promo-video/public/audio/bg_music.mp3"
+type = "audio"
+title = "background music"
