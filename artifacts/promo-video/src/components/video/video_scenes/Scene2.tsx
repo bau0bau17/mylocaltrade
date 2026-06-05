@@ -8,10 +8,10 @@ export function Scene2() {
   useEffect(() => {
     const timers = [
       setTimeout(() => setPhase(1), 200),
-      setTimeout(() => setPhase(2), 800),
-      setTimeout(() => setPhase(3), 1600),
-      setTimeout(() => setPhase(4), 2400),
-      setTimeout(() => setPhase(5), 4800), // Exiting
+      setTimeout(() => setPhase(2), 700),
+      setTimeout(() => setPhase(3), 1300),
+      setTimeout(() => setPhase(4), 1900),
+      setTimeout(() => setPhase(5), 2500),
     ];
     return () => timers.forEach(t => clearTimeout(t));
   }, []);
@@ -28,9 +28,9 @@ export function Scene2() {
         {/* Left Side: Images */}
         <div className="w-[45%] h-full relative">
           <motion.div
-            className="absolute top-[15%] left-[10%] w-[25vw] h-[35vh] rounded-2xl overflow-hidden shadow-2xl border border-white/10"
-            initial={{ x: '-10vw', opacity: 0, rotate: -5 }}
-            animate={phase >= 2 ? { x: 0, opacity: 1, rotate: -5 } : { x: '-10vw', opacity: 0, rotate: -5 }}
+            className="absolute top-[5%] left-[3%] w-[21vw] h-[29vh] rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+            initial={{ x: '-10vw', opacity: 0, rotate: -6 }}
+            animate={phase >= 2 ? { x: 0, opacity: 1, rotate: -6 } : { x: '-10vw', opacity: 0, rotate: -6 }}
             transition={{ type: 'spring', stiffness: 200, damping: 25 }}
           >
             <img src={`${import.meta.env.BASE_URL}images/plumber.jpg`} className="w-full h-full object-cover" />
@@ -40,14 +40,26 @@ export function Scene2() {
           </motion.div>
           
           <motion.div
-            className="absolute top-[45%] left-[25%] w-[25vw] h-[35vh] rounded-2xl overflow-hidden shadow-2xl border border-white/10"
-            initial={{ x: '-10vw', opacity: 0, rotate: 5 }}
-            animate={phase >= 3 ? { x: 0, opacity: 1, rotate: 5 } : { x: '-10vw', opacity: 0, rotate: 5 }}
+            className="absolute top-[33%] left-[20%] w-[21vw] h-[29vh] rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+            initial={{ x: '-10vw', opacity: 0, rotate: 4 }}
+            animate={phase >= 3 ? { x: 0, opacity: 1, rotate: 4 } : { x: '-10vw', opacity: 0, rotate: 4 }}
             transition={{ type: 'spring', stiffness: 200, damping: 25 }}
           >
             <img src={`${import.meta.env.BASE_URL}images/electrician.jpg`} className="w-full h-full object-cover" />
             <div className="absolute bottom-0 left-0 right-0 p-[2vh] bg-gradient-to-t from-black/80 to-transparent">
               <p className="text-[1.5vw] font-semibold">Expert Electricians</p>
+            </div>
+          </motion.div>
+
+          <motion.div
+            className="absolute top-[61%] left-[5%] w-[21vw] h-[29vh] rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+            initial={{ x: '-10vw', opacity: 0, rotate: -3 }}
+            animate={phase >= 4 ? { x: 0, opacity: 1, rotate: -3 } : { x: '-10vw', opacity: 0, rotate: -3 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+          >
+            <img src={`${import.meta.env.BASE_URL}images/cleaning.jpg`} className="w-full h-full object-cover" />
+            <div className="absolute bottom-0 left-0 right-0 p-[2vh] bg-gradient-to-t from-black/80 to-transparent">
+              <p className="text-[1.5vw] font-semibold">Trusted Cleaners</p>
             </div>
           </motion.div>
         </div>
@@ -94,7 +106,7 @@ export function Scene2() {
                 key={i}
                 className="flex items-center space-x-[1.5vw]"
                 initial={{ opacity: 0, y: '2vh' }}
-                animate={phase >= 4 ? { opacity: 1, y: 0 } : { opacity: 0, y: '2vh' }}
+                animate={phase >= 5 ? { opacity: 1, y: 0 } : { opacity: 0, y: '2vh' }}
                 transition={{ duration: 0.5, delay: i * 0.15 }}
               >
                 <div className="w-[3vw] h-[3vw] rounded-full bg-[#00B4D8]/20 flex items-center justify-center text-[#00B4D8]">

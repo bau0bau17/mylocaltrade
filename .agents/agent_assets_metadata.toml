@@ -6,6 +6,12 @@ uri = "file://attached_assets/generated_images/male-tradesperson.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "rNA6BgtQHDDYHqEpDA-d_"
+uri = "file://attached_assets/generated_images/cleaning-supplies.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "UpD8wjBjUd1ATP_WkJ40y"
 uri = "file://.local/handoff/mylocaltrade-loop-fix.zip"
