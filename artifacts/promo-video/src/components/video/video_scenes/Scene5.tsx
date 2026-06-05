@@ -26,12 +26,31 @@ export function Scene5() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#00B4D8]/20 via-[#0B1120] to-[#0B1120]" />
 
       <motion.div
-        className="w-[25vw] mb-[4vh] relative z-10"
+        className="flex items-center gap-[2vw] mb-[5vh] relative z-10"
         initial={{ opacity: 0, y: '5vh' }}
         animate={phase >= 1 ? { opacity: 1, y: 0 } : { opacity: 0, y: '5vh' }}
         transition={{ type: 'spring', stiffness: 200, damping: 20 }}
       >
-        <img src={logoPng} alt="MyLocalTrade Logo" className="w-full h-auto" />
+        {/* App icon tile */}
+        <div className="relative shrink-0">
+          <div className="absolute -inset-[1.2vw] rounded-[2.6vw] bg-[#00B4D8]/30 blur-[2.5vw]" />
+          <img
+            src={logoPng}
+            alt="MyLocalTrade"
+            className="relative w-[8vw] h-[8vw] rounded-[1.9vw] ring-1 ring-white/20 shadow-[0_1.5vh_4vh_rgba(0,0,0,0.55)]"
+          />
+        </div>
+
+        {/* Wordmark lockup */}
+        <div className="flex items-center gap-[1.1vw]">
+          <div className="w-[0.45vw] h-[4.6vw] rounded-full bg-[#00B4D8]" />
+          <span
+            className="text-[5.4vw] font-bold tracking-tighter leading-none text-white"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            MyLocalTrade
+          </span>
+        </div>
       </motion.div>
 
       <motion.p
