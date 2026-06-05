@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import appScreenshot from '@assets/Screenshot_2026-06-05_at_08.24.59_1780644302482.png';
+
+const appScreen = `${import.meta.env.BASE_URL}images/app-home.jpg`;
 
 export function Scene3() {
   const [phase, setPhase] = useState(0);
@@ -89,11 +90,19 @@ export function Scene3() {
                transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
                className="w-full h-full relative flex justify-center items-center"
             >
-              <img 
-                src={appScreenshot} 
-                alt="MyLocalTrade App" 
-                className="w-full h-full object-contain drop-shadow-[0_20px_50px_rgba(6,214,160,0.4)]"
-              />
+              {/* Phone body */}
+              <div className="relative h-full aspect-[390/844] rounded-[3.2vw] bg-[#0A0D13] p-[0.7vw] ring-1 ring-white/10 shadow-[0_30px_80px_rgba(6,214,160,0.35),0_12px_40px_rgba(0,0,0,0.65)]">
+                {/* Screen */}
+                <div className="relative w-full h-full rounded-[2.6vw] overflow-hidden bg-black">
+                  <img
+                    src={appScreen}
+                    alt="MyLocalTrade App"
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Dynamic island */}
+                  <div className="absolute top-[1.1vh] left-1/2 -translate-x-1/2 w-[7vw] h-[1.5vh] rounded-full bg-black z-10" />
+                </div>
+              </div>
             </motion.div>
           </motion.div>
         </div>
