@@ -116,6 +116,7 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
         vatNumber: traderProfilesTable.vatNumber,
         businessEmailDomain: traderProfilesTable.businessEmailDomain,
         website: traderProfilesTable.website,
+        plan: traderProfilesTable.plan,
       })
       .from(traderProfilesTable)
       .where(eq(traderProfilesTable.userId, userId))
@@ -145,8 +146,17 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
     // so re-saving the gallery doesn't re-fetch metadata for every image.
     if (Array.isArray(updateData.galleryUrls)) {
       const newUrls = updateData.galleryUrls as unknown[];
-      if (newUrls.length > 999) {
-        res.status(400).json({ error: "Too many gallery images." });
+      // Gallery size is plan-gated: Basic (free, verified) traders may keep up
+      // to 3 photos; Premium unlocks effectively unlimited images.
+      const premiumPlanIds = new Set(["premium", "trader"]);
+      const isPremium = !!prior?.plan && premiumPlanIds.has(prior.plan);
+      const galleryCap = isPremium ? 999 : 3;
+      if (newUrls.length > galleryCap) {
+        res.status(400).json({
+          error: isPremium
+            ? "Too many gallery images."
+            : "Your Basic plan allows up to 3 gallery photos. Upgrade to Premium for unlimited photos.",
+        });
         return;
       }
       const [existing] = await db

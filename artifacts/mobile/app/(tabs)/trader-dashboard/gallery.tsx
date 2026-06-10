@@ -129,7 +129,7 @@ export default function GalleryScreen() {
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.sectionTitle}>Gallery Images</Text>
-          <Text style={styles.counter}>{galleryUrls.length}/{maxImages === 999 ? 'Unlimited' : maxImages}</Text>
+          <Text style={styles.counter}>{galleryUrls.length}/{Number.isFinite(maxImages) ? maxImages : 'Unlimited'}</Text>
         </View>
 
         <Text style={styles.description}>

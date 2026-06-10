@@ -177,7 +177,7 @@ export type TraderStatus = (typeof TRADER_STATUS)[keyof typeof TRADER_STATUS];
 export function isTraderProfilePublic(
   user: Pick<User, "emailVerified" | "isActive" | "role" | "deletedAt" | "deletionStatus">,
   profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive" | "businessRole" | "authorisedRepresentative" | "revalidationOverdue">,
-  subscription?: { status: string | null } | null,
+  _subscription?: { status: string | null } | null,
   documents?: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[] | null,
 ): boolean {
   if (user.role !== "trader") return false;
@@ -191,11 +191,9 @@ export function isTraderProfilePublic(
   // Periodic re-validation: a verified trader who let the grace period lapse
   // without re-confirming their key documents is hidden until they re-confirm.
   if (profile.revalidationOverdue) return false;
-  // Phase 6: subscription must be active for the profile to be public.
-  // If a caller doesn't pass subscription info, fall back on profile.isActive — the
-  // subscription activation flow flips that flag on, and cancellation flips it off,
-  // so the field stays in sync. The explicit check is preferred when available.
-  if (subscription !== undefined && subscription?.status !== "active") return false;
+  // Listing is driven by verification (free Basic), not by a paid subscription.
+  // A verified, active profile is public regardless of subscription state;
+  // Premium only adds perks (featured placement, ranking, enhanced profile).
   // Phase 7: any expired required document hides the profile.
   if (documents) {
     const evaluation = evaluateDocumentsComplete(documents, {
@@ -397,28 +395,28 @@ export function buildOnboardingChecklist(
     },
     {
       key: "subscription",
-      label: "Subscription active",
+      label: "Premium (optional)",
       state: !verified
         ? "locked"
         : subActive
           ? "completed"
-          : "action_required",
+          : "pending",
       description: !verified
         ? "Get verified first."
         : subActive
           ? subCancelling
             ? `${(subscription?.planId ?? "Plan").toString().toUpperCase()} — cancels at period end.`
             : `${(subscription?.planId ?? "Plan").toString().toUpperCase()} plan active.`
-          : "Choose a plan to make your profile live.",
+          : "Optional — upgrade to Premium any time for a featured listing, higher search ranking and unlimited gallery photos.",
     },
     {
       key: "live",
       label: "Profile live",
-      state: profile.isActive && verified && subActive ? "completed" : "locked",
-      description: profile.isActive && verified && subActive
+      state: profile.isActive && verified ? "completed" : "locked",
+      description: profile.isActive && verified
         ? "Your profile is visible to customers."
-        : verified && !subActive
-          ? "Activate a subscription to publish."
+        : verified
+          ? "Your profile goes live as soon as you're approved."
           : undefined,
     },
   ];
@@ -442,7 +440,7 @@ export function statusMessage(profile: Pick<TraderProfile, "verificationStatus" 
         ? `We need a bit more information before we can verify your account: ${profile.needsMoreInfoReason}`
         : "We need a bit more information before we can verify your account. Please check your dashboard for details.";
     case TRADER_STATUS.VERIFIED:
-      return "Your profile is verified. Choose a subscription plan to make it live.";
+      return "Your profile is verified and live for customers. Upgrade to Premium any time for a featured listing and more.";
     case TRADER_STATUS.REJECTED:
       return profile.rejectionReason
         ? `Your application was rejected: ${profile.rejectionReason}`

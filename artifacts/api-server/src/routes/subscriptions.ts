@@ -10,7 +10,7 @@ import {
   promoRedemptionsTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { authMiddleware, traderOnly, revokeUserSessions } from "../lib/auth";
+import { authMiddleware, traderOnly } from "../lib/auth";
 import { CreateCheckoutSessionBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
@@ -348,14 +348,13 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
 
       await tx
         .update(usersTable)
-        .set({ plan: planId, isActive: true })
+        .set({ plan: planId })
         .where(eq(usersTable.id, userId));
 
       await tx
         .update(traderProfilesTable)
         .set({
           plan: planId,
-          isActive: true,
           isFeatured: planId === "premium",
           updatedAt: new Date(),
         })
@@ -528,25 +527,18 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
         });
       }
 
-      // Ensure the profile is live. When Stripe owns the subscription row we
-      // leave its plan label intact and only guarantee the account is active.
-      if (stripeOwned) {
+      // Grant Premium perks. When Stripe owns the subscription row we leave it
+      // entirely intact (web Stripe is the source of truth there). Public
+      // listing is driven by verification, not subscription, so we never touch
+      // isActive here — losing Premium must never unlist a verified trader.
+      if (!stripeOwned) {
         await tx
           .update(usersTable)
-          .set({ isActive: true })
+          .set({ plan: RC_PLAN_ID })
           .where(eq(usersTable.id, userId));
         await tx
           .update(traderProfilesTable)
-          .set({ isActive: true, updatedAt: new Date() })
-          .where(eq(traderProfilesTable.userId, userId));
-      } else {
-        await tx
-          .update(usersTable)
-          .set({ plan: RC_PLAN_ID, isActive: true })
-          .where(eq(usersTable.id, userId));
-        await tx
-          .update(traderProfilesTable)
-          .set({ plan: RC_PLAN_ID, isActive: true, isFeatured: true, updatedAt: new Date() })
+          .set({ plan: RC_PLAN_ID, isFeatured: true, updatedAt: new Date() })
           .where(eq(traderProfilesTable.userId, userId));
       }
     });
@@ -695,7 +687,11 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
 
     res.json({
       plan: sub?.planId ?? user.plan,
-      status: sub?.status ?? (user.isActive ? "active" : "inactive"),
+      // Subscription status reflects the PAID subscription only. Listing is now
+      // driven by verification, so a free verified trader has no subscription
+      // row and must report "none" — never "active" derived from users.isActive
+      // (that would hide the upgrade CTA from exactly the free traders it targets).
+      status: sub?.status ?? "none",
       currentPeriodStart: sub?.currentPeriodStart || null,
       currentPeriodEnd: sub?.currentPeriodEnd || null,
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd || false,
@@ -754,7 +750,6 @@ async function activateSubscription(customerId: string, planId: string | null, s
       .update(usersTable)
       .set({
         stripeSubscriptionId: subscriptionId,
-        isActive: true,
         plan: planId,
       })
       .where(eq(usersTable.id, user.id));
@@ -763,7 +758,6 @@ async function activateSubscription(customerId: string, planId: string | null, s
       .update(traderProfilesTable)
       .set({
         plan: planId,
-        isActive: true,
         isFeatured: planId === "premium",
         updatedAt: new Date(),
       })
@@ -818,18 +812,18 @@ async function deactivateSubscription(customerId: string) {
     if (!user) return;
     deactivatedUserId = user.id;
 
+    // Downgrade only: the trader stays publicly listed (free Basic) and stays
+    // logged in. We never set isActive=false or revoke sessions here — losing
+    // Premium just removes the paid perks (plan label + featured placement).
     await tx
       .update(usersTable)
-      .set({ isActive: false, plan: null })
+      .set({ plan: null })
       .where(eq(usersTable.id, user.id));
-
-    await revokeUserSessions(user.id, tx as unknown as typeof db);
 
     await tx
       .update(traderProfilesTable)
       .set({
         plan: null,
-        isActive: false,
         isFeatured: false,
         updatedAt: new Date(),
       })
@@ -910,6 +904,201 @@ router.post("/webhooks/stripe", async (req, res) => {
     res.json({ success: true, message: "Webhook processed" });
   } catch (error) {
     req.log.error({ err: error }, "Stripe webhook failed");
+    res.status(500).json({ success: false, message: "Webhook processing failed" });
+  }
+});
+
+// Constant-time comparison of the webhook Authorization header against the
+// configured shared secret, avoiding length/timing leaks.
+function authHeaderMatches(provided: string, expected: string): boolean {
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+// POST /api/webhooks/revenuecat — Apple (RevenueCat) subscription lifecycle.
+// RevenueCat owns native iOS In-App Purchases; this endpoint enforces expiry
+// and cancellation server-side (the /revenuecat-sync endpoint only ever grants).
+// Authenticated via a shared secret sent in the Authorization header, which is
+// configured in the RevenueCat dashboard. Losing Premium NEVER unlists a
+// verified trader or logs them out — it only removes the paid perks.
+router.post("/webhooks/revenuecat", async (req, res) => {
+  try {
+    const authSecret = process.env.REVENUECAT_WEBHOOK_AUTH;
+    if (!authSecret) {
+      req.log.warn("REVENUECAT_WEBHOOK_AUTH not set, rejecting webhook");
+      res.status(403).json({ error: "Webhook endpoint not configured" });
+      return;
+    }
+
+    const provided = req.headers["authorization"];
+    if (typeof provided !== "string" || !authHeaderMatches(provided, authSecret)) {
+      res.status(401).json({ error: "Invalid webhook authorization" });
+      return;
+    }
+
+    const raw = Buffer.isBuffer(req.body)
+      ? req.body.toString("utf8")
+      : typeof req.body === "string"
+        ? req.body
+        : JSON.stringify(req.body ?? {});
+    let payload: { event?: Record<string, unknown> };
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      res.status(400).json({ error: "Invalid JSON" });
+      return;
+    }
+
+    const event = (payload?.event ?? {}) as Record<string, unknown>;
+    const type = String(event.type ?? "");
+
+    // Only enforce events that concern our trader entitlement. Some event types
+    // omit entitlement ids; when present and non-matching, acknowledge and skip.
+    const entitlementIds: string[] = Array.isArray(event.entitlement_ids)
+      ? (event.entitlement_ids as string[])
+      : event.entitlement_id
+        ? [String(event.entitlement_id)]
+        : [];
+    if (entitlementIds.length > 0) {
+      const wanted = normalizeEntitlementKey(REVENUECAT_ENTITLEMENT_ID);
+      const matches = entitlementIds.some(
+        (e) => normalizeEntitlementKey(String(e)) === wanted,
+      );
+      if (!matches) {
+        res.json({ success: true, ignored: "entitlement" });
+        return;
+      }
+    }
+
+    const grant =
+      type === "INITIAL_PURCHASE" ||
+      type === "RENEWAL" ||
+      type === "PRODUCT_CHANGE" ||
+      type === "UNCANCELLATION";
+    const scheduleCancel = type === "CANCELLATION";
+    const revoke = type === "EXPIRATION" || type === "SUBSCRIPTION_PAUSED";
+
+    // TEST pings, BILLING_ISSUE, TRANSFER, etc. — nothing to enforce.
+    if (!grant && !scheduleCancel && !revoke) {
+      res.json({ success: true, ignored: "type" });
+      return;
+    }
+
+    // app_user_id is our numeric user id (set via RevenueCat logIn). Anonymous
+    // ids ("$RCAnonymousID:...") cannot be mapped to an account — ack and skip.
+    const appUserId = String(event.app_user_id ?? event.original_app_user_id ?? "");
+    const userId = Number(appUserId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      res.json({ success: true, ignored: "anonymous" });
+      return;
+    }
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+    if (!user) {
+      res.json({ success: true, ignored: "unknown_user" });
+      return;
+    }
+
+    const expiresAtMs = Number(event.expiration_at_ms);
+    const periodEnd =
+      Number.isFinite(expiresAtMs) && expiresAtMs > 0
+        ? new Date(expiresAtMs)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    let stripeOwned = false;
+    let applied = false;
+
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, userId))
+        .limit(1);
+
+      // Never let an Apple (RevenueCat) event mutate a Stripe-owned row — web
+      // Stripe is the source of truth for those subscribers.
+      stripeOwned =
+        !!existing && (!!existing.stripeSubscriptionId || !!existing.stripeCustomerId);
+      if (stripeOwned) return;
+
+      if (grant) {
+        if (existing) {
+          await tx
+            .update(subscriptionsTable)
+            .set({
+              status: "active",
+              planId: RC_PLAN_ID,
+              currentPeriodStart: new Date(),
+              currentPeriodEnd: periodEnd,
+              cancelAtPeriodEnd: false,
+              updatedAt: new Date(),
+            })
+            .where(eq(subscriptionsTable.userId, userId));
+        } else {
+          await tx.insert(subscriptionsTable).values({
+            userId,
+            planId: RC_PLAN_ID,
+            status: "active",
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: periodEnd,
+          });
+        }
+        await tx
+          .update(usersTable)
+          .set({ plan: RC_PLAN_ID })
+          .where(eq(usersTable.id, userId));
+        await tx
+          .update(traderProfilesTable)
+          .set({ plan: RC_PLAN_ID, isFeatured: true, updatedAt: new Date() })
+          .where(eq(traderProfilesTable.userId, userId));
+        applied = true;
+      } else if (scheduleCancel) {
+        // Auto-renew turned off; Premium continues until expiry. Keep perks.
+        if (existing) {
+          await tx
+            .update(subscriptionsTable)
+            .set({ cancelAtPeriodEnd: true, updatedAt: new Date() })
+            .where(eq(subscriptionsTable.userId, userId));
+          applied = true;
+        }
+      } else if (revoke) {
+        // Access ended — remove Premium perks. The free verified listing stays
+        // live and the trader stays logged in.
+        await tx
+          .update(usersTable)
+          .set({ plan: null })
+          .where(eq(usersTable.id, userId));
+        await tx
+          .update(traderProfilesTable)
+          .set({ plan: null, isFeatured: false, updatedAt: new Date() })
+          .where(eq(traderProfilesTable.userId, userId));
+        if (existing) {
+          await tx
+            .update(subscriptionsTable)
+            .set({ status: "cancelled", cancelAtPeriodEnd: false, updatedAt: new Date() })
+            .where(eq(subscriptionsTable.userId, userId));
+        }
+        applied = true;
+      }
+    });
+
+    if (applied && !stripeOwned) {
+      await logAudit({
+        userId,
+        action: grant ? "SUBSCRIPTION_ACTIVATED" : "SUBSCRIPTION_CANCELLED",
+        details: { source: "revenuecat-webhook", type },
+      });
+    }
+
+    res.json({ success: true, type, applied, stripeOwned });
+  } catch (error) {
+    req.log.error({ err: error }, "RevenueCat webhook failed");
     res.status(500).json({ success: false, message: "Webhook processing failed" });
   }
 });

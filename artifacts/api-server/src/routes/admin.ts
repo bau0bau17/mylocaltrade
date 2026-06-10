@@ -758,16 +758,9 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
       .set({ status: "APPROVED", reviewedAt: new Date(), reviewedBy: adminId })
       .where(and(eq(traderDocumentsTable.userId, userId), eq(traderDocumentsTable.status, "PENDING_REVIEW")));
 
-    // Phase 7: re-approving from EXPIRED_DOCUMENTS should restore visibility if the
-    // trader still has an active subscription. Otherwise leave isActive untouched —
-    // the subscription activation flow will flip it on when they next subscribe.
-    const [sub] = await db
-      .select()
-      .from(subscriptionsTable)
-      .where(eq(subscriptionsTable.userId, userId))
-      .limit(1);
-    const restoreActive = sub?.status === "active";
-
+    // Verification is what makes a trader publicly listed (free Basic). Approving
+    // takes the profile live immediately — it no longer depends on a paid
+    // subscription. Premium only adds perks on top of the free listing.
     const [updated] = await db
       .update(traderProfilesTable)
       .set({
@@ -783,11 +776,16 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
         revalidationOverdue: false,
         adminNotes: body.notes ?? profile.adminNotes,
         verificationNotes: body.notes ?? profile.verificationNotes,
-        ...(restoreActive ? { isActive: true } : {}),
+        isActive: true,
         updatedAt: new Date(),
       })
       .where(eq(traderProfilesTable.userId, userId))
       .returning();
+
+    await db
+      .update(usersTable)
+      .set({ isActive: true })
+      .where(eq(usersTable.id, userId));
 
     await logAudit({
       userId,
@@ -1165,15 +1163,8 @@ router.post("/admin/traders/:userId/unsuspend", authMiddleware, adminOnly, async
       authorisedRepresentative: profile.authorisedRepresentative,
     });
 
-    // Mirror approve()'s subscription-gating: only restore public visibility if
-    // the trader currently holds an active subscription.
-    const [sub] = await db
-      .select()
-      .from(subscriptionsTable)
-      .where(eq(subscriptionsTable.userId, userId))
-      .limit(1);
-    const subActive = sub?.status === "active";
-
+    // Restoring a previously-verified trader makes them publicly listed again
+    // (free Basic). Listing no longer depends on a paid subscription.
     let nextStatus: string = TRADER_STATUS.UNDER_REVIEW;
     let nextActive = false;
     if (evaluation.hasExpiredRequired) {
@@ -1182,7 +1173,7 @@ router.post("/admin/traders/:userId/unsuspend", authMiddleware, adminOnly, async
       nextStatus = TRADER_STATUS.PENDING_DOCUMENTS;
     } else if (profile.verifiedAt) {
       nextStatus = TRADER_STATUS.VERIFIED;
-      nextActive = subActive;
+      nextActive = true;
     } else {
       nextStatus = TRADER_STATUS.UNDER_REVIEW;
     }
@@ -1197,6 +1188,12 @@ router.post("/admin/traders/:userId/unsuspend", authMiddleware, adminOnly, async
       })
       .where(eq(traderProfilesTable.userId, userId))
       .returning();
+    if (nextActive) {
+      await db
+        .update(usersTable)
+        .set({ isActive: true })
+        .where(eq(usersTable.id, userId));
+    }
     await logAudit({
       userId,
       action: "TRADER_UNSUSPENDED",

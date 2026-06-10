@@ -350,6 +350,28 @@ export default function TraderProfileScreen() {
                   <Text style={[styles.contactText, { color: Colors.light.primary }]}>{trader.website}</Text>
                 </Pressable>
               )}
+              {trader.socialLinks
+                ? (['facebook', 'instagram', 'twitter', 'linkedin'] as const).map((key) => {
+                    const url = trader.socialLinks?.[key];
+                    if (!url) return null;
+                    const label = key.charAt(0).toUpperCase() + key.slice(1);
+                    return (
+                      <Pressable
+                        key={key}
+                        style={styles.contactRow}
+                        onPress={() => Linking.openURL(url)}
+                        accessibilityRole="link"
+                        accessibilityLabel={`Open ${trader.businessName} ${label}`}
+                        accessibilityHint="Opens in your browser"
+                      >
+                        <View style={styles.contactIconWrap}>
+                          <Feather name={key} size={14} color={Colors.light.primary} />
+                        </View>
+                        <Text style={[styles.contactText, { color: Colors.light.primary }]}>{label}</Text>
+                      </Pressable>
+                    );
+                  })
+                : null}
               {trader.businessAddress && (
                 <View style={styles.contactRow}>
                   <View style={styles.contactIconWrap}>

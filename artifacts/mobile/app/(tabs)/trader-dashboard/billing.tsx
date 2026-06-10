@@ -58,7 +58,7 @@ export default function BillingScreen() {
     if (!status || status.cancelAtPeriodEnd) return;
     Alert.alert(
       'Cancel subscription?',
-      'Your profile will stay live until the end of the current billing period, then it will be hidden from customers.',
+      'You will keep Premium until the end of the current billing period. After that your free Basic listing stays live — you only lose the Premium perks.',
       [
         { text: 'Keep plan', style: 'cancel' },
         {
@@ -97,7 +97,9 @@ export default function BillingScreen() {
   // This also normalises any legacy plan values (e.g. "trader", "elite") so the
   // label never shows a raw/unknown value to the trader.
   const isPremium = plan != null && plan !== 'basic';
-  const planLabel = !plan ? 'No plan' : isPremium ? 'Premium' : 'Basic';
+  // Verified traders are always listed for free as Basic, even with no paid
+  // subscription row (plan === null). Only true paid plans show as Premium.
+  const planLabel = isPremium ? 'Premium' : 'Basic';
   const isActive = status?.status === 'active';
   const periodEnd = status?.currentPeriodEnd ? new Date(status.currentPeriodEnd) : null;
 
@@ -113,11 +115,11 @@ export default function BillingScreen() {
         <View style={s.planHeader}>
           <View>
             <Text style={s.cardLabel}>Current Plan</Text>
-            <Text style={s.planName}>{planLabel}{plan ? ' Plan' : ''}</Text>
+            <Text style={s.planName}>{planLabel} Plan</Text>
           </View>
-          <View style={[s.badge, isActive ? s.badgeActive : s.badgeInactive]}>
-            <Text style={[s.badgeText, isActive ? s.badgeTextActive : s.badgeTextInactive]}>
-              {(status?.status ?? 'inactive').toUpperCase()}
+          <View style={[s.badge, (isActive || !isPremium) ? s.badgeActive : s.badgeInactive]}>
+            <Text style={[s.badgeText, (isActive || !isPremium) ? s.badgeTextActive : s.badgeTextInactive]}>
+              {isPremium ? (status?.status ?? 'inactive').toUpperCase() : 'FREE'}
             </Text>
           </View>
         </View>
@@ -133,7 +135,7 @@ export default function BillingScreen() {
           <View style={s.cancelBanner}>
             <Feather name="alert-triangle" size={16} color={Colors.light.warning ?? '#B45309'} />
             <Text style={s.cancelText}>
-              Cancellation scheduled. Your profile will go offline at the end of the current period.
+              Cancellation scheduled. Your Premium perks end at the end of the current period — your free Basic listing stays live.
             </Text>
           </View>
         ) : null}
@@ -195,7 +197,7 @@ export default function BillingScreen() {
       <View style={s.featuresSection}>
         <Text style={s.sectionTitle}>Your Plan Features</Text>
         <View style={s.featuresCard}>
-          <Feature included={isActive && isPremium} text="Receive customer enquiries" />
+          <Feature included text="Receive customer enquiries" />
           <Feature included={isActive && isPremium} text="Higher search ranking and priority placement" />
           <Feature included={isActive && isPremium} text="Featured listing badge and home screen placement" />
           <Feature included={isActive && isPremium} text="Unlimited gallery images" />

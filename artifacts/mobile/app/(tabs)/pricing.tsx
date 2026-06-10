@@ -128,7 +128,7 @@ export default function PricingScreen() {
       if (active) {
         Alert.alert(
           'You are subscribed',
-          'Your Premium plan is active and your profile is now live for customers.',
+          'Your Premium plan is active. Your listing is now featured and boosted in search.',
         );
         router.push('/trader-dashboard/billing');
       }
@@ -189,7 +189,6 @@ export default function PricingScreen() {
       <View style={styles.benefitsCard}>
         <Text style={styles.benefitsTitle}>Why upgrade</Text>
         {[
-          { icon: 'mail' as const, label: 'Receive enquiries from local customers' },
           { icon: 'arrow-up' as const, label: 'Higher search ranking and priority placement' },
           { icon: 'star' as const, label: 'Featured listing badge and home screen placement' },
           { icon: 'image' as const, label: 'Unlimited gallery images' },
@@ -225,7 +224,7 @@ export default function PricingScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.gateTitle}>Verification required</Text>
             <Text style={styles.gateBody}>
-              You can browse plans, but you'll need to finish verification before subscribing and going live.
+              You can browse Premium plans, but you'll need to finish verification first. Once verified, your free listing goes live automatically.
             </Text>
             <Pressable style={styles.gateBtn} onPress={() => router.push('/trader-dashboard')}>
               <Text style={styles.gateBtnText}>Go to dashboard</Text>
@@ -290,7 +289,7 @@ export default function PricingScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.iapActiveTitle}>Trader Subscription active</Text>
                 <Text style={styles.iapActiveBody}>
-                  Your profile is live for customers. Manage your subscription from Billing in your dashboard.
+                  Premium is active — your listing is featured and boosted in search. Manage your subscription from Billing in your dashboard.
                 </Text>
                 <Pressable style={styles.gateBtn} onPress={() => router.push('/trader-dashboard/billing')}>
                   <Text style={styles.gateBtnText}>Go to billing</Text>
@@ -325,7 +324,7 @@ export default function PricingScreen() {
                 </View>
                 <Text style={styles.planOptionPrice}>Free</Text>
                 <Text style={styles.planOptionDesc}>
-                  Limited trader access — a free public listing with standard search visibility.
+                  Your free public listing — verified traders appear in search and receive customer enquiries at no cost.
                 </Text>
               </View>
 
