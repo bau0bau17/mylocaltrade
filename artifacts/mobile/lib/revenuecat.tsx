@@ -153,6 +153,27 @@ async function ensureConfigured(): Promise<PurchasesDefault | null> {
         P.setLogLevel(
           DIAGNOSTICS_ENABLED ? mod.LOG_LEVEL.VERBOSE : mod.LOG_LEVEL.WARN,
         );
+        // The native SDK logs a user dismissing the purchase sheet at ERROR
+        // level ("Purchase was cancelled."), which the default log handler
+        // routes to console.error and surfaces as a red LogBox in dev. A
+        // cancellation is a normal user action, not a failure, so demote it.
+        // Genuine errors are still reported as errors.
+        P.setLogHandler((logLevel, message) => {
+          const text = `[RevenueCat] ${message}`;
+          // Match only the SDK's user-cancellation message, not any log that
+          // happens to mention "cancel" (e.g. a real cancellation failure).
+          if (/purchase was cancelled/i.test(message)) {
+            if (DIAGNOSTICS_ENABLED) console.log(text);
+            return;
+          }
+          if (logLevel === mod.LOG_LEVEL.ERROR) {
+            console.error(text);
+          } else if (logLevel === mod.LOG_LEVEL.WARN) {
+            console.warn(text);
+          } else if (DIAGNOSTICS_ENABLED) {
+            console.log(text);
+          }
+        });
         if (DIAGNOSTICS_ENABLED) {
           console.log(
             `[RC] configure platform=${Platform.OS} __DEV__=${__DEV__} ` +
