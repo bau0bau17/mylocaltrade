@@ -204,7 +204,10 @@ export default function BillingScreen() {
       </View>
 
       <Text style={s.footnote}>
-        Subscriptions for the iOS app are handled securely through the Apple App Store.
+        Subscriptions for the iOS app are managed securely through the Apple App Store.
+        Upgrading, downgrading or cancelling is done in Apple's subscription settings, and
+        those changes may take a few moments to take effect. Your plan status here updates
+        automatically once Apple confirms them.
       </Text>
     </ScrollView>
   );

@@ -1,0 +1,74 @@
+Please update and verify the subscription management flow in the app.
+
+Current situation:
+- the subscription purchase itself works
+- subscriptions are handled through Apple / App Store
+- after selecting a subscription, I also want the user to have a clear way to manage and change their plan later from the Billing / Plan area
+- most of the subscription information is already there, so please do not change or redesign things unnecessarily
+
+What I want:
+
+1. In the Billing / Plan section, keep the current UI/details if they are already correct
+2. Add or improve a clear Manage Subscription action/button only if needed
+3. Because subscriptions are handled by Apple, this should open the correct Apple subscription management flow, not try to change the subscription directly only inside our own app
+4. The user should be able to:
+   - view their current subscription
+   - change to another available plan
+   - upgrade or downgrade through Apple’s subscription management
+   - cancel if they want, through the proper Apple flow
+
+5. The app UI should clearly explain that:
+   - subscriptions are managed through the Apple App Store
+   - changes may not happen instantly depending on Apple subscription rules
+   - the final subscription status should sync back into the app after Apple confirms the change
+
+6. After the user returns from Apple subscription management, the app should:
+   - refresh entitlement / subscription status
+   - update the active plan shown in the Billing / Plan screen
+   - handle upgrade / downgrade / cancellation correctly
+
+7. Please keep the existing Billing / Plan information and UI as much as possible if it is already correct
+8. Only make minimal, necessary changes — do not redesign the whole section unless something is actually broken
+9. If there is already useful subscription information displayed, preserve it and only add the missing Apple-managed subscription functionality
+
+Also, I want a proper functional verification of the Premium plan features shown on the Billing & Plan screen. I do not want to rely only on the UI text. Please confirm whether these features are actually implemented, connected, and working correctly:
+
+10. Receive customer enquiries
+- confirm Premium users can receive enquiries correctly
+- confirm this is connected end-to-end, not just shown in the UI
+
+11. Higher search ranking and priority placement
+- confirm Premium traders actually get better placement/ranking where intended
+- explain exactly where and how this is applied in the app
+
+12. Featured listing badge and home screen placement
+- confirm the featured badge is shown correctly for Premium users
+- confirm Premium traders are surfaced on the home screen / featured areas where applicable
+
+13. Unlimited gallery images
+- confirm Premium users are not blocked by the normal gallery limit
+- confirm the upload limit logic is actually connected to the subscription status
+
+14. Enhanced profile with services, social and website links
+- confirm Premium users can add and save these extra profile fields
+- confirm they are displayed correctly to customers
+
+15. Subscription entitlement enforcement
+- confirm these features are controlled by the real active subscription / entitlement state
+- confirm they are removed or restricted correctly if the subscription is cancelled or expires
+
+16. End-to-end testing
+- please test using a Premium test account and confirm which features are fully working now, which are partially implemented, and which are only UI placeholders if any
+
+Please give me a clear breakdown:
+- fully implemented and working
+- partially connected
+- UI only / not yet enforced
+
+Main goal:
+I want the Billing / Plan section to let users manage and change their subscription properly, while respecting the fact that the subscription is owned and handled by Apple.
+
+Important:
+please preserve the existing subscription UI/details where they are already good, and only add the missing functionality needed for Apple-managed subscription changes.
+
+I also want to make sure the Premium plan features shown on the Billing & Plan screen are genuinely functional and not just visual.
