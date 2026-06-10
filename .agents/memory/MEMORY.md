@@ -2,6 +2,7 @@
 - [RevenueCat empty offerings debugging](revenuecat-empty-offerings-debugging.md) — RC "offerings empty" is generic; offerings response is cached, only updateOffering busts it; device triage inside.
 - [RevenueCat Test Store is debug-only](revenuecat-test-store-debug-only.md) — test_ key crashes Release builds at configure; no standalone Test Store build exists. Don't force it.
 - [RevenueCat cancellation red LogBox](revenuecat-cancellation-logbox.md) — catching userCancelled isn't enough; native SDK logs "Purchase was cancelled" at ERROR → red LogBox. Demote via setLogHandler, match only that message.
+- [RevenueCat identity before purchase](revenuecat-identity-before-purchase.md) — configure is anonymous; logIn-in-effect races the buy button → purchases orphan on $RCAnonymousID, invisible to sync+webhook. Force logIn before purchase/restore.
 - [GestureHandlerRootView flex](gesturehandlerrootview-release-touches.md) — root GestureHandlerRootView needs flex:1; plain RN Pressable bypasses RNGH so this alone rarely kills all taps.
 - [.replit [nix] change kills workflows](replit-nix-change-needs-rebuild.md) — after a .replit [nix] edit, workflows start then die; restart_workflow lies; fix = user reloads workspace to rebuild env.
 - [SubscriptionProvider value loop](subscription-provider-value-loop.md) — never depend on the whole useSubscription() object in effect deps; provider rebuilds it each render → infinite refresh loop.

@@ -408,28 +408,49 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, [loadOfferings, loadCustomerInfo]);
 
+  // Guarantee the RevenueCat customer is our signed-in user before a purchase
+  // or restore. configure() starts anonymous and the identity effect above may
+  // not have completed yet; without this a purchase can land on an
+  // $RCAnonymousID, so the server sync and the webhook (both keyed on our
+  // numeric user id) never see it and the purchase is orphaned. Throws if the
+  // identity can't be set, so we never make an anonymous (unattributable)
+  // purchase.
+  const ensureIdentified = useCallback(
+    async (P: PurchasesDefault): Promise<void> => {
+      if (!user) throw new Error('You need to be signed in to manage your subscription.');
+      const wantedId = String(user.id);
+      const currentId = await P.getAppUserID();
+      if (currentId === wantedId) return;
+      const { customerInfo: info } = await P.logIn(wantedId);
+      applyCustomerInfo(info);
+    },
+    [user, applyCustomerInfo],
+  );
+
   const purchase = useCallback(
     async (pkg: PurchasesPackage): Promise<boolean> => {
       const P = await ensureConfigured();
       if (!P) throw new Error('In-app purchases are not available in this build.');
+      await ensureIdentified(P);
       const { customerInfo: info } = await P.purchasePackage(pkg);
       applyCustomerInfo(info);
       const active = !!findActiveTraderEntitlement(info);
       if (active) await syncEntitlementWithBackend(token);
       return active;
     },
-    [applyCustomerInfo, token],
+    [applyCustomerInfo, ensureIdentified, token],
   );
 
   const restore = useCallback(async (): Promise<boolean> => {
     const P = await ensureConfigured();
     if (!P) throw new Error('In-app purchases are not available in this build.');
+    await ensureIdentified(P);
     const info = await P.restorePurchases();
     applyCustomerInfo(info);
     const active = !!findActiveTraderEntitlement(info);
     if (active) await syncEntitlementWithBackend(token);
     return active;
-  }, [applyCustomerInfo, token]);
+  }, [applyCustomerInfo, ensureIdentified, token]);
 
   const manageSubscriptions = useCallback(async () => {
     const P = await ensureConfigured();
