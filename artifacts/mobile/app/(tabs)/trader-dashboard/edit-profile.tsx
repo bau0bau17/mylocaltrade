@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -8,6 +9,7 @@ import { useGetTraderProfile, useUpdateTraderProfile } from '@workspace/api-clie
 
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
 
   const { data: profile, isLoading } = useGetTraderProfile();
@@ -64,7 +66,7 @@ export default function EditProfileScreen() {
       style={styles.container}
       contentContainerStyle={{
         paddingTop: insets.top + 16,
-        paddingBottom: insets.bottom + 24,
+        paddingBottom: tabBarHeight + insets.bottom + 24,
         paddingHorizontal: 20,
       }}
       bottomOffset={60}
