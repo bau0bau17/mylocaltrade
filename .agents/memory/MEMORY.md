@@ -5,3 +5,5 @@
 - [.replit [nix] change kills workflows](replit-nix-change-needs-rebuild.md) — after a .replit [nix] edit, workflows start then die; restart_workflow lies; fix = user reloads workspace to rebuild env.
 - [SubscriptionProvider value loop](subscription-provider-value-loop.md) — never depend on the whole useSubscription() object in effect deps; provider rebuilds it each render → infinite refresh loop.
 - [Local Mac dev + GitHub sync](local-mac-dev-and-github-sync.md) — user RUNS Expo/Metro on their own Mac, not Replit; deliver fixes via `git checkout origin/replit-agent -- <files>` then `expo start -c`; Replit terminal can't push to GitHub.
+- [Dependency security overrides](dependency-security-overrides.md) — patch transitive CVEs via pnpm-workspace overrides; get exact patched ranges from npm bulk advisory endpoint (qs/ws/uuid "latest patch" can still be vulnerable).
+- [promo-video typecheck pre-broken](promo-video-typecheck-pre-broken.md) — `artifacts/promo-video` fails `tsc` (no DOM lib + framer-motion Variant types); workspace-wide typecheck/build fails there regardless of your change.
