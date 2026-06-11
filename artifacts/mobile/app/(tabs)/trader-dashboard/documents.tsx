@@ -235,7 +235,7 @@ export default function DocumentsScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: tabBarHeight + insets.bottom + 24, paddingHorizontal: 20 }}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: 16, paddingHorizontal: 20 }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={Colors.light.primary} />}
       >
         <View style={styles.summaryCard}>
@@ -384,7 +384,12 @@ export default function DocumentsScreen() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
+      </ScrollView>
 
+      {/* Submit CTA is pinned above the absolutely-positioned bottom tab bar so
+          it is always fully visible and tappable, instead of scrolling behind
+          the tab bar. */}
+      <View style={[styles.footerBar, { paddingBottom: insets.bottom + tabBarHeight + 12 }]}>
         <Pressable
           style={[styles.submitBtn, !isComplete && styles.btnDisabled]}
           onPress={() => router.replace('/trader-dashboard')}
@@ -394,7 +399,7 @@ export default function DocumentsScreen() {
             {isComplete ? 'Submit for review' : 'Upload required documents to continue'}
           </Text>
         </Pressable>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -482,7 +487,8 @@ const styles = StyleSheet.create({
   uploadBtnText: { color: Colors.light.primary, fontSize: 13, fontWeight: '700' },
   btnDisabled: { opacity: 0.5 },
 
-  submitBtn: { backgroundColor: Colors.light.secondary, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 22 },
+  footerBar: { paddingTop: 12, paddingHorizontal: 20, backgroundColor: Colors.light.background, borderTopWidth: 1, borderTopColor: Colors.light.border },
+  submitBtn: { backgroundColor: Colors.light.secondary, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   submitBtnText: { color: Colors.light.white, fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
 
   footerNote: { fontSize: 11, color: Colors.light.textMuted, lineHeight: 16, marginTop: 4, textAlign: 'center' },
