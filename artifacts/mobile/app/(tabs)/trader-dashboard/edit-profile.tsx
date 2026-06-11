@@ -62,11 +62,12 @@ export default function EditProfileScreen() {
   }
 
   return (
+    <View style={styles.container}>
     <KeyboardAwareScrollViewCompat
-      style={styles.container}
+      style={{ flex: 1 }}
       contentContainerStyle={{
         paddingTop: insets.top + 16,
-        paddingBottom: tabBarHeight + insets.bottom + 24,
+        paddingBottom: 16,
         paddingHorizontal: 20,
       }}
       bottomOffset={60}
@@ -162,6 +163,11 @@ export default function EditProfileScreen() {
           />
         </View>
 
+      </View>
+    </KeyboardAwareScrollViewCompat>
+
+      {/* Save CTA pinned above the absolutely-positioned bottom tab bar. */}
+      <View style={[styles.footerBar, { paddingBottom: insets.bottom + tabBarHeight + 12 }]}>
         <Pressable 
           style={[styles.button, isPending && styles.buttonDisabled]} 
           onPress={handleUpdate}
@@ -174,7 +180,7 @@ export default function EditProfileScreen() {
           )}
         </Pressable>
       </View>
-    </KeyboardAwareScrollViewCompat>
+    </View>
   );
 }
 
@@ -237,13 +243,19 @@ const styles = StyleSheet.create({
     height: 100,
     paddingTop: 14,
   },
+  footerBar: {
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    backgroundColor: Colors.light.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
   button: {
     backgroundColor: Colors.light.primary,
     height: 52,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
   },
   buttonDisabled: {
     opacity: 0.6,

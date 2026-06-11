@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useGetTraderProfile, useUpdateTraderProfile } from '@workspace/api-client-react';
@@ -8,6 +9,7 @@ import { SPECIALISMS } from '@/constants/specialisms';
 
 export default function ServicesScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const { data: profileData, isLoading } = useGetTraderProfile();
   const { mutateAsync: updateProfile, isPending: isSaving } = useUpdateTraderProfile();
 
@@ -59,9 +61,10 @@ export default function ServicesScreen() {
   }
 
   return (
+    <View style={styles.container}>
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingBottom: 16 }}
     >
       <View style={styles.content}>
         <Text style={styles.sectionTitle}>Main Category</Text>
@@ -136,6 +139,11 @@ export default function ServicesScreen() {
           </View>
         )}
 
+      </View>
+    </ScrollView>
+
+      {/* Save CTA pinned above the absolutely-positioned bottom tab bar. */}
+      <View style={[styles.footerBar, { paddingBottom: insets.bottom + tabBarHeight + 12 }]}>
         <Pressable
           style={[styles.saveButton, isSaving && styles.buttonDisabled]}
           onPress={handleSave}
@@ -148,7 +156,7 @@ export default function ServicesScreen() {
           )}
         </Pressable>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -289,13 +297,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.textSecondary,
   },
+  footerBar: {
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    backgroundColor: Colors.light.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
   saveButton: {
     backgroundColor: Colors.light.primary,
     height: 52,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
   },
   buttonDisabled: {
     opacity: 0.7,

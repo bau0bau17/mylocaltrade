@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator, ScrollView, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Colors from '@/constants/colors';
@@ -28,6 +29,7 @@ function guessMime(uri: string, fallback?: string | null): string {
 
 export default function GalleryScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const { data: profileData, isLoading } = useGetTraderProfile();
   const { mutateAsync: updateProfile, isPending: isSaving } = useUpdateTraderProfile();
   const { mutateAsync: getUploadUrl } = useGetCustomerUploadUrl();
@@ -122,9 +124,10 @@ export default function GalleryScreen() {
   }
 
   return (
+    <View style={styles.container}>
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingBottom: 16 }}
     >
       <View style={styles.content}>
         <View style={styles.header}>
@@ -174,6 +177,11 @@ export default function GalleryScreen() {
           </View>
         )}
 
+      </View>
+    </ScrollView>
+
+      {/* Save CTA pinned above the absolutely-positioned bottom tab bar. */}
+      <View style={[styles.footerBar, { paddingBottom: insets.bottom + tabBarHeight + 12 }]}>
         <Pressable
           style={[styles.saveButton, isSaving && styles.buttonDisabled]}
           onPress={handleSave}
@@ -186,7 +194,7 @@ export default function GalleryScreen() {
           )}
         </Pressable>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -287,13 +295,19 @@ const styles = StyleSheet.create({
     color: Colors.light.textSecondary,
     textAlign: 'center',
   },
+  footerBar: {
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    backgroundColor: Colors.light.background,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
   saveButton: {
     backgroundColor: Colors.light.primary,
     height: 52,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
   },
   buttonDisabled: {
     opacity: 0.7,
