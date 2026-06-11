@@ -382,6 +382,8 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       website: updated.website,
       openingHours: updated.openingHours,
       businessRole: updated.businessRole,
+      businessType: updated.businessType,
+      companyNumber: updated.companyNumber,
       authorisedRepresentative: updated.authorisedRepresentative,
       businessEmailDomain: updated.businessEmailDomain,
       businessEmailVerified: updated.businessEmailVerified,
