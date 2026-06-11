@@ -269,7 +269,7 @@ export default function BusinessProfileScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingTop: 8,
-          paddingBottom: tabBarHeight + 24,
+          paddingBottom: 16,
           paddingHorizontal: 20,
         }}
         bottomOffset={tabBarHeight + 24}
@@ -656,7 +656,11 @@ export default function BusinessProfileScreen() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
+      </KeyboardAwareScrollViewCompat>
 
+      {/* Save CTA is pinned above the absolutely-positioned bottom tab bar so it
+          is always fully visible and tappable, instead of scrolling behind it. */}
+      <View style={[styles.footerBar, { paddingBottom: insets.bottom + tabBarHeight + 12 }]}>
         <Pressable
           style={[styles.saveBtn, saving && styles.btnDisabled]}
           onPress={handleSave}
@@ -675,7 +679,7 @@ export default function BusinessProfileScreen() {
             {requirements.filter(r => !r.satisfied).length === 1 ? '' : 's'} still to complete — tap Save & continue to see which.
           </Text>
         )}
-      </KeyboardAwareScrollViewCompat>
+      </View>
     </View>
   );
 }
@@ -803,7 +807,8 @@ const styles = StyleSheet.create({
   errorBox: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: Colors.light.errorMuted, borderColor: Colors.light.error, borderWidth: 1, padding: 12, borderRadius: 10, marginTop: 14 },
   errorText: { flex: 1, fontSize: 12, color: Colors.light.error, lineHeight: 17 },
 
-  saveBtn: { backgroundColor: Colors.light.secondary, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 22 },
+  footerBar: { paddingTop: 12, paddingHorizontal: 20, backgroundColor: Colors.light.background, borderTopWidth: 1, borderTopColor: Colors.light.border },
+  saveBtn: { backgroundColor: Colors.light.secondary, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   saveBtnText: { color: Colors.light.white, fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
   btnDisabled: { opacity: 0.5 },
   footerHint: { fontSize: 11, color: Colors.light.textMuted, textAlign: 'center', marginTop: 10 },
