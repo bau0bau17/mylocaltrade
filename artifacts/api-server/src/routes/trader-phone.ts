@@ -6,6 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, logAudit } from "../lib/trader-status";
+import { deliverTraderPhoneOtp } from "../lib/otp-delivery";
 
 const router: IRouter = Router();
 
@@ -80,6 +81,33 @@ router.post("/trader/phone/send-otp", authMiddleware, async (req, res) => {
     const codeHash = await bcryptjs.hash(code, 10);
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
+    // Deliver the code FIRST, then persist OTP state only on confirmed
+    // delivery. This keeps send atomic: a failed/unconfigured delivery never
+    // leaves a live code or a cooldown lock with nothing actually sent, so the
+    // user can retry immediately. During development this goes out by email
+    // (Brevo), reusing the same verification logic. At launch, flip
+    // OTP_DELIVERY_CHANNEL to "sms" to deliver via Brevo SMS instead — the
+    // generation/expiry/cooldown/attempt logic stays exactly the same.
+    let delivery: Awaited<ReturnType<typeof deliverTraderPhoneOtp>>;
+    try {
+      delivery = await deliverTraderPhoneOtp({
+        code,
+        email: user.email,
+        name: user.fullName,
+        phone: phoneToUse,
+        expiresInMinutes: Math.round(OTP_TTL_MS / 60000),
+      });
+    } catch (err) {
+      req.log.error({ err, userId: user.id }, "Trader phone OTP delivery threw");
+      res.status(503).json({ error: "Could not send verification code. Please try again shortly." });
+      return;
+    }
+    if (!delivery.delivered) {
+      req.log.error({ userId: user.id }, "Trader phone OTP not delivered (no transport)");
+      res.status(503).json({ error: "Could not send verification code. Please try again shortly." });
+      return;
+    }
+
     await db
       .update(traderProfilesTable)
       .set({
@@ -92,17 +120,26 @@ router.post("/trader/phone/send-otp", authMiddleware, async (req, res) => {
       })
       .where(eq(traderProfilesTable.userId, user.id));
 
-    // MOCK SMS — print to server console. Replace with real SMS provider later.
-    req.log.info({ userId: user.id, phone: phoneToUse, code }, "[MOCK SMS] Trader phone OTP");
+    req.log.info(
+      { userId: user.id, phone: phoneToUse, channel: delivery.channel, delivered: delivery.delivered },
+      "Trader phone OTP dispatched",
+    );
 
-    logAudit({ userId: user.id, action: "PHONE_OTP_SENT", details: { phone: phoneToUse } });
+    logAudit({
+      userId: user.id,
+      action: "PHONE_OTP_SENT",
+      details: { phone: phoneToUse, channel: delivery.channel },
+    });
 
     res.json({
-      message: "Verification code sent.",
+      message:
+        delivery.channel === "email"
+          ? "Verification code sent to your email."
+          : "Verification code sent.",
       phoneMasked: maskPhone(phoneToUse),
       expiresInSeconds: Math.floor(OTP_TTL_MS / 1000),
-      // Mock-only convenience: include code in dev so testers can grab it without server logs.
-      // TODO Phase 8: gate behind NODE_ENV !== 'production' (already true here for now).
+      // Dev-only convenience: include the code in non-production so testers can
+      // grab it without opening the inbox. Always undefined in production.
       mockCode: process.env.NODE_ENV === "production" ? undefined : code,
     });
   } catch (error) {

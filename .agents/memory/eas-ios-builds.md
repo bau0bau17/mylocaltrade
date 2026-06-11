@@ -22,4 +22,4 @@ description: How the mobile app's EAS build profiles map to backends, the device
 - Tradeoff: NO_VCS builds show "Git ref: None". To get a real git ref, run the build in a later turn from a clean, already-committed tree (no uncommitted edits) without NO_VCS.
 
 ## Account verification (June 2026)
-- `lucian.sabau@listmyride.co.uk` (user 47, trader, premium) exists in the **development** DB only; **not** in production. The users table has `email_verified` (no `verification_status` column — that lives on trader_profiles).
+- The dev DB carries seeded test traders (incl. premium) that do **not** exist in production — never assume a dev test account is present in prod. The users table has `email_verified` (no `verification_status` column — that lives on trader_profiles).
