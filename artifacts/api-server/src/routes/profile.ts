@@ -70,6 +70,8 @@ router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
       galleryUrls: trader.galleryUrls || [],
       socialLinks: trader.socialLinks,
       businessRole: trader.businessRole,
+      businessType: trader.businessType,
+      companyNumber: trader.companyNumber,
       authorisedRepresentative: trader.authorisedRepresentative,
       businessEmailDomain: trader.businessEmailDomain,
       businessEmailVerified: trader.businessEmailVerified,
@@ -112,6 +114,7 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
     const [prior] = await db
       .select({
         companyNumber: traderProfilesTable.companyNumber,
+        businessType: traderProfilesTable.businessType,
         businessRole: traderProfilesTable.businessRole,
         vatNumber: traderProfilesTable.vatNumber,
         businessEmailDomain: traderProfilesTable.businessEmailDomain,
@@ -129,8 +132,8 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       "additionalServices", "businessAddress", "town", "postcode",
       "serviceAreas", "businessDescription", "website", "openingHours",
       "logoUrl", "galleryUrls", "socialLinks",
-      "businessRole", "authorisedRepresentative", "businessEmailDomain",
-      "vatNumber",
+      "businessRole", "businessType", "authorisedRepresentative", "businessEmailDomain",
+      "vatNumber", "companyNumber",
     ] as const;
 
     for (const field of allowedFields) {
@@ -138,6 +141,25 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       if (value !== undefined) {
         updateData[field] = value;
       }
+    }
+
+    // Companies House numbers are stored normalised (uppercase, no spaces) so
+    // the deterministic register check and format validation see a canonical
+    // value regardless of how the trader typed it.
+    if (typeof updateData.companyNumber === "string") {
+      const normalised = updateData.companyNumber.replace(/\s+/g, "").toUpperCase();
+      updateData.companyNumber = normalised.length > 0 ? normalised : null;
+    }
+
+    // The company number is only meaningful for limited companies. When the
+    // trader declares (or switches to) SOLE_TRADER, drop any number on record
+    // so it can't linger and trigger a Companies House check that no longer
+    // applies. The effective business type is the incoming value if provided,
+    // otherwise what is already stored.
+    const effectiveBusinessType =
+      (updateData.businessType as string | undefined) ?? prior?.businessType ?? null;
+    if (effectiveBusinessType === "SOLE_TRADER") {
+      updateData.companyNumber = null;
     }
 
     // If galleryUrls is being changed, verify each NEW path against the
@@ -260,6 +282,7 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
     const norm = (v: string | null | undefined) => (v ?? "").trim();
     const companyChanged =
       norm(prior?.companyNumber) !== norm(updated.companyNumber) ||
+      norm(prior?.businessType) !== norm(updated.businessType) ||
       norm(prior?.businessRole) !== norm(updated.businessRole);
     const vatChanged = norm(prior?.vatNumber) !== norm(updated.vatNumber);
     const domainChanged =

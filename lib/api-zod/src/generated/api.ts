@@ -362,6 +362,18 @@ export const ListTradersResponse = zod.object({
           "OTHER",
         ])
         .nullish(),
+      businessType: zod
+        .enum(["LIMITED_COMPANY", "SOLE_TRADER"])
+        .nullish()
+        .describe(
+          "Legal structure of the business. LIMITED_COMPANY requires a\ncompanyNumber and triggers the automatic Companies House check;\nSOLE_TRADER never requires a company number.\n",
+        ),
+      companyNumber: zod
+        .string()
+        .nullish()
+        .describe(
+          "UK Companies House registration number. Mandatory only when\nbusinessType is LIMITED_COMPANY.\n",
+        ),
       authorisedRepresentative: zod.boolean().nullish(),
       businessEmailDomain: zod.string().nullish(),
       vatNumber: zod.string().nullish(),
@@ -441,6 +453,18 @@ export const GetFeaturedTradersResponse = zod.object({
           "OTHER",
         ])
         .nullish(),
+      businessType: zod
+        .enum(["LIMITED_COMPANY", "SOLE_TRADER"])
+        .nullish()
+        .describe(
+          "Legal structure of the business. LIMITED_COMPANY requires a\ncompanyNumber and triggers the automatic Companies House check;\nSOLE_TRADER never requires a company number.\n",
+        ),
+      companyNumber: zod
+        .string()
+        .nullish()
+        .describe(
+          "UK Companies House registration number. Mandatory only when\nbusinessType is LIMITED_COMPANY.\n",
+        ),
       authorisedRepresentative: zod.boolean().nullish(),
       businessEmailDomain: zod.string().nullish(),
       vatNumber: zod.string().nullish(),
@@ -516,6 +540,18 @@ export const GetTraderResponse = zod.object({
       "OTHER",
     ])
     .nullish(),
+  businessType: zod
+    .enum(["LIMITED_COMPANY", "SOLE_TRADER"])
+    .nullish()
+    .describe(
+      "Legal structure of the business. LIMITED_COMPANY requires a\ncompanyNumber and triggers the automatic Companies House check;\nSOLE_TRADER never requires a company number.\n",
+    ),
+  companyNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "UK Companies House registration number. Mandatory only when\nbusinessType is LIMITED_COMPANY.\n",
+    ),
   authorisedRepresentative: zod.boolean().nullish(),
   businessEmailDomain: zod.string().nullish(),
   vatNumber: zod.string().nullish(),
@@ -582,6 +618,18 @@ export const GetTraderProfileResponse = zod.object({
       "OTHER",
     ])
     .nullish(),
+  businessType: zod
+    .enum(["LIMITED_COMPANY", "SOLE_TRADER"])
+    .nullish()
+    .describe(
+      "Legal structure of the business. LIMITED_COMPANY requires a\ncompanyNumber and triggers the automatic Companies House check;\nSOLE_TRADER never requires a company number.\n",
+    ),
+  companyNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "UK Companies House registration number. Mandatory only when\nbusinessType is LIMITED_COMPANY.\n",
+    ),
   authorisedRepresentative: zod.boolean().nullish(),
   businessEmailDomain: zod.string().nullish(),
   vatNumber: zod.string().nullish(),
@@ -645,6 +693,8 @@ export const UpdateTraderProfileBody = zod.object({
       "OTHER",
     ])
     .optional(),
+  businessType: zod.enum(["LIMITED_COMPANY", "SOLE_TRADER"]).optional(),
+  companyNumber: zod.string().optional(),
   authorisedRepresentative: zod.boolean().optional(),
   businessEmailDomain: zod.string().optional(),
   vatNumber: zod.string().optional(),
@@ -686,6 +736,18 @@ export const UpdateTraderProfileResponse = zod.object({
       "OTHER",
     ])
     .nullish(),
+  businessType: zod
+    .enum(["LIMITED_COMPANY", "SOLE_TRADER"])
+    .nullish()
+    .describe(
+      "Legal structure of the business. LIMITED_COMPANY requires a\ncompanyNumber and triggers the automatic Companies House check;\nSOLE_TRADER never requires a company number.\n",
+    ),
+  companyNumber: zod
+    .string()
+    .nullish()
+    .describe(
+      "UK Companies House registration number. Mandatory only when\nbusinessType is LIMITED_COMPANY.\n",
+    ),
   authorisedRepresentative: zod.boolean().nullish(),
   businessEmailDomain: zod.string().nullish(),
   vatNumber: zod.string().nullish(),
@@ -1219,6 +1281,18 @@ export const GetSavedTradersResponse = zod.object({
           "OTHER",
         ])
         .nullish(),
+      businessType: zod
+        .enum(["LIMITED_COMPANY", "SOLE_TRADER"])
+        .nullish()
+        .describe(
+          "Legal structure of the business. LIMITED_COMPANY requires a\ncompanyNumber and triggers the automatic Companies House check;\nSOLE_TRADER never requires a company number.\n",
+        ),
+      companyNumber: zod
+        .string()
+        .nullish()
+        .describe(
+          "UK Companies House registration number. Mandatory only when\nbusinessType is LIMITED_COMPANY.\n",
+        ),
       authorisedRepresentative: zod.boolean().nullish(),
       businessEmailDomain: zod.string().nullish(),
       vatNumber: zod.string().nullish(),

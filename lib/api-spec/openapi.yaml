@@ -2274,6 +2274,20 @@ components:
           type: string
           enum: [OWNER, DIRECTOR, MANAGER, EMPLOYEE, SELF_EMPLOYED, OTHER]
           nullable: true
+        businessType:
+          type: string
+          enum: [LIMITED_COMPANY, SOLE_TRADER]
+          nullable: true
+          description: |
+            Legal structure of the business. LIMITED_COMPANY requires a
+            companyNumber and triggers the automatic Companies House check;
+            SOLE_TRADER never requires a company number.
+        companyNumber:
+          type: string
+          nullable: true
+          description: |
+            UK Companies House registration number. Mandatory only when
+            businessType is LIMITED_COMPANY.
         authorisedRepresentative:
           type: boolean
           nullable: true
@@ -2416,6 +2430,11 @@ components:
         businessRole:
           type: string
           enum: [OWNER, DIRECTOR, MANAGER, EMPLOYEE, SELF_EMPLOYED, OTHER]
+        businessType:
+          type: string
+          enum: [LIMITED_COMPANY, SOLE_TRADER]
+        companyNumber:
+          type: string
         authorisedRepresentative:
           type: boolean
         businessEmailDomain:

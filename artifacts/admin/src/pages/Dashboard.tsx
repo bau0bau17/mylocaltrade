@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { api } from "@/lib/api";
-import type { DashboardSummary, TraderStatus } from "@/lib/types";
-import { STATUS_LABELS } from "@/lib/types";
+import type { DashboardSummary } from "@/lib/types";
+import { REVIEW_FILTER_STATUSES } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -10,19 +10,18 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { relativeTime } from "@/lib/format";
 import { Users, FileWarning, Mail, ClipboardList } from "lucide-react";
 
-const HIGHLIGHT_STATUSES: TraderStatus[] = [
-  "UNDER_REVIEW",
-  "VERIFIED",
-  "PENDING_DOCUMENTS",
-  "EXPIRED_DOCUMENTS",
-  "REJECTED",
-  "SUSPENDED",
-];
+// Mirror the Traders page filter list exactly so every status a reviewer can
+// filter by also appears (and is counted) on the dashboard, in the same order.
+const HIGHLIGHT_STATUSES = REVIEW_FILTER_STATUSES;
 
 export default function Dashboard() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "dashboard"],
     queryFn: () => api<DashboardSummary>("/api/admin/dashboard"),
+    // Keep the counts live so the dashboard reflects status changes without a
+    // manual refresh.
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading) {

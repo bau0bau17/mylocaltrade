@@ -20,6 +20,13 @@ const BUSINESS_ROLE_OPTIONS: { value: string; label: string }[] = [
   { value: 'OTHER', label: 'Other' },
 ];
 
+const BUSINESS_TYPE_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: 'LIMITED_COMPANY', label: 'Limited company (Ltd)', hint: 'Registered at Companies House. A company registration number is required.' },
+  { value: 'SOLE_TRADER', label: 'Sole trader / self-employed', hint: 'Not registered at Companies House. No company number needed.' },
+];
+
+const COMPANY_NUMBER_RE = /^[A-Z0-9]{6,10}$/;
+
 interface ProfileForm {
   mainCategory: string;
   businessDescription: string;
@@ -31,6 +38,8 @@ interface ProfileForm {
   openingHours: string;
   website: string;
   businessRole: string;
+  businessType: string;
+  companyNumber: string;
   authorisedRepresentative: boolean;
   businessEmailDomain: string;
   vatNumber: string;
@@ -53,6 +62,8 @@ export default function BusinessProfileScreen() {
     openingHours: '',
     website: '',
     businessRole: '',
+    businessType: '',
+    companyNumber: '',
     authorisedRepresentative: false,
     businessEmailDomain: '',
     vatNumber: '',
@@ -102,6 +113,8 @@ export default function BusinessProfileScreen() {
           openingHours: json.openingHours ?? '',
           website: json.website ?? '',
           businessRole: json.businessRole ?? '',
+          businessType: json.businessType ?? '',
+          companyNumber: json.companyNumber ?? '',
           authorisedRepresentative: Boolean(json.authorisedRepresentative),
           businessEmailDomain: json.businessEmailDomain ?? '',
           vatNumber: json.vatNumber ?? '',
@@ -174,6 +187,11 @@ export default function BusinessProfileScreen() {
           openingHours: form.openingHours.trim(),
           website: form.website.trim() || undefined,
           businessRole: form.businessRole || undefined,
+          businessType: form.businessType || undefined,
+          companyNumber:
+            form.businessType === 'LIMITED_COMPANY'
+              ? form.companyNumber.replace(/\s+/g, '').toUpperCase() || undefined
+              : '',
           authorisedRepresentative: form.authorisedRepresentative,
           businessEmailDomain: form.businessEmailDomain.trim() || undefined,
           vatNumber: form.vatNumber.trim() || undefined,
@@ -319,6 +337,59 @@ export default function BusinessProfileScreen() {
           </Text>
           {fieldErr('businessDescription') && <Text style={styles.fieldError}>{fieldErr('businessDescription')}</Text>}
         </View>
+
+        <Text style={styles.sectionTitle}>Business type *</Text>
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Are you a limited company or a sole trader?</Text>
+          <Text style={styles.helper}>
+            Limited companies must provide a Companies House registration number, which we verify automatically. Sole traders and self-employed traders do not.
+          </Text>
+          <View style={styles.typeGrid}>
+            {BUSINESS_TYPE_OPTIONS.map((opt) => {
+              const selected = form.businessType === opt.value;
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => setForm(p => ({ ...p, businessType: opt.value }))}
+                  style={[styles.typeCard, selected && styles.typeCardSelected]}
+                >
+                  <View style={styles.typeCardHeader}>
+                    <Feather
+                      name={selected ? 'check-circle' : 'circle'}
+                      size={18}
+                      color={selected ? Colors.light.primary : Colors.light.textMuted}
+                    />
+                    <Text style={[styles.typeCardLabel, selected && { color: Colors.light.primary }]}>{opt.label}</Text>
+                  </View>
+                  <Text style={styles.typeCardHint}>{opt.hint}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {fieldErr('businessType') && <Text style={styles.fieldError}>{fieldErr('businessType')}</Text>}
+        </View>
+
+        {form.businessType === 'LIMITED_COMPANY' && (
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Company registration number *</Text>
+            <View style={[styles.inputWrap, fieldErr('companyNumber') && styles.inputWrapError]}>
+              <Feather name="briefcase" size={16} color={Colors.light.textMuted} />
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 12345678"
+                placeholderTextColor={Colors.light.textMuted}
+                value={form.companyNumber}
+                onChangeText={(t) => setForm(p => ({ ...p, companyNumber: t }))}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+            </View>
+            <Text style={styles.helper}>
+              Your 8-character Companies House number (some start with letters, e.g. SC123456). We check this against Companies House automatically.
+            </Text>
+            {fieldErr('companyNumber') && <Text style={styles.fieldError}>{fieldErr('companyNumber')}</Text>}
+          </View>
+        )}
 
         <Text style={styles.sectionTitle}>Your role in the business</Text>
         <View style={styles.inputGroup}>
@@ -625,7 +696,20 @@ function ChipList({ items, onRemove }: { items: string[]; onRemove: (v: string) 
 
 function computeFieldErrors(form: ProfileForm) {
   const desc = form.businessDescription.trim();
+  const isLtd = form.businessType === 'LIMITED_COMPANY';
+  const company = form.companyNumber.replace(/\s+/g, '').toUpperCase();
   return {
+    businessType:
+      form.businessType !== 'LIMITED_COMPANY' && form.businessType !== 'SOLE_TRADER'
+        ? 'Please choose your business type.'
+        : null,
+    companyNumber: isLtd
+      ? company.length === 0
+        ? 'Limited companies must provide a company number.'
+        : !COMPANY_NUMBER_RE.test(company)
+          ? 'Enter a valid Companies House number (6–10 letters/digits).'
+          : null
+      : null,
     mainCategory: form.mainCategory.trim().length === 0 ? 'This field is required.' : null,
     businessDescription:
       desc.length === 0
@@ -649,7 +733,13 @@ function computeRequirements(form: ProfileForm) {
   const postcode = form.postcode.trim();
   const hours = form.openingHours.trim();
   const category = form.mainCategory.trim();
+  const isLtd = form.businessType === 'LIMITED_COMPANY';
+  const company = form.companyNumber.replace(/\s+/g, '').toUpperCase();
   return [
+    { field: 'businessType', label: 'Business type', satisfied: form.businessType === 'LIMITED_COMPANY' || form.businessType === 'SOLE_TRADER', hint: 'Limited company or sole trader.' },
+    ...(isLtd
+      ? [{ field: 'companyNumber', label: 'Company registration number', satisfied: COMPANY_NUMBER_RE.test(company), hint: 'Your Companies House number.' }]
+      : []),
     { field: 'mainCategory', label: 'Main trade category', satisfied: category.length > 0, hint: 'e.g. Plumber, Electrician.' },
     { field: 'businessDescription', label: 'Business description', satisfied: desc.length >= MIN_DESCRIPTION_LEN, hint: `At least ${MIN_DESCRIPTION_LEN} characters.` },
     { field: 'businessAddress', label: 'Business address', satisfied: addr.length > 0 && town.length > 0 && postcode.length > 0, hint: 'Street, town and postcode.' },
@@ -693,6 +783,12 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12, color: Colors.light.text, fontWeight: '500' },
   emptyChips: { fontSize: 12, color: Colors.light.textMuted, marginLeft: 4, marginTop: 6, fontStyle: 'italic' },
 
+  typeGrid: { gap: 10, marginTop: 6 },
+  typeCard: { backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 12, padding: 14, gap: 6 },
+  typeCardSelected: { backgroundColor: 'rgba(59, 130, 246, 0.10)', borderColor: Colors.light.primary },
+  typeCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  typeCardLabel: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
+  typeCardHint: { fontSize: 11, color: Colors.light.textMuted, lineHeight: 16, marginLeft: 28 },
   roleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   roleChip: { paddingHorizontal: 14, paddingVertical: 9, backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 12 },
   roleChipSelected: { backgroundColor: 'rgba(59, 130, 246, 0.10)', borderColor: Colors.light.primary },

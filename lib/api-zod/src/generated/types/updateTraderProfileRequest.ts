@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UpdateTraderProfileRequestBusinessRole } from "./updateTraderProfileRequestBusinessRole";
+import type { UpdateTraderProfileRequestBusinessType } from "./updateTraderProfileRequestBusinessType";
 import type { UpdateTraderProfileRequestSocialLinks } from "./updateTraderProfileRequestSocialLinks";
 
 export interface UpdateTraderProfileRequest {
@@ -25,6 +26,8 @@ export interface UpdateTraderProfileRequest {
   galleryUrls?: string[];
   socialLinks?: UpdateTraderProfileRequestSocialLinks;
   businessRole?: UpdateTraderProfileRequestBusinessRole;
+  businessType?: UpdateTraderProfileRequestBusinessType;
+  companyNumber?: string;
   authorisedRepresentative?: boolean;
   businessEmailDomain?: string;
   vatNumber?: string;

@@ -262,6 +262,21 @@ export const TraderProfileBusinessRole = {
   OTHER: "OTHER",
 } as const;
 
+/**
+ * Legal structure of the business. LIMITED_COMPANY requires a
+companyNumber and triggers the automatic Companies House check;
+SOLE_TRADER never requires a company number.
+
+ */
+export type TraderProfileBusinessType =
+  | (typeof TraderProfileBusinessType)[keyof typeof TraderProfileBusinessType]
+  | null;
+
+export const TraderProfileBusinessType = {
+  LIMITED_COMPANY: "LIMITED_COMPANY",
+  SOLE_TRADER: "SOLE_TRADER",
+} as const;
+
 export type TraderProfilePlan =
   | (typeof TraderProfilePlan)[keyof typeof TraderProfilePlan]
   | null;
@@ -291,6 +306,15 @@ export interface TraderProfile {
   galleryUrls?: string[];
   socialLinks?: TraderProfileSocialLinks;
   businessRole?: TraderProfileBusinessRole;
+  /** Legal structure of the business. LIMITED_COMPANY requires a
+companyNumber and triggers the automatic Companies House check;
+SOLE_TRADER never requires a company number.
+ */
+  businessType?: TraderProfileBusinessType;
+  /** UK Companies House registration number. Mandatory only when
+businessType is LIMITED_COMPANY.
+ */
+  companyNumber?: string | null;
   authorisedRepresentative?: boolean | null;
   businessEmailDomain?: string | null;
   vatNumber?: string | null;
@@ -339,6 +363,14 @@ export const UpdateTraderProfileRequestBusinessRole = {
   OTHER: "OTHER",
 } as const;
 
+export type UpdateTraderProfileRequestBusinessType =
+  (typeof UpdateTraderProfileRequestBusinessType)[keyof typeof UpdateTraderProfileRequestBusinessType];
+
+export const UpdateTraderProfileRequestBusinessType = {
+  LIMITED_COMPANY: "LIMITED_COMPANY",
+  SOLE_TRADER: "SOLE_TRADER",
+} as const;
+
 export interface UpdateTraderProfileRequest {
   businessName?: string;
   contactName?: string;
@@ -356,6 +388,8 @@ export interface UpdateTraderProfileRequest {
   galleryUrls?: string[];
   socialLinks?: UpdateTraderProfileRequestSocialLinks;
   businessRole?: UpdateTraderProfileRequestBusinessRole;
+  businessType?: UpdateTraderProfileRequestBusinessType;
+  companyNumber?: string;
   authorisedRepresentative?: boolean;
   businessEmailDomain?: string;
   vatNumber?: string;

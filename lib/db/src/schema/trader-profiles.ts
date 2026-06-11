@@ -32,10 +32,25 @@ export const BUSINESS_ROLES = [
 ] as const;
 export type BusinessRole = (typeof BUSINESS_ROLES)[number];
 
+// The legal structure of the trader's business. This is the single source of
+// truth for whether a Companies House registration number is mandatory:
+// LIMITED_COMPANY traders MUST supply (and pass an automatic Companies House
+// check on) a company number; SOLE_TRADER (sole traders / self-employed)
+// never do. Null until the trader declares it.
+export const BUSINESS_TYPES = [
+  "LIMITED_COMPANY",
+  "SOLE_TRADER",
+] as const;
+export type BusinessType = (typeof BUSINESS_TYPES)[number];
+
 export const traderProfilesTable = pgTable("trader_profiles", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => usersTable.id).unique(),
   businessName: varchar("business_name", { length: 255 }).notNull(),
+  // Legal structure of the business (LIMITED_COMPANY | SOLE_TRADER). Drives
+  // whether companyNumber is mandatory and whether the automatic Companies
+  // House check runs. Null until the trader declares it on their profile.
+  businessType: varchar("business_type", { length: 30 }),
   companyNumber: varchar("company_number", { length: 20 }),
   // Optional UK VAT registration number supplied by the trader. Like
   // companyNumber it is never required (sole traders / self-employed may have

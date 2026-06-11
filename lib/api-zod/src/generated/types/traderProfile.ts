@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TraderProfileBusinessRole } from "./traderProfileBusinessRole";
+import type { TraderProfileBusinessType } from "./traderProfileBusinessType";
 import type { TraderProfilePlan } from "./traderProfilePlan";
 import type { TraderProfileSocialLinks } from "./traderProfileSocialLinks";
 
@@ -29,6 +30,15 @@ export interface TraderProfile {
   galleryUrls?: string[];
   socialLinks?: TraderProfileSocialLinks;
   businessRole?: TraderProfileBusinessRole;
+  /** Legal structure of the business. LIMITED_COMPANY requires a
+companyNumber and triggers the automatic Companies House check;
+SOLE_TRADER never requires a company number.
+ */
+  businessType?: TraderProfileBusinessType;
+  /** UK Companies House registration number. Mandatory only when
+businessType is LIMITED_COMPANY.
+ */
+  companyNumber?: string | null;
   authorisedRepresentative?: boolean | null;
   businessEmailDomain?: string | null;
   vatNumber?: string | null;

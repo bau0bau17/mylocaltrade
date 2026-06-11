@@ -244,7 +244,8 @@ const MIN_DESCRIPTION_LEN = 80;
 export function evaluateBusinessProfileComplete(
   profile: Pick<TraderProfile,
     "businessDescription" | "businessAddress" | "additionalServices" | "serviceAreas" |
-    "openingHours" | "town" | "postcode" | "mainCategory">,
+    "openingHours" | "town" | "postcode" | "mainCategory" |
+    "businessType" | "companyNumber">,
 ): BusinessProfileEvaluation {
   const desc = (profile.businessDescription ?? "").trim();
   const addr = (profile.businessAddress ?? "").trim();
@@ -254,8 +255,17 @@ export function evaluateBusinessProfileComplete(
   const areas = profile.serviceAreas ?? [];
   const hours = (profile.openingHours ?? "").trim();
   const category = (profile.mainCategory ?? "").trim();
+  const businessType = (profile.businessType ?? "").trim();
+  const companyNumber = (profile.companyNumber ?? "").replace(/\s+/g, "").toUpperCase();
+  const isLimitedCompany = businessType === "LIMITED_COMPANY";
 
   const requirements: BusinessProfileRequirement[] = [
+    {
+      field: "businessType",
+      label: "Business type",
+      satisfied: businessType === "LIMITED_COMPANY" || businessType === "SOLE_TRADER",
+      hint: "Tell us whether you are a limited company or a sole trader.",
+    },
     {
       field: "mainCategory",
       label: "Main trade category",
@@ -293,6 +303,18 @@ export function evaluateBusinessProfileComplete(
       hint: "Tell customers when you're available.",
     },
   ];
+
+  // A Companies House registration number is mandatory only for limited
+  // companies. Sole traders are never asked for one, so this requirement is
+  // only added to the checklist when the trader has declared LIMITED_COMPANY.
+  if (isLimitedCompany) {
+    requirements.push({
+      field: "companyNumber",
+      label: "Company registration number",
+      satisfied: /^[A-Z0-9]{6,10}$/.test(companyNumber),
+      hint: "Limited companies must provide their Companies House number.",
+    });
+  }
 
   return {
     complete: requirements.every(r => r.satisfied),
