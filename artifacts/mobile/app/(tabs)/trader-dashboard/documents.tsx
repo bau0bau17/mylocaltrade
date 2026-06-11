@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, RefreshControl, ScrollView, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -56,6 +57,7 @@ function parseExpiry(input: string): { iso: string | null; error: string | null 
 
 export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { token, isTrader } = useAuth();
 
@@ -233,7 +235,7 @@ export default function DocumentsScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: insets.bottom + 24, paddingHorizontal: 20 }}
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: tabBarHeight + insets.bottom + 24, paddingHorizontal: 20 }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={Colors.light.primary} />}
       >
         <View style={styles.summaryCard}>
