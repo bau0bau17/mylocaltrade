@@ -163,7 +163,8 @@ export default function BusinessProfileScreen() {
   const handleSave = async () => {
     if (!allMet) {
       setAttemptedSave(true);
-      setError('Please fill in the fields highlighted in red before saving.');
+      const missing = requirements.filter(r => !r.satisfied).map(r => r.label);
+      setError(`Please complete the following before continuing: ${missing.join(', ')}.`);
       return;
     }
     setAttemptedSave(true);
@@ -657,9 +658,9 @@ export default function BusinessProfileScreen() {
         ) : null}
 
         <Pressable
-          style={[styles.saveBtn, (saving || !allMet) && styles.btnDisabled]}
+          style={[styles.saveBtn, saving && styles.btnDisabled]}
           onPress={handleSave}
-          disabled={saving || !allMet}
+          disabled={saving}
         >
           {saving ? (
             <ActivityIndicator color={Colors.light.white} />
@@ -670,7 +671,8 @@ export default function BusinessProfileScreen() {
 
         {!allMet && (
           <Text style={styles.footerHint}>
-            Fill in all required fields to enable saving.
+            {requirements.filter(r => !r.satisfied).length} required field
+            {requirements.filter(r => !r.satisfied).length === 1 ? '' : 's'} still to complete — tap Save & continue to see which.
           </Text>
         )}
       </KeyboardAwareScrollViewCompat>

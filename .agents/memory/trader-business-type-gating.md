@@ -21,3 +21,12 @@ server will disagree on whether a profile is "complete":
 **How to apply:** when changing the requirement, the regex, or the allowed business types, update all
 three plus `openapi.yaml` (TraderProfile + UpdateTraderProfileRequest) and re-run api-spec codegen.
 Both GET and PUT `/api/profile` must echo `businessType` + `companyNumber`.
+
+**Stale-client trap:** because `businessType` is nullable and was added later, any client that
+doesn't send it (old mobile bundle, or any partial PUT) leaves it null, so the server completion
+gate fails silently — the PUT returns 200 but the profile never reaches PENDING_DOCUMENTS and the
+documents step stays locked. Symptom: user "saves" repeatedly (audit log shows BUSINESS_PROFILE_UPDATED
+with no BUSINESS_PROFILE_COMPLETED) but can't continue. Diagnose via trader_audit_log. The mobile
+Save button must never be a disabled dead-end: keep it pressable so tapping surfaces an error that
+names the missing requirement(s). Stale local Mac bundles need a pull + `expo start -c` to get the
+selector.
