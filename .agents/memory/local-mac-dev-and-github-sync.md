@@ -20,6 +20,10 @@ The user (MyLocalTrade) edits/builds on Replit but actually RUNS Expo/Metro + iO
 ## Replit Git UI quirk
 Because local branch is `master` but GitHub uses `main`, the UI offers "Push branch as 'origin/master'" (create new remote branch) instead of a clean push to main. Trying to create `main` again gives `BRANCH_ALREADY_EXISTS`. Net effect: the user ends up pushing some branch (they successfully pushed `replit-agent`).
 
+## A Replit checkpoint/commit is NOT a GitHub push — verify the remote
+A committed checkpoint puts the fix on local `master` AND mirrors it to local `replit-agent`, but does NOT push it to GitHub. The user's Mac pulls `origin/replit-agent`, so the fix is invisible to them until the branch is pushed via the Replit Git pane.
+**Always verify before telling the user to pull:** `git ls-remote origin replit-agent` and compare the SHA to local `git rev-parse replit-agent`. If they differ (and remote is an ancestor → "local ahead, needs push"), the fix has NOT reached GitHub yet. Symptom this caused: user kept reporting the same bug fixed ("tot nu merge") because their pull never had the commit. Fastest unblock meanwhile: have them test in the Replit Expo preview, which always serves the latest local code.
+
 ## How to deliver specific fixes to the Mac (the move that worked)
 1. Confirm the fix commits are on a branch that got pushed to GitHub (here: `origin/replit-agent`).
 2. On the Mac, pull ONLY the changed files (avoid merging the 300+ commit branch history):
