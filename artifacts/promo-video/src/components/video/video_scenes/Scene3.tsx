@@ -35,7 +35,7 @@ export function Scene3() {
             transition={{ duration: 0.8, delay: 0.2 }}
           >
             <h2 
-              className="text-[6vw] leading-[1.05] font-bold tracking-tighter"
+              className="text-[6.8vw] leading-[1.05] font-bold tracking-tighter"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               <motion.span 
@@ -70,7 +70,7 @@ export function Scene3() {
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                 </div>
-                <span className="text-[1.8vw] font-semibold">{tag}</span>
+                <span className="text-[2.4vw] font-semibold">{tag}</span>
               </div>
             ))}
           </motion.div>

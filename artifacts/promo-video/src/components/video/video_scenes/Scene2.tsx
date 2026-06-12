@@ -35,7 +35,7 @@ export function Scene2() {
           >
             <img src={`${import.meta.env.BASE_URL}images/plumber.jpg`} className="w-full h-full object-cover object-top" />
             <div className="absolute bottom-0 left-0 right-0 p-[2vh] bg-gradient-to-t from-black/80 to-transparent">
-              <p className="text-[1.5vw] font-semibold">Verified Plumbers</p>
+              <p className="text-[2vw] font-semibold">Verified Plumbers</p>
             </div>
           </motion.div>
           
@@ -47,7 +47,7 @@ export function Scene2() {
           >
             <img src={`${import.meta.env.BASE_URL}images/electrician.jpg`} className="w-full h-full object-cover" />
             <div className="absolute bottom-0 left-0 right-0 p-[2vh] bg-gradient-to-t from-black/80 to-transparent">
-              <p className="text-[1.5vw] font-semibold">Expert Electricians</p>
+              <p className="text-[2vw] font-semibold">Expert Electricians</p>
             </div>
           </motion.div>
 
@@ -59,7 +59,7 @@ export function Scene2() {
           >
             <img src={`${import.meta.env.BASE_URL}images/painter.jpg`} className="w-full h-full object-cover" />
             <div className="absolute bottom-0 left-0 right-0 p-[2vh] bg-gradient-to-t from-black/80 to-transparent">
-              <p className="text-[1.5vw] font-semibold">Trusted Painters</p>
+              <p className="text-[2vw] font-semibold">Trusted Painters</p>
             </div>
           </motion.div>
         </div>
@@ -67,7 +67,7 @@ export function Scene2() {
         {/* Right Side: Text */}
         <div className="w-[55%] h-full flex flex-col justify-center pr-[10vw] pl-[5vw]">
           <h2 
-            className="text-[4.5vw] leading-[1.1] font-bold tracking-tight mb-[4vh]"
+            className="text-[5.2vw] leading-[1.1] font-bold tracking-tight mb-[4vh]"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             <motion.span 
@@ -87,7 +87,7 @@ export function Scene2() {
               tradespeople
             </motion.span>
             <motion.span 
-              className="block text-white/60 text-[3vw]"
+              className="block text-white/60 text-[3.6vw]"
               initial={{ opacity: 0, x: '5vw' }}
               animate={phase >= 3 ? { opacity: 1, x: 0 } : { opacity: 0, x: '5vw' }}
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
@@ -112,7 +112,7 @@ export function Scene2() {
                 <div className="w-[3vw] h-[3vw] rounded-full bg-[#00B4D8]/20 flex items-center justify-center text-[#00B4D8]">
                   <item.icon size="1.5vw" />
                 </div>
-                <span className="text-[1.8vw] font-medium text-white/90">{item.text}</span>
+                <span className="text-[2.4vw] font-medium text-white/90">{item.text}</span>
               </motion.div>
             ))}
           </div>
