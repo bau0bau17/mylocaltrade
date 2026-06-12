@@ -104,6 +104,8 @@ interface DispatchOpts {
   to: { email: string; name?: string | null };
   subject: string;
   html: string;
+  /** Optional plain-text alternative. Improves deliverability for transactional mail. */
+  text?: string;
   /** Defaults to FROM_NAME / FROM_EMAIL. */
   from?: { email: string; name?: string };
   replyTo?: { email: string; name?: string };
@@ -140,6 +142,7 @@ async function sendViaBrevo(opts: DispatchOpts, apiKey: string): Promise<void> {
     subject: opts.subject,
     htmlContent: opts.html,
   };
+  if (opts.text) payload.textContent = opts.text;
   if (opts.replyTo) payload.replyTo = opts.replyTo;
   if (opts.headers) payload.headers = opts.headers;
 
@@ -173,6 +176,7 @@ async function sendViaSmtp(opts: DispatchOpts): Promise<boolean> {
       : undefined,
     subject: opts.subject,
     html: opts.html,
+    text: opts.text,
     headers: opts.headers,
     attachments: [logoAttachment()],
   });
@@ -317,11 +321,22 @@ export async function sendVerificationEmail(
   </div>
 </body>
 </html>`;
+  const text = `Hi ${toName},
+
+Thanks for signing up to MyLocalTrade. Please verify your email address to activate your account.
+
+Verify your email address:
+${verifyUrl}
+
+This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.
+
+Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ`;
   await dispatchEmail({
     category: "verification",
     to: { email: toEmail, name: toName },
     subject: "Verify your MyLocalTrade email address",
     html,
+    text,
     tag: "verify-email",
   });
 }
@@ -351,11 +366,19 @@ export async function sendPhoneVerificationCodeEmail(
         This code expires in ${expiresInMinutes} minutes. If you didn't request it, you can safely ignore this email.
       </p>`,
   });
+  const text = `Hi ${toName || "there"},
+
+Use this code to verify your phone number on MyLocalTrade:
+
+${code}
+
+This code expires in ${expiresInMinutes} minutes. If you didn't request it, you can safely ignore this email.`;
   return dispatchEmail({
     category: "verification",
     to: { email: toEmail, name: toName },
     subject: "Your MyLocalTrade verification code",
     html,
+    text,
     tag: "phone-otp",
   });
 }
@@ -393,11 +416,20 @@ export async function sendBusinessEmailVerificationEmail(
         This link expires in 24 hours. If you didn't request this, you can safely ignore this email.
       </p>`,
   });
+  const text = `Hi ${toName || "there"},
+
+Please confirm that ${toEmail} is a working business email address for ${businessName}. Confirming it adds a trust signal to your MyLocalTrade profile.
+
+Confirm this email address:
+${verifyUrl}
+
+This link expires in 24 hours. If you didn't request this, you can safely ignore this email.`;
   await dispatchEmail({
     category: "verification",
     to: { email: toEmail, name: toName },
     subject: "Confirm your business email address — MyLocalTrade",
     html,
+    text,
     tag: "business-email-verify",
   });
 }
