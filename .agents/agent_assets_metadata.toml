@@ -47,3 +47,9 @@ id = "MyTBhRps-rj3BcKJvuxHD"
 uri = "file://artifacts/promo-video/public/audio/bg_music.mp3"
 type = "audio"
 title = "background music"
+
+[[outputs]]
+id = "940R4Dlt_iumoQ5ROxxcS"
+uri = "file://artifacts/promo-video/TEXT_SIZING_GUIDE.md"
+type = "text"
+title = "Ghid mărire text & imagini în promo video"
