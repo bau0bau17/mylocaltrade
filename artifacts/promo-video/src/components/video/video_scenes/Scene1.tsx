@@ -49,14 +49,14 @@ export function Scene1() {
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             className="px-[2vw] py-[1vh] rounded-full bg-[#111827]/80 border border-[#00B4D8]/30 backdrop-blur-md"
           >
-            <span className="text-[2.2vw] font-medium tracking-wide text-[#00B4D8] uppercase">
+            <span className="text-[2.8vw] font-medium tracking-wide text-[#00B4D8] uppercase">
               For your home
             </span>
           </motion.div>
         </div>
 
         <h1 
-          className="text-[7vw] leading-[1.1] font-bold tracking-tight mb-[3vh]"
+          className="text-[8.5vw] leading-[1.1] font-bold tracking-tight mb-[3vh]"
           style={{ fontFamily: 'var(--font-display)' }}
         >
           <motion.span 
