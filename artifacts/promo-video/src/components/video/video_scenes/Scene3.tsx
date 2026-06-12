@@ -79,7 +79,7 @@ export function Scene3() {
         {/* Right Side: Phone Mockup */}
         <div className="w-[50%] h-full flex items-center justify-center relative perspective-[1200px]">
           <motion.div
-            className="relative w-[30vw] h-[65vw] max-h-[85vh] mt-[5vh]"
+            className="relative w-[40vw] h-[80vw] max-h-[94vh] mt-[1vh]"
             initial={{ opacity: 0, y: '30vh', rotateY: 35, rotateX: 15, rotateZ: -5, scale: 0.8 }}
             animate={phase >= 2 ? { opacity: 1, y: '0vh', rotateY: -15, rotateX: 5, rotateZ: 0, scale: 1 } : { opacity: 0, y: '30vh', rotateY: 35, rotateX: 15, rotateZ: -5, scale: 0.8 }}
             transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.3 }}
