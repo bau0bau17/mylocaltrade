@@ -26,16 +26,16 @@ export function Scene3() {
     >
       <div className="absolute inset-0 bg-[#06D6A0]/10" />
 
-      <div className="absolute inset-0 flex px-[10vw]">
+      <div className="absolute inset-0 flex px-[6vw]">
         {/* Left Side: Text */}
-        <div className="w-[50%] h-full flex flex-col justify-center">
+        <div className="w-[55%] h-full flex flex-col justify-center pr-[4vw]">
           <motion.div
             initial={{ scale: 0.9, opacity: 0, x: '-5vw' }}
             animate={{ scale: 1, opacity: 1, x: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
           >
             <h2 
-              className="text-[7.5vw] leading-[1.05] font-bold tracking-tighter"
+              className="text-[9.5vw] leading-[1] font-bold tracking-tighter"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               <motion.span 
@@ -47,7 +47,7 @@ export function Scene3() {
                 Zero hassle.
               </motion.span>
               <motion.span 
-                className="block text-white mt-[1vh]"
+                className="block text-white mt-[1.5vh]"
                 initial={{ y: '2vh', opacity: 0 }}
                 animate={phase >= 2 ? { y: 0, opacity: 1 } : { y: '2vh', opacity: 0 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 25 }}
@@ -58,30 +58,30 @@ export function Scene3() {
           </motion.div>
 
           <motion.div 
-            className="mt-[6vh] flex flex-col space-y-[2.5vh]"
+            className="mt-[8vh] flex flex-col space-y-[3vh]"
             initial={{ y: '4vh', opacity: 0 }}
             animate={phase >= 3 ? { y: 0, opacity: 1 } : { y: '4vh', opacity: 0 }}
             transition={{ duration: 0.8, ease: 'easeOut' }}
           >
-            {['Verified Reviews', 'Direct Messaging', 'Save Favourites'].map((tag, i) => (
-              <div key={i} className="px-[2.5vw] py-[1.5vh] rounded-full bg-[#111827] border border-[#06D6A0]/30 shadow-lg shadow-[#06D6A0]/10 flex items-center space-x-[1.5vw] w-fit">
-                <div className="w-[2vw] h-[2vw] rounded-full bg-[#06D6A0] flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" className="w-[1.2vw] h-[1.2vw] text-[#0B1120]" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            {['Verified Reviews', 'Direct Messaging'].map((tag, i) => (
+              <div key={i} className="px-[3vw] py-[2vh] rounded-2xl bg-[#111827] border-2 border-[#06D6A0]/40 shadow-xl shadow-[#06D6A0]/10 flex items-center space-x-[2vw] w-fit">
+                <div className="w-[3.5vw] h-[3.5vw] rounded-full bg-[#06D6A0] flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" className="w-[2vw] h-[2vw] text-[#0B1120]" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                 </div>
-                <span className="text-[3vw] font-semibold">{tag}</span>
+                <span className="text-[3.5vw] font-bold text-white">{tag}</span>
               </div>
             ))}
           </motion.div>
         </div>
 
         {/* Right Side: Phone Mockup */}
-        <div className="w-[50%] h-full flex items-center justify-center relative perspective-[1200px]">
+        <div className="w-[45%] h-full flex items-center justify-center relative perspective-[1200px]">
           <motion.div
-            className="relative w-[40vw] h-[80vw] max-h-[94vh] mt-[1vh]"
-            initial={{ opacity: 0, y: '30vh', rotateY: 35, rotateX: 15, rotateZ: -5, scale: 0.8 }}
-            animate={phase >= 2 ? { opacity: 1, y: '0vh', rotateY: -15, rotateX: 5, rotateZ: 0, scale: 1 } : { opacity: 0, y: '30vh', rotateY: 35, rotateX: 15, rotateZ: -5, scale: 0.8 }}
+            className="relative w-[45vw] h-[92vh] mt-[4vh]"
+            initial={{ opacity: 0, y: '30vh', rotateY: 25, rotateX: 10, rotateZ: -3, scale: 0.8 }}
+            animate={phase >= 2 ? { opacity: 1, y: '0vh', rotateY: -10, rotateX: 0, rotateZ: 0, scale: 1 } : { opacity: 0, y: '30vh', rotateY: 25, rotateX: 10, rotateZ: -3, scale: 0.8 }}
             transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.3 }}
           >
              {/* Float animation */}
@@ -91,16 +91,15 @@ export function Scene3() {
                className="w-full h-full relative flex justify-center items-center"
             >
               {/* Phone body */}
-              <div className="relative h-full aspect-[390/844] rounded-[3.2vw] bg-[#0A0D13] p-[0.7vw] ring-1 ring-white/10 shadow-[0_30px_80px_rgba(6,214,160,0.35),0_12px_40px_rgba(0,0,0,0.65)]">
+              <div className="relative h-full aspect-[390/844] rounded-[4vw] bg-[#0A0D13] p-[1vw] ring-2 ring-white/20 shadow-[0_40px_100px_rgba(6,214,160,0.4),0_15px_50px_rgba(0,0,0,0.7)]">
                 {/* Screen */}
-                <div className="relative w-full h-full rounded-[2.6vw] overflow-hidden bg-black">
+                <div className="relative w-full h-full rounded-[3vw] overflow-hidden bg-black">
                   <img
                     src={appScreen}
                     alt="MyLocalTrade App"
                     className="w-full h-full object-cover"
                   />
-                  {/* Dynamic island */}
-                  <div className="absolute top-[1.1vh] left-1/2 -translate-x-1/2 w-[7vw] h-[1.5vh] rounded-full bg-black z-10" />
+                  {/* Removed dynamic island for website clarity */}
                 </div>
               </div>
             </motion.div>

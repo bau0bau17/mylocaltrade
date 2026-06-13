@@ -41,22 +41,22 @@ export function Scene1() {
       </motion.div>
 
       {/* Main Content */}
-      <div className="relative z-10 flex flex-col items-center text-center px-[5vw]">
-        <div className="overflow-hidden mb-[2vh]">
+      <div className="relative z-10 flex flex-col items-center text-center px-[4vw]">
+        <div className="overflow-hidden mb-[3vh]">
           <motion.div
             initial={{ y: '100%' }}
             animate={{ y: phase >= 1 ? '0%' : '100%' }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="px-[2vw] py-[1vh] rounded-full bg-[#111827]/80 border border-[#00B4D8]/30 backdrop-blur-md"
+            className="px-[3vw] py-[1.5vh] rounded-full bg-[#111827]/80 border border-[#00B4D8]/30 backdrop-blur-md"
           >
-            <span className="text-[2.8vw] font-medium tracking-wide text-[#00B4D8] uppercase">
+            <span className="text-[4vw] font-medium tracking-wide text-[#00B4D8] uppercase">
               For your home
             </span>
           </motion.div>
         </div>
 
         <h1 
-          className="text-[8.5vw] leading-[1.1] font-bold tracking-tight mb-[3vh]"
+          className="text-[12vw] leading-[1.05] font-bold tracking-tight mb-[3vh]"
           style={{ fontFamily: 'var(--font-display)' }}
         >
           <motion.span 
