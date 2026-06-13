@@ -28,14 +28,14 @@ export function Scene3() {
 
       <div className="absolute inset-0 flex px-[6vw]">
         {/* Left Side: Text */}
-        <div className="w-[55%] h-full flex flex-col justify-center pr-[4vw]">
+        <div className="w-[58%] h-full flex flex-col justify-center pr-[4vw]">
           <motion.div
             initial={{ scale: 0.9, opacity: 0, x: '-5vw' }}
             animate={{ scale: 1, opacity: 1, x: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
           >
             <h2 
-              className="text-[9.5vw] leading-[1] font-bold tracking-tighter"
+              className="text-[5vw] leading-[1.05] font-bold tracking-tighter"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               <motion.span 
@@ -70,16 +70,16 @@ export function Scene3() {
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                 </div>
-                <span className="text-[3.5vw] font-bold text-white">{tag}</span>
+                <span className="text-[3vw] font-bold text-white">{tag}</span>
               </div>
             ))}
           </motion.div>
         </div>
 
         {/* Right Side: Phone Mockup */}
-        <div className="w-[45%] h-full flex items-center justify-center relative perspective-[1200px]">
+        <div className="w-[42%] h-full flex items-center justify-center relative perspective-[1200px]">
           <motion.div
-            className="relative w-[45vw] h-[92vh] mt-[4vh]"
+            className="relative w-[36vw] h-[88vh] mt-[2vh]"
             initial={{ opacity: 0, y: '30vh', rotateY: 25, rotateX: 10, rotateZ: -3, scale: 0.8 }}
             animate={phase >= 2 ? { opacity: 1, y: '0vh', rotateY: -10, rotateX: 0, rotateZ: 0, scale: 1 } : { opacity: 0, y: '30vh', rotateY: 25, rotateX: 10, rotateZ: -3, scale: 0.8 }}
             transition={{ type: 'spring', stiffness: 80, damping: 20, delay: 0.3 }}

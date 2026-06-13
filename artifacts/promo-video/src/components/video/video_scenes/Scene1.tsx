@@ -56,7 +56,7 @@ export function Scene1() {
         </div>
 
         <h1 
-          className="text-[12vw] leading-[1.05] font-bold tracking-tight mb-[3vh]"
+          className="text-[8vw] leading-[1.05] font-bold tracking-tight mb-[3vh]"
           style={{ fontFamily: 'var(--font-display)' }}
         >
           <motion.span 

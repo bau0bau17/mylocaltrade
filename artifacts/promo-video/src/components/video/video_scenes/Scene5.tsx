@@ -37,15 +37,15 @@ export function Scene5() {
           <img
             src={logoPng}
             alt="MyLocalTrade"
-            className="relative w-[14vw] h-[14vw] rounded-[3vw] ring-2 ring-white/30 shadow-[0_2vh_5vh_rgba(0,0,0,0.6)]"
+            className="relative w-[12vw] h-[12vw] rounded-[3vw] ring-2 ring-white/30 shadow-[0_2vh_5vh_rgba(0,0,0,0.6)]"
           />
         </div>
 
         {/* Wordmark lockup */}
         <div className="flex items-center gap-[1.5vw]">
-          <div className="w-[0.8vw] h-[10vw] rounded-full bg-[#00B4D8]" />
+          <div className="w-[0.8vw] h-[8.5vw] rounded-full bg-[#00B4D8]" />
           <span
-            className="text-[9.5vw] font-bold tracking-tighter leading-none text-white"
+            className="text-[8.5vw] font-bold tracking-tighter leading-none text-white"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             MyLocalTrade
@@ -54,14 +54,14 @@ export function Scene5() {
       </motion.div>
 
       <motion.p
-        className="text-[4.5vw] font-medium text-white/90 tracking-wide text-center leading-[1.3] px-[5vw]"
+        className="text-[4.2vw] font-medium text-white/90 tracking-wide text-center leading-[1.3] px-[5vw]"
         initial={{ opacity: 0, filter: 'blur(10px)' }}
         animate={phase >= 2 ? { opacity: 1, filter: 'blur(0px)' } : { opacity: 0, filter: 'blur(10px)' }}
         transition={{ duration: 0.8 }}
       >
         Find independent local tradespeople
         <br />
-        <span className="text-[#00B4D8] font-bold text-[5.5vw]">across the UK.</span>
+        <span className="text-[#00B4D8] font-bold text-[5vw]">across the UK.</span>
       </motion.p>
 
       <motion.div

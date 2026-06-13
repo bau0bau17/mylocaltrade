@@ -22,9 +22,9 @@ export function Scene4() {
       exit={{ opacity: 0, filter: 'blur(20px)' }}
       transition={{ duration: 1, ease: [0.76, 0, 0.24, 1] }}
     >
-      <div className="w-[50%] h-full flex flex-col justify-center pl-[8vw] pr-[2vw]">
+      <div className="w-[52%] h-full flex flex-col justify-center pl-[6vw] pr-[2vw]">
         <motion.div
-          className="inline-block px-[2vw] py-[1vh] rounded-lg bg-[#F59E0B]/20 text-[#F59E0B] font-bold text-[3vw] tracking-wider uppercase mb-[4vh] w-fit"
+          className="inline-block px-[2vw] py-[1vh] rounded-lg bg-[#F59E0B]/20 text-[#F59E0B] font-bold text-[2.5vw] tracking-wider uppercase mb-[4vh] w-fit"
           initial={{ opacity: 0, scale: 0.8 }}
           animate={phase >= 1 ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
         >
@@ -32,7 +32,7 @@ export function Scene4() {
         </motion.div>
         
         <h2 
-          className="text-[8vw] leading-[1.05] font-bold tracking-tight mb-[4vh]"
+          className="text-[4.8vw] leading-[1.05] font-bold tracking-tight mb-[4vh]"
           style={{ fontFamily: 'var(--font-display)' }}
         >
           <motion.span 
@@ -54,7 +54,7 @@ export function Scene4() {
         </h2>
         
         <motion.p 
-          className="text-[4vw] leading-[1.3] text-white/80 max-w-[45vw]"
+          className="text-[3vw] leading-[1.3] text-white/80 max-w-[40vw]"
           initial={{ opacity: 0 }}
           animate={phase >= 3 ? { opacity: 1 } : { opacity: 0 }}
           transition={{ duration: 0.7, delay: 0.3 }}
@@ -74,11 +74,11 @@ export function Scene4() {
           <div className="absolute top-0 right-0 w-full h-[40%] bg-gradient-to-b from-[#F59E0B]/20 to-transparent pointer-events-none" />
           
           <div className="flex items-center space-x-[2.5vw] mb-[4vh]">
-            <div className="w-[10vw] h-[10vw] rounded-full bg-gray-700 overflow-hidden border-4 border-[#F59E0B] shrink-0">
+            <div className="w-[8vw] h-[8vw] rounded-full bg-gray-700 overflow-hidden border-4 border-[#F59E0B] shrink-0">
               <img src={`${import.meta.env.BASE_URL}images/plumber.jpg`} className="w-full h-full object-cover object-top" />
             </div>
             <div>
-              <h3 className="text-[3.8vw] font-bold leading-tight mb-[1vh]">John's Plumbing</h3>
+              <h3 className="text-[3vw] font-bold leading-tight mb-[1vh]">John's Plumbing</h3>
               <div className="flex items-center space-x-[1vw] text-[#F59E0B]">
                 <svg viewBox="0 0 24 24" className="w-[2.5vw] h-[2.5vw]" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                 <span className="text-[2.8vw] font-bold text-white">5.0</span>

@@ -26,7 +26,7 @@ export function Scene2() {
     >
       <div className="absolute inset-0 flex">
         {/* Left Side: Images */}
-        <div className="w-[45%] h-full relative">
+        <div className="w-[40%] h-full relative">
           <motion.div
             className="absolute top-[10%] left-[8%] w-[32vw] h-[38vh] rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-2 border-white/10"
             initial={{ x: '-10vw', opacity: 0, rotate: -6 }}
@@ -55,9 +55,9 @@ export function Scene2() {
         </div>
 
         {/* Right Side: Text */}
-        <div className="w-[55%] h-full flex flex-col justify-center pr-[6vw] pl-[8vw]">
+        <div className="w-[60%] h-full flex flex-col justify-center pr-[4vw] pl-[6vw]">
           <h2 
-            className="text-[8vw] leading-[1.05] font-bold tracking-tight mb-[5vh]"
+            className="text-[5vw] leading-[1.05] font-bold tracking-tight mb-[4vh]"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             <motion.span 
@@ -77,7 +77,7 @@ export function Scene2() {
               tradespeople
             </motion.span>
             <motion.span 
-              className="block text-white/70 text-[5vw] mt-2"
+              className="block text-white/70 text-[3.8vw] mt-2"
               initial={{ opacity: 0, x: '5vw' }}
               animate={phase >= 3 ? { opacity: 1, x: 0 } : { opacity: 0, x: '5vw' }}
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
@@ -99,10 +99,10 @@ export function Scene2() {
                 animate={phase >= 5 ? { opacity: 1, y: 0 } : { opacity: 0, y: '2vh' }}
                 transition={{ duration: 0.5, delay: i * 0.15 }}
               >
-                <div className="w-[5vw] h-[5vw] rounded-full bg-[#00B4D8]/20 flex items-center justify-center text-[#00B4D8] shrink-0">
-                  <item.icon size="2.5vw" strokeWidth={2.5} />
+                <div className="w-[4.5vw] h-[4.5vw] rounded-full bg-[#00B4D8]/20 flex items-center justify-center text-[#00B4D8] shrink-0">
+                  <item.icon size="2.2vw" strokeWidth={2.5} />
                 </div>
-                <span className="text-[3.5vw] font-medium text-white">{item.text}</span>
+                <span className="text-[3vw] font-medium text-white">{item.text}</span>
               </motion.div>
             ))}
           </div>
