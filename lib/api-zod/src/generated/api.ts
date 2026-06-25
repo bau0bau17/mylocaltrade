@@ -1400,12 +1400,22 @@ export const GetEnquiriesResponse = zod.object({
       traderId: zod.number(),
       customerId: zod.number(),
       customerName: zod.string(),
-      customerEmail: zod.string(),
+      customerEmail: zod
+        .string()
+        .nullable()
+        .describe(
+          "Customer's email. Null until the customer hires the trader (contactUnlocked=false), so contact details are not exposed at the lead stage.",
+        ),
       traderBusinessName: zod.string(),
       message: zod.string(),
       serviceRequired: zod.string(),
       preferredDate: zod.string().nullish(),
-      phone: zod.string().nullish(),
+      phone: zod
+        .string()
+        .nullish()
+        .describe(
+          "Customer's phone. Null until the customer hires the trader (contactUnlocked=false).",
+        ),
       attachmentUrls: zod.array(zod.string()).optional(),
       specialistFields: zod
         .object({
@@ -1424,6 +1434,11 @@ export const GetEnquiriesResponse = zod.object({
       status: zod.enum(["pending", "responded", "closed"]),
       conversationId: zod.number().nullish(),
       viewedByTrader: zod.boolean().optional(),
+      contactUnlocked: zod
+        .boolean()
+        .describe(
+          "Whether the customer's contact details (email, phone) are revealed to the trader. False until the customer hires the trader.",
+        ),
       createdAt: zod.date(),
     }),
   ),

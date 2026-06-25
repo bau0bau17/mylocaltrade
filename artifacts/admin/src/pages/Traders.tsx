@@ -8,7 +8,7 @@ import type {
   RegisterCheckStatus,
   AiVerificationStatus,
 } from "@/lib/types";
-import { REVIEW_FILTER_STATUSES, STATUS_LABELS } from "@/lib/types";
+import { REVIEW_FILTER_STATUSES, STATUS_LABELS, VISIBILITY_REASON_LABELS } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -271,7 +271,14 @@ export default function Traders() {
                       <td className="px-4 py-3 text-sm">
                         {t.town ? `${t.town}${t.postcode ? `, ${t.postcode}` : ""}` : "—"}
                       </td>
-                      <td className="px-4 py-3"><StatusBadge status={t.verificationStatus} /></td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={t.verificationStatus} />
+                        {!t.visibility.isPublic && (
+                          <div className="text-xs text-orange-700 mt-1" data-testid={`hidden-trader-${t.userId}`}>
+                            Hidden — {t.visibility.reasons.map((r) => VISIBILITY_REASON_LABELS[r]).join(", ")}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3" data-testid={`checks-trader-${t.userId}`}>
                         {t.registerCheckStatus || t.aiVerificationStatus ? (
                           <div className="flex flex-col gap-1 items-start">

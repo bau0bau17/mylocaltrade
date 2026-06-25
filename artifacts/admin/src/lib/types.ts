@@ -34,6 +34,32 @@ export const REVIEW_FILTER_STATUSES: TraderStatus[] = [
   "EXPIRED_DOCUMENTS",
 ];
 
+export type VisibilityReason =
+  | "NOT_TRADER"
+  | "ACCOUNT_DELETED"
+  | "ACCOUNT_DELETION_PENDING"
+  | "EMAIL_UNVERIFIED"
+  | "NOT_VERIFIED"
+  | "INACTIVE"
+  | "REVALIDATION_OVERDUE"
+  | "DOCUMENTS_EXPIRED";
+
+export interface ProfileVisibility {
+  isPublic: boolean;
+  reasons: VisibilityReason[];
+}
+
+export const VISIBILITY_REASON_LABELS: Record<VisibilityReason, string> = {
+  NOT_TRADER: "Not a trader account",
+  ACCOUNT_DELETED: "Account deleted",
+  ACCOUNT_DELETION_PENDING: "Deletion pending",
+  EMAIL_UNVERIFIED: "Email not verified",
+  NOT_VERIFIED: "Not verified",
+  INACTIVE: "Set inactive",
+  REVALIDATION_OVERDUE: "Re-validation overdue",
+  DOCUMENTS_EXPIRED: "Documents expired",
+};
+
 export const BUSINESS_ROLE_LABELS: Record<string, string> = {
   OWNER: "Owner",
   DIRECTOR: "Director",
@@ -63,6 +89,7 @@ export interface TraderListRow {
   rejectedAt: string | null;
   registerCheckStatus: RegisterCheckStatus | null;
   aiVerificationStatus: AiVerificationStatus | null;
+  visibility: ProfileVisibility;
 }
 
 export type RegisterCheckStatus = "PASS" | "REVIEW" | "FAIL" | "NOT_PROVIDED" | "ERROR";
@@ -263,6 +290,7 @@ export interface TraderDetailResponse {
   profile: TraderProfileFull;
   documents: TraderDocument[];
   documentsEvaluation: DocumentEvaluation;
+  visibility: ProfileVisibility;
   auditLog: AuditLogEntry[];
 }
 

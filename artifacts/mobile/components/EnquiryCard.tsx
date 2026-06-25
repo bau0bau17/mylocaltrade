@@ -142,18 +142,27 @@ export function EnquiryCard({
 
       <View style={styles.footer}>
         {!isCustomerView && (
-          <>
+          enquiry.contactUnlocked ? (
+            <>
+              {enquiry.customerEmail ? (
+                <View style={styles.contactRow}>
+                  <Feather name="mail" size={14} color={Colors.light.textSecondary} />
+                  <Text style={styles.contactText}>{enquiry.customerEmail}</Text>
+                </View>
+              ) : null}
+              {enquiry.phone ? (
+                <View style={styles.contactRow}>
+                  <Feather name="phone" size={14} color={Colors.light.textSecondary} />
+                  <Text style={styles.contactText}>{enquiry.phone}</Text>
+                </View>
+              ) : null}
+            </>
+          ) : (
             <View style={styles.contactRow}>
-              <Feather name="mail" size={14} color={Colors.light.textSecondary} />
-              <Text style={styles.contactText}>{enquiry.customerEmail}</Text>
+              <Feather name="lock" size={14} color={Colors.light.textSecondary} />
+              <Text style={styles.contactText}>Contact details unlock once the customer hires you</Text>
             </View>
-            {enquiry.phone && (
-              <View style={styles.contactRow}>
-                <Feather name="phone" size={14} color={Colors.light.textSecondary} />
-                <Text style={styles.contactText}>{enquiry.phone}</Text>
-              </View>
-            )}
-          </>
+          )
         )}
         <View style={styles.contactRow}>
           <Feather name="calendar" size={14} color={Colors.light.textSecondary} />

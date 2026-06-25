@@ -42,6 +42,7 @@ function makeRow(overrides: Partial<TraderListRow> = {}): TraderListRow {
     rejectedAt: null,
     aiVerificationStatus: null,
     registerCheckStatus: null,
+    visibility: { isPublic: true, reasons: [] },
     ...overrides,
   };
 }

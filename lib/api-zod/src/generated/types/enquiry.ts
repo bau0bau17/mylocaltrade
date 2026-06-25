@@ -13,16 +13,20 @@ export interface Enquiry {
   traderId: number;
   customerId: number;
   customerName: string;
-  customerEmail: string;
+  /** Customer's email. Null until the customer hires the trader (contactUnlocked=false), so contact details are not exposed at the lead stage. */
+  customerEmail: string | null;
   traderBusinessName: string;
   message: string;
   serviceRequired: string;
   preferredDate?: string | null;
+  /** Customer's phone. Null until the customer hires the trader (contactUnlocked=false). */
   phone?: string | null;
   attachmentUrls?: string[];
   specialistFields?: EnquirySpecialistFields | null;
   status: EnquiryStatus;
   conversationId?: number | null;
   viewedByTrader?: boolean;
+  /** Whether the customer's contact details (email, phone) are revealed to the trader. False until the customer hires the trader. */
+  contactUnlocked: boolean;
   createdAt: Date;
 }

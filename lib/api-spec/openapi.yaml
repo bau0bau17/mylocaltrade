@@ -2637,6 +2637,8 @@ components:
           type: string
         customerEmail:
           type: string
+          nullable: true
+          description: Customer's email. Null until the customer hires the trader (contactUnlocked=false), so contact details are not exposed at the lead stage.
         traderBusinessName:
           type: string
         message:
@@ -2649,6 +2651,7 @@ components:
         phone:
           type: string
           nullable: true
+          description: Customer's phone. Null until the customer hires the trader (contactUnlocked=false).
         attachmentUrls:
           type: array
           items:
@@ -2665,6 +2668,9 @@ components:
           nullable: true
         viewedByTrader:
           type: boolean
+        contactUnlocked:
+          type: boolean
+          description: Whether the customer's contact details (email, phone) are revealed to the trader. False until the customer hires the trader.
         createdAt:
           type: string
           format: date-time
@@ -2678,6 +2684,7 @@ components:
         - message
         - serviceRequired
         - status
+        - contactUnlocked
         - createdAt
 
     EnquiryListResponse:

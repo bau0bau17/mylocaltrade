@@ -21,6 +21,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage"
 import {
   TRADER_STATUS,
   evaluateDocumentsComplete,
+  evaluateProfileVisibility,
   logAudit,
   REVALIDATION_INTERVAL_MS,
 } from "../lib/trader-status";
@@ -267,6 +268,9 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
         userId: usersTable.id,
         email: usersTable.email,
         emailVerified: usersTable.emailVerified,
+        userIsActive: usersTable.isActive,
+        deletedAt: usersTable.deletedAt,
+        deletionStatus: usersTable.deletionStatus,
         createdAt: usersTable.createdAt,
         businessName: traderProfilesTable.businessName,
         contactName: traderProfilesTable.contactName,
@@ -278,6 +282,10 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
         phoneVerified: traderProfilesTable.phoneVerified,
         businessProfileCompleted: traderProfilesTable.businessProfileCompleted,
         documentsSubmitted: traderProfilesTable.documentsSubmitted,
+        isActive: traderProfilesTable.isActive,
+        revalidationOverdue: traderProfilesTable.revalidationOverdue,
+        businessRole: traderProfilesTable.businessRole,
+        authorisedRepresentative: traderProfilesTable.authorisedRepresentative,
         submittedForReviewAt: traderProfilesTable.submittedForReviewAt,
         verifiedAt: traderProfilesTable.verifiedAt,
         rejectedAt: traderProfilesTable.rejectedAt,
@@ -342,7 +350,59 @@ router.get("/admin/traders", authMiddleware, adminOnly, async (req, res) => {
       count: r.count,
     }));
 
-    res.json({ traders: rows, counts, registerCounts, aiCounts, total, limit, offset });
+    // Effective (read-time) visibility per trader. The stored verificationStatus
+    // can lag behind reality (e.g. a required document expired but the status is
+    // still VERIFIED until the next reconciliation sweep), so the admin list
+    // surfaces what the public actually sees right now.
+    const pageUserIds = rows.map((r) => r.userId);
+    const pageDocs = pageUserIds.length
+      ? await db
+          .select()
+          .from(traderDocumentsTable)
+          .where(inArray(traderDocumentsTable.userId, pageUserIds))
+      : [];
+    const docsByUser = new Map<number, typeof pageDocs>();
+    for (const d of pageDocs) {
+      const arr = docsByUser.get(d.userId);
+      if (arr) arr.push(d);
+      else docsByUser.set(d.userId, [d]);
+    }
+    const traders = rows.map((r) => {
+      const {
+        userIsActive,
+        deletedAt,
+        deletionStatus,
+        isActive,
+        revalidationOverdue,
+        businessRole,
+        authorisedRepresentative,
+        ...rest
+      } = r;
+      return {
+        ...rest,
+        visibility: evaluateProfileVisibility(
+          {
+            role: "trader",
+            emailVerified: r.emailVerified,
+            isActive: userIsActive,
+            deletedAt,
+            deletionStatus,
+          },
+          {
+            verificationStatus: r.verificationStatus,
+            phoneVerified: r.phoneVerified,
+            businessProfileCompleted: r.businessProfileCompleted,
+            isActive,
+            businessRole,
+            authorisedRepresentative,
+            revalidationOverdue,
+          },
+          docsByUser.get(r.userId) ?? [],
+        ),
+      };
+    });
+
+    res.json({ traders, counts, registerCounts, aiCounts, total, limit, offset });
   } catch (error) {
     req.log.error({ err: error }, "Admin list traders failed");
     res.status(500).json({ error: "Failed to list traders" });
@@ -404,6 +464,9 @@ router.get("/admin/traders/:userId", authMiddleware, adminOnly, async (req, res)
         businessRole: row.profile.businessRole,
         authorisedRepresentative: row.profile.authorisedRepresentative,
       }),
+      // Effective (read-time) visibility: what the public actually sees now,
+      // which can differ from the stored verificationStatus until reconciliation.
+      visibility: evaluateProfileVisibility(row.user, row.profile, documents),
       auditLog,
     });
   } catch (error) {

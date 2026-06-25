@@ -164,7 +164,8 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
             serviceRequired,
             message,
             preferredDate: preferredDate || null,
-            phone: phone || null,
+            // Stage gate: the customer's phone is not shared at the lead stage.
+            // It is revealed in-app only once the customer hires the trader.
             specialistFields: specialistFields ?? null,
           });
         }
@@ -224,6 +225,8 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       specialistFields: enquiry.specialistFields ?? null,
       status: enquiry.status,
       conversationId,
+      // The creator is always the customer, who sees their own details.
+      contactUnlocked: true,
       createdAt: enquiry.createdAt.toISOString(),
     });
   } catch (error: unknown) {
@@ -434,6 +437,7 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
           trader: traderProfilesTable,
           conversationId: conversationsTable.id,
           traderViewedAt: conversationsTable.traderViewedAt,
+          customerAcceptedAt: conversationsTable.customerAcceptedAt,
         })
         .from(enquiriesTable)
         .innerJoin(usersTable, eq(enquiriesTable.customerId, usersTable.id))
@@ -449,6 +453,7 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
           trader: traderProfilesTable,
           conversationId: conversationsTable.id,
           traderViewedAt: conversationsTable.traderViewedAt,
+          customerAcceptedAt: conversationsTable.customerAcceptedAt,
         })
         .from(enquiriesTable)
         .innerJoin(usersTable, eq(enquiriesTable.customerId, usersTable.id))
@@ -458,24 +463,34 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
         .orderBy(desc(enquiriesTable.createdAt));
     }
 
-    const formatted = enquiries.map(({ enquiry: e, customer: c, trader: t, conversationId, traderViewedAt }) => ({
-      id: e.id,
-      traderId: e.traderId,
-      customerId: e.customerId,
-      customerName: c.fullName,
-      customerEmail: c.email,
-      traderBusinessName: t.businessName,
-      message: e.message,
-      serviceRequired: e.serviceRequired,
-      preferredDate: e.preferredDate,
-      phone: e.phone,
-      attachmentUrls: e.attachmentUrls ?? [],
-      specialistFields: e.specialistFields ?? null,
-      status: e.status,
-      conversationId: conversationId ?? null,
-      viewedByTrader: traderViewedAt != null,
-      createdAt: e.createdAt.toISOString(),
-    }));
+    const viewerIsTrader = userRole === "trader";
+    const formatted = enquiries.map(({ enquiry: e, customer: c, trader: t, conversationId, traderViewedAt, customerAcceptedAt }) => {
+      // Stage gate: a trader only sees the customer's contact details once the
+      // customer has hired them (customerAcceptedAt set = HIRED stage). Before
+      // that, they communicate via in-app messaging only. Deterministic and
+      // auditable — tied to a concrete lifecycle timestamp, not a trust score.
+      // Customers always see their own details.
+      const contactUnlocked = !viewerIsTrader || customerAcceptedAt != null;
+      return {
+        id: e.id,
+        traderId: e.traderId,
+        customerId: e.customerId,
+        customerName: c.fullName,
+        customerEmail: contactUnlocked ? c.email : null,
+        traderBusinessName: t.businessName,
+        message: e.message,
+        serviceRequired: e.serviceRequired,
+        preferredDate: e.preferredDate,
+        phone: contactUnlocked ? e.phone : null,
+        attachmentUrls: e.attachmentUrls ?? [],
+        specialistFields: e.specialistFields ?? null,
+        status: e.status,
+        conversationId: conversationId ?? null,
+        viewedByTrader: traderViewedAt != null,
+        contactUnlocked,
+        createdAt: e.createdAt.toISOString(),
+      };
+    });
 
     res.json({ enquiries: formatted, total: formatted.length });
   } catch (error) {

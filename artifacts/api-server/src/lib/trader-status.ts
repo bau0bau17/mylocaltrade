@@ -171,26 +171,53 @@ export const TRADER_STATUS = {
 export type TraderStatus = (typeof TRADER_STATUS)[keyof typeof TRADER_STATUS];
 
 /**
- * Single source of truth for whether a trader profile is publicly visible.
- * As later phases land (subscription gating, document expiry checks), tighten this.
+ * Machine-readable reasons a trader profile is NOT publicly visible. Each maps
+ * 1:1 to a condition in evaluateProfileVisibility so the admin UI can show the
+ * *effective* (real, read-time) visibility instead of the stored status enum,
+ * which can lag behind reality (e.g. documents expired but status still VERIFIED
+ * until the next reconciliation sweep).
  */
-export function isTraderProfilePublic(
+export type VisibilityReason =
+  | "NOT_TRADER"
+  | "ACCOUNT_DELETED"
+  | "ACCOUNT_DELETION_PENDING"
+  | "EMAIL_UNVERIFIED"
+  | "NOT_VERIFIED"
+  | "INACTIVE"
+  | "REVALIDATION_OVERDUE"
+  | "DOCUMENTS_EXPIRED";
+
+export interface ProfileVisibility {
+  /** True only when there are zero blocking reasons. */
+  isPublic: boolean;
+  /** Every blocking reason, in evaluation order. Empty when isPublic. */
+  reasons: VisibilityReason[];
+}
+
+/**
+ * Single source of truth for whether a trader profile is publicly visible, and
+ * WHY when it is not. This is the authoritative read-time computation: it can
+ * differ from profile.verificationStatus (the stored decision), which only
+ * converges via reconciliation. Public routes use isTraderProfilePublic();
+ * the admin UI uses the reasons to surface the effective status.
+ */
+export function evaluateProfileVisibility(
   user: Pick<User, "emailVerified" | "isActive" | "role" | "deletedAt" | "deletionStatus">,
   profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive" | "businessRole" | "authorisedRepresentative" | "revalidationOverdue">,
-  _subscription?: { status: string | null } | null,
   documents?: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[] | null,
-): boolean {
-  if (user.role !== "trader") return false;
+): ProfileVisibility {
+  const reasons: VisibilityReason[] = [];
+  if (user.role !== "trader") reasons.push("NOT_TRADER");
   // GDPR: any account in the deletion lifecycle (or already soft-deleted)
   // must not appear in public listings, search results or detail pages.
-  if (user.deletedAt) return false;
-  if (user.deletionStatus) return false;
-  if (!user.emailVerified) return false;
-  if (profile.verificationStatus !== TRADER_STATUS.VERIFIED) return false;
-  if (!profile.isActive) return false;
+  if (user.deletedAt) reasons.push("ACCOUNT_DELETED");
+  if (user.deletionStatus) reasons.push("ACCOUNT_DELETION_PENDING");
+  if (!user.emailVerified) reasons.push("EMAIL_UNVERIFIED");
+  if (profile.verificationStatus !== TRADER_STATUS.VERIFIED) reasons.push("NOT_VERIFIED");
+  if (!profile.isActive) reasons.push("INACTIVE");
   // Periodic re-validation: a verified trader who let the grace period lapse
   // without re-confirming their key documents is hidden until they re-confirm.
-  if (profile.revalidationOverdue) return false;
+  if (profile.revalidationOverdue) reasons.push("REVALIDATION_OVERDUE");
   // Listing is driven by verification (free Basic), not by a paid subscription.
   // A verified, active profile is public regardless of subscription state;
   // Premium only adds perks (featured placement, ranking, enhanced profile).
@@ -200,9 +227,23 @@ export function isTraderProfilePublic(
       businessRole: profile.businessRole,
       authorisedRepresentative: profile.authorisedRepresentative,
     });
-    if (evaluation.hasExpiredRequired) return false;
+    if (evaluation.hasExpiredRequired) reasons.push("DOCUMENTS_EXPIRED");
   }
-  return true;
+  return { isPublic: reasons.length === 0, reasons };
+}
+
+/**
+ * Single source of truth for whether a trader profile is publicly visible.
+ * Thin boolean wrapper over evaluateProfileVisibility so public routes and the
+ * admin "effective status" indicator never drift apart.
+ */
+export function isTraderProfilePublic(
+  user: Pick<User, "emailVerified" | "isActive" | "role" | "deletedAt" | "deletionStatus">,
+  profile: Pick<TraderProfile, "verificationStatus" | "phoneVerified" | "businessProfileCompleted" | "isActive" | "businessRole" | "authorisedRepresentative" | "revalidationOverdue">,
+  _subscription?: { status: string | null } | null,
+  documents?: Pick<TraderDocument, "type" | "status" | "rejectionReason" | "createdAt" | "expiresAt">[] | null,
+): boolean {
+  return evaluateProfileVisibility(user, profile, documents).isPublic;
 }
 
 export interface AuditEntry {

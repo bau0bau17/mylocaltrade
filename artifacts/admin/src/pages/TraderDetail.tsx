@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, downloadAuthed, fetchAuthedBlob, ApiError } from "@/lib/api";
 import { queryClient as qc } from "@/lib/queryClient";
-import { BUSINESS_ROLE_LABELS, type TraderDetailResponse, type TraderDocument } from "@/lib/types";
+import { BUSINESS_ROLE_LABELS, VISIBILITY_REASON_LABELS, type TraderDetailResponse, type TraderDocument } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -227,7 +227,7 @@ export default function TraderDetail({ userId }: Props) {
     );
   }
 
-  const { profile, user, documents, documentsEvaluation, auditLog } = data;
+  const { profile, user, documents, documentsEvaluation, visibility, auditLog } = data;
   const isSuspended = profile.verificationStatus === "SUSPENDED";
 
   function openAction(type: ActionType) {
@@ -378,7 +378,13 @@ export default function TraderDetail({ userId }: Props) {
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <StatusBadge status={profile.verificationStatus} />
             {profile.isFeatured && <Badge variant="secondary">Featured</Badge>}
-            {profile.isActive && <Badge className="bg-emerald-100 text-emerald-800 border-transparent">Live</Badge>}
+            {visibility.isPublic ? (
+              <Badge className="bg-emerald-100 text-emerald-800 border-transparent">Live</Badge>
+            ) : (
+              <Badge className="bg-orange-100 text-orange-900 border-transparent">
+                Hidden — {visibility.reasons.map((r) => VISIBILITY_REASON_LABELS[r]).join(", ")}
+              </Badge>
+            )}
             <span className="text-xs text-muted-foreground">
               Joined {formatDate(profile.createdAt)}
             </span>

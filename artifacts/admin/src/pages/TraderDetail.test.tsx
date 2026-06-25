@@ -107,6 +107,7 @@ function buildResponse(
       hasExpiredRequired: false,
       hasExpiringSoonRequired: false,
     },
+    visibility: { isPublic: true, reasons: [] },
     auditLog: [],
   };
 }
