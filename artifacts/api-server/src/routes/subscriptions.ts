@@ -32,10 +32,10 @@ const IS_DEMO_MODE = !process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== 
 // drive the informational fallback pricing cards on web / Expo Go only.
 const PREMIUM_FEATURES = [
   "Receive customer enquiries",
+  "Website and social links on your profile",
   "Higher search ranking and priority placement",
   "Featured listing badge and home screen placement",
   "Unlimited gallery images",
-  "Enhanced profile with services, social and website links",
 ];
 
 const PLANS = [

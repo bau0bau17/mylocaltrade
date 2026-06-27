@@ -245,6 +245,29 @@ function pickPackage(
   );
 }
 
+/**
+ * Work out whether the active subscription is billed monthly or yearly. The
+ * backend only stores a single "premium" plan id, so the cadence (used for the
+ * exact "Premium Monthly" / "Premium Yearly" label) is derived here from the
+ * active store product. We match the active product id against the current
+ * offering's packages first, then fall back to a heuristic on the product id
+ * for products that aren't in the current offering (e.g. a legacy purchase).
+ */
+function resolveCadence(
+  productId: string | null,
+  offering: PurchasesOffering | null,
+): 'monthly' | 'annual' | null {
+  if (!productId) return null;
+  const monthly = pickPackage(offering, 'monthly');
+  const annual = pickPackage(offering, 'annual');
+  if (annual && productId === annual.product.identifier) return 'annual';
+  if (monthly && productId === monthly.product.identifier) return 'monthly';
+  const p = productId.toLowerCase();
+  if (/year|annual|yr|12m/.test(p)) return 'annual';
+  if (/month|monthly|1m/.test(p)) return 'monthly';
+  return null;
+}
+
 interface SubscriptionContextValue {
   /** True when IAP can run (native build with API key). */
   isSupported: boolean;
@@ -257,6 +280,8 @@ interface SubscriptionContextValue {
   hasTraderSubscription: boolean;
   /** Store identifier of the active subscription product, if any. */
   activeProductId: string | null;
+  /** Billing cadence of the active subscription, if determinable. */
+  activeCadence: 'monthly' | 'annual' | null;
   /** ISO expiry date of the active entitlement, if known. */
   expiresAt: string | null;
   refresh: () => Promise<void>;
@@ -507,6 +532,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       annualPackage: pickPackage(offering, 'annual'),
       hasTraderSubscription: !!activeEntitlement,
       activeProductId: activeEntitlement?.productIdentifier ?? null,
+      activeCadence: resolveCadence(
+        activeEntitlement?.productIdentifier ?? null,
+        offering,
+      ),
       expiresAt: activeEntitlement?.expirationDate ?? null,
       refresh,
       purchase,

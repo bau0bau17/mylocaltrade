@@ -46,6 +46,16 @@ export default function RefundScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.heading}>App Store Purchases & Refunds</Text>
+        <Text style={styles.paragraph}>
+          If you subscribed through the iOS app, your payment is taken and managed by Apple. Refunds for App Store purchases are handled by Apple, not by MyLocalTrade, and must be requested directly from Apple at reportaproblem.apple.com or via Settings then your name then Subscriptions on your device.
+        </Text>
+        <Text style={styles.paragraph}>
+          Your statutory rights set out above still apply. If you need any help, please contact us using the button below and we will do our best to assist.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.heading}>Subscription Cancellations</Text>
         <Text style={styles.paragraph}>
           You can cancel your subscription at any time through the App or by contacting us. When you cancel after the 14-day cooling-off period, you will continue to have access to the subscription features until the end of your current billing period. No further payments will be taken.

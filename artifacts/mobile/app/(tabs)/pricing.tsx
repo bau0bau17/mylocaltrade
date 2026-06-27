@@ -127,8 +127,8 @@ export default function PricingScreen() {
       const active = await subscription.purchase(pkg);
       if (active) {
         Alert.alert(
-          'You are subscribed',
-          'Your Premium plan is active. Your listing is now featured and boosted in search.',
+          key === 'annual' ? 'Premium Yearly is now active' : 'Premium Monthly is now active',
+          'Your listing is now featured and boosted in local search. You can manage your plan any time from Billing.',
         );
         router.push('/trader-dashboard/billing');
       }
@@ -192,7 +192,6 @@ export default function PricingScreen() {
           { icon: 'arrow-up' as const, label: 'Higher search ranking and priority placement' },
           { icon: 'star' as const, label: 'Featured listing badge and home screen placement' },
           { icon: 'image' as const, label: 'Unlimited gallery images' },
-          { icon: 'briefcase' as const, label: 'Enhanced profile with services, social and website links' },
         ].map((b, idx) => (
           <View key={idx} style={styles.benefitRow}>
             <View style={styles.benefitIconWrap}>

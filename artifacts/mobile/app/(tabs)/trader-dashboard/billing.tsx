@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, RefreshControl, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -22,6 +22,7 @@ export default function BillingScreen() {
   const { mutateAsync: resumeSub, isPending: resuming } = useResumeSubscription();
   const subscription = useSubscription();
   const busy = cancelling || resuming;
+  const [showDowngrade, setShowDowngrade] = useState(false);
 
   // Depend on the stable members, NOT the whole `subscription` object: the
   // provider rebuilds that object every render, so depending on it would make
@@ -97,13 +98,23 @@ export default function BillingScreen() {
   // This also normalises any legacy plan values (e.g. "trader", "elite") so the
   // label never shows a raw/unknown value to the trader.
   const isPremium = plan != null && plan !== 'basic';
+  // The backend stores a single "premium" plan id, so the exact cadence
+  // (Monthly vs Yearly) comes from RevenueCat's active product. Falls back to a
+  // plain "Premium" label when the cadence can't be determined (e.g. web).
+  const cadence = subscription.activeCadence;
+  const premiumName =
+    cadence === 'annual' ? 'Premium Yearly' : cadence === 'monthly' ? 'Premium Monthly' : 'Premium';
   // Verified traders are always listed for free as Basic, even with no paid
   // subscription row (plan === null). Only true paid plans show as Premium.
-  const planLabel = isPremium ? 'Premium' : 'Basic';
+  const planLabel = isPremium ? premiumName : 'Basic';
   const isActive = status?.status === 'active';
   const periodEnd = status?.currentPeriodEnd ? new Date(status.currentPeriodEnd) : null;
+  const periodEndLabel = periodEnd
+    ? periodEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : null;
 
   return (
+    <>
     <ScrollView
       style={s.container}
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32, paddingHorizontal: 20 }}
@@ -115,7 +126,7 @@ export default function BillingScreen() {
         <View style={s.planHeader}>
           <View>
             <Text style={s.cardLabel}>Current Plan</Text>
-            <Text style={s.planName}>{planLabel} Plan</Text>
+            <Text style={s.planName}>{planLabel}</Text>
           </View>
           <View style={[s.badge, (isActive || !isPremium) ? s.badgeActive : s.badgeInactive]}>
             <Text style={[s.badgeText, (isActive || !isPremium) ? s.badgeTextActive : s.badgeTextInactive]}>
@@ -160,6 +171,15 @@ export default function BillingScreen() {
                 <Feather name="settings" size={18} color={Colors.light.primary} />
                 <Text style={s.secondaryBtnText}>Manage subscription</Text>
               </Pressable>
+              <Text style={s.actionHint}>
+                Change between Monthly and Yearly, update payment or cancel any time in your App Store subscription settings.
+              </Text>
+              {!status?.cancelAtPeriodEnd && (
+                <Pressable style={s.dangerBtn} onPress={() => setShowDowngrade(true)}>
+                  <Feather name="arrow-down-circle" size={18} color={Colors.light.text} />
+                  <Text style={s.dangerBtnText}>Switch to Free plan</Text>
+                </Pressable>
+              )}
               <Pressable style={s.dangerBtn} onPress={restoreApple}>
                 <Feather name="refresh-ccw" size={18} color={Colors.light.text} />
                 <Text style={s.dangerBtnText}>Restore purchases</Text>
@@ -198,20 +218,75 @@ export default function BillingScreen() {
         <Text style={s.sectionTitle}>Your Plan Features</Text>
         <View style={s.featuresCard}>
           <Feature included text="Receive customer enquiries" />
+          <Feature included text="Website and social links on your profile" />
           <Feature included={isActive && isPremium} text="Higher search ranking and priority placement" />
           <Feature included={isActive && isPremium} text="Featured listing badge and home screen placement" />
           <Feature included={isActive && isPremium} text="Unlimited gallery images" />
-          <Feature included={isActive && isPremium} text="Enhanced profile with services, social and website links" />
         </View>
       </View>
 
       <Text style={s.footnote}>
-        Subscriptions for the iOS app are managed securely through the Apple App Store.
-        Upgrading, downgrading or cancelling is done in Apple's subscription settings, and
-        those changes may take a few moments to take effect. Your plan status here updates
-        automatically once Apple confirms them.
+        Subscriptions are billed and managed by Apple. Changes and cancellations are made in
+        your App Store settings, and your status here updates automatically once Apple confirms them.
       </Text>
     </ScrollView>
+
+    <Modal
+      visible={showDowngrade}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowDowngrade(false)}
+    >
+      <View style={s.modalOverlay}>
+        <View style={s.modalCard}>
+          <Text style={s.modalTitle}>Switch to the Free plan?</Text>
+          <Text style={s.modalBody}>
+            {periodEndLabel
+              ? `You'll keep your Premium perks until ${periodEndLabel}. After that your listing moves to the free Basic plan and you'll lose:`
+              : `Your listing will move to the free Basic plan and you'll lose:`}
+          </Text>
+          <View style={s.lossList}>
+            <LossRow text="Featured listing badge and home screen placement" />
+            <LossRow text="Higher search ranking and priority placement" />
+            <LossRow text="Unlimited gallery images (Basic allows up to 3)" />
+          </View>
+          <Text style={s.modalNote}>
+            Your free Basic listing stays live — you keep customer enquiries, your profile,
+            photos and your website and social links.
+          </Text>
+          <Text style={s.modalNote}>
+            Your subscription is billed by Apple, so the final step is completed in your App Store settings.
+          </Text>
+          <Pressable
+            style={s.primaryBtn}
+            onPress={async () => {
+              setShowDowngrade(false);
+              await subscription.manageSubscriptions();
+              await refetch();
+            }}
+          >
+            <Feather name="external-link" size={18} color="#fff" />
+            <Text style={s.primaryBtnText}>Continue in App Store</Text>
+          </Pressable>
+          <Pressable
+            style={[s.dangerBtn, { marginTop: 10 }]}
+            onPress={() => setShowDowngrade(false)}
+          >
+            <Text style={s.dangerBtnText}>Keep Premium</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+    </>
+  );
+}
+
+function LossRow({ text }: { text: string }) {
+  return (
+    <View style={s.lossRow}>
+      <Feather name="x" size={18} color={Colors.light.textMuted} />
+      <Text style={s.lossText}>{text}</Text>
+    </View>
   );
 }
 
@@ -255,4 +330,13 @@ const s = StyleSheet.create({
   featureText: { fontSize: 14, color: Colors.light.text, marginLeft: 12 },
   featureTextOff: { color: Colors.light.textMuted, textDecorationLine: 'line-through' },
   footnote: { fontSize: 11, color: Colors.light.textMuted, textAlign: 'center', marginTop: 18, paddingHorizontal: 8, lineHeight: 16 },
+  actionHint: { fontSize: 12, color: Colors.light.textMuted, lineHeight: 17, paddingHorizontal: 2 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 24 },
+  modalCard: { backgroundColor: Colors.light.card, borderRadius: 18, padding: 22, borderWidth: 1, borderColor: Colors.light.border },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.light.text, marginBottom: 10 },
+  modalBody: { fontSize: 14, color: Colors.light.textSecondary, lineHeight: 20, marginBottom: 12 },
+  lossList: { gap: 8, marginBottom: 14 },
+  lossRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  lossText: { flex: 1, fontSize: 14, color: Colors.light.text },
+  modalNote: { fontSize: 12, color: Colors.light.textMuted, lineHeight: 18, marginBottom: 12 },
 });
