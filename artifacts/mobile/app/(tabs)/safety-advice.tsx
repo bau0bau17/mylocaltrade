@@ -22,7 +22,7 @@ export default function SafetyAdviceScreen() {
           MyLocalTrade is a platform connecting customers with independent local traders. We help you find tradespeople, but the contract for any work is between you and the trader directly.
         </Text>
         <Text style={styles.paragraph}>
-          Verification helps improve trust and transparency on the platform but does not guarantee the quality of work. Customers should always make their own checks before hiring a tradesperson.
+          Verification helps improve trust and transparency on the platform but does not guarantee the quality of work. It is based on the information traders provide to us and is not a criminal records (DBS) check. Customers should always make their own checks before hiring a tradesperson.
         </Text>
       </View>
 

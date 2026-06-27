@@ -338,7 +338,7 @@ export default function RegisterTraderScreen() {
             />
           </View>
           <Text style={styles.hintText}>
-            If you're VAT registered, add your number — we'll verify it against HMRC during review.
+            If you're VAT registered, add your number — we use it as a supporting check during review.
           </Text>
         </View>
 

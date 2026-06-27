@@ -46,7 +46,7 @@ export default function AboutScreen() {
             </View>
             <View style={styles.promiseContent}>
               <Text style={styles.promiseTitle}>Information Checks</Text>
-              <Text style={styles.promiseDesc}>Trader profiles may include verified information where applicable. Details such as contact information, business details, insurance or qualifications may be checked where required.</Text>
+              <Text style={styles.promiseDesc}>Trader profiles may include verified information where applicable. Details such as contact information, business details, insurance or qualifications may be checked where required. This is not a guarantee of work quality or a criminal records (DBS) check.</Text>
             </View>
           </View>
           <View style={styles.promiseItem}>

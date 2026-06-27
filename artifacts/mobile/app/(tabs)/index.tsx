@@ -139,7 +139,7 @@ export default function HomeScreen() {
               <Feather name="check-circle" size={17} color={Colors.light.secondary} />
             </View>
             <Text style={styles.trustLabel}>Verified</Text>
-            <Text style={styles.trustSub}>Traders</Text>
+            <Text style={styles.trustSub}>Details</Text>
           </View>
           <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
@@ -166,7 +166,7 @@ export default function HomeScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.quoteCtaTitle}>Request a quote</Text>
             <Text style={styles.quoteCtaSub}>
-              Find a verified local trader and send your job details for free.
+              Find local traders with verified details and send your job details for free.
             </Text>
           </View>
           <Feather name="arrow-right" size={18} color={Colors.light.white} />
