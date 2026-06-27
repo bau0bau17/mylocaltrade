@@ -1,0 +1,84 @@
+The subscription flow is much better now and the core state looks aligned between the app and Apple.
+
+Before this is production-ready / App Store-ready, I want a final polish pass on the subscription UX, logic, and wording.
+
+Please adjust the following:
+
+1. Current plan naming
+
+* do not show only “Premium Plan”
+* show the exact plan name instead, for example:
+    * Premium Monthly
+    * Premium Yearly
+
+2. Purchase success messaging
+
+* replace the generic “Your purchase was successful” wording with cleaner subscription-specific wording
+* do not show “[Environment: Sandbox]” in user-facing UI outside debug/testing
+
+3. Change plan flow
+
+* keep the ability to move between Premium Monthly and Premium Yearly only where it makes logical sense
+* also add the Free plan as a downgrade path
+* when changing to Free, show a confirmation modal that clearly explains which premium features will be lost
+* make this flow feel complete and clear
+
+4. Plan visibility rules inside Manage Subscription / Change Plan
+    I want the available options to depend on the user’s current active plan:
+
+* if the user currently has Premium Monthly, then inside Manage Subscription / Change Plan:
+    * do not show Premium Yearly as a selectable upgrade/change option in the main management flow if that creates confusion
+    * show only the current active plan clearly
+    * show the Free option as the downgrade path
+    * if they go back to Free, all premium features must be removed/hidden correctly
+* if the user currently has Premium Yearly, then inside Manage Subscription / Change Plan:
+    * do not show Premium Monthly as a selectable downgrade/change option in the main management flow if that creates confusion
+    * show only the current active plan clearly
+    * show the Free option as the downgrade path
+    * if they go back to Free, all premium features must be removed/hidden correctly
+
+Main point:
+I want the management flow to feel simple and deterministic:
+
+* current paid plan clearly shown
+* Free shown as the downgrade path
+* no confusing alternate paid plan options in the wrong place if they make the UX unclear
+
+5. Free downgrade behaviour
+    When the user returns to Free:
+
+* the app must remove premium entitlement correctly
+* premium-only features must be hidden/disabled correctly
+* featured placement must be revoked
+* higher search ranking / priority placement must be revoked
+* unlimited gallery image access must revert to free/basic limits
+* enhanced profile features / extra links must revert to free/basic behaviour
+* the app must reflect the Free/basic version consistently everywhere
+
+6. Cancel subscription flow
+
+* if iOS/Apple remains the real subscription manager, do not make the app imply that cancellation is fully completed only inside our own custom screen
+* it is fine to collect cancellation reason first, but then the flow should clearly continue into Apple subscription management where needed
+
+7. Refund flow
+
+* make it clear that iOS subscription refunds are handled by Apple
+
+8. Billing & Plan page
+
+* keep the current state accurate and synced
+* keep Restore Purchases visible
+* keep Manage Subscription clear
+* make the explanatory text cleaner and more concise
+
+9. App Store readiness
+    Please review this screen/flow as if it were preparing for App Store release:
+
+* clear plan names
+* clear renewal state
+* proper Apple-managed subscription handling
+* no confusing wording
+* no mismatch between app state and Apple state
+* correct downgrade behaviour back to Free/basic
+
+I want this final subscription experience to feel polished, trustworthy, simple, and consistent with normal App Store subscription apps.
