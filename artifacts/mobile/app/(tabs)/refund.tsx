@@ -41,7 +41,7 @@ export default function RefundScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>Digital Services During Cooling-Off Period</Text>
         <Text style={styles.paragraph}>
-          If you wish to begin using the subscription services immediately (before the 14-day cooling-off period ends), you must give your express consent and acknowledge that you will lose your right to cancel once the digital service has been fully performed. If you cancel before the service is fully performed, you may be required to pay a proportionate amount for the service provided up to the point of cancellation.
+          Your subscription gives you access to digital features as soon as it starts. We do not currently ask you to give up your 14-day cooling-off right in exchange for that immediate access, so your right to cancel within the cooling-off period continues to apply even though access begins straight away. If you cancel within that period, your refund is handled as set out below.
         </Text>
       </View>
 

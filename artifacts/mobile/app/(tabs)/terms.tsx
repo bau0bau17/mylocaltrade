@@ -65,7 +65,7 @@ export default function TermsScreen() {
           Nothing in these Terms affects your statutory rights under the Consumer Rights Act 2015 or the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013. You have the right to cancel a digital subscription within 14 days of purchase.
         </Text>
         <Text style={styles.paragraph}>
-          If you request that we begin providing the digital service immediately during the 14-day cooling-off period, you acknowledge that your right to cancel will end once the service has been fully performed. If you cancel before the service is fully performed, you may be required to pay a proportionate amount for the service provided up to the point of cancellation.
+          Your subscription may give you access to digital features immediately after purchase. We do not ask you to waive your right to cancel during the 14-day cooling-off period, so that right continues to apply in full. Your refund rights are set out in our Refund &amp; Cancellation Policy.
         </Text>
       </View>
 
