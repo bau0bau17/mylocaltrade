@@ -23,7 +23,7 @@ export default function PrivacyScreen() {
       <Text style={styles.title}>Privacy Policy</Text>
       
       <View style={styles.section}>
-        <Text style={styles.lastUpdated}>Last Updated: March 2026</Text>
+        <Text style={styles.lastUpdated}>Last Updated: June 2026</Text>
         <Text style={styles.paragraph}>
           This Privacy Policy explains how Service Provider LTD (company registered in England and Wales under company number 15830141, registered office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ), trading as MyLocalTrade ("we", "us", "our"), collects, uses, discloses, and safeguards your personal data when you use our mobile application.
         </Text>
@@ -63,7 +63,7 @@ export default function PrivacyScreen() {
         <Text style={styles.paragraph}>
           - To facilitate connections between customers and tradespeople{'\n'}
           - To manage your account and subscriptions{'\n'}
-          - To process payments via our payment processor (Stripe){'\n'}
+          - To process subscription payments — on iOS through the Apple App Store, with subscriptions managed by RevenueCat; card payments made on the web are processed by Stripe{'\n'}
           - To improve our services and app functionality{'\n'}
           - To send service-related communications{'\n'}
           - To comply with legal and regulatory requirements
@@ -73,7 +73,7 @@ export default function PrivacyScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>4. Data Sharing</Text>
         <Text style={styles.paragraph}>
-          We may share your data with our payment processor (Stripe), our email provider, and our hosting provider. We do not sell your personal data to third parties. When you send an enquiry to a trader, the trader receives your name, the service required, your preferred date, your message and — if you choose to provide it — your phone number, so they can respond to your request. Your email address is not shared with the trader by default; replies come back through the in-app messaging system.
+          We may share your data with the providers that operate our service: Apple (App Store) and RevenueCat, which process and manage trader subscriptions purchased on iOS; Stripe, which processes card payments made on the web; our email provider (Brevo); and our hosting provider. We do not sell your personal data to third parties. When you send an enquiry to a trader, the trader receives your name, the service required, your preferred date, your message and — if you choose to provide it — your phone number, so they can respond to your request. Your email address is not shared with the trader by default; replies come back through the in-app messaging system.
         </Text>
       </View>
 

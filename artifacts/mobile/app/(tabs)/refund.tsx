@@ -65,13 +65,13 @@ export default function RefundScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>Refunds</Text>
         <Text style={styles.paragraph}>
-          If you cancel within the 14-day cooling-off period, we will reimburse all payments received from you, without undue delay and no later than 14 days from the day we are informed of your decision to cancel.
+          How any refund is issued depends on how you paid. If you subscribed through the iOS app, your payment was taken by Apple, so any refund must be issued by Apple — we cannot process App Store refunds ourselves, but we will help you request one (see "App Store Purchases & Refunds" above). For payments taken directly by us (for example, on the web), any refund will be made using the same method of payment used for the original transaction.
+        </Text>
+        <Text style={styles.paragraph}>
+          Your statutory cooling-off rights are not affected by how you paid. If you cancel within the 14-day cooling-off period, you are entitled to reimbursement of the payments received, without undue delay and no later than 14 days from the day we are informed of your decision to cancel. Where Apple took the payment, we will support your refund request with Apple so that those rights are given effect.
         </Text>
         <Text style={styles.paragraph}>
           Refunds after the 14-day cooling-off period are provided at our discretion, except where required by the Consumer Rights Act 2015 (for example, if the service was not as described or not fit for purpose).
-        </Text>
-        <Text style={styles.paragraph}>
-          Refunds will be made using the same method of payment used for the original transaction.
         </Text>
       </View>
 
