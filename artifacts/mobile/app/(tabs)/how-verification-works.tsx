@@ -93,10 +93,10 @@ export default function HowVerificationWorksScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>6. What verification is not</Text>
         <Text style={styles.paragraph}>
-          Our checks focus on the information traders provide to us. Verification is not:
+          Verification is based on the information traders provide to us. It is not:
         </Text>
         <Text style={styles.paragraph}>
-          • A guarantee of the quality of any work carried out{'\n'}
+          • A guarantee of the quality of work carried out{'\n'}
           • A criminal records (DBS) check{'\n'}
           • A replacement for independent checks customers should make themselves
         </Text>

@@ -436,7 +436,7 @@ export default function TraderProfileScreen() {
               <Text style={styles.helpTitle}>What "Verified" means</Text>
             </View>
             <Text style={styles.helpBody}>
-              Verified means certain trader or business details have been reviewed by MyLocalTrade according to its verification process. It does not mean the platform guarantees workmanship or outcomes. Customers should still review quotes, insurance, credentials, and suitability before work starts.
+              Verified means certain trader or business details have been reviewed by MyLocalTrade according to its verification process. It is based on the information traders provide to us. It does not mean the platform guarantees workmanship or outcomes, and it is not a criminal records (DBS) check. Customers should still review quotes, insurance, credentials, and suitability before work starts.
             </Text>
             <Pressable
               style={styles.helpLinkRow}
