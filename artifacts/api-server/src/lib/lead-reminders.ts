@@ -142,7 +142,13 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
     if (row.traderEmailEnabled === false) return;
     if (row.traderProfileId == null) return;
     try {
-      const apiBase = (process.env.API_BASE_URL ?? `https://${process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080"}`).replace(/\/$/, "");
+      const prodDomain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
+      const apiBase = (
+        process.env.API_BASE_URL ??
+        (prodDomain
+          ? `https://${prodDomain}`
+          : `https://${process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080"}`)
+      ).replace(/\/$/, "");
       const token = generateUnsubscribeToken(row.traderProfileId, "lead_reminder");
       const unsubscribeUrl = `${apiBase}/api/email/unsubscribe?token=${encodeURIComponent(token)}`;
       emailOk = await sendLeadReminderEmail({

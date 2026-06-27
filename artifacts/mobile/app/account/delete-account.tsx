@@ -106,7 +106,12 @@ export default function DeleteAccountScreen() {
         <Stack.Screen options={{ title: 'Delete account' }} />
         <Text style={styles.heading}>Delete account</Text>
         <Text style={styles.body}>{statusError}</Text>
-        <Pressable style={[styles.deleteBtn, { marginTop: 20 }]} onPress={() => void fetchStatus()}>
+        <Pressable
+          style={[styles.deleteBtn, { marginTop: 20 }]}
+          onPress={() => void fetchStatus()}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+        >
           <Text style={styles.deleteBtnText}>Try again</Text>
         </Pressable>
       </View>
@@ -269,6 +274,9 @@ function PendingDeletionView({
         <Pressable
           style={[styles.deleteBtn, { backgroundColor: Colors.light.primary }]}
           onPress={onCancelTap}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel deletion request"
+          accessibilityHint="Reactivates your account while the request is still pending"
         >
           <Feather name="rotate-ccw" size={18} color={Colors.light.white} />
           <Text style={styles.deleteBtnText}>Cancel deletion request</Text>
@@ -294,12 +302,16 @@ function PendingDeletionView({
               <Pressable
                 style={[styles.modalBtn, styles.modalBtnGhost]}
                 onPress={() => setShowCancelConfirm(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Keep deletion request"
               >
                 <Text style={styles.modalBtnGhostText}>Keep deletion request</Text>
               </Pressable>
               <Pressable
                 style={[styles.modalBtn, styles.modalBtnPrimary]}
                 onPress={onConfirmCancel}
+                accessibilityRole="button"
+                accessibilityLabel="Continue to cancel deletion request"
               >
                 <Text style={styles.modalBtnPrimaryText}>Cancel deletion request</Text>
               </Pressable>
@@ -331,6 +343,7 @@ function PendingDeletionView({
               value={password}
               onChangeText={setPassword}
               editable={!submitting}
+              accessibilityLabel="Your current password"
             />
             <View style={styles.confirmRow}>
               <Switch
@@ -339,6 +352,9 @@ function PendingDeletionView({
                 disabled={submitting}
                 trackColor={{ false: Colors.light.border, true: Colors.light.primary }}
                 thumbColor={Colors.light.white}
+                accessibilityRole="switch"
+                accessibilityLabel="I want to cancel my account deletion request"
+                accessibilityState={{ checked: confirm, disabled: submitting }}
               />
               <Text style={styles.confirmText}>
                 I want to cancel my account deletion request.
@@ -355,6 +371,8 @@ function PendingDeletionView({
                 style={[styles.modalBtn, styles.modalBtnGhost]}
                 onPress={() => setShowPasswordModal(false)}
                 disabled={submitting}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
               >
                 <Text style={styles.modalBtnGhostText}>Back</Text>
               </Pressable>
@@ -366,6 +384,9 @@ function PendingDeletionView({
                 ]}
                 onPress={onSubmitCancel}
                 disabled={!password || !confirm || submitting}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm cancel deletion"
+                accessibilityState={{ disabled: !password || !confirm || submitting, busy: submitting }}
               >
                 {submitting ? (
                   <ActivityIndicator color={Colors.light.white} />
@@ -509,6 +530,7 @@ function RequestDeletionView({
           value={password}
           onChangeText={setPassword}
           editable={!submitting}
+          accessibilityLabel="Your current password"
         />
 
         <View style={styles.confirmRow}>
@@ -518,6 +540,9 @@ function RequestDeletionView({
             disabled={submitting}
             trackColor={{ false: Colors.light.border, true: Colors.light.error }}
             thumbColor={Colors.light.white}
+            accessibilityRole="switch"
+            accessibilityLabel="I understand my account will be deactivated immediately and finalised by an administrator"
+            accessibilityState={{ checked: confirm, disabled: submitting }}
           />
           <Text style={styles.confirmText}>
             I understand my account will be deactivated immediately and finalised by an administrator.
@@ -535,6 +560,10 @@ function RequestDeletionView({
           style={[styles.deleteBtn, !canSubmit && styles.deleteBtnDisabled]}
           disabled={!canSubmit}
           onPress={onSubmit}
+          accessibilityRole="button"
+          accessibilityLabel="Delete my account"
+          accessibilityHint="Deactivates your account immediately; an administrator finalises the deletion"
+          accessibilityState={{ disabled: !canSubmit, busy: submitting }}
         >
           {submitting ? (
             <ActivityIndicator color={Colors.light.white} />

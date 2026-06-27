@@ -19,6 +19,7 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "MyLocalTrade uses your location to show tradespeople near you.",
         "NSPhotoLibraryUsageDescription": "MyLocalTrade needs access to your photos so you can add images to your enquiries and trader gallery.",
+        "NSCameraUsageDescription": "MyLocalTrade needs access to your camera so you can take photos to add to your enquiries and trader gallery.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

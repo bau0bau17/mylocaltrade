@@ -55,8 +55,15 @@ function sanitizeHeaderValue(value: string | null | undefined, maxLen = 120): st
 
 function getApiBaseUrl(): string {
   if (process.env.API_BASE_URL) return process.env.API_BASE_URL;
-  const domain = process.env.REPLIT_DEV_DOMAIN;
-  if (domain) return `https://${domain}`;
+  // Replit deployments expose the live public domain(s) via REPLIT_DOMAINS
+  // (comma separated); the dev container exposes REPLIT_DEV_DOMAIN. Prefer the
+  // deployment domain so verification / confirmation email links resolve in
+  // production instead of silently falling back to localhost (which would make
+  // every "verify your email" link dead for real users).
+  const prodDomain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
+  if (prodDomain) return `https://${prodDomain}`;
+  const devDomain = process.env.REPLIT_DEV_DOMAIN;
+  if (devDomain) return `https://${devDomain}`;
   return "http://localhost:8080";
 }
 
