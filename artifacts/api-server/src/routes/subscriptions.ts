@@ -483,7 +483,25 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
     const isActive = !!entitlement;
 
     if (!isActive) {
-      // Never deactivate here — that would risk clobbering a web Stripe sub.
+      // RevenueCat reports no active entitlement. Self-heal the local record so
+      // the app converges to Apple/RevenueCat's real state on focus and on
+      // "Restore purchases" — but NEVER touch a Stripe-owned row (web Stripe is
+      // the source of truth there). Only an active RC/demo row needs revoking.
+      const [existing] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, userId))
+        .limit(1);
+      const existingStripeOwned =
+        !!existing && (!!existing.stripeSubscriptionId || !!existing.stripeCustomerId);
+      if (existing && !existingStripeOwned && existing.status === "active") {
+        await downgradeExpiredSubscription(userId);
+        await logAudit({
+          userId,
+          action: "SUBSCRIPTION_CANCELLED",
+          details: { source: "revenuecat-sync", reason: "no_active_entitlement" },
+        });
+      }
       res.json({ active: false });
       return;
     }
@@ -685,16 +703,69 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
         }
       : null;
 
+    // Effective subscription state. The stored row can lag reality when a
+    // downgrade webhook (EXPIRATION) is never delivered — common with the
+    // RevenueCat sandbox / Apple Test Store. So for non-Stripe subscriptions we
+    // honour the paid period at read time: once currentPeriodEnd has passed the
+    // trader is no longer Premium, regardless of the stored status string. This
+    // is what makes the in-app Billing & Plan screen match Apple exactly.
+    // Stripe-owned rows are left untouched — Stripe's own webhooks are the
+    // source of truth there.
+    const isStripeOwned =
+      !!sub && (!!sub.stripeSubscriptionId || !!sub.stripeCustomerId);
+    const periodEndMs = sub?.currentPeriodEnd
+      ? sub.currentPeriodEnd.getTime()
+      : null;
+    const periodLapsed =
+      !!sub && !isStripeOwned && periodEndMs != null && periodEndMs <= Date.now();
+
+    // IMPORTANT: this read path only REPORTS the effective (non-Premium) state
+    // when the paid period has lapsed — it deliberately does NOT mutate the DB.
+    // The destructive downgrade (revoking perks: plan, featured badge, ranking)
+    // is performed only once the entitlement is confirmed gone provider-side,
+    // via POST /subscriptions/revenuecat-sync (the app calls it on focus and on
+    // "Restore purchases") and the EXPIRATION webhook. Revoking here on the date
+    // alone would risk falsely downgrading a subscription that is still active
+    // during an Apple billing-grace window whose extended expiry we simply
+    // haven't re-synced yet.
+
+    if (sub && isStripeOwned) {
+      // Stripe path — unchanged; reconciled by Stripe webhooks.
+      res.json({
+        plan: sub.planId,
+        status: sub.status,
+        currentPeriodStart: sub.currentPeriodStart || null,
+        currentPeriodEnd: sub.currentPeriodEnd || null,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd || false,
+        promoRedemption: promo,
+      });
+      return;
+    }
+
+    if (sub) {
+      // Non-Stripe (RevenueCat / demo). Premium only while the row is active AND
+      // the paid period has not lapsed; a lapsed sub reports as expired/Basic.
+      const stillPremium = sub.status === "active" && !periodLapsed;
+      res.json({
+        plan: stillPremium ? sub.planId : null,
+        status: periodLapsed ? "expired" : stillPremium ? "active" : sub.status,
+        currentPeriodStart: stillPremium ? sub.currentPeriodStart || null : null,
+        currentPeriodEnd: stillPremium ? sub.currentPeriodEnd || null : null,
+        cancelAtPeriodEnd: stillPremium ? sub.cancelAtPeriodEnd || false : false,
+        promoRedemption: promo,
+      });
+      return;
+    }
+
+    // No subscription row — a free verified trader (listing is driven by
+    // verification, so this must report "none" and surface the upgrade CTA,
+    // never "active").
     res.json({
-      plan: sub?.planId ?? user.plan,
-      // Subscription status reflects the PAID subscription only. Listing is now
-      // driven by verification, so a free verified trader has no subscription
-      // row and must report "none" — never "active" derived from users.isActive
-      // (that would hide the upgrade CTA from exactly the free traders it targets).
-      status: sub?.status ?? "none",
-      currentPeriodStart: sub?.currentPeriodStart || null,
-      currentPeriodEnd: sub?.currentPeriodEnd || null,
-      cancelAtPeriodEnd: sub?.cancelAtPeriodEnd || false,
+      plan: user.plan,
+      status: "none",
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
       promoRedemption: promo,
     });
   } catch (error) {
@@ -837,6 +908,28 @@ async function deactivateSubscription(customerId: string) {
   if (deactivatedUserId) {
     await logAudit({ userId: deactivatedUserId, action: "SUBSCRIPTION_CANCELLED", details: { stripe: true } });
   }
+}
+
+// Revoke Premium perks for a non-Stripe (RevenueCat / demo) subscriber and mark
+// the row ended. Mirrors the EXPIRATION webhook's revoke branch so the read-time
+// expiry guard and the focus/restore sync path converge on the same end state:
+// the verified free listing stays live, only the paid perks are removed.
+// NEVER call this for a Stripe-owned row — web Stripe is the source of truth.
+async function downgradeExpiredSubscription(userId: number): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(usersTable)
+      .set({ plan: null })
+      .where(eq(usersTable.id, userId));
+    await tx
+      .update(traderProfilesTable)
+      .set({ plan: null, isFeatured: false, updatedAt: new Date() })
+      .where(eq(traderProfilesTable.userId, userId));
+    await tx
+      .update(subscriptionsTable)
+      .set({ status: "cancelled", cancelAtPeriodEnd: false, updatedAt: new Date() })
+      .where(eq(subscriptionsTable.userId, userId));
+  });
 }
 
 router.post("/webhooks/stripe", async (req, res) => {
