@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CoolingOffState } from "./coolingOffState";
 import type { SubscriptionStatusStatus } from "./subscriptionStatusStatus";
 
 export interface SubscriptionStatus {
@@ -12,4 +13,5 @@ export interface SubscriptionStatus {
   status: SubscriptionStatusStatus;
   currentPeriodEnd?: Date | null;
   cancelAtPeriodEnd: boolean;
+  coolingOff?: CoolingOffState;
 }

@@ -24,12 +24,14 @@ import type {
   AdminUserReportListResponse,
   AuthResponse,
   CancelConversationRequest,
+  CancellationRequestResult,
   CategoriesResponse,
   CheckoutSessionResponse,
   CompaniesHouseSearchResponse,
   ConversationDetailResponse,
   ConversationListResponse,
   ConversationMessage,
+  CreateCancellationRequest,
   CreateCheckoutRequest,
   CreateEnquiryRequest,
   CreateReportRequest,
@@ -1700,6 +1702,104 @@ export function useGetSubscriptionStatus<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Records a structured cancellation request and notifies support. This
+NEVER cancels the subscription and NEVER issues a refund — Apple-owned
+subscriptions are cancelled/refunded by Apple; the app only hands off and
+records the request. Cooling-off eligibility is computed server-side.
+
+ * @summary File a cooling-off / cancellation request (file-and-record only)
+ */
+export const getCreateSubscriptionCancellationRequestUrl = () => {
+  return `/api/subscriptions/cancellation-request`;
+};
+
+export const createSubscriptionCancellationRequest = async (
+  createCancellationRequest?: CreateCancellationRequest,
+  options?: RequestInit,
+): Promise<CancellationRequestResult> => {
+  return customFetch<CancellationRequestResult>(
+    getCreateSubscriptionCancellationRequestUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createCancellationRequest),
+    },
+  );
+};
+
+export const getCreateSubscriptionCancellationRequestMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubscriptionCancellationRequest>>,
+    TError,
+    { data: BodyType<CreateCancellationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSubscriptionCancellationRequest>>,
+  TError,
+  { data: BodyType<CreateCancellationRequest> },
+  TContext
+> => {
+  const mutationKey = ["createSubscriptionCancellationRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSubscriptionCancellationRequest>>,
+    { data: BodyType<CreateCancellationRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createSubscriptionCancellationRequest(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSubscriptionCancellationRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSubscriptionCancellationRequest>>
+>;
+export type CreateSubscriptionCancellationRequestMutationBody =
+  BodyType<CreateCancellationRequest>;
+export type CreateSubscriptionCancellationRequestMutationError =
+  ErrorType<ErrorResponse>;
+
+/**
+ * @summary File a cooling-off / cancellation request (file-and-record only)
+ */
+export const useCreateSubscriptionCancellationRequest = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSubscriptionCancellationRequest>>,
+    TError,
+    { data: BodyType<CreateCancellationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createSubscriptionCancellationRequest>>,
+  TError,
+  { data: BodyType<CreateCancellationRequest> },
+  TContext
+> => {
+  return useMutation(
+    getCreateSubscriptionCancellationRequestMutationOptions(options),
+  );
+};
 
 /**
  * Used only when the API is running without `STRIPE_SECRET_KEY`. The

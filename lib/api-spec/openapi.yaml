@@ -576,6 +576,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /subscriptions/cancellation-request:
+    post:
+      operationId: createSubscriptionCancellationRequest
+      tags: [subscriptions]
+      summary: File a cooling-off / cancellation request (file-and-record only)
+      description: |
+        Records a structured cancellation request and notifies support. This
+        NEVER cancels the subscription and NEVER issues a refund — Apple-owned
+        subscriptions are cancelled/refunded by Apple; the app only hands off and
+        records the request. Cooling-off eligibility is computed server-side.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCancellationRequest"
+      responses:
+        "201":
+          description: Request filed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancellationRequestResult"
+        "200":
+          description: An open request already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancellationRequestResult"
+        "400":
+          description: No subscription to cancel / invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /subscriptions/demo-activate:
     post:
       operationId: demoActivateSubscription
@@ -2681,9 +2725,59 @@ components:
           nullable: true
         cancelAtPeriodEnd:
           type: boolean
+        coolingOff:
+          $ref: "#/components/schemas/CoolingOffState"
       required:
         - status
         - cancelAtPeriodEnd
+
+    CoolingOffState:
+      type: object
+      description: Read-only snapshot of the 14-day cooling-off window. Reports eligibility only — never affects perks, verification, listing or refunds.
+      properties:
+        isWithinWindow:
+          type: boolean
+        originalPurchaseAt:
+          type: string
+          format: date-time
+          nullable: true
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+        daysRemaining:
+          type: integer
+        provider:
+          type: string
+          enum: [apple, stripe, demo]
+          nullable: true
+      required:
+        - isWithinWindow
+        - daysRemaining
+
+    CreateCancellationRequest:
+      type: object
+      properties:
+        note:
+          type: string
+          description: Optional free-text note from the trader explaining the request.
+
+    CancellationRequestResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        requestId:
+          type: integer
+        withinCoolingOff:
+          type: boolean
+        provider:
+          type: string
+          enum: [apple, stripe, demo]
+        alreadyOpen:
+          type: boolean
+      required:
+        - ok
 
     CreateEnquiryRequest:
       type: object

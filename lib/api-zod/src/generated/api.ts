@@ -831,6 +831,43 @@ export const GetSubscriptionStatusResponse = zod.object({
   status: zod.enum(["active", "inactive", "past_due", "cancelled"]),
   currentPeriodEnd: zod.date().nullish(),
   cancelAtPeriodEnd: zod.boolean(),
+  coolingOff: zod
+    .object({
+      isWithinWindow: zod.boolean(),
+      originalPurchaseAt: zod.date().nullish(),
+      endsAt: zod.date().nullish(),
+      daysRemaining: zod.number(),
+      provider: zod.enum(["apple", "stripe", "demo"]).nullish(),
+    })
+    .optional()
+    .describe(
+      "Read-only snapshot of the 14-day cooling-off window. Reports eligibility only — never affects perks, verification, listing or refunds.",
+    ),
+});
+
+/**
+ * Records a structured cancellation request and notifies support. This
+NEVER cancels the subscription and NEVER issues a refund — Apple-owned
+subscriptions are cancelled/refunded by Apple; the app only hands off and
+records the request. Cooling-off eligibility is computed server-side.
+
+ * @summary File a cooling-off / cancellation request (file-and-record only)
+ */
+export const CreateSubscriptionCancellationRequestBody = zod.object({
+  note: zod
+    .string()
+    .optional()
+    .describe(
+      "Optional free-text note from the trader explaining the request.",
+    ),
+});
+
+export const CreateSubscriptionCancellationRequestResponse = zod.object({
+  ok: zod.boolean(),
+  requestId: zod.number().optional(),
+  withinCoolingOff: zod.boolean().optional(),
+  provider: zod.enum(["apple", "stripe", "demo"]).optional(),
+  alreadyOpen: zod.boolean().optional(),
 });
 
 /**

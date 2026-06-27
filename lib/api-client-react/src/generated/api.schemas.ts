@@ -478,11 +478,55 @@ export const SubscriptionStatusStatus = {
   cancelled: "cancelled",
 } as const;
 
+export type CoolingOffStateProvider =
+  | (typeof CoolingOffStateProvider)[keyof typeof CoolingOffStateProvider]
+  | null;
+
+export const CoolingOffStateProvider = {
+  apple: "apple",
+  stripe: "stripe",
+  demo: "demo",
+} as const;
+
+/**
+ * Read-only snapshot of the 14-day cooling-off window. Reports eligibility only — never affects perks, verification, listing or refunds.
+ */
+export interface CoolingOffState {
+  isWithinWindow: boolean;
+  originalPurchaseAt?: string | null;
+  endsAt?: string | null;
+  daysRemaining: number;
+  provider?: CoolingOffStateProvider;
+}
+
 export interface SubscriptionStatus {
   plan?: string | null;
   status: SubscriptionStatusStatus;
   currentPeriodEnd?: string | null;
   cancelAtPeriodEnd: boolean;
+  coolingOff?: CoolingOffState;
+}
+
+export interface CreateCancellationRequest {
+  /** Optional free-text note from the trader explaining the request. */
+  note?: string;
+}
+
+export type CancellationRequestResultProvider =
+  (typeof CancellationRequestResultProvider)[keyof typeof CancellationRequestResultProvider];
+
+export const CancellationRequestResultProvider = {
+  apple: "apple",
+  stripe: "stripe",
+  demo: "demo",
+} as const;
+
+export interface CancellationRequestResult {
+  ok: boolean;
+  requestId?: number;
+  withinCoolingOff?: boolean;
+  provider?: CancellationRequestResultProvider;
+  alreadyOpen?: boolean;
 }
 
 export type EnquirySpecialistFieldsPropertyType =

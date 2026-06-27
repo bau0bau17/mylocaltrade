@@ -145,6 +145,14 @@ const documentUploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const cancellationRequestLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many cancellation requests. Please contact support." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use(
   "/api/webhooks/stripe",
   express.raw({ type: "application/json" }),
@@ -163,6 +171,7 @@ app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);
 app.use(/^\/api\/conversations\/\d+\/report$/, reportsLimiter);
 app.use("/api/reports", reportsLimiter);
 app.use("/api/trader/documents/upload-url", documentUploadLimiter);
+app.use("/api/subscriptions/cancellation-request", cancellationRequestLimiter);
 app.use("/api", apiLimiter);
 
 // Public, unauthenticated logo endpoint used by transactional emails. Brevo

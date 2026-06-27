@@ -11,6 +11,7 @@ import {
   messagesTable,
   conversationReportsTable,
   userReportsTable,
+  cancellationRequestsTable,
   REPORT_CATEGORIES,
   reviewsTable,
 } from "@workspace/db/schema";
@@ -1878,6 +1879,114 @@ router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async 
     }
     req.log.error({ err: error }, "Resolve user report failed");
     res.status(500).json({ error: "Failed to resolve report" });
+  }
+});
+
+// GET /api/admin/cancellation-requests — support queue of cooling-off /
+// cancellation requests filed from the app. Read-only listing; resolving a
+// request never cancels a subscription or issues a refund (those are handled
+// by Apple/Stripe externally and recorded here).
+router.get("/admin/cancellation-requests", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const where = status
+      ? eq(cancellationRequestsTable.status, status)
+      : isNotNull(cancellationRequestsTable.id);
+    const rows = await db
+      .select({
+        request: cancellationRequestsTable,
+        traderName: usersTable.fullName,
+        traderEmail: usersTable.email,
+        businessName: traderProfilesTable.businessName,
+      })
+      .from(cancellationRequestsTable)
+      .innerJoin(usersTable, eq(cancellationRequestsTable.userId, usersTable.id))
+      .leftJoin(traderProfilesTable, eq(cancellationRequestsTable.userId, traderProfilesTable.userId))
+      .where(where)
+      .orderBy(desc(cancellationRequestsTable.createdAt));
+    res.json({
+      requests: rows.map(({ request, traderName, traderEmail, businessName }) => ({
+        id: request.id,
+        userId: request.userId,
+        traderName,
+        traderEmail,
+        businessName,
+        provider: request.provider,
+        withinCoolingOff: request.withinCoolingOff,
+        originalPurchaseAt: request.originalPurchaseAt?.toISOString() ?? null,
+        coolingOffEndsAt: request.coolingOffEndsAt?.toISOString() ?? null,
+        userNote: request.userNote,
+        status: request.status,
+        resolutionNotes: request.resolutionNotes,
+        resolvedAt: request.resolvedAt?.toISOString() ?? null,
+        createdAt: request.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin list cancellation requests failed");
+    res.status(500).json({ error: "Failed to list cancellation requests" });
+  }
+});
+
+const ResolveCancellationRequestBody = z.object({
+  action: z.enum(["resolve", "dismiss"]),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+router.post("/admin/cancellation-requests/:id/resolve", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const body = ResolveCancellationRequestBody.parse(req.body);
+    const adminId = (req as AuthenticatedRequest).userId;
+
+    const [request] = await db
+      .select()
+      .from(cancellationRequestsTable)
+      .where(eq(cancellationRequestsTable.id, id))
+      .limit(1);
+    if (!request) {
+      res.status(404).json({ error: "Request not found" });
+      return;
+    }
+
+    const newStatus = body.action === "dismiss" ? "DISMISSED" : "RESOLVED";
+    // Record the outcome only — this never touches the subscription, plan,
+    // perks, verification or listing.
+    await db
+      .update(cancellationRequestsTable)
+      .set({
+        status: newStatus,
+        resolutionNotes: body.notes ?? null,
+        handledByAdminId: adminId,
+        resolvedAt: new Date(),
+      })
+      .where(eq(cancellationRequestsTable.id, id));
+
+    await logAudit({
+      userId: request.userId,
+      action: "CANCELLATION_REQUEST_RESOLVED",
+      performedBy: adminId,
+      details: {
+        requestId: id,
+        provider: request.provider,
+        withinCoolingOff: request.withinCoolingOff,
+        action: body.action,
+      },
+      notes: body.notes,
+    });
+
+    res.json({ ok: true, status: newStatus, action: body.action });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid action", details: error.issues });
+      return;
+    }
+    req.log.error({ err: error }, "Resolve cancellation request failed");
+    res.status(500).json({ error: "Failed to resolve cancellation request" });
   }
 });
 

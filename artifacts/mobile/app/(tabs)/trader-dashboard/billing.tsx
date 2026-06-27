@@ -8,6 +8,7 @@ import {
   useGetSubscriptionStatus,
   useCancelSubscription,
   useResumeSubscription,
+  useCreateSubscriptionCancellationRequest,
 } from '@workspace/api-client-react';
 import { useSubscription } from '@/lib/revenuecat';
 
@@ -20,9 +21,11 @@ export default function BillingScreen() {
   });
   const { mutateAsync: cancelSub, isPending: cancelling } = useCancelSubscription();
   const { mutateAsync: resumeSub, isPending: resuming } = useResumeSubscription();
+  const { mutateAsync: fileCancellation, isPending: filing } = useCreateSubscriptionCancellationRequest();
   const subscription = useSubscription();
   const busy = cancelling || resuming;
   const [showDowngrade, setShowDowngrade] = useState(false);
+  const [requestFiled, setRequestFiled] = useState(false);
 
   // Depend on the stable members, NOT the whole `subscription` object: the
   // provider rebuilds that object every render, so depending on it would make
@@ -87,6 +90,38 @@ export default function BillingScreen() {
     }
   };
 
+  // File-and-record only: this records the trader's request and alerts our
+  // support team. It NEVER cancels the subscription or issues a refund — for
+  // Apple-billed plans the cancellation and any refund are completed by Apple.
+  const fileCancellationRequest = (isAppleProvider: boolean) => {
+    Alert.alert(
+      'Tell our support team?',
+      isAppleProvider
+        ? 'We will record your request and our support team will help. This does not cancel your subscription by itself — Apple manages the cancellation and any refund, which you complete in your App Store settings.'
+        : 'We will record your request and our support team will process your cancellation and email you a confirmation.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Send request',
+          onPress: async () => {
+            try {
+              await fileCancellation({ data: {} });
+              setRequestFiled(true);
+              Alert.alert(
+                'Request received',
+                isAppleProvider
+                  ? 'Our support team has your request and will be in touch. To cancel straight away, use Manage in App Store.'
+                  : 'Our support team has your request and will process your cancellation and email you a confirmation.',
+              );
+            } catch (e) {
+              Alert.alert('Could not send', e instanceof Error ? e.message : 'Try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={s.center}><ActivityIndicator size="large" color={Colors.light.primary} /></View>
@@ -108,6 +143,17 @@ export default function BillingScreen() {
   // subscription row (plan === null). Only true paid plans show as Premium.
   const planLabel = isPremium ? premiumName : 'Basic';
   const isActive = status?.status === 'active';
+  // Cooling-off is a read-only, backend-driven flag. The banner only shows
+  // while the server says we are inside the 14-day window; it auto-hides once
+  // the window closes. It never affects the plan, perks, verification or
+  // listing — it only offers a hand-off + record action.
+  const coolingOff = status?.coolingOff;
+  const inCoolingOff = coolingOff?.isWithinWindow === true;
+  const coolingOffProvider = coolingOff?.provider ?? null;
+  // Treat Apple as the owner when the backend says so, or when this device's
+  // store is the in-app (RevenueCat) one. Apple owns cancellation + refunds.
+  const isAppleOwned = coolingOffProvider === 'apple' || (coolingOffProvider == null && subscription.isSupported);
+  const coolingOffDaysLeft = Math.max(0, coolingOff?.daysRemaining ?? 0);
   const periodEnd = status?.currentPeriodEnd ? new Date(status.currentPeriodEnd) : null;
   const periodEndLabel = periodEnd
     ? periodEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -121,6 +167,66 @@ export default function BillingScreen() {
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} />}
     >
       <Text style={s.title}>Billing & Plan</Text>
+
+      {inCoolingOff ? (
+        <View style={s.coolingCard}>
+          <View style={s.coolingHeader}>
+            <Feather name="clock" size={18} color={Colors.light.primary} />
+            <Text style={s.coolingTitle}>14-day cooling-off period</Text>
+          </View>
+          <Text style={s.coolingBody}>
+            {coolingOffDaysLeft > 0
+              ? `You have ${coolingOffDaysLeft} day${coolingOffDaysLeft === 1 ? '' : 's'} left in your cooling-off period.`
+              : 'Today is the last day of your cooling-off period.'}
+            {isAppleOwned
+              ? ' Your subscription is billed by Apple, so the cancellation and any refund are completed in your App Store settings. We can record your request and help.'
+              : ' Tell our support team and we will process your cancellation and email you a confirmation.'}
+          </Text>
+          {requestFiled ? (
+            <View style={s.coolingFiled}>
+              <Feather name="check-circle" size={16} color={Colors.light.secondary} />
+              <Text style={s.coolingFiledText}>
+                Request received. Our support team will be in touch.
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: 10 }}>
+              {isAppleOwned ? (
+                <Pressable
+                  style={s.primaryBtn}
+                  onPress={async () => {
+                    await subscription.manageSubscriptions();
+                    await refetch();
+                  }}
+                >
+                  <Feather name="external-link" size={18} color="#fff" />
+                  <Text style={s.primaryBtnText}>Manage in App Store</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                style={isAppleOwned ? s.dangerBtn : s.primaryBtn}
+                onPress={() => fileCancellationRequest(isAppleOwned)}
+                disabled={filing}
+              >
+                {filing ? (
+                  <ActivityIndicator color={isAppleOwned ? Colors.light.text : '#fff'} />
+                ) : (
+                  <>
+                    <Feather
+                      name="mail"
+                      size={18}
+                      color={isAppleOwned ? Colors.light.text : '#fff'}
+                    />
+                    <Text style={isAppleOwned ? s.dangerBtnText : s.primaryBtnText}>
+                      Tell our support team
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          )}
+        </View>
+      ) : null}
 
       <View style={s.card}>
         <View style={s.planHeader}>
@@ -316,6 +422,12 @@ const s = StyleSheet.create({
   meta: { fontSize: 13, color: Colors.light.textSecondary, marginBottom: 12 },
   cancelBanner: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#FEF3C7', borderRadius: 10, padding: 10, marginBottom: 12 },
   cancelText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 },
+  coolingCard: { backgroundColor: Colors.light.primaryMuted, borderRadius: 18, padding: 20, borderWidth: 1, borderColor: Colors.light.primary, marginBottom: 24, gap: 12 },
+  coolingHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  coolingTitle: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
+  coolingBody: { fontSize: 13, color: Colors.light.textSecondary, lineHeight: 19 },
+  coolingFiled: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: Colors.light.secondaryMuted, borderRadius: 10, padding: 12 },
+  coolingFiledText: { flex: 1, fontSize: 13, color: Colors.light.secondary, lineHeight: 18, fontWeight: '600' },
   divider: { height: 1, backgroundColor: Colors.light.border, marginVertical: 12 },
   primaryBtn: { flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, backgroundColor: Colors.light.primary, borderRadius: 14 },
   primaryBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },

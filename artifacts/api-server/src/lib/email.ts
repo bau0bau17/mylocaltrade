@@ -1004,6 +1004,67 @@ export async function sendAdminRevalidationAlertEmail(opts: {
   });
 }
 
+export async function sendAdminCancellationRequestEmail(opts: {
+  traderEmail: string;
+  traderName: string;
+  businessName?: string | null;
+  provider: "apple" | "stripe" | "demo";
+  withinCoolingOff: boolean;
+  note?: string | null;
+}): Promise<void> {
+  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
+  const safeEmail = escapeHtml(opts.traderEmail);
+  const safeName = escapeHtml(opts.traderName);
+  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : "(none)";
+  const providerLabel =
+    opts.provider === "apple"
+      ? "Apple (App Store / in-app purchase)"
+      : opts.provider === "stripe"
+        ? "Stripe (web)"
+        : "Demo";
+  const accent = opts.withinCoolingOff ? "#10B981" : "#F59E0B";
+  const coolingLabel = opts.withinCoolingOff
+    ? "Within 14-day cooling-off window"
+    : "Outside cooling-off window";
+  const handoff =
+    opts.provider === "apple"
+      ? "Apple owns this subscription — any cancellation/refund is handled by Apple. Assist the trader; do not attempt to issue a refund from our side."
+      : "Our team processes this cancellation/refund directly.";
+  const html = emailShell({
+    title: "A trader has requested to cancel",
+    preheader: `${safeName} — cancellation request (${coolingLabel.toLowerCase()})`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">A trader has filed a cancellation request from the app.</p>
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 150px;">Trader</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeName}</td></tr>
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Business</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeBusiness}</td></tr>
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Email</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeEmail}</td></tr>
+        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Provider</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${escapeHtml(providerLabel)}</td></tr>
+      </table>
+      <div style="background: #0E1A2A; border-left: 3px solid ${accent}; padding: 14px 16px; border-radius: 8px; margin: 0 0 16px;">
+        <p style="color: ${accent}; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">${escapeHtml(coolingLabel)}</p>
+        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">${escapeHtml(handoff)}</p>
+      </div>
+      ${
+        opts.note
+          ? `<div style="margin: 0 0 16px;"><p style="color: #6B7280; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Trader note</p><p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${escapeHtml(opts.note)}</p></div>`
+          : ""
+      }
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">Open the admin console to action this request.</p>`,
+  });
+  await dispatchEmail({
+    category: "contact",
+    to: { email: SUPPORT_EMAIL },
+    from: { email: FROM_EMAIL, name: "MyLocalTrade Cancellations" },
+    subject: `[CANCELLATION ${opts.withinCoolingOff ? "COOLING-OFF" : "REQUEST"}] ${sanitizeHeaderValue(opts.traderEmail)}`,
+    html,
+    headers: {
+      "X-MyLocalTrade-Type": "cancellation-request-admin-alert",
+    },
+    tag: "cancellation-request-admin",
+  });
+}
+
 export async function sendTraderRejectedEmail(opts: {
   toEmail: string;
   toName: string;

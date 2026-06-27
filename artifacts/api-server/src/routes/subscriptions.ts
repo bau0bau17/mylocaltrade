@@ -6,14 +6,17 @@ import {
   usersTable,
   traderProfilesTable,
   subscriptionsTable,
+  cancellationRequestsTable,
   promoCodesTable,
   promoRedemptionsTable,
 } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { CreateCheckoutSessionBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
+import { getCoolingOffState } from "../lib/cooling-off";
+import { sendAdminCancellationRequestEmail } from "../lib/email";
 import { claimPromoForUser } from "./promo";
 import {
   listCustomerActiveEntitlements,
@@ -344,6 +347,8 @@ router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (r
           planId,
           currentPeriodStart: new Date(),
           currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          // Anchor the cooling-off window on the first purchase only; never reset.
+          originalPurchaseAt: sub.originalPurchaseAt ?? new Date(),
           updatedAt: new Date(),
         })
         .where(eq(subscriptionsTable.userId, userId));
@@ -534,6 +539,8 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
             currentPeriodStart: new Date(),
             currentPeriodEnd: periodEnd,
             cancelAtPeriodEnd: false,
+            // First-purchase anchor only; renewals must not reset cooling-off.
+            originalPurchaseAt: existing.originalPurchaseAt ?? new Date(),
             updatedAt: new Date(),
           })
           .where(eq(subscriptionsTable.userId, userId));
@@ -544,6 +551,7 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
           status: "active",
           currentPeriodStart: new Date(),
           currentPeriodEnd: periodEnd,
+          originalPurchaseAt: new Date(),
         });
       }
 
@@ -721,6 +729,19 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
     const periodLapsed =
       !!sub && !isStripeOwned && periodEndMs != null && periodEndMs <= Date.now();
 
+    // Read-only cooling-off snapshot. Anchored on the FIRST purchase date
+    // (never reset by renewals); falls back to createdAt for rows predating the
+    // dedicated column. This only REPORTS eligibility — it never affects perks,
+    // verification, listing or featured status, and never issues refunds.
+    const coolingOff = getCoolingOffState(
+      sub ? sub.originalPurchaseAt ?? sub.createdAt : null,
+    );
+    const coolingOffProvider = !sub
+      ? null
+      : isStripeOwned
+        ? ("stripe" as const)
+        : ("apple" as const);
+
     // IMPORTANT: this read path only REPORTS the effective (non-Premium) state
     // when the paid period has lapsed — it deliberately does NOT mutate the DB.
     // The destructive downgrade (revoking perks: plan, featured badge, ranking)
@@ -740,6 +761,7 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
         currentPeriodEnd: sub.currentPeriodEnd || null,
         cancelAtPeriodEnd: sub.cancelAtPeriodEnd || false,
         promoRedemption: promo,
+        coolingOff: { ...coolingOff, provider: coolingOffProvider },
       });
       return;
     }
@@ -755,6 +777,7 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
         currentPeriodEnd: stillPremium ? sub.currentPeriodEnd || null : null,
         cancelAtPeriodEnd: stillPremium ? sub.cancelAtPeriodEnd || false : false,
         promoRedemption: promo,
+        coolingOff: { ...coolingOff, provider: coolingOffProvider },
       });
       return;
     }
@@ -769,12 +792,172 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
       currentPeriodEnd: null,
       cancelAtPeriodEnd: false,
       promoRedemption: promo,
+      coolingOff: { ...coolingOff, provider: coolingOffProvider },
     });
   } catch (error) {
     req.log.error({ err: error }, "Get subscription status failed");
     res.status(500).json({ error: "Failed to get subscription status" });
   }
 });
+
+const CreateCancellationRequestBody = z.object({
+  note: z.string().trim().max(2000).optional(),
+});
+
+// POST /api/subscriptions/cancellation-request — file a cooling-off /
+// cancellation request. This is a FILE-AND-RECORD action only: it stores a
+// structured request, writes an audit entry and notifies support. It NEVER
+// cancels the subscription, NEVER issues an Apple/Stripe refund, and NEVER
+// touches plan, perks, verification, listing or featured status. Apple-owned
+// subscriptions are cancelled/refunded by Apple; the app only hands off and
+// records the request so support can assist.
+router.post(
+  "/subscriptions/cancellation-request",
+  authMiddleware,
+  traderOnly,
+  async (req, res) => {
+    try {
+      const { userId } = req as AuthenticatedRequest;
+      const body = CreateCancellationRequestBody.parse(req.body);
+
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, userId))
+        .limit(1);
+      if (!sub) {
+        res.status(400).json({ error: "No subscription found to cancel." });
+        return;
+      }
+
+      // Dedupe: one active request at a time. Return the existing one rather
+      // than stacking duplicates in the support queue.
+      const [openExisting] = await db
+        .select()
+        .from(cancellationRequestsTable)
+        .where(
+          and(
+            eq(cancellationRequestsTable.userId, userId),
+            inArray(cancellationRequestsTable.status, ["OPEN", "IN_PROGRESS"]),
+          ),
+        )
+        .limit(1);
+      if (openExisting) {
+        res.json({
+          ok: true,
+          alreadyOpen: true,
+          requestId: openExisting.id,
+          withinCoolingOff: openExisting.withinCoolingOff,
+          provider: openExisting.provider,
+        });
+        return;
+      }
+
+      const isStripeOwned =
+        !!sub.stripeSubscriptionId || !!sub.stripeCustomerId;
+      const provider: "apple" | "stripe" = isStripeOwned ? "stripe" : "apple";
+      const anchor = sub.originalPurchaseAt ?? sub.createdAt;
+      // Cooling-off eligibility is computed SERVER-SIDE — never trusted from the
+      // client — from the first-purchase anchor.
+      const cooling = getCoolingOffState(anchor);
+
+      let created: { id: number };
+      try {
+        [created] = await db
+          .insert(cancellationRequestsTable)
+          .values({
+            userId,
+            subscriptionId: sub.id,
+            provider,
+            withinCoolingOff: cooling.isWithinWindow,
+            originalPurchaseAt: anchor,
+            coolingOffEndsAt: cooling.endsAt ? new Date(cooling.endsAt) : null,
+            userNote: body.note ?? null,
+            status: "OPEN",
+          })
+          .returning({ id: cancellationRequestsTable.id });
+      } catch (insertErr: unknown) {
+        // The partial unique index (one active request per user) closes the
+        // race when two submissions slip past the SELECT above. Treat the
+        // unique violation as "already open" rather than a server error.
+        if (
+          typeof insertErr === "object" &&
+          insertErr !== null &&
+          (insertErr as { code?: string }).code === "23505"
+        ) {
+          const [raced] = await db
+            .select()
+            .from(cancellationRequestsTable)
+            .where(
+              and(
+                eq(cancellationRequestsTable.userId, userId),
+                inArray(cancellationRequestsTable.status, ["OPEN", "IN_PROGRESS"]),
+              ),
+            )
+            .limit(1);
+          res.json({
+            ok: true,
+            alreadyOpen: true,
+            requestId: raced?.id,
+            withinCoolingOff: raced?.withinCoolingOff,
+            provider: raced?.provider,
+          });
+          return;
+        }
+        throw insertErr;
+      }
+
+      await logAudit({
+        userId,
+        action: "COOLING_OFF_CANCELLATION_REQUESTED",
+        details: {
+          requestId: created.id,
+          provider,
+          withinCoolingOff: cooling.isWithinWindow,
+        },
+        notes: body.note,
+      });
+
+      // Best-effort support notification — never block the request on email.
+      try {
+        const [user] = await db
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.id, userId))
+          .limit(1);
+        const [profile] = await db
+          .select()
+          .from(traderProfilesTable)
+          .where(eq(traderProfilesTable.userId, userId))
+          .limit(1);
+        await sendAdminCancellationRequestEmail({
+          traderEmail: user?.email ?? `user-${userId}`,
+          traderName: user?.fullName ?? `User #${userId}`,
+          businessName: profile?.businessName ?? null,
+          provider,
+          withinCoolingOff: cooling.isWithinWindow,
+          note: body.note ?? null,
+        });
+      } catch (e) {
+        req.log.error({ err: e }, "Cancellation request support email failed");
+      }
+
+      res.status(201).json({
+        ok: true,
+        requestId: created.id,
+        withinCoolingOff: cooling.isWithinWindow,
+        provider,
+      });
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Invalid request", details: error.issues });
+        return;
+      }
+      req.log.error({ err: error }, "Create cancellation request failed");
+      res.status(500).json({ error: "Failed to file cancellation request." });
+    }
+  },
+);
 
 const WEBHOOK_TOLERANCE_SECONDS = 300;
 
@@ -852,6 +1035,9 @@ async function activateSubscription(customerId: string, planId: string | null, s
           planId: planId || existingSub[0].planId,
           stripeSubscriptionId: subscriptionId,
           cancelAtPeriodEnd: false,
+          // First-purchase anchor only; renewals/reactivations must not reset
+          // the cooling-off window.
+          originalPurchaseAt: existingSub[0].originalPurchaseAt ?? new Date(),
           updatedAt: new Date(),
         })
         .where(eq(subscriptionsTable.userId, user.id));
@@ -862,6 +1048,7 @@ async function activateSubscription(customerId: string, planId: string | null, s
         status: "active",
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
+        originalPurchaseAt: new Date(),
       });
     }
   });
@@ -1106,6 +1293,15 @@ router.post("/webhooks/revenuecat", async (req, res) => {
         ? new Date(expiresAtMs)
         : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
+    // Original-purchase anchor for cooling-off. Prefer the event's purchase
+    // timestamp (accurate for INITIAL_PURCHASE); set once and never reset on a
+    // RENEWAL — an existing anchor always wins.
+    const purchasedAtMs = Number(event.purchased_at_ms);
+    const originalAnchor =
+      Number.isFinite(purchasedAtMs) && purchasedAtMs > 0
+        ? new Date(purchasedAtMs)
+        : new Date();
+
     let stripeOwned = false;
     let applied = false;
 
@@ -1132,6 +1328,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
               currentPeriodStart: new Date(),
               currentPeriodEnd: periodEnd,
               cancelAtPeriodEnd: false,
+              originalPurchaseAt: existing.originalPurchaseAt ?? originalAnchor,
               updatedAt: new Date(),
             })
             .where(eq(subscriptionsTable.userId, userId));
@@ -1142,6 +1339,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
             status: "active",
             currentPeriodStart: new Date(),
             currentPeriodEnd: periodEnd,
+            originalPurchaseAt: originalAnchor,
           });
         }
         await tx

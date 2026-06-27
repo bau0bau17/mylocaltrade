@@ -18,6 +18,7 @@ import {
   Flag,
   Tag,
   Trash2,
+  Ban,
 } from "lucide-react";
 
 interface NavItem {
@@ -35,6 +36,7 @@ const NAV: NavItem[] = [
   { href: "/reviews", label: "Reviews", icon: Star },
   { href: "/conversation-reports", label: "Conversation reports", icon: ShieldAlert },
   { href: "/user-reports", label: "User reports", icon: Flag },
+  { href: "/cancellation-requests", label: "Cancellations", icon: Ban },
   { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/promo-codes", label: "Promo codes", icon: Tag },
   { href: "/account-deletions", label: "Account deletions", icon: Trash2 },
