@@ -4,7 +4,7 @@
 
 pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
 
-**MyLocalTrade.co.uk** — A UK local trades marketplace mobile app connecting customers with tradespeople. Features a customer-facing discovery experience, trader profiles with subscription tier badges (Basic £10, Premium £20, Elite £30/month), Stripe checkout integration (demo mode when no STRIPE_SECRET_KEY), and a complete backend API.
+**MyLocalTrade.co.uk** — A UK local trades marketplace mobile app connecting customers with tradespeople. Features a customer-facing discovery experience, trader profiles with a free verified Basic listing and a paid Premium plan (£20/month or yearly, purchased via Apple In-App Purchase / RevenueCat on iOS), and a complete backend API.
 
 ## Stack
 
@@ -128,9 +128,9 @@ Utility scripts. Run via `pnpm --filter @workspace/scripts run <script>`.
 
 ## Subscription Tiers
 
-- Basic: £10/month — standard listing, 3 gallery images
-- Premium: £20/month — enhanced profile, 10 images, priority search, premium badge
-- Elite: £30/month — featured placement, unlimited images, top visibility, star badge
+- Basic: free — verified public listing, receive customer enquiries, website and social links, up to 3 gallery images
+- Premium: £20/month or yearly (Apple In-App Purchase via RevenueCat on iOS) — everything in Basic plus featured placement, higher search ranking, unlimited gallery images, and a premium badge
+- Note: website/social links and extra services are free for all verified traders; they are not a Premium-only perk. The single stored paid plan id is `premium` (Monthly vs Yearly cadence is derived client-side from RevenueCat).
 
 ## User preferences
 

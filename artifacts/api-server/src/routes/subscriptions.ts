@@ -30,9 +30,10 @@ const IS_DEMO_MODE = !process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== 
 // plan id ("premium"); only the billing interval/price differ. Real prices on
 // the native iOS app come from the App Store via RevenueCat — the values below
 // drive the informational fallback pricing cards on web / Expo Go only.
+// Genuine Premium differentiators only. Free capabilities (receiving customer
+// enquiries, website/social links) belong to the Basic plan below, so the
+// plan comparison stays truthful and never implies those are paid features.
 const PREMIUM_FEATURES = [
-  "Receive customer enquiries",
-  "Website and social links on your profile",
   "Higher search ranking and priority placement",
   "Featured listing badge and home screen placement",
   "Unlimited gallery images",
@@ -46,8 +47,9 @@ const PLANS = [
     currency: "GBP",
     interval: "month",
     features: [
-      "Free public business listing",
-      "Standard profile page",
+      "Free verified public listing",
+      "Receive customer enquiries",
+      "Website and social links on your profile",
       "Up to 3 gallery images",
       "Standard search visibility",
     ],

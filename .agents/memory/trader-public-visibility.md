@@ -6,8 +6,10 @@ description: All customer-facing trader retrieval endpoints must enforce the sam
 **Listing is decoupled from subscription (product model).** A VERIFIED trader is
 publicly listed for FREE ("Basic"). Paid "Premium" (`plan==='premium'`, legacy
 `'trader'`; entitlement `trader_subscription`) only ADDS perks — featured
-placement, higher ranking, public website/socialLinks/additionalServices, and
-unlimited gallery (vs 3 for Basic). `trader_profiles.is_active` = "publicly
+placement, higher ranking, and unlimited gallery (vs 3 for Basic). Website,
+socialLinks and additionalServices are FREE for ALL verified traders (2026
+product decision): `formatTrader()` no longer strips them by plan, and no
+subscription/plan copy may advertise them as Premium-only. `trader_profiles.is_active` = "publicly
 listed/live" and is driven by verification/suspension/deletion ONLY. Losing
 Premium (Apple expiry/cancel via the RevenueCat webhook, or Stripe cancel) must
 NEVER set `is_active=false` and must NEVER revoke sessions. `users.is_active`

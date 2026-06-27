@@ -323,20 +323,15 @@ router.get("/traders/:id", async (req, res) => {
   }
 });
 
-const PREMIUM_PLAN_IDS = new Set(["premium", "trader"]);
-function isPremiumPlan(plan: string | null | undefined): boolean {
-  return !!plan && PREMIUM_PLAN_IDS.has(plan);
-}
-
 function formatTrader(
   t: TraderProfile,
   emailVerified: boolean,
   responseTimeMinutes: number | null,
 ) {
-  // Enhanced public profile (extra services, website and social links) is a
-  // Premium perk. Basic (free, verified) traders are still fully listed, but
-  // these fields are stripped from the public payload.
-  const premium = isPremiumPlan(t.plan);
+  // All verified traders (free Basic and paid Premium) get a full public
+  // profile, including extra services, website and social links. Premium adds
+  // perks elsewhere (featured placement, higher search ranking and unlimited
+  // gallery images), not these profile fields.
   return {
     id: t.id,
     userId: t.userId,
@@ -345,17 +340,17 @@ function formatTrader(
     email: t.email,
     phone: t.phone,
     mainCategory: t.mainCategory,
-    additionalServices: premium ? (t.additionalServices || []) : [],
+    additionalServices: t.additionalServices || [],
     businessAddress: t.businessAddress,
     town: t.town,
     postcode: t.postcode,
     serviceAreas: t.serviceAreas || [],
     businessDescription: t.businessDescription,
-    website: premium ? t.website : null,
+    website: t.website,
     openingHours: t.openingHours,
     logoUrl: t.logoUrl,
     galleryUrls: t.galleryUrls || [],
-    socialLinks: premium ? t.socialLinks : null,
+    socialLinks: t.socialLinks,
     plan: t.plan,
     isFeatured: t.isFeatured,
     isActive: t.isActive,

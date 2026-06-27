@@ -220,7 +220,8 @@ export function evaluateProfileVisibility(
   if (profile.revalidationOverdue) reasons.push("REVALIDATION_OVERDUE");
   // Listing is driven by verification (free Basic), not by a paid subscription.
   // A verified, active profile is public regardless of subscription state;
-  // Premium only adds perks (featured placement, ranking, enhanced profile).
+  // Premium only adds perks (featured placement, higher search ranking,
+  // unlimited gallery images) — never extra profile fields, which are free.
   // Phase 7: any expired required document hides the profile.
   if (documents) {
     const evaluation = evaluateDocumentsComplete(documents, {
