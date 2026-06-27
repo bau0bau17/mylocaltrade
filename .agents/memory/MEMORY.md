@@ -8,6 +8,7 @@
 - [SubscriptionProvider value loop](subscription-provider-value-loop.md) — never depend on the whole useSubscription() object in effect deps; provider rebuilds it each render → infinite refresh loop.
 - [Public trader visibility](trader-public-visibility.md) — listing driven by VERIFICATION, never subscription; Premium only adds perks; predicate duplicated across public routes — update all.
 - [User-reports reporting authz](user-reports-authz.md) — customer reports must derive reportedUserId from a verified shared conversation; never accept a client-supplied customer user id (IDOR).
+- [Subscription notification dedupe](subscription-notification-dedupe.md) — status-change push must gate on a real transition; RC sync, RC webhook & Stripe (updated+deleted) all overlap & repeat → unguarded sends spam.
 - [Subscription downgrade source of truth](subscription-downgrade-source-of-truth.md) — status read path only REPORTS expiry, never mutates; destructive downgrade is provider-confirmed (revenuecat-sync + webhook); never touch Stripe rows.
 - [Trader business-type gating](trader-business-type-gating.md) — LTD-only company-number rule duplicated in 3 places; nullable businessType + stale client = silent completion-gate fail, docs stay locked.
 - [No destructive tests on live data](no-destructive-tests-on-live-data.md) — never replay a write PUT against a real user row; no row-level undo. Use throwaway/rollback or snapshot SELECT * first.

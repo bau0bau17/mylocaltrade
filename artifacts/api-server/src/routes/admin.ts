@@ -20,6 +20,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, isNull, asc } from "drizzle-orm";
 import { z } from "zod";
 import { authMiddleware, adminOnly, revokeUserSessions } from "../lib/auth";
+import { sendPushToUser } from "../lib/push-notifications";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import {
@@ -884,6 +885,14 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
       }
     })();
 
+    // Best-effort push so the trader is alerted even if they're not on the
+    // dashboard. Deep-links to the dashboard where the live status is shown.
+    void sendPushToUser(userId, {
+      title: "You're verified",
+      body: "Your details have been verified. Your trader profile is now live in search.",
+      data: { type: "verification_update", status: "VERIFIED" },
+    }).catch((err) => req.log.warn({ err }, "Failed to send trader-approved push"));
+
     res.json({ profile: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -956,6 +965,12 @@ router.post("/admin/traders/:userId/reject", authMiddleware, adminOnly, async (r
       }
     })();
 
+    void sendPushToUser(userId, {
+      title: "Verification update",
+      body: "We could not verify your trader account. Open the app to see the reason and what to do next.",
+      data: { type: "verification_update", status: "REJECTED" },
+    }).catch((err) => req.log.warn({ err }, "Failed to send trader-rejected push"));
+
     res.json({ profile: updated });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -1023,6 +1038,12 @@ router.post("/admin/traders/:userId/request-info", authMiddleware, adminOnly, as
         req.log.warn({ err }, "Failed to send trader more-info email");
       }
     })();
+
+    void sendPushToUser(userId, {
+      title: "More information needed",
+      body: "We need a bit more from you to finish verifying your account. Open the app to continue.",
+      data: { type: "verification_update", status: "NEEDS_MORE_INFO" },
+    }).catch((err) => req.log.warn({ err }, "Failed to send trader more-info push"));
 
     res.json({ profile: updated });
   } catch (error) {
@@ -1184,6 +1205,12 @@ router.post("/admin/traders/:userId/suspend", authMiddleware, adminOnly, async (
         req.log.warn({ err }, "Failed to send trader-suspended email");
       }
     })();
+
+    void sendPushToUser(userId, {
+      title: "Account suspended",
+      body: "Your trader account has been suspended. Open the app to find out more.",
+      data: { type: "verification_update", status: "SUSPENDED" },
+    }).catch((err) => req.log.warn({ err }, "Failed to send trader-suspended push"));
 
     res.json({ profile: updated });
   } catch (error) {
@@ -1870,6 +1897,18 @@ router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async 
       },
       notes: body.notes,
     });
+
+    // Acknowledge the moderation outcome to the person who filed the report.
+    // No deep-link target (there is no report-status screen); the body carries
+    // the outcome. We never notify the reported user from here.
+    void sendPushToUser(report.reporterUserId, {
+      title: "Report reviewed",
+      body:
+        body.action === "dismiss"
+          ? "We've reviewed your report. No further action was needed this time — thank you for flagging it."
+          : "We've reviewed your report and taken appropriate action. Thank you for helping keep the community safe.",
+      data: { type: "report_update" },
+    }).catch((err) => req.log.warn({ err }, "Failed to send report-resolved push"));
 
     res.json({ ok: true, status: newStatus, action: body.action });
   } catch (error: unknown) {

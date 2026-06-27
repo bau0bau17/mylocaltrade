@@ -54,7 +54,16 @@ function useNotificationDeepLinks() {
         router.push(`/messages/${d.conversationId}`);
       } else if (d.type === "new_enquiry" || d.type === "lead_reminder") {
         router.push("/trader-dashboard/leads");
+      } else if (d.type === "verification_update") {
+        // Verification status changes are surfaced on the trader dashboard.
+        router.push("/trader-dashboard");
+      } else if (d.type === "subscription_update") {
+        // Subscription/billing changes deep-link to the billing screen.
+        router.push("/trader-dashboard/billing");
       }
+      // "report_update" intentionally has no deep-link target — there is no
+      // report-status screen, so tapping simply opens the app; the body text
+      // carries the outcome.
     };
 
     // App was opened by tapping a notification while killed.

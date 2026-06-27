@@ -17,6 +17,7 @@ import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
 import { getCoolingOffState } from "../lib/cooling-off";
 import { sendAdminCancellationRequestEmail } from "../lib/email";
+import { sendPushToUser } from "../lib/push-notifications";
 import { claimPromoForUser } from "./promo";
 import {
   listCustomerActiveEntitlements,
@@ -508,6 +509,11 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
           action: "SUBSCRIPTION_CANCELLED",
           details: { source: "revenuecat-sync", reason: "no_active_entitlement" },
         });
+        void sendPushToUser(userId, {
+          title: "Premium ended",
+          body: "Your Premium subscription has ended. Your free Basic listing stays live.",
+          data: { type: "subscription_update", status: "cancelled" },
+        }).catch((err) => req.log.warn({ err }, "Failed to send subscription-ended push"));
       }
       res.json({ active: false });
       return;
@@ -516,6 +522,7 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
     const periodEnd = expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     let stripeOwned = false;
+    let newlyActivated = false;
 
     await db.transaction(async (tx) => {
       const [existing] = await tx
@@ -529,6 +536,9 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
       // We still make sure the profile is live below (it normally already is).
       stripeOwned =
         !!existing && (!!existing.stripeSubscriptionId || !!existing.stripeCustomerId);
+      // Only a genuine inactive -> active transition should notify, so the
+      // routine focus/restore syncs don't re-announce an already-live plan.
+      newlyActivated = !stripeOwned && (!existing || existing.status !== "active");
 
       if (existing && !stripeOwned) {
         await tx
@@ -577,6 +587,14 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
       details: { plan: RC_PLAN_ID, source: "revenuecat", productId: entitlement?.product_identifier, stripeOwned },
     });
     await logAudit({ userId, action: "PROFILE_WENT_LIVE", details: { plan: RC_PLAN_ID, source: "revenuecat", stripeOwned } });
+
+    if (newlyActivated) {
+      void sendPushToUser(userId, {
+        title: "Premium active",
+        body: "Your Premium subscription is now active. Your premium perks are live.",
+        data: { type: "subscription_update", status: "active" },
+      }).catch((err) => req.log.warn({ err }, "Failed to send subscription-activated push"));
+    }
 
     res.json({
       active: true,
@@ -1056,12 +1074,19 @@ async function activateSubscription(customerId: string, planId: string | null, s
     await logAudit({ userId: activatedUserId, action: "SUBSCRIPTION_ACTIVATED", details: { plan: planId, stripe: true } });
     if (wentLive) {
       await logAudit({ userId: activatedUserId, action: "PROFILE_WENT_LIVE", details: { plan: planId } });
+      // Best-effort; runs outside a request so there is no req.log to use.
+      void sendPushToUser(activatedUserId, {
+        title: "Premium active",
+        body: "Your Premium subscription is now active. Your premium perks are live.",
+        data: { type: "subscription_update", status: "active" },
+      }).catch(() => {});
     }
   }
 }
 
 async function deactivateSubscription(customerId: string) {
   let deactivatedUserId: number | null = null;
+  let wasActive = false;
   await db.transaction(async (tx) => {
     const [user] = await tx
       .select()
@@ -1089,6 +1114,15 @@ async function deactivateSubscription(customerId: string) {
       })
       .where(eq(traderProfilesTable.userId, user.id));
 
+    const [existingSub] = await tx
+      .select({ status: subscriptionsTable.status })
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, user.id))
+      .limit(1);
+    // Stripe can emit several terminal events (updated + deleted); only the
+    // genuine active -> cancelled transition should notify, never the repeats.
+    wasActive = existingSub?.status === "active";
+
     await tx
       .update(subscriptionsTable)
       .set({ status: "cancelled", cancelAtPeriodEnd: false, updatedAt: new Date() })
@@ -1096,6 +1130,14 @@ async function deactivateSubscription(customerId: string) {
   });
   if (deactivatedUserId) {
     await logAudit({ userId: deactivatedUserId, action: "SUBSCRIPTION_CANCELLED", details: { stripe: true } });
+    if (wasActive) {
+      // Best-effort; runs outside a request so there is no req.log to use.
+      void sendPushToUser(deactivatedUserId, {
+        title: "Premium ended",
+        body: "Your Premium subscription has ended. Your free Basic listing stays live.",
+        data: { type: "subscription_update", status: "cancelled" },
+      }).catch(() => {});
+    }
   }
 }
 
@@ -1304,6 +1346,8 @@ router.post("/webhooks/revenuecat", async (req, res) => {
 
     let stripeOwned = false;
     let applied = false;
+    let newlyActivated = false;
+    let newlyCancelled = false;
 
     await db.transaction(async (tx) => {
       const [existing] = await tx
@@ -1319,6 +1363,8 @@ router.post("/webhooks/revenuecat", async (req, res) => {
       if (stripeOwned) return;
 
       if (grant) {
+        // Notify only on a real inactive -> active transition (skip renewals).
+        newlyActivated = !existing || existing.status !== "active";
         if (existing) {
           await tx
             .update(subscriptionsTable)
@@ -1361,6 +1407,8 @@ router.post("/webhooks/revenuecat", async (req, res) => {
           applied = true;
         }
       } else if (revoke) {
+        // Notify only on a real active -> cancelled transition (skip repeats).
+        newlyCancelled = !!existing && existing.status === "active";
         // Access ended — remove Premium perks. The free verified listing stays
         // live and the trader stays logged in.
         await tx
@@ -1387,6 +1435,19 @@ router.post("/webhooks/revenuecat", async (req, res) => {
         action: grant ? "SUBSCRIPTION_ACTIVATED" : "SUBSCRIPTION_CANCELLED",
         details: { source: "revenuecat-webhook", type },
       });
+      if (newlyActivated) {
+        void sendPushToUser(userId, {
+          title: "Premium active",
+          body: "Your Premium subscription is now active. Your premium perks are live.",
+          data: { type: "subscription_update", status: "active" },
+        }).catch((err) => req.log.warn({ err }, "Failed to send subscription-activated push"));
+      } else if (newlyCancelled) {
+        void sendPushToUser(userId, {
+          title: "Premium ended",
+          body: "Your Premium subscription has ended. Your free Basic listing stays live.",
+          data: { type: "subscription_update", status: "cancelled" },
+        }).catch((err) => req.log.warn({ err }, "Failed to send subscription-ended push"));
+      }
     }
 
     res.json({ success: true, type, applied, stripeOwned });
