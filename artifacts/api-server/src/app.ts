@@ -161,6 +161,7 @@ app.use("/api/contact", contactLimiter);
 app.use("/api/enquiries", enquiriesLimiter);
 app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);
 app.use(/^\/api\/conversations\/\d+\/report$/, reportsLimiter);
+app.use("/api/reports", reportsLimiter);
 app.use("/api/trader/documents/upload-url", documentUploadLimiter);
 app.use("/api", apiLimiter);
 

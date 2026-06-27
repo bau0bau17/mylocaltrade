@@ -30,6 +30,8 @@ tags:
     description: Trade categories
   - name: conversations
     description: Customer-trader conversations and messages
+  - name: reports
+    description: Profile-level reports about a trader or customer
   - name: push-tokens
     description: Mobile push notification token registration
   - name: companies-house
@@ -1680,6 +1682,107 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ResolveReportRequest"
+      responses:
+        "200":
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolveReportResponse"
+
+  /reports:
+    post:
+      operationId: createReport
+      tags: [reports]
+      summary: File a profile-level report (customer reports a trader, trader reports a customer)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReportRequest"
+      responses:
+        "201":
+          description: Report submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "400":
+          description: Invalid report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Reported party not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /report-categories:
+    get:
+      operationId: getReportCategories
+      tags: [reports]
+      summary: Predefined report reason categories, keyed by the subject being reported
+      responses:
+        "200":
+          description: Report categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportCategoriesResponse"
+
+  /admin/user-reports:
+    get:
+      operationId: getAdminUserReports
+      tags: [reports]
+      summary: Admin — list profile-level reports
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [OPEN, RESOLVED, DISMISSED]
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserReportListResponse"
+
+  /admin/user-reports/{id}/resolve:
+    post:
+      operationId: resolveAdminUserReport
+      tags: [reports]
+      summary: Admin — resolve or dismiss a profile-level report
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolveUserReportRequest"
       responses:
         "200":
           description: Resolved
@@ -3499,3 +3602,106 @@ components:
           maxLength: 2000
       required:
         - reply
+
+    CreateReportRequest:
+      type: object
+      properties:
+        reportedRole:
+          type: string
+          enum: [trader, customer]
+        traderProfileId:
+          type: integer
+          description: Required when reportedRole is "trader".
+        category:
+          type: string
+        detail:
+          type: string
+          maxLength: 2000
+        conversationId:
+          type: integer
+          description: >-
+            Required when reportedRole is "customer" (the customer is derived
+            from this conversation). Optional context for trader reports.
+      required:
+        - reportedRole
+        - category
+
+    ReportCategoryOption:
+      type: object
+      properties:
+        value:
+          type: string
+        label:
+          type: string
+      required: [value, label]
+
+    ReportCategoriesResponse:
+      type: object
+      properties:
+        categories:
+          type: object
+          properties:
+            trader:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReportCategoryOption"
+            customer:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReportCategoryOption"
+          required: [trader, customer]
+      required: [categories]
+
+    AdminUserReport:
+      type: object
+      properties:
+        id: { type: integer }
+        reporterUserId: { type: integer }
+        reporterRole: { type: string }
+        reporterName: { type: string, nullable: true }
+        reporterEmail: { type: string, nullable: true }
+        reportedUserId: { type: integer }
+        reportedRole: { type: string }
+        reportedName: { type: string, nullable: true }
+        reportedEmail: { type: string, nullable: true }
+        reportedTraderProfileId: { type: integer, nullable: true }
+        reportedTraderBusinessName: { type: string, nullable: true }
+        category: { type: string }
+        categoryLabel: { type: string }
+        detail: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [OPEN, RESOLVED, DISMISSED]
+        resolutionNotes: { type: string, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        conversationId: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
+      required:
+        - id
+        - reporterUserId
+        - reporterRole
+        - reportedUserId
+        - reportedRole
+        - category
+        - categoryLabel
+        - status
+        - createdAt
+
+    AdminUserReportListResponse:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUserReport"
+      required: [reports]
+
+    ResolveUserReportRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          enum: [resolve, dismiss]
+        notes:
+          type: string
+      required: [action]

@@ -10,9 +10,12 @@ import {
   conversationsTable,
   messagesTable,
   conversationReportsTable,
+  userReportsTable,
+  REPORT_CATEGORIES,
   reviewsTable,
 } from "@workspace/db/schema";
 import { pushTokensTable } from "@workspace/db/schema";
+import { alias } from "drizzle-orm/pg-core";
 import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, isNull, asc } from "drizzle-orm";
 import { z } from "zod";
 import { authMiddleware, adminOnly, revokeUserSessions } from "../lib/auth";
@@ -1756,6 +1759,124 @@ router.post("/admin/conversation-reports/:id/resolve", authMiddleware, adminOnly
       return;
     }
     req.log.error({ err: error }, "Resolve conversation report failed");
+    res.status(500).json({ error: "Failed to resolve report" });
+  }
+});
+
+// === Profile-level (user) reports moderation ===
+
+const ResolveUserReportBody = z.object({
+  action: z.enum(["resolve", "dismiss"]),
+  notes: z.string().max(1000).optional(),
+});
+
+function reportCategoryLabel(reportedRole: string, value: string): string {
+  const set = reportedRole === "trader" ? REPORT_CATEGORIES.trader : REPORT_CATEGORIES.customer;
+  return set.find((c) => c.value === value)?.label ?? value;
+}
+
+router.get("/admin/user-reports", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const where = status
+      ? eq(userReportsTable.status, status)
+      : isNotNull(userReportsTable.id);
+    const reporterUsers = alias(usersTable, "reporter_users");
+    const reportedUsers = alias(usersTable, "reported_users");
+    const rows = await db
+      .select({
+        report: userReportsTable,
+        reporterName: reporterUsers.fullName,
+        reporterEmail: reporterUsers.email,
+        reportedName: reportedUsers.fullName,
+        reportedEmail: reportedUsers.email,
+        traderBusinessName: traderProfilesTable.businessName,
+      })
+      .from(userReportsTable)
+      .innerJoin(reporterUsers, eq(userReportsTable.reporterUserId, reporterUsers.id))
+      .innerJoin(reportedUsers, eq(userReportsTable.reportedUserId, reportedUsers.id))
+      .leftJoin(traderProfilesTable, eq(userReportsTable.reportedTraderProfileId, traderProfilesTable.id))
+      .where(where)
+      .orderBy(desc(userReportsTable.createdAt));
+    res.json({
+      reports: rows.map(({ report, reporterName, reporterEmail, reportedName, reportedEmail, traderBusinessName }) => ({
+        id: report.id,
+        reporterUserId: report.reporterUserId,
+        reporterRole: report.reporterRole,
+        reporterName,
+        reporterEmail,
+        reportedUserId: report.reportedUserId,
+        reportedRole: report.reportedRole,
+        reportedName,
+        reportedEmail,
+        reportedTraderProfileId: report.reportedTraderProfileId,
+        reportedTraderBusinessName: traderBusinessName,
+        category: report.category,
+        categoryLabel: reportCategoryLabel(report.reportedRole, report.category),
+        detail: report.detail,
+        status: report.status,
+        resolutionNotes: report.resolutionNotes,
+        resolvedAt: report.resolvedAt?.toISOString() ?? null,
+        conversationId: report.conversationId,
+        createdAt: report.createdAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin list user reports failed");
+    res.status(500).json({ error: "Failed to list reports" });
+  }
+});
+
+router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const body = ResolveUserReportBody.parse(req.body);
+    const adminId = (req as AuthenticatedRequest).userId;
+
+    const [report] = await db
+      .select()
+      .from(userReportsTable)
+      .where(eq(userReportsTable.id, id))
+      .limit(1);
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    const newStatus = body.action === "dismiss" ? "DISMISSED" : "RESOLVED";
+    await db
+      .update(userReportsTable)
+      .set({
+        status: newStatus,
+        resolutionNotes: body.notes ?? null,
+        resolvedByAdminId: adminId,
+        resolvedAt: new Date(),
+      })
+      .where(eq(userReportsTable.id, id));
+
+    await logAudit({
+      userId: report.reportedUserId,
+      action: "USER_REPORT_RESOLVED",
+      performedBy: adminId,
+      details: {
+        reportId: id,
+        reportedRole: report.reportedRole,
+        action: body.action,
+      },
+      notes: body.notes,
+    });
+
+    res.json({ ok: true, status: newStatus, action: body.action });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid action", details: error.issues });
+      return;
+    }
+    req.log.error({ err: error }, "Resolve user report failed");
     res.status(500).json({ error: "Failed to resolve report" });
   }
 });

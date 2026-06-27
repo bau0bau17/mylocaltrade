@@ -1919,6 +1919,98 @@ export const ResolveAdminConversationReportResponse = zod.object({
 });
 
 /**
+ * @summary File a profile-level report (customer reports a trader, trader reports a customer)
+ */
+export const createReportBodyDetailMax = 2000;
+
+export const CreateReportBody = zod.object({
+  reportedRole: zod.enum(["trader", "customer"]),
+  traderProfileId: zod
+    .number()
+    .optional()
+    .describe('Required when reportedRole is \"trader\".'),
+  category: zod.string(),
+  detail: zod.string().max(createReportBodyDetailMax).optional(),
+  conversationId: zod
+    .number()
+    .optional()
+    .describe(
+      'Required when reportedRole is \"customer\" (the customer is derived from this conversation). Optional context for trader reports.',
+    ),
+});
+
+/**
+ * @summary Predefined report reason categories, keyed by the subject being reported
+ */
+export const GetReportCategoriesResponse = zod.object({
+  categories: zod.object({
+    trader: zod.array(
+      zod.object({
+        value: zod.string(),
+        label: zod.string(),
+      }),
+    ),
+    customer: zod.array(
+      zod.object({
+        value: zod.string(),
+        label: zod.string(),
+      }),
+    ),
+  }),
+});
+
+/**
+ * @summary Admin — list profile-level reports
+ */
+export const GetAdminUserReportsQueryParams = zod.object({
+  status: zod.enum(["OPEN", "RESOLVED", "DISMISSED"]).optional(),
+});
+
+export const GetAdminUserReportsResponse = zod.object({
+  reports: zod.array(
+    zod.object({
+      id: zod.number(),
+      reporterUserId: zod.number(),
+      reporterRole: zod.string(),
+      reporterName: zod.string().nullish(),
+      reporterEmail: zod.string().nullish(),
+      reportedUserId: zod.number(),
+      reportedRole: zod.string(),
+      reportedName: zod.string().nullish(),
+      reportedEmail: zod.string().nullish(),
+      reportedTraderProfileId: zod.number().nullish(),
+      reportedTraderBusinessName: zod.string().nullish(),
+      category: zod.string(),
+      categoryLabel: zod.string(),
+      detail: zod.string().nullish(),
+      status: zod.enum(["OPEN", "RESOLVED", "DISMISSED"]),
+      resolutionNotes: zod.string().nullish(),
+      resolvedAt: zod.date().nullish(),
+      conversationId: zod.number().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+});
+
+/**
+ * @summary Admin — resolve or dismiss a profile-level report
+ */
+export const ResolveAdminUserReportParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ResolveAdminUserReportBody = zod.object({
+  action: zod.enum(["resolve", "dismiss"]),
+  notes: zod.string().optional(),
+});
+
+export const ResolveAdminUserReportResponse = zod.object({
+  ok: zod.boolean(),
+  status: zod.string(),
+  action: zod.string(),
+});
+
+/**
  * Public, unauthenticated lookup used during trader registration to
 let the trader pick a confirmed match (which auto-populates address
 and town). Returns up to 6 best matches. Queries shorter than 3

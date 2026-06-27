@@ -21,6 +21,7 @@ import type {
   AdminConversationResponse,
   AdminListReviewsParams,
   AdminReviewsResponse,
+  AdminUserReportListResponse,
   AuthResponse,
   CancelConversationRequest,
   CategoriesResponse,
@@ -31,6 +32,7 @@ import type {
   ConversationMessage,
   CreateCheckoutRequest,
   CreateEnquiryRequest,
+  CreateReportRequest,
   CreateReviewRequest,
   DeleteTraderDocumentResponse,
   DemoActivateResponse,
@@ -41,6 +43,7 @@ import type {
   ErrorResponse,
   GetAccountDeletionStatus200,
   GetAdminConversationReportsParams,
+  GetAdminUserReportsParams,
   GetFeaturedTradersParams,
   HandleStripeWebhookBody,
   HealthStatus,
@@ -64,12 +67,14 @@ import type {
   RegisterTraderDocumentResponse,
   RegisterTraderRequest,
   ReplyToReviewRequest,
+  ReportCategoriesResponse,
   ReportConversationRequest,
   RequestCustomerUploadUrlRequest,
   RequestUploadUrlRequest,
   ResendVerificationRequest,
   ResolveReportRequest,
   ResolveReportResponse,
+  ResolveUserReportRequest,
   RetryAfterErrorResponse,
   RevalidateProfileResponse,
   Review,
@@ -5107,6 +5112,358 @@ export const useResolveAdminConversationReport = <
   TContext
 > => {
   return useMutation(getResolveAdminConversationReportMutationOptions(options));
+};
+
+/**
+ * @summary File a profile-level report (customer reports a trader, trader reports a customer)
+ */
+export const getCreateReportUrl = () => {
+  return `/api/reports`;
+};
+
+export const createReport = async (
+  createReportRequest: CreateReportRequest,
+  options?: RequestInit,
+): Promise<OkResponse> => {
+  return customFetch<OkResponse>(getCreateReportUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createReportRequest),
+  });
+};
+
+export const getCreateReportMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createReport>>,
+    TError,
+    { data: BodyType<CreateReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createReport>>,
+  TError,
+  { data: BodyType<CreateReportRequest> },
+  TContext
+> => {
+  const mutationKey = ["createReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createReport>>,
+    { data: BodyType<CreateReportRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createReport(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createReport>>
+>;
+export type CreateReportMutationBody = BodyType<CreateReportRequest>;
+export type CreateReportMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary File a profile-level report (customer reports a trader, trader reports a customer)
+ */
+export const useCreateReport = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createReport>>,
+    TError,
+    { data: BodyType<CreateReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createReport>>,
+  TError,
+  { data: BodyType<CreateReportRequest> },
+  TContext
+> => {
+  return useMutation(getCreateReportMutationOptions(options));
+};
+
+/**
+ * @summary Predefined report reason categories, keyed by the subject being reported
+ */
+export const getGetReportCategoriesUrl = () => {
+  return `/api/report-categories`;
+};
+
+export const getReportCategories = async (
+  options?: RequestInit,
+): Promise<ReportCategoriesResponse> => {
+  return customFetch<ReportCategoriesResponse>(getGetReportCategoriesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetReportCategoriesQueryKey = () => {
+  return [`/api/report-categories`] as const;
+};
+
+export const getGetReportCategoriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getReportCategories>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getReportCategories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetReportCategoriesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getReportCategories>>
+  > = ({ signal }) => getReportCategories({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getReportCategories>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetReportCategoriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getReportCategories>>
+>;
+export type GetReportCategoriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Predefined report reason categories, keyed by the subject being reported
+ */
+
+export function useGetReportCategories<
+  TData = Awaited<ReturnType<typeof getReportCategories>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getReportCategories>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetReportCategoriesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin — list profile-level reports
+ */
+export const getGetAdminUserReportsUrl = (
+  params?: GetAdminUserReportsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/user-reports?${stringifiedParams}`
+    : `/api/admin/user-reports`;
+};
+
+export const getAdminUserReports = async (
+  params?: GetAdminUserReportsParams,
+  options?: RequestInit,
+): Promise<AdminUserReportListResponse> => {
+  return customFetch<AdminUserReportListResponse>(
+    getGetAdminUserReportsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetAdminUserReportsQueryKey = (
+  params?: GetAdminUserReportsParams,
+) => {
+  return [`/api/admin/user-reports`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAdminUserReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminUserReports>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAdminUserReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAdminUserReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAdminUserReportsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminUserReports>>
+  > = ({ signal }) =>
+    getAdminUserReports(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminUserReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminUserReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminUserReports>>
+>;
+export type GetAdminUserReportsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Admin — list profile-level reports
+ */
+
+export function useGetAdminUserReports<
+  TData = Awaited<ReturnType<typeof getAdminUserReports>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAdminUserReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAdminUserReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminUserReportsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Admin — resolve or dismiss a profile-level report
+ */
+export const getResolveAdminUserReportUrl = (id: number) => {
+  return `/api/admin/user-reports/${id}/resolve`;
+};
+
+export const resolveAdminUserReport = async (
+  id: number,
+  resolveUserReportRequest: ResolveUserReportRequest,
+  options?: RequestInit,
+): Promise<ResolveReportResponse> => {
+  return customFetch<ResolveReportResponse>(getResolveAdminUserReportUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(resolveUserReportRequest),
+  });
+};
+
+export const getResolveAdminUserReportMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resolveAdminUserReport>>,
+    TError,
+    { id: number; data: BodyType<ResolveUserReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof resolveAdminUserReport>>,
+  TError,
+  { id: number; data: BodyType<ResolveUserReportRequest> },
+  TContext
+> => {
+  const mutationKey = ["resolveAdminUserReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof resolveAdminUserReport>>,
+    { id: number; data: BodyType<ResolveUserReportRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return resolveAdminUserReport(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ResolveAdminUserReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof resolveAdminUserReport>>
+>;
+export type ResolveAdminUserReportMutationBody =
+  BodyType<ResolveUserReportRequest>;
+export type ResolveAdminUserReportMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Admin — resolve or dismiss a profile-level report
+ */
+export const useResolveAdminUserReport = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof resolveAdminUserReport>>,
+    TError,
+    { id: number; data: BodyType<ResolveUserReportRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof resolveAdminUserReport>>,
+  TError,
+  { id: number; data: BodyType<ResolveUserReportRequest> },
+  TContext
+> => {
+  return useMutation(getResolveAdminUserReportMutationOptions(options));
 };
 
 /**

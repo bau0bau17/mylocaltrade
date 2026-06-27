@@ -1141,6 +1141,87 @@ export interface ReplyToReviewRequest {
   reply: string;
 }
 
+export type CreateReportRequestReportedRole =
+  (typeof CreateReportRequestReportedRole)[keyof typeof CreateReportRequestReportedRole];
+
+export const CreateReportRequestReportedRole = {
+  trader: "trader",
+  customer: "customer",
+} as const;
+
+export interface CreateReportRequest {
+  reportedRole: CreateReportRequestReportedRole;
+  /** Required when reportedRole is "trader". */
+  traderProfileId?: number;
+  category: string;
+  /** @maxLength 2000 */
+  detail?: string;
+  /** Required when reportedRole is "customer" (the customer is derived from this conversation). Optional context for trader reports. */
+  conversationId?: number;
+}
+
+export interface ReportCategoryOption {
+  value: string;
+  label: string;
+}
+
+export type ReportCategoriesResponseCategories = {
+  trader: ReportCategoryOption[];
+  customer: ReportCategoryOption[];
+};
+
+export interface ReportCategoriesResponse {
+  categories: ReportCategoriesResponseCategories;
+}
+
+export type AdminUserReportStatus =
+  (typeof AdminUserReportStatus)[keyof typeof AdminUserReportStatus];
+
+export const AdminUserReportStatus = {
+  OPEN: "OPEN",
+  RESOLVED: "RESOLVED",
+  DISMISSED: "DISMISSED",
+} as const;
+
+export interface AdminUserReport {
+  id: number;
+  reporterUserId: number;
+  reporterRole: string;
+  reporterName?: string | null;
+  reporterEmail?: string | null;
+  reportedUserId: number;
+  reportedRole: string;
+  reportedName?: string | null;
+  reportedEmail?: string | null;
+  reportedTraderProfileId?: number | null;
+  reportedTraderBusinessName?: string | null;
+  category: string;
+  categoryLabel: string;
+  detail?: string | null;
+  status: AdminUserReportStatus;
+  resolutionNotes?: string | null;
+  resolvedAt?: string | null;
+  conversationId?: number | null;
+  createdAt: string;
+}
+
+export interface AdminUserReportListResponse {
+  reports: AdminUserReport[];
+}
+
+export type ResolveUserReportRequestAction =
+  (typeof ResolveUserReportRequestAction)[keyof typeof ResolveUserReportRequestAction];
+
+export const ResolveUserReportRequestAction = {
+  resolve: "resolve",
+  dismiss: "dismiss",
+} as const;
+
+export interface ResolveUserReportRequest {
+  action: ResolveUserReportRequestAction;
+  notes?: string;
+}
+
 export type ListTradersParams = {
   category?: string;
   location?: string;
@@ -1224,6 +1305,19 @@ export type GetAdminConversationReportsStatus =
   (typeof GetAdminConversationReportsStatus)[keyof typeof GetAdminConversationReportsStatus];
 
 export const GetAdminConversationReportsStatus = {
+  OPEN: "OPEN",
+  RESOLVED: "RESOLVED",
+  DISMISSED: "DISMISSED",
+} as const;
+
+export type GetAdminUserReportsParams = {
+  status?: GetAdminUserReportsStatus;
+};
+
+export type GetAdminUserReportsStatus =
+  (typeof GetAdminUserReportsStatus)[keyof typeof GetAdminUserReportsStatus];
+
+export const GetAdminUserReportsStatus = {
   OPEN: "OPEN",
   RESOLVED: "RESOLVED",
   DISMISSED: "DISMISSED",

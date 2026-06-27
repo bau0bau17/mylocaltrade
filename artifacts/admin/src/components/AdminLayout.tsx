@@ -15,6 +15,7 @@ import {
   LogOut,
   Shield,
   ShieldAlert,
+  Flag,
   Tag,
   Trash2,
 } from "lucide-react";
@@ -33,6 +34,7 @@ const NAV: NavItem[] = [
   { href: "/enquiries", label: "Enquiries", icon: Mail },
   { href: "/reviews", label: "Reviews", icon: Star },
   { href: "/conversation-reports", label: "Conversation reports", icon: ShieldAlert },
+  { href: "/user-reports", label: "User reports", icon: Flag },
   { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/promo-codes", label: "Promo codes", icon: Tag },
   { href: "/account-deletions", label: "Account deletions", icon: Trash2 },

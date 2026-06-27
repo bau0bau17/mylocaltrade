@@ -380,6 +380,24 @@ export default function TraderProfileScreen() {
                   <Text style={styles.contactText}>{trader.businessAddress}</Text>
                 </View>
               )}
+              {!isAdmin && !isTraderViewer ? (
+                <Pressable
+                  style={styles.contactRow}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/report-trader',
+                      params: { traderId: String(trader.id), name: trader.businessName },
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Report ${trader.businessName}`}
+                >
+                  <View style={styles.contactIconWrap}>
+                    <Feather name="flag" size={14} color={Colors.light.textSecondary} />
+                  </View>
+                  <Text style={styles.contactText}>Report this trader</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         </View>

@@ -519,6 +519,21 @@ export default function ConversationThreadScreen() {
                 ? [{ text: "Close conversation", onPress: onClose, style: "destructive" as const }]
                 : []),
               { text: "Report this conversation", onPress: onReport },
+              ...(isTrader
+                ? [
+                    {
+                      text: "Report this customer",
+                      onPress: () =>
+                        router.push({
+                          pathname: "/report-customer",
+                          params: {
+                            conversationId: String(conversationId),
+                            name: conv.customerName ?? "",
+                          },
+                        }),
+                    },
+                  ]
+                : []),
             ])
           }
         >
