@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type {
@@ -67,12 +67,13 @@ const AI_FILTER_OPTIONS: { value: AiVerificationStatus | "NONE"; label: string }
 ];
 
 function useQueryParams() {
-  const [location] = useLocation();
-  return useMemo(() => {
-    const idx = location.indexOf("?");
-    if (idx < 0) return new URLSearchParams();
-    return new URLSearchParams(location.slice(idx + 1));
-  }, [location]);
+  // wouter's `useLocation()` returns the pathname only — the query string is
+  // not included — so query params must be read via `useSearch()`. Reading them
+  // from the location string instead silently dropped incoming filters (e.g. a
+  // dashboard link to `/traders?status=PROFILE_INCOMPLETE` fell back to the
+  // default status and showed nothing).
+  const search = useSearch();
+  return useMemo(() => new URLSearchParams(search), [search]);
 }
 
 export default function Traders() {

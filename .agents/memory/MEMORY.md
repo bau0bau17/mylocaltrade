@@ -15,6 +15,7 @@
 - [Local Mac dev + GitHub sync](local-mac-dev-and-github-sync.md) — user RUNS Expo/Metro on their own Mac, not Replit; deliver fixes via `git checkout origin/replit-agent -- <files>` then `expo start -c`; Replit terminal can't push to GitHub.
 - [Dependency security overrides](dependency-security-overrides.md) — patch transitive CVEs via pnpm-workspace overrides; get exact patched ranges from npm bulk advisory endpoint (qs/ws/uuid "latest patch" can still be vulnerable).
 - [promo-video typecheck pre-broken](promo-video-typecheck-pre-broken.md) — `artifacts/promo-video` fails `tsc` (no DOM lib + framer-motion Variant types); workspace-wide typecheck/build fails there regardless of your change.
+- [wouter query string](wouter-query-string.md) — wouter v3 useLocation() is pathname-only; read query params via useSearch() (parsing the location string drops incoming ?filters and resets to default).
 - [Admin account bootstrap](admin-account-bootstrap.md) — no admin self-signup; admins are promoted. First prod admin via secret-gated startup bootstrap (ADMIN_BOOTSTRAP_EMAIL), since prod DB is read-only & every admin route is adminOnly.
 - [Production public base URL](prod-public-base-url.md) — email/link host must prefer REPLIT_DOMAINS; REPLIT_DEV_DOMAIN is dev-only & absent in deployment, so links silently fall back to localhost in prod.
 - [Email deliverability (Brevo)](email-deliverability.md) — spam/unverified = DNS auth (SPF/DKIM/DMARC), not code; deferred code boost = plain-text part; NO List-Unsubscribe on OTP/verification mail.

@@ -292,9 +292,37 @@ describe("Traders list — pagination", () => {
   });
 });
 
+describe("Traders list — initial filter from URL query", () => {
+  beforeEach(() => {
+    apiMock.mockReset();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("applies the status filter from the URL query string (e.g. a dashboard 'Profile incomplete' link)", async () => {
+    window.history.replaceState(null, "", "/traders?status=PROFILE_INCOMPLETE");
+    apiMock.mockResolvedValue(
+      buildResponse([
+        makeRow({
+          userId: 42,
+          verificationStatus: "PROFILE_INCOMPLETE",
+          businessName: null,
+        }),
+      ]),
+    );
+    renderList();
+
+    await screen.findByTestId("row-trader-42");
+    expect(apiMock.mock.calls[0][1].query.status).toBe("PROFILE_INCOMPLETE");
+    expect(screen.getByTestId("status-PROFILE_INCOMPLETE")).toHaveTextContent(
+      "Profile incomplete",
+    );
+  });
+});
+
 describe("Traders list — loading, empty, and error states", () => {
   beforeEach(() => {
     apiMock.mockReset();
+    window.history.replaceState(null, "", "/");
   });
 
   it("renders skeleton placeholders while the first page is still loading", () => {
