@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
+import { bootstrapAdminFromEnv } from "./lib/admin-bootstrap";
 
 const rawPort = process.env["PORT"];
 
@@ -19,4 +20,5 @@ if (Number.isNaN(port) || port <= 0) {
 app.listen(port, () => {
   logger.info({ port }, "Server listening");
   startScheduler();
+  void bootstrapAdminFromEnv();
 });
