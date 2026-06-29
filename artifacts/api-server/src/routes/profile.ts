@@ -405,6 +405,14 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       rating: updated.rating,
       reviewCount: updated.reviewCount,
       createdAt: updated.createdAt.toISOString(),
+      // Authoritative onboarding verdict so the client never has to guess
+      // whether the save was enough to advance. The server is the single
+      // source of truth for completion; the client mirrors these to decide
+      // whether to move the trader on or show exactly what is still missing.
+      businessProfileComplete: evalResult.complete,
+      businessProfileMissing: evalResult.requirements
+        .filter(r => !r.satisfied)
+        .map(r => r.label),
     });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "ZodError") {

@@ -200,6 +200,25 @@ export default function BusinessProfileScreen() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to save');
+      // The server is the single source of truth for whether the business
+      // profile is complete enough to advance onboarding. We only move the
+      // trader on when the server POSITIVELY confirms completion. Anything else
+      // (an explicit `false`, or a missing/old field) keeps them on this screen
+      // with a clear reason — never a silent bounce back to a dashboard that
+      // still reads "Action required", which looks like "saving did nothing".
+      if (json.businessProfileComplete !== true) {
+        setAttemptedSave(true);
+        const missing: string[] =
+          Array.isArray(json.businessProfileMissing) && json.businessProfileMissing.length > 0
+            ? json.businessProfileMissing
+            : requirements.filter(r => !r.satisfied).map(r => r.label);
+        setError(
+          missing.length > 0
+            ? `Your changes were saved, but a few details still need attention before you can continue: ${missing.join(', ')}.`
+            : 'Your changes were saved, but we could not confirm your profile is complete. Please review the required fields and try again.',
+        );
+        return;
+      }
       setCompleted(true);
       // Navigate straight to the trader dashboard. We previously used
       // Alert.alert as a confirmation, but native alerts do not render
