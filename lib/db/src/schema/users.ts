@@ -40,6 +40,12 @@ export const usersTable = pgTable("users", {
   emailVerified: boolean("email_verified").notNull().default(false),
   emailVerificationToken: text("email_verification_token"),
   emailVerificationSentAt: timestamp("email_verification_sent_at"),
+  // In-app email verification code (6-digit OTP). Mirrors the trader phone
+  // OTP fields. The link-based token above remains as a web fallback; both
+  // paths verify the same account.
+  emailOtpHash: text("email_otp_hash"),
+  emailOtpExpiresAt: timestamp("email_otp_expires_at"),
+  emailOtpAttempts: integer("email_otp_attempts").notNull().default(0),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   plan: varchar("plan", { length: 20 }),

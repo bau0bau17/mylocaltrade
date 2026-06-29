@@ -21,3 +21,4 @@
 - [Email deliverability (Brevo)](email-deliverability.md) — spam/unverified = DNS auth (SPF/DKIM/DMARC), not code; deferred code boost = plain-text part; NO List-Unsubscribe on OTP/verification mail.
 - [EAS iOS builds](eas-ios-builds.md) — profiles→backends; "Unable to install"=simulator/device-profile issue; EAS_NO_VCS=1 needed in sandbox (Git ref None tradeoff); preview points at dev domain.
 - [Monorepo project-reference stale .d.ts](monorepo-project-reference-dts.md) — editing lib/* src isn't enough; dependents typecheck against emitted dist .d.ts. Rebuild: `tsc -b lib/<pkg>/tsconfig.json --force`.
+- [Email OTP verification](email-otp-verification.md) — in-app code is primary, link is fallback; share ONE finalize helper; unauthenticated verify must collapse all non-lockout failures to one generic 400 (+dummy bcrypt) to avoid enumeration.

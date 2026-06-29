@@ -11,6 +11,7 @@ import {
   registerCustomer as apiRegisterCustomer,
   registerTrader as apiRegisterTrader,
   resendVerificationEmail as apiResendVerificationEmail,
+  verifyEmailCode as apiVerifyEmailCode,
 } from '@workspace/api-client-react';
 import {
   registerForPushNotificationsAsync,
@@ -35,6 +36,13 @@ interface AuthContextType {
   registerCustomer: (data: RegisterCustomerRequest) => Promise<{ email: string; pollToken: string }>;
   registerTrader: (data: RegisterTraderRequest) => Promise<{ email: string; pollToken: string }>;
   resendVerification: (email: string) => Promise<void>;
+  /**
+   * Verify an email address with the 6-digit code from the verification email.
+   * On success the server returns a full session, so the user is signed in
+   * immediately (no bounce out to the browser). Returns the signed-in profile
+   * so callers can route by role.
+   */
+  verifyEmailCode: (email: string, code: string) => Promise<UserProfile>;
   logout: () => Promise<void>;
   /**
    * Swap the active bearer token (and optionally the cached user) without
@@ -142,6 +150,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const verifyEmailCode = async (email: string, code: string): Promise<UserProfile> => {
+    try {
+      const response = await apiVerifyEmailCode({ email, code });
+      await AsyncStorage.setItem('auth_token', response.token);
+      await AsyncStorage.setItem('auth_user', JSON.stringify(response.user));
+      setToken(response.token);
+      setUser(response.user);
+      void registerForPushNotificationsAsync();
+      return response.user;
+    } catch (err) {
+      throw extractApiError(err, 'Verification failed');
+    }
+  };
+
   const applyToken = async (newToken: string, newUser?: UserProfile) => {
     await AsyncStorage.setItem('auth_token', newToken);
     setToken(newToken);
@@ -169,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         registerCustomer,
         registerTrader,
         resendVerification,
+        verifyEmailCode,
         logout,
         applyToken,
         isAuthenticated: !!user,

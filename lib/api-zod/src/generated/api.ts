@@ -103,6 +103,51 @@ export const ResendVerificationEmailResponse = zod.object({
 });
 
 /**
+ * Primary in-app email verification flow. The user enters the 6-digit
+code from their verification email and, on success, is signed in
+immediately — the response is a full session (same shape as
+/auth/login), so the mobile UX never has to bounce out to the browser.
+The web-link path (GET /auth/verify-email) remains as a fallback.
+
+ * @summary Verify an email address with the 6-digit code
+ */
+export const verifyEmailCodeBodyCodeRegExp = new RegExp("^[0-9]{6}$");
+
+export const VerifyEmailCodeBody = zod.object({
+  email: zod.string().email(),
+  code: zod
+    .string()
+    .regex(verifyEmailCodeBodyCodeRegExp)
+    .describe("The 6-digit verification code from the email."),
+});
+
+export const VerifyEmailCodeResponse = zod.object({
+  token: zod.string(),
+  user: zod.object({
+    id: zod.number(),
+    email: zod.string(),
+    fullName: zod.string(),
+    role: zod.enum(["customer", "trader", "admin"]),
+    isActive: zod.boolean(),
+    plan: zod.string().nullish(),
+    pushNotificationsEnabled: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Global toggle for push notifications across all conversations",
+      ),
+    createdAt: zod.date().optional(),
+    deletionStatus: zod
+      .string()
+      .nullish()
+      .describe(
+        "GDPR account-deletion lifecycle stage. Null for normal accounts.\nREQUESTED \/ DISABLED_PENDING_RETENTION are still cancellable from\nthe mobile client. ANONYMISED \/ COMPLETED are terminal — those\nusers cannot reach this endpoint.\n",
+      ),
+    deletionRequestedAt: zod.date().nullish(),
+  }),
+});
+
+/**
  * @summary Log in
  */
 export const LoginBody = zod.object({

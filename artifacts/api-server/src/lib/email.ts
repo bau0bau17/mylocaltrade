@@ -289,8 +289,11 @@ export async function sendVerificationEmail(
   toEmail: string,
   toName: string,
   token: string,
+  code: string,
+  codeExpiresInMinutes = 10,
 ): Promise<void> {
   const verifyUrl = `${getApiBaseUrl()}/api/auth/verify-email?token=${token}`;
+  const safeCode = escapeHtml(code);
   const html = `
 <!DOCTYPE html>
 <html>
@@ -307,10 +310,22 @@ export async function sendVerificationEmail(
       <p style="color: #9CA3AF; font-size: 14px; margin: 0;">Verify your email address</p>
     </div>
     <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${escapeHtml(toName)},</p>
-    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 32px;">
-      Thanks for signing up to MyLocalTrade. Please verify your email address to activate your account.
+    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+      Thanks for signing up to MyLocalTrade. Enter the code below in the app to verify your email address and activate your account.
     </p>
-    <div style="text-align: center; margin-bottom: 32px;">
+    <div style="text-align: center; margin: 0 0 12px;">
+      <div style="display: inline-block; background: #0B1120; border: 1px solid #1F2937; border-radius: 12px; padding: 18px 32px;">
+        <span style="color: #00B4D8; font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: 'Courier New', monospace;">${safeCode}</span>
+      </div>
+    </div>
+    <p style="color: #9CA3AF; font-size: 13px; text-align: center; line-height: 1.6; margin: 0 0 32px;">
+      This code expires in ${codeExpiresInMinutes} minutes.
+    </p>
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
+    <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 0 0 16px;">
+      Not using the app? You can verify in your browser instead:
+    </p>
+    <div style="text-align: center; margin-bottom: 24px;">
       <a href="${verifyUrl}"
          style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 16px; padding: 14px 40px; border-radius: 12px; text-decoration: none;">
         Verify Email Address
@@ -322,7 +337,7 @@ export async function sendVerificationEmail(
     <p style="color: #00B4D8; font-size: 13px; word-break: break-all; margin: 0 0 32px;">${verifyUrl}</p>
     <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
     <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.<br><br>
+      The verification link expires in 24 hours. If you didn't create an account, you can safely ignore this email.<br><br>
       Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ
     </p>
   </div>
@@ -330,12 +345,16 @@ export async function sendVerificationEmail(
 </html>`;
   const text = `Hi ${toName},
 
-Thanks for signing up to MyLocalTrade. Please verify your email address to activate your account.
+Thanks for signing up to MyLocalTrade. Enter this code in the app to verify your email address and activate your account:
 
-Verify your email address:
+${code}
+
+This code expires in ${codeExpiresInMinutes} minutes.
+
+Not using the app? You can verify in your browser instead:
 ${verifyUrl}
 
-This link expires in 24 hours. If you didn't create an account, you can safely ignore this email.
+The verification link expires in 24 hours. If you didn't create an account, you can safely ignore this email.
 
 Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ`;
   await dispatchEmail({

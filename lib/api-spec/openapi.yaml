@@ -159,6 +159,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/RetryAfterErrorResponse"
 
+  /auth/verify-email-code:
+    post:
+      operationId: verifyEmailCode
+      tags: [auth]
+      summary: Verify an email address with the 6-digit code
+      description: |
+        Primary in-app email verification flow. The user enters the 6-digit
+        code from their verification email and, on success, is signed in
+        immediately — the response is a full session (same shape as
+        /auth/login), so the mobile UX never has to bounce out to the browser.
+        The web-link path (GET /auth/verify-email) remains as a fallback.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailCodeRequest"
+      responses:
+        "200":
+          description: Verified — session issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid, expired, or incorrect code (uniform response; does not disclose account state)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many incorrect attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/login:
     post:
       operationId: login
@@ -2113,6 +2150,20 @@ components:
           format: email
       required:
         - email
+
+    VerifyEmailCodeRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          description: The 6-digit verification code from the email.
+          pattern: "^[0-9]{6}$"
+      required:
+        - email
+        - code
 
     MessageResponse:
       type: object

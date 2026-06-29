@@ -154,3 +154,4 @@ export * from "./uploadUrlResponse";
 export * from "./uploadUrlResponseExpectedHeaders";
 export * from "./userProfile";
 export * from "./userProfileRole";
+export * from "./verifyEmailCodeRequest";

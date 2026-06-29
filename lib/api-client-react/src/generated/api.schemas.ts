@@ -89,6 +89,15 @@ export interface ResendVerificationRequest {
   email: string;
 }
 
+export interface VerifyEmailCodeRequest {
+  email: string;
+  /**
+   * The 6-digit verification code from the email.
+   * @pattern ^[0-9]{6}$
+   */
+  code: string;
+}
+
 export interface MessageResponse {
   message: string;
 }

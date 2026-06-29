@@ -30,6 +30,79 @@ import { traderDocumentsTable } from "@workspace/db/schema";
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
+// In-app email verification code (OTP). Mirrors the trader phone OTP policy.
+const EMAIL_OTP_TTL_MS = 10 * 60 * 1000;
+const EMAIL_OTP_TTL_MINUTES = EMAIL_OTP_TTL_MS / 60000;
+const EMAIL_OTP_MAX_ATTEMPTS = 5;
+
+// Fixed dummy hash compared against on the "no real OTP" branches so the
+// timing of an unknown / already-verified / expired email stays close to a
+// real code comparison (mitigates account-enumeration via response latency).
+const DUMMY_OTP_HASH = bcryptjs.hashSync("000000", 10);
+
+function generateEmailOtp(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+/** Mint a fresh 6-digit email OTP and its bcrypt hash + expiry. */
+async function createEmailOtp(): Promise<{ code: string; hash: string; expiresAt: Date }> {
+  const code = generateEmailOtp();
+  const hash = await bcryptjs.hash(code, 10);
+  const expiresAt = new Date(Date.now() + EMAIL_OTP_TTL_MS);
+  return { code, hash, expiresAt };
+}
+
+/**
+ * Marks a user's email as verified and applies every downstream side effect.
+ * Shared by BOTH verification paths — the web-link GET and the in-app code
+ * POST — so the two can never drift:
+ *   - clears the verification link token + OTP fields
+ *   - activates customers (isActive); traders stay inactive until payment
+ *   - transitions trader PENDING_EMAIL_VERIFICATION -> PENDING_PHONE_VERIFICATION
+ *     (idempotent, never downgrades)
+ *   - writes the EMAIL_VERIFIED audit log
+ * Callers must guard on `user.emailVerified` before invoking.
+ */
+async function finalizeEmailVerification(user: User): Promise<void> {
+  // Customers are activated immediately upon email verification. Traders are
+  // NOT activated here — trader activation only happens after a successful
+  // subscription payment webhook. Until then their account exists and they can
+  // sign in to complete onboarding, but `isActive` stays false so the profile
+  // is not publicly listed.
+  const activateOnVerify = user.role === "customer";
+
+  await db.update(usersTable)
+    .set({
+      emailVerified: true,
+      emailVerificationToken: null,
+      emailOtpHash: null,
+      emailOtpExpiresAt: null,
+      emailOtpAttempts: 0,
+      ...(activateOnVerify ? { isActive: true } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(usersTable.id, user.id));
+
+  if (user.role === "trader") {
+    const [profile] = await db
+      .select()
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, user.id))
+      .limit(1);
+    if (profile && profile.verificationStatus === TRADER_STATUS.PENDING_EMAIL_VERIFICATION) {
+      await db
+        .update(traderProfilesTable)
+        .set({
+          verificationStatus: TRADER_STATUS.PENDING_PHONE_VERIFICATION,
+          updatedAt: new Date(),
+        })
+        .where(eq(traderProfilesTable.userId, user.id));
+    }
+  }
+
+  logAudit({ userId: user.id, action: "EMAIL_VERIFIED" });
+}
+
 /**
  * Returns reopen context if `existing` refers to a user that has previously
  * been put through the account-deletion lifecycle (requested, retained,
@@ -99,6 +172,7 @@ router.post("/auth/register/customer", async (req, res) => {
 
     const passwordHash = await bcryptjs.hash(body.password, 12);
     const verificationToken = generateVerificationToken();
+    const emailOtp = await createEmailOtp();
 
     const user = await db.transaction(async (tx) => {
       if (reopen) await releasePriorEmail(tx, reopen.priorUserId, reopen.priorRole);
@@ -112,6 +186,9 @@ router.post("/auth/register/customer", async (req, res) => {
         emailVerified: false,
         emailVerificationToken: verificationToken,
         emailVerificationSentAt: new Date(),
+        emailOtpHash: emailOtp.hash,
+        emailOtpExpiresAt: emailOtp.expiresAt,
+        emailOtpAttempts: 0,
       }).returning();
       return created;
     });
@@ -130,7 +207,7 @@ router.post("/auth/register/customer", async (req, res) => {
       });
     }
 
-    sendVerificationEmail(user.email, user.fullName, verificationToken).catch((err) =>
+    sendVerificationEmail(user.email, user.fullName, verificationToken, emailOtp.code, EMAIL_OTP_TTL_MINUTES).catch((err) =>
       req.log.error({ err }, "Failed to send verification email")
     );
 
@@ -179,6 +256,7 @@ router.post("/auth/register/trader", async (req, res) => {
 
     const passwordHash = await bcryptjs.hash(body.password, 12);
     const verificationToken = generateVerificationToken();
+    const emailOtp = await createEmailOtp();
     const now = new Date();
 
     // If the trader picked a confirmed match from the Companies House live
@@ -271,6 +349,9 @@ router.post("/auth/register/trader", async (req, res) => {
         emailVerified: false,
         emailVerificationToken: verificationToken,
         emailVerificationSentAt: now,
+        emailOtpHash: emailOtp.hash,
+        emailOtpExpiresAt: emailOtp.expiresAt,
+        emailOtpAttempts: 0,
       }).returning();
 
       await tx.insert(traderProfilesTable).values({
@@ -325,7 +406,7 @@ router.post("/auth/register/trader", async (req, res) => {
       });
     }
 
-    sendVerificationEmail(result.email, result.fullName, verificationToken).catch((err) =>
+    sendVerificationEmail(result.email, result.fullName, verificationToken, emailOtp.code, EMAIL_OTP_TTL_MINUTES).catch((err) =>
       req.log.error({ err }, "Failed to send verification email")
     );
 
@@ -440,44 +521,7 @@ router.get("/auth/verify-email", async (req, res) => {
       return;
     }
 
-    // Customers are activated immediately upon email verification.
-    // Traders are NOT activated here — trader activation only happens after
-    // a successful subscription payment webhook (see /api/subscriptions/webhook
-    // and the demo-activate endpoint in routes/subscriptions.ts). Until then,
-    // their account exists and they can sign in to complete onboarding, but
-    // `users.isActive` and `trader_profiles.isActive` stay false so their
-    // profile is not publicly listed.
-    const activateOnVerify = user.role === "customer";
-
-    await db.update(usersTable)
-      .set({
-        emailVerified: true,
-        emailVerificationToken: null,
-        ...(activateOnVerify ? { isActive: true } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.id, user.id));
-
-    // Trader status transition: PENDING_EMAIL_VERIFICATION -> PENDING_PHONE_VERIFICATION
-    // Only transition if currently in the email-pending state (idempotent, never downgrade).
-    if (user.role === "trader") {
-      const [profile] = await db
-        .select()
-        .from(traderProfilesTable)
-        .where(eq(traderProfilesTable.userId, user.id))
-        .limit(1);
-      if (profile && profile.verificationStatus === TRADER_STATUS.PENDING_EMAIL_VERIFICATION) {
-        await db
-          .update(traderProfilesTable)
-          .set({
-            verificationStatus: TRADER_STATUS.PENDING_PHONE_VERIFICATION,
-            updatedAt: new Date(),
-          })
-          .where(eq(traderProfilesTable.userId, user.id));
-      }
-    }
-
-    logAudit({ userId: user.id, action: "EMAIL_VERIFIED" });
+    await finalizeEmailVerification(user);
 
     res.send(verifyPage("Email Verified!", "Your email has been verified. You can now log in to MyLocalTrade.", true));
   } catch (error) {
@@ -518,11 +562,19 @@ router.post("/auth/resend-verification", async (req, res) => {
     }
 
     const newToken = generateVerificationToken();
+    const newOtp = await createEmailOtp();
     await db.update(usersTable)
-      .set({ emailVerificationToken: newToken, emailVerificationSentAt: new Date(), updatedAt: new Date() })
+      .set({
+        emailVerificationToken: newToken,
+        emailVerificationSentAt: new Date(),
+        emailOtpHash: newOtp.hash,
+        emailOtpExpiresAt: newOtp.expiresAt,
+        emailOtpAttempts: 0,
+        updatedAt: new Date(),
+      })
       .where(eq(usersTable.id, user.id));
 
-    sendVerificationEmail(user.email, user.fullName, newToken).catch((err) =>
+    sendVerificationEmail(user.email, user.fullName, newToken, newOtp.code, EMAIL_OTP_TTL_MINUTES).catch((err) =>
       req.log.error({ err }, "Failed to send verification email")
     );
 
@@ -532,6 +584,105 @@ router.post("/auth/resend-verification", async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, "Resend verification failed");
     res.status(500).json({ error: "Failed to resend verification email" });
+  }
+});
+
+/**
+ * In-app email verification by 6-digit code. This is the primary mobile flow:
+ * the user enters the code from their email and is signed in immediately, so
+ * the UX never depends on bouncing out to the browser. The web-link path
+ * (GET /auth/verify-email) remains as a fallback. Both call the same
+ * finalizeEmailVerification helper.
+ *
+ * On success returns the same { token, user } shape as /auth/login.
+ */
+router.post("/auth/verify-email-code", async (req, res) => {
+  try {
+    const { email, code } = req.body as { email?: string; code?: string };
+    if (!email || typeof email !== "string" || !code || typeof code !== "string") {
+      res.status(400).json({ error: "Email and code are required" });
+      return;
+    }
+    const normalisedCode = code.trim();
+    if (!/^\d{6}$/.test(normalisedCode)) {
+      res.status(400).json({ error: "Enter the 6-digit code from your email.", code: "INVALID_CODE" });
+      return;
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+
+    // Uniform failure response. We deliberately do NOT distinguish between an
+    // unknown email, an already-verified account, a missing/expired code, or a
+    // wrong code — they all return the same generic 400 — so this unauthenticated
+    // endpoint cannot be used to enumerate which emails are registered or
+    // verified. The only state-specific response is the 429 lockout, which a
+    // caller can reach only for an account whose OTP attempts they are actively
+    // exhausting (after EMAIL_OTP_MAX_ATTEMPTS tries). A dummy bcrypt compare
+    // on the no-real-hash branches keeps response timing close to a real
+    // comparison, mitigating enumeration via latency.
+    const INVALID = { error: "That code is invalid or has expired. Please request a new one.", code: "INVALID_CODE" };
+
+    const hasActiveOtp =
+      !!user &&
+      !user.emailVerified &&
+      !!user.emailOtpHash &&
+      !!user.emailOtpExpiresAt &&
+      Date.now() <= new Date(user.emailOtpExpiresAt).getTime();
+
+    if (!user || !hasActiveOtp) {
+      await bcryptjs.compare(normalisedCode, DUMMY_OTP_HASH);
+      res.status(400).json(INVALID);
+      return;
+    }
+
+    if ((user.emailOtpAttempts ?? 0) >= EMAIL_OTP_MAX_ATTEMPTS) {
+      res.status(429).json({
+        error: "Too many incorrect attempts. Please request a new code.",
+        code: "TOO_MANY_ATTEMPTS",
+      });
+      return;
+    }
+
+    const matches = await bcryptjs.compare(normalisedCode, user.emailOtpHash!);
+    if (!matches) {
+      const attempts = (user.emailOtpAttempts ?? 0) + 1;
+      await db.update(usersTable)
+        .set({ emailOtpAttempts: attempts, updatedAt: new Date() })
+        .where(eq(usersTable.id, user.id));
+      if (attempts >= EMAIL_OTP_MAX_ATTEMPTS) {
+        res.status(429).json({
+          error: "Too many incorrect attempts. Please request a new code.",
+          code: "TOO_MANY_ATTEMPTS",
+        });
+        return;
+      }
+      res.status(400).json(INVALID);
+      return;
+    }
+
+    await finalizeEmailVerification(user);
+
+    const token = generateToken(user.id, user.role, user.tokenVersion);
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        // finalizeEmailVerification activates customers; traders stay inactive
+        // until subscription payment.
+        isActive: user.role === "customer" ? true : user.isActive,
+        plan: user.plan,
+        pushNotificationsEnabled: user.pushNotificationsEnabled,
+        createdAt: user.createdAt.toISOString(),
+        deletionStatus: user.deletionStatus ?? null,
+        deletionRequestedAt: user.deletionRequestedAt?.toISOString() ?? null,
+      },
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Email code verification failed");
+    res.status(500).json({ error: "Verification failed" });
   }
 });
 

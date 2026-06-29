@@ -101,6 +101,7 @@ import type {
   UpdateTraderStatusResponse,
   UploadUrlResponse,
   UserProfile,
+  VerifyEmailCodeRequest,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -462,6 +463,98 @@ export const useResendVerificationEmail = <
   TContext
 > => {
   return useMutation(getResendVerificationEmailMutationOptions(options));
+};
+
+/**
+ * Primary in-app email verification flow. The user enters the 6-digit
+code from their verification email and, on success, is signed in
+immediately — the response is a full session (same shape as
+/auth/login), so the mobile UX never has to bounce out to the browser.
+The web-link path (GET /auth/verify-email) remains as a fallback.
+
+ * @summary Verify an email address with the 6-digit code
+ */
+export const getVerifyEmailCodeUrl = () => {
+  return `/api/auth/verify-email-code`;
+};
+
+export const verifyEmailCode = async (
+  verifyEmailCodeRequest: VerifyEmailCodeRequest,
+  options?: RequestInit,
+): Promise<AuthResponse> => {
+  return customFetch<AuthResponse>(getVerifyEmailCodeUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(verifyEmailCodeRequest),
+  });
+};
+
+export const getVerifyEmailCodeMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyEmailCode>>,
+    TError,
+    { data: BodyType<VerifyEmailCodeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof verifyEmailCode>>,
+  TError,
+  { data: BodyType<VerifyEmailCodeRequest> },
+  TContext
+> => {
+  const mutationKey = ["verifyEmailCode"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof verifyEmailCode>>,
+    { data: BodyType<VerifyEmailCodeRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return verifyEmailCode(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type VerifyEmailCodeMutationResult = NonNullable<
+  Awaited<ReturnType<typeof verifyEmailCode>>
+>;
+export type VerifyEmailCodeMutationBody = BodyType<VerifyEmailCodeRequest>;
+export type VerifyEmailCodeMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Verify an email address with the 6-digit code
+ */
+export const useVerifyEmailCode = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof verifyEmailCode>>,
+    TError,
+    { data: BodyType<VerifyEmailCodeRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof verifyEmailCode>>,
+  TError,
+  { data: BodyType<VerifyEmailCodeRequest> },
+  TContext
+> => {
+  return useMutation(getVerifyEmailCodeMutationOptions(options));
 };
 
 /**
