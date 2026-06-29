@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -95,9 +95,13 @@ export default function VerifyPhoneScreen() {
       if (!res.ok) {
         throw new Error(json.error || 'Could not verify code');
       }
-      Alert.alert('Phone verified', 'Your phone number has been verified successfully.', [
-        { text: 'Continue', onPress: () => router.replace('/trader-dashboard') },
-      ]);
+      // Navigate straight to the dashboard on success. We previously showed an
+      // Alert.alert confirmation, but native alerts do not render reliably
+      // inside the web preview iframe — the verify succeeds on the server but
+      // the Continue button never appears, so the trader is stuck on this
+      // screen with no way forward. The dashboard refetches on focus and will
+      // show the phone step completed.
+      router.replace('/trader-dashboard');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not verify code');
     } finally {
