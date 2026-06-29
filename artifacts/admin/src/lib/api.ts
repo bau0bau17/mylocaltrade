@@ -34,15 +34,31 @@ export interface ApiOptions {
   query?: Record<string, string | number | boolean | undefined | null>;
 }
 
+/**
+ * Resolve the API origin. By default the admin dashboard talks to its own
+ * origin (same-origin in production). Setting VITE_API_BASE_URL to an absolute
+ * URL (e.g. https://mylocaltrade.replit.app) points the dev preview at a
+ * remote backend without affecting the deployed build. Trailing slashes are
+ * trimmed so URL composition stays predictable.
+ */
+const API_BASE_URL: string = (() => {
+  const configured = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  return window.location.origin;
+})();
+
 function buildUrl(path: string, query?: ApiOptions["query"]): string {
-  const url = new URL(path.startsWith("/") ? path : `/${path}`, window.location.origin);
+  const url = new URL(path.startsWith("/") ? path : `/${path}`, API_BASE_URL);
   if (query) {
     for (const [k, v] of Object.entries(query)) {
       if (v === undefined || v === null || v === "") continue;
       url.searchParams.set(k, String(v));
     }
   }
-  return url.pathname + url.search;
+  // When targeting a remote backend we must send absolute URLs; for same-origin
+  // a relative path keeps requests on the current host.
+  const isRemote = API_BASE_URL !== window.location.origin;
+  return isRemote ? url.toString() : url.pathname + url.search;
 }
 
 export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {

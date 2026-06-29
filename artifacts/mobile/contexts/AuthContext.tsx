@@ -12,6 +12,8 @@ import {
   registerTrader as apiRegisterTrader,
   resendVerificationEmail as apiResendVerificationEmail,
   verifyEmailCode as apiVerifyEmailCode,
+  forgotPassword as apiForgotPassword,
+  resetPassword as apiResetPassword,
 } from '@workspace/api-client-react';
 import {
   registerForPushNotificationsAsync,
@@ -43,6 +45,17 @@ interface AuthContextType {
    * so callers can route by role.
    */
   verifyEmailCode: (email: string, code: string) => Promise<UserProfile>;
+  /**
+   * Request a 6-digit password reset code by email. Always resolves (the
+   * server responds generically whether or not the email is registered).
+   */
+  forgotPassword: (email: string) => Promise<void>;
+  /**
+   * Complete a password reset with the 6-digit code and a new password. On
+   * success the server returns a full session, so the user is signed in
+   * immediately. Returns the signed-in profile so callers can route by role.
+   */
+  resetPassword: (email: string, code: string, newPassword: string) => Promise<UserProfile>;
   logout: () => Promise<void>;
   /**
    * Swap the active bearer token (and optionally the cached user) without
@@ -164,6 +177,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const forgotPassword = async (email: string): Promise<void> => {
+    try {
+      await apiForgotPassword({ email });
+    } catch (err) {
+      throw extractApiError(err, 'Could not send reset code');
+    }
+  };
+
+  const resetPassword = async (
+    email: string,
+    code: string,
+    newPassword: string,
+  ): Promise<UserProfile> => {
+    try {
+      const response = await apiResetPassword({ email, code, newPassword });
+      await AsyncStorage.setItem('auth_token', response.token);
+      await AsyncStorage.setItem('auth_user', JSON.stringify(response.user));
+      setToken(response.token);
+      setUser(response.user);
+      void registerForPushNotificationsAsync();
+      return response.user;
+    } catch (err) {
+      throw extractApiError(err, 'Password reset failed');
+    }
+  };
+
   const applyToken = async (newToken: string, newUser?: UserProfile) => {
     await AsyncStorage.setItem('auth_token', newToken);
     setToken(newToken);
@@ -192,6 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         registerTrader,
         resendVerification,
         verifyEmailCode,
+        forgotPassword,
+        resetPassword,
         logout,
         applyToken,
         isAuthenticated: !!user,

@@ -103,6 +103,74 @@ export const ResendVerificationEmailResponse = zod.object({
 });
 
 /**
+ * Sends a 6-digit password reset code to the account's email address.
+Always responds 200 with a generic message regardless of whether the
+email is registered (to avoid leaking which addresses have accounts).
+Works for all account types (customer, trader, admin). Rate-limited to
+one request per 60 seconds per account.
+
+ * @summary Request a password reset code
+ */
+export const ForgotPasswordBody = zod.object({
+  email: zod.string().email(),
+});
+
+export const ForgotPasswordResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * Completes the password reset: the user supplies the 6-digit code from
+the reset email plus a new password. On success the password is changed,
+all existing sessions are revoked, and a fresh session is issued (same
+shape as /auth/login), so the user is signed in immediately. If the
+account's email was not yet verified, a successful reset also verifies
+it (the code proves email control).
+
+ * @summary Reset a password with the 6-digit code
+ */
+export const resetPasswordBodyCodeRegExp = new RegExp("^[0-9]{6}$");
+export const resetPasswordBodyNewPasswordMin = 8;
+
+export const ResetPasswordBody = zod.object({
+  email: zod.string().email(),
+  code: zod
+    .string()
+    .regex(resetPasswordBodyCodeRegExp)
+    .describe("The 6-digit password reset code from the email."),
+  newPassword: zod
+    .string()
+    .min(resetPasswordBodyNewPasswordMin)
+    .describe("The new password (minimum 8 characters)."),
+});
+
+export const ResetPasswordResponse = zod.object({
+  token: zod.string(),
+  user: zod.object({
+    id: zod.number(),
+    email: zod.string(),
+    fullName: zod.string(),
+    role: zod.enum(["customer", "trader", "admin"]),
+    isActive: zod.boolean(),
+    plan: zod.string().nullish(),
+    pushNotificationsEnabled: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Global toggle for push notifications across all conversations",
+      ),
+    createdAt: zod.date().optional(),
+    deletionStatus: zod
+      .string()
+      .nullish()
+      .describe(
+        "GDPR account-deletion lifecycle stage. Null for normal accounts.\nREQUESTED \/ DISABLED_PENDING_RETENTION are still cancellable from\nthe mobile client. ANONYMISED \/ COMPLETED are terminal — those\nusers cannot reach this endpoint.\n",
+      ),
+    deletionRequestedAt: zod.date().nullish(),
+  }),
+});
+
+/**
  * Primary in-app email verification flow. The user enters the 6-digit
 code from their verification email and, on success, is signed in
 immediately — the response is a full session (same shape as

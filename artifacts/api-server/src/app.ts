@@ -164,6 +164,8 @@ app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 app.use("/api/auth/resend-verification", resendLimiter);
+app.use("/api/auth/forgot-password", resendLimiter);
+app.use("/api/auth/reset-password", authLimiter);
 app.use("/api/trader/phone/send-otp", resendLimiter);
 app.use("/api/contact", contactLimiter);
 app.use("/api/enquiries", enquiriesLimiter);

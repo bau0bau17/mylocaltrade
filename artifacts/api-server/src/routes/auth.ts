@@ -18,7 +18,7 @@ import {
   generatePollToken,
   verifyPollToken,
 } from "../lib/auth";
-import { sendVerificationEmail, generateVerificationToken } from "../lib/email";
+import { sendVerificationEmail, sendPasswordResetEmail, generateVerificationToken } from "../lib/email";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, logAudit, buildOnboardingChecklist, statusMessage, isTraderProfilePublic, evaluateBusinessProfileComplete, evaluateDocumentsComplete } from "../lib/trader-status";
 import { ACCOUNT_DELETION_STATUSES, type User } from "@workspace/db/schema";
@@ -50,6 +50,32 @@ async function createEmailOtp(): Promise<{ code: string; hash: string; expiresAt
   const hash = await bcryptjs.hash(code, 10);
   const expiresAt = new Date(Date.now() + EMAIL_OTP_TTL_MS);
   return { code, hash, expiresAt };
+}
+
+// Password reset code (OTP). Mirrors the email verification OTP policy.
+const PASSWORD_RESET_TTL_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_TTL_MINUTES = PASSWORD_RESET_TTL_MS / 60000;
+const PASSWORD_RESET_MAX_ATTEMPTS = 5;
+
+/** Mint a fresh 6-digit password reset OTP and its bcrypt hash + expiry. */
+async function createPasswordResetOtp(): Promise<{ code: string; hash: string; expiresAt: Date }> {
+  const code = generateEmailOtp();
+  const hash = await bcryptjs.hash(code, 10);
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+  return { code, hash, expiresAt };
+}
+
+/**
+ * True for accounts that have been irreversibly anonymised or finalised —
+ * there is no meaningful password to reset on these, so the reset flow treats
+ * them as if the account does not exist.
+ */
+function isAccountUnreachable(user: User): boolean {
+  return (
+    !!user.deletedAt ||
+    user.deletionStatus === "ANONYMISED" ||
+    user.deletionStatus === "COMPLETED"
+  );
 }
 
 /**
@@ -683,6 +709,208 @@ router.post("/auth/verify-email-code", async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, "Email code verification failed");
     res.status(500).json({ error: "Verification failed" });
+  }
+});
+
+/**
+ * Step 1 of password reset: request a 6-digit reset code by email. Works for
+ * every account type (customer, trader, admin). Always responds with a generic
+ * 200 — it never reveals whether the email is registered (account-enumeration
+ * resistance) and is rate-limited (60s cooldown per account, plus the
+ * resendLimiter at the app layer).
+ */
+router.post("/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body as { email?: string };
+    if (!email || typeof email !== "string") {
+      res.status(400).json({ error: "Email is required" });
+      return;
+    }
+
+    const GENERIC_RESPONSE = {
+      message: "If an account exists with that email, a password reset code has been sent.",
+    };
+
+    const normalisedEmail = email.trim().toLowerCase();
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, normalisedEmail))
+      .limit(1);
+
+    // Unknown email or an irreversibly deleted/anonymised account: respond
+    // generically without sending anything.
+    if (!user || isAccountUnreachable(user)) {
+      res.json(GENERIC_RESPONSE);
+      return;
+    }
+
+    // 60s cooldown between reset requests — enforced server-side but not
+    // surfaced, to avoid leaking account state.
+    if (user.passwordResetSentAt) {
+      const elapsed = Date.now() - new Date(user.passwordResetSentAt).getTime();
+      if (elapsed < RESEND_COOLDOWN_MS) {
+        res.json(GENERIC_RESPONSE);
+        return;
+      }
+    }
+
+    const otp = await createPasswordResetOtp();
+    await db
+      .update(usersTable)
+      .set({
+        passwordResetOtpHash: otp.hash,
+        passwordResetOtpExpiresAt: otp.expiresAt,
+        passwordResetOtpAttempts: 0,
+        passwordResetSentAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, user.id));
+
+    sendPasswordResetEmail(user.email, user.fullName, otp.code, PASSWORD_RESET_TTL_MINUTES).catch((err) =>
+      req.log.error({ err }, "Failed to send password reset email"),
+    );
+
+    logAudit({ userId: user.id, action: "PASSWORD_RESET_REQUESTED" });
+
+    res.json(GENERIC_RESPONSE);
+  } catch (error) {
+    req.log.error({ err: error }, "Forgot password failed");
+    res.status(500).json({ error: "Failed to process password reset request" });
+  }
+});
+
+/**
+ * Step 2 of password reset: verify the 6-digit code and set a new password.
+ * On success the password is changed, every existing session is revoked
+ * (tokenVersion bump) and a fresh session is issued (same { token, user }
+ * shape as /auth/login), so the user is signed in immediately. A successful
+ * reset also verifies the email if it wasn't already (the emailed code proves
+ * control of the inbox). Uniform 400 INVALID response on any bad/expired code
+ * to avoid disclosing account state; per-account attempt cap mirrors the email
+ * verification flow.
+ */
+router.post("/auth/reset-password", async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body as {
+      email?: string;
+      code?: string;
+      newPassword?: string;
+    };
+
+    if (!email || typeof email !== "string" || !code || typeof code !== "string") {
+      res.status(400).json({ error: "Email and code are required" });
+      return;
+    }
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+      res.status(400).json({ error: "New password must be at least 8 characters." });
+      return;
+    }
+
+    const INVALID = { error: "Invalid or expired code." };
+    const normalisedEmail = email.trim().toLowerCase();
+    const normalisedCode = code.trim();
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, normalisedEmail))
+      .limit(1);
+
+    const hasActiveOtp =
+      !!user &&
+      !isAccountUnreachable(user) &&
+      !!user.passwordResetOtpHash &&
+      !!user.passwordResetOtpExpiresAt &&
+      new Date(user.passwordResetOtpExpiresAt).getTime() > Date.now();
+
+    if (!user || !hasActiveOtp) {
+      // Keep the timing close to a real comparison (enumeration resistance).
+      await bcryptjs.compare(normalisedCode, DUMMY_OTP_HASH);
+      res.status(400).json(INVALID);
+      return;
+    }
+
+    if ((user.passwordResetOtpAttempts ?? 0) >= PASSWORD_RESET_MAX_ATTEMPTS) {
+      res.status(429).json({
+        error: "Too many incorrect attempts. Please request a new code.",
+        code: "TOO_MANY_ATTEMPTS",
+      });
+      return;
+    }
+
+    const matches = await bcryptjs.compare(normalisedCode, user.passwordResetOtpHash!);
+    if (!matches) {
+      const attempts = (user.passwordResetOtpAttempts ?? 0) + 1;
+      await db
+        .update(usersTable)
+        .set({ passwordResetOtpAttempts: attempts, updatedAt: new Date() })
+        .where(eq(usersTable.id, user.id));
+      if (attempts >= PASSWORD_RESET_MAX_ATTEMPTS) {
+        res.status(429).json({
+          error: "Too many incorrect attempts. Please request a new code.",
+          code: "TOO_MANY_ATTEMPTS",
+        });
+        return;
+      }
+      res.status(400).json(INVALID);
+      return;
+    }
+
+    const newPasswordHash = await bcryptjs.hash(newPassword, 12);
+    const newTokenVersion = (user.tokenVersion ?? 1) + 1;
+
+    // Set the new password, clear the reset OTP, and revoke every existing
+    // session by bumping tokenVersion (the fresh JWT below uses the new one).
+    await db
+      .update(usersTable)
+      .set({
+        passwordHash: newPasswordHash,
+        passwordResetOtpHash: null,
+        passwordResetOtpExpiresAt: null,
+        passwordResetOtpAttempts: 0,
+        passwordResetSentAt: null,
+        tokenVersion: newTokenVersion,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, user.id));
+
+    // A valid emailed code proves control of the inbox, so verify the email if
+    // it wasn't already (activates customers / advances trader onboarding).
+    if (!user.emailVerified) {
+      await finalizeEmailVerification(user);
+    }
+
+    logAudit({ userId: user.id, action: "PASSWORD_RESET_COMPLETED" });
+
+    // Re-read for an accurate response (finalizeEmailVerification may have
+    // flipped isActive / emailVerified).
+    const [fresh] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, user.id))
+      .limit(1);
+    const result = fresh ?? user;
+
+    const token = generateToken(result.id, result.role, newTokenVersion);
+    res.json({
+      token,
+      user: {
+        id: result.id,
+        email: result.email,
+        fullName: result.fullName,
+        role: result.role,
+        isActive: result.isActive,
+        plan: result.plan,
+        pushNotificationsEnabled: result.pushNotificationsEnabled,
+        createdAt: result.createdAt.toISOString(),
+        deletionStatus: result.deletionStatus ?? null,
+        deletionRequestedAt: result.deletionRequestedAt?.toISOString() ?? null,
+      },
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Password reset failed");
+    res.status(500).json({ error: "Password reset failed" });
   }
 });
 

@@ -80,6 +80,14 @@ export default function Login() {
             <Button type="submit" className="w-full" disabled={submitting} data-testid="button-signin">
               {submitting ? "Signing in…" : "Sign in"}
             </Button>
+            <button
+              type="button"
+              onClick={() => navigate("/forgot-password")}
+              className="w-full text-center text-sm text-muted-foreground hover:text-foreground"
+              data-testid="link-forgot-password"
+            >
+              Forgot password?
+            </button>
           </form>
         </CardContent>
       </Card>

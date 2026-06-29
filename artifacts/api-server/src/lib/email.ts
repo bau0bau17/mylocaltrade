@@ -409,6 +409,48 @@ This code expires in ${expiresInMinutes} minutes. If you didn't request it, you 
   });
 }
 
+export async function sendPasswordResetEmail(
+  toEmail: string,
+  toName: string,
+  code: string,
+  expiresInMinutes = 10,
+): Promise<"brevo" | "smtp" | "none"> {
+  const safeName = escapeHtml(toName || "there");
+  const safeCode = escapeHtml(code);
+  const html = emailShell({
+    title: "Your password reset code",
+    preheader: `Your MyLocalTrade password reset code is ${safeCode}`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+        We received a request to reset your MyLocalTrade password. Enter the code below in the app to choose a new password.
+      </p>
+      <div style="text-align: center; margin: 0 0 24px;">
+        <div style="display: inline-block; background: #0B1120; border: 1px solid #1F2937; border-radius: 12px; padding: 18px 32px;">
+          <span style="color: #00B4D8; font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: 'Courier New', monospace;">${safeCode}</span>
+        </div>
+      </div>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
+        This code expires in ${expiresInMinutes} minutes. If you didn't request a password reset, you can safely ignore this email — your password will not be changed.
+      </p>`,
+  });
+  const text = `Hi ${toName || "there"},
+
+We received a request to reset your MyLocalTrade password. Enter this code in the app to choose a new password:
+
+${code}
+
+This code expires in ${expiresInMinutes} minutes. If you didn't request a password reset, you can safely ignore this email — your password will not be changed.`;
+  return dispatchEmail({
+    category: "verification",
+    to: { email: toEmail, name: toName },
+    subject: "Your MyLocalTrade password reset code",
+    html,
+    text,
+    tag: "password-reset",
+  });
+}
+
 export async function sendBusinessEmailVerificationEmail(
   toEmail: string,
   toName: string,

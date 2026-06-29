@@ -159,6 +159,75 @@ paths:
               schema:
                 $ref: "#/components/schemas/RetryAfterErrorResponse"
 
+  /auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags: [auth]
+      summary: Request a password reset code
+      description: |
+        Sends a 6-digit password reset code to the account's email address.
+        Always responds 200 with a generic message regardless of whether the
+        email is registered (to avoid leaking which addresses have accounts).
+        Works for all account types (customer, trader, admin). Rate-limited to
+        one request per 60 seconds per account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Request handled (a code is sent if the account exists)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Missing or invalid email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags: [auth]
+      summary: Reset a password with the 6-digit code
+      description: |
+        Completes the password reset: the user supplies the 6-digit code from
+        the reset email plus a new password. On success the password is changed,
+        all existing sessions are revoked, and a fresh session is issued (same
+        shape as /auth/login), so the user is signed in immediately. If the
+        account's email was not yet verified, a successful reset also verifies
+        it (the code proves email control).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset — session issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid, expired, or incorrect code (uniform response; does not disclose account state)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many incorrect attempts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/verify-email-code:
     post:
       operationId: verifyEmailCode
@@ -2164,6 +2233,34 @@ components:
       required:
         - email
         - code
+
+    ForgotPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+        - email
+
+    ResetPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          description: The 6-digit password reset code from the email.
+          pattern: "^[0-9]{6}$"
+        newPassword:
+          type: string
+          minLength: 8
+          description: The new password (minimum 8 characters).
+      required:
+        - email
+        - code
+        - newPassword
 
     MessageResponse:
       type: object

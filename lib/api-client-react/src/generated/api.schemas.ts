@@ -98,6 +98,24 @@ export interface VerifyEmailCodeRequest {
   code: string;
 }
 
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  /**
+   * The 6-digit password reset code from the email.
+   * @pattern ^[0-9]{6}$
+   */
+  code: string;
+  /**
+   * The new password (minimum 8 characters).
+   * @minLength 8
+   */
+  newPassword: string;
+}
+
 export interface MessageResponse {
   message: string;
 }

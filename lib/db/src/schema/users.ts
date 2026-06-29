@@ -46,6 +46,13 @@ export const usersTable = pgTable("users", {
   emailOtpHash: text("email_otp_hash"),
   emailOtpExpiresAt: timestamp("email_otp_expires_at"),
   emailOtpAttempts: integer("email_otp_attempts").notNull().default(0),
+  // Password reset code (6-digit OTP). Mirrors the email verification OTP
+  // fields above. Used by the forgot-password / reset-password flow for all
+  // account types (customer, trader, admin).
+  passwordResetOtpHash: text("password_reset_otp_hash"),
+  passwordResetOtpExpiresAt: timestamp("password_reset_otp_expires_at"),
+  passwordResetOtpAttempts: integer("password_reset_otp_attempts").notNull().default(0),
+  passwordResetSentAt: timestamp("password_reset_sent_at"),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   plan: varchar("plan", { length: 20 }),

@@ -6,6 +6,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AdminLayout } from "@/components/AdminLayout";
 import { Toaster } from "@/components/ui/toaster";
 import Login from "@/pages/Login";
+import ForgotPassword from "@/pages/ForgotPassword";
 import Dashboard from "@/pages/Dashboard";
 import Traders from "@/pages/Traders";
 import TraderDetail from "@/pages/TraderDetail";
@@ -57,6 +58,7 @@ export default function App() {
         <Router base={BASE_PATH === "/" ? "" : BASE_PATH}>
           <Switch>
             <Route path="/login" component={Login} />
+            <Route path="/forgot-password" component={ForgotPassword} />
             <Route>
               <ProtectedRoutes />
             </Route>

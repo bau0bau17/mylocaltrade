@@ -56,6 +56,9 @@ export const TRADER_AUDIT_ACTIONS = [
   "ADMIN_APPROVED_DELETION_PROCESSING",
   "ADMIN_MARKED_RETENTION_REQUIRED",
   "ACCOUNT_REOPENED",
+  // --- Password reset (forgot / reset) ---
+  "PASSWORD_RESET_REQUESTED",
+  "PASSWORD_RESET_COMPLETED",
   // --- Periodic re-validation (trust maintenance) ---
   "REVALIDATION_DUE",
   "REVALIDATION_OVERDUE",

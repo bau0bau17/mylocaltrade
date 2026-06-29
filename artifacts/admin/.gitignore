@@ -1,0 +1,6 @@
+# Local environment overrides (e.g. VITE_API_BASE_URL pointing dev preview at
+# a remote backend). Never commit — the deployed build must default to
+# same-origin.
+.env
+.env.local
+.env.*.local

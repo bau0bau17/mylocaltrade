@@ -20,6 +20,8 @@ const INNER_ROUTES: { name: string; title: string; parent: string }[] = [
   { name: "auth/register-customer", title: "Register", parent: "/account" },
   { name: "auth/register-trader", title: "Join as Trader", parent: "/account" },
   { name: "auth/verify-email", title: "Verify Email", parent: "/account" },
+  { name: "auth/forgot-password", title: "Forgot Password", parent: "/auth/login" },
+  { name: "auth/reset-password", title: "Reset Password", parent: "/auth/login" },
   { name: "pricing", title: "Subscription Plans", parent: "/account" },
   { name: "enquiry/[traderId]", title: "Send Enquiry", parent: "/traders" },
   { name: "trader-dashboard/index", title: "Trader Onboarding", parent: "/account" },
