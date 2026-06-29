@@ -187,7 +187,7 @@ function ClassicTabLayout() {
               title: r.title,
               headerShown: true,
               ...(hideTabBar ? { tabBarStyle: { display: "none" } } : {}),
-              header: ({ navigation, options }) => (
+              header: ({ route, options }) => (
                 <ScreenHeader
                   title={(options.title as string) ?? r.title}
                   showBack
@@ -197,9 +197,15 @@ function ClassicTabLayout() {
                     // rather than stack pushes — router.back() (and the
                     // underlying navigation.goBack()) returns to the
                     // previously active tab (Home) instead of the screen
-                    // the user came from. So we always navigate to the
-                    // explicit parent declared for the route.
-                    router.replace(r.parent as Parameters<typeof router.replace>[0]);
+                    // the user came from. So we navigate to an explicit
+                    // destination: a caller may pass a `returnTo` param to
+                    // come back to the exact screen they opened this from
+                    // (e.g. the trader signup form opening Terms/Privacy);
+                    // otherwise we fall back to the route's declared parent.
+                    const returnTo = (route.params as { returnTo?: string } | undefined)?.returnTo;
+                    router.replace(
+                      (returnTo ?? r.parent) as Parameters<typeof router.replace>[0],
+                    );
                   }}
                 />
               ),

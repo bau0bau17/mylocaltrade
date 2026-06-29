@@ -486,9 +486,9 @@ export default function RegisterTraderScreen() {
           </View>
           <Text style={styles.checkboxLabel}>
             I confirm that the information provided is accurate and I agree to MyLocalTrade's{' '}
-            <Text style={styles.checkboxLink} onPress={() => router.push('/terms')}>Terms</Text>
+            <Text style={styles.checkboxLink} onPress={() => router.push({ pathname: '/terms', params: { returnTo: '/auth/register-trader' } })}>Terms</Text>
             {' '}and{' '}
-            <Text style={styles.checkboxLink} onPress={() => router.push('/privacy')}>Privacy Policy</Text>.
+            <Text style={styles.checkboxLink} onPress={() => router.push({ pathname: '/privacy', params: { returnTo: '/auth/register-trader' } })}>Privacy Policy</Text>.
           </Text>
         </Pressable>
 
