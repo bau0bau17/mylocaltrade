@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   contactBlockAttemptsTable,
@@ -152,7 +152,7 @@ export async function getAttemptCountsByConversation(
       recent: sql<number>`count(*) FILTER (WHERE ${contactBlockAttemptsTable.createdAt} >= ${since})::int`,
     })
     .from(contactBlockAttemptsTable)
-    .where(sql`${contactBlockAttemptsTable.conversationId} = ANY(${conversationIds})`)
+    .where(inArray(contactBlockAttemptsTable.conversationId, conversationIds))
     .groupBy(contactBlockAttemptsTable.conversationId);
   for (const r of rows) {
     if (r.conversationId == null) continue;
