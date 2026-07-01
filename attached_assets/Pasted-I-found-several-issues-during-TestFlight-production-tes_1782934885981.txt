@@ -1,0 +1,170 @@
+I found several issues during TestFlight / production testing. I will attach screenshots for most of them.
+
+Please treat this as a bug-fix / launch-readiness batch. First verify each issue, then fix only what is confirmed.
+
+1. Conversation reports not appearing in Admin Dashboard
+
+I tested reporting a conversation from the app, but the report does not appear in the Admin Dashboard.
+
+Please verify:
+
+* whether the report is created in the production database
+* whether the admin dashboard is reading from the correct production backend/database
+* whether the report is going to conversation_reports or another table
+* whether the admin page/filter is missing or filtering it out incorrectly
+* whether this is a backend issue, admin UI issue, or environment issue
+
+Expected behaviour:
+
+* when a conversation is reported in the app, it should appear in the admin moderation queue
+* admin should be able to review it and resolve/dismiss it
+* the reporter should receive the existing outcome notification when resolved/dismissed
+
+2. Remove “payments inside MyLocalTrade” wording everywhere
+
+In conversations/chat there is wording similar to:
+
+“Keep all conversations and payments inside MyLocalTrade”
+
+This is not correct because MyLocalTrade does not take job payments through the platform and does not secure job payments.
+
+Please remove or update this wording everywhere.
+
+Important principle:
+MyLocalTrade does not process, hold, secure, escrow, or manage customer-to-trader job payments.
+
+Please search and update all places where the app/policies/help text imply that job payments happen inside MyLocalTrade.
+
+Suggested replacement wording:
+“Keep all conversations inside MyLocalTrade for your safety and record keeping.”
+
+or:
+“Keep communication inside MyLocalTrade so there is a clear record of the enquiry.”
+
+Please also check:
+
+* mobile chat copy
+* customer/trader safety advice
+* FAQs
+* Terms
+* Privacy/Refund policy if relevant
+* any help/legal/policy wording
+* any onboarding/trust text
+
+Main goal:
+There should be no wording anywhere that suggests MyLocalTrade takes or protects job payments.
+
+3. Unread message counter does not clear after reading
+
+When I open a conversation and read the message, the red unread counter/badge with the number does not disappear.
+
+Expected behaviour:
+
+* once the user opens the conversation and the messages are read, the unread badge should clear
+* the unread count should update correctly on the conversations list / tabs / badges
+* this should work for both customer and trader accounts
+
+Please verify whether this is a backend read-state issue, mobile cache/state issue, or both.
+
+4. Center the in-app toast/status messages properly
+
+Some centered feedback messages/toasts, for example:
+
+“Reported, thanks — our team will review this conversation”
+
+do not look properly centered as a whole message.
+
+Please review this type of middle-screen confirmation/status message across the app and make the text/layout properly centered and visually consistent.
+
+This applies to all similar messages, not just the report confirmation.
+
+Expected behaviour:
+
+* message container centered
+* text centered
+* multi-line wording centered properly
+* consistent spacing and styling
+
+5. Reviews after job accepted/hired or completed
+
+After a job is accepted / hired or completed, the app should allow the correct review flow where appropriate.
+
+At the moment I cannot get reviews to work / cannot add a review.
+
+Please verify the intended review rules and current implementation.
+
+Expected behaviour:
+
+* once the customer has hired/accepted the trader, the review flow should become available at the correct stage
+* if the job is completed, the customer should be able to leave a review
+* if a job is cancelled, please confirm whether reviews should be allowed or not
+* the app should not show a dead-end or hidden/non-working review option
+
+Please check both customer and trader sides and confirm the correct flow.
+
+6. Quote/enquiry photo attachment not visible to trader
+
+When a customer sends an enquiry/request for quote with a photo, the trader account shows something like:
+
+“1 photo attached”
+
+but the trader cannot open or view the photo.
+
+Expected behaviour:
+
+* trader should be able to tap/open/view the attached photo
+* photo should load securely
+* if there is a permissions or signed URL issue, please fix it
+* this should work from the trader enquiry/chat view
+
+I will attach screenshots for this issue.
+
+7. “Send enquiry” button too low / hidden by bottom navigation
+
+The “Send enquiry” button is too low and appears under or too close to the bottom navigation bar.
+
+Expected behaviour:
+
+* button should sit above the bottom tab/navigation bar
+* it should be fully visible and tappable
+* it should respect safe area / bottom inset on iPhone
+* this should be checked across relevant screens and device sizes
+
+I will attach a screenshot.
+
+8. Admin Traders dashboard — verified/live trader should remain editable/reviewable
+
+In the Admin Dashboard, under Traders, after a trader has passed verification and the account/profile is Live, I do not have a clear way to access the passed/approved verification state and edit or re-open it if needed.
+
+Expected behaviour:
+
+* even after a trader is verified/live, admin should still be able to open that trader’s verification details
+* admin should be able to review the approved documents/status history
+* admin should be able to make corrections or re-open/reject/request info again if needed
+* approved/live status should not make the verification record disappear or become inaccessible
+* there should be a clear admin action/path to edit or manage the verification state after approval
+
+Main goal:
+A Live trader should still be manageable by admin. Verification should not become locked or hidden after passing.
+
+Scope / constraints
+
+Please keep this focused on the issues above.
+
+Do not redesign unrelated areas.
+
+Before implementing, please tell me which fixes are:
+
+* backend/admin only
+* mobile only
+* backend + mobile
+* policy/copy only
+
+Also tell me which fixes will require:
+
+* Replit backend republish only
+* a new EAS/TestFlight mobile build
+* both
+
+Main goal:
+I want to close these launch-readiness issues cleanly before continuing with App Store submission.
