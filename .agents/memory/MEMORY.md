@@ -9,6 +9,7 @@
 - [Public trader visibility](trader-public-visibility.md) — listing driven by VERIFICATION, never subscription; Premium only adds perks; predicate duplicated across public routes — update all.
 - [User-reports reporting authz](user-reports-authz.md) — customer reports must derive reportedUserId from a verified shared conversation; never accept a client-supplied customer user id (IDOR).
 - [Subscription notification dedupe](subscription-notification-dedupe.md) — status-change push must gate on a real transition; RC sync, RC webhook & Stripe (updated+deleted) all overlap & repeat → unguarded sends spam.
+- [Verification notification policy](verification-notification-policy.md) — NO per-document approval email/push; only doc-rejected/more-info + one final "You're verified" milestone email+push. Don't reintroduce per-doc approvals.
 - [Subscription downgrade source of truth](subscription-downgrade-source-of-truth.md) — status read path only REPORTS expiry, never mutates; destructive downgrade is provider-confirmed (revenuecat-sync + webhook); never touch Stripe rows.
 - [Trader business-type gating](trader-business-type-gating.md) — LTD-only company-number rule duplicated in 3 places; nullable businessType + stale client = silent completion-gate fail, docs stay locked.
 - [Onboarding completion source of truth](onboarding-completion-source-of-truth.md) — advance steps only on server's completion verdict (returned in save response), never on HTTP 200; else silent dead-end.
