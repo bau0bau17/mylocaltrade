@@ -37,7 +37,6 @@ import {
   CONTACT_BYPASS_THRESHOLD,
 } from "../lib/contact-block-tracker";
 import {
-  sendDocumentApprovedEmail,
   sendDocumentRejectedEmail,
   sendTraderApprovedEmail,
   sendTraderRejectedEmail,
@@ -690,24 +689,10 @@ router.post("/admin/documents/:id/approve", authMiddleware, adminOnly, async (re
       performedBy: adminId,
       details: { documentId: doc.id, type: doc.type },
     });
-    void (async () => {
-      try {
-        const [trader] = await db
-          .select({ email: usersTable.email, fullName: usersTable.fullName })
-          .from(usersTable)
-          .where(eq(usersTable.id, doc.userId))
-          .limit(1);
-        if (trader?.email) {
-          await sendDocumentApprovedEmail({
-            toEmail: trader.email,
-            toName: trader.fullName || "there",
-            documentType: doc.type,
-          });
-        }
-      } catch (notifyErr) {
-        req.log.warn({ err: notifyErr, docId: doc.id }, "Failed to send document-approved email");
-      }
-    })();
+    // Deliberately no email on individual document approval. Approved documents
+    // simply show as approved in the trader dashboard and admin. Emailing per
+    // document felt spammy; traders are only emailed when a document is rejected
+    // or more information is required.
     res.json({ document: doc });
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -1,0 +1,83 @@
+I clarified the verification correction flow and it is mostly working correctly.
+
+When a document is rejected and I use the “Request info” flow, the trader can open the app and upload a replacement document for the rejected item. So please do not redesign that part.
+
+However, I found three items I want to handle now.
+
+1. Verification document emails
+
+Please adjust the verification document email behaviour.
+
+Current issue:
+
+* the system appears to send emails when documents are approved
+* this creates too many emails and feels spammy/unprofessional
+
+Preferred behaviour:
+
+* do not send an email for each individual approved document
+* approved documents should simply show as approved in the trader account/admin
+* only send an email/notification when a document is rejected or more information is required
+* the rejection/more-info email should include:
+    * the document name
+    * the rejection reason entered by admin
+    * a clear instruction to upload a replacement document
+
+Example:
+“Your Photo ID was rejected because: the ID is blurry. Please upload a clearer replacement.”
+
+Please keep the existing “Request info” / replacement upload flow intact.
+
+2. Password reset in mobile app
+
+I cannot clearly find a working “Forgot password?” / reset password flow in the mobile app.
+
+Please verify whether this is already implemented in the current mobile build.
+
+If it is not implemented or not reachable, please add/fix it so users can:
+
+1. tap “Forgot password?” on the login screen
+2. enter their email
+3. receive a reset code by email
+4. enter the code in the app
+5. set a new password
+6. log in successfully afterwards
+
+Please make sure this works in production/TestFlight.
+
+3. Second authentication factor / 2FA
+
+I also want to explore adding a second authentication factor, but please do not implement it blindly yet.
+
+Please investigate the best approach for MyLocalTrade and give me options.
+
+My preferred starting point is probably:
+
+* admin-only 2FA first
+* using email OTP or authenticator app
+* not SMS for now, because SMS delivery is not implemented and adds extra complexity/cost
+
+Please compare:
+
+1. email OTP 2FA for admin login
+2. authenticator-app/TOTP 2FA for admin login
+3. full user 2FA later as an optional enhancement
+
+For each option, please tell me:
+
+* implementation complexity
+* security benefit
+* UX impact
+* whether it needs mobile changes
+* whether it needs backend/database changes
+* whether it is suitable before launch or better after launch
+
+Constraints
+
+Please keep this batch focused on:
+
+* stopping approval emails
+* password reset visibility/functionality
+* 2FA investigation only
+
+Do not redesign verification, onboarding, subscriptions, or reporting.

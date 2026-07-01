@@ -759,34 +759,6 @@ export async function sendLeadReminderEmail(opts: {
   return channel !== "none";
 }
 
-export async function sendDocumentApprovedEmail(opts: {
-  toEmail: string;
-  toName: string;
-  documentType: string;
-}): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeType = escapeHtml(opts.documentType);
-  const html = emailShell({
-    title: "Document approved",
-    preheader: `Your ${safeType} has been approved`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-        Good news — your <strong style="color: #06D6A0;">${safeType}</strong> document has been approved by our team.
-      </p>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
-        Once all required documents are approved you will be eligible to go live on the marketplace.
-      </p>`,
-  });
-  await dispatchEmail({
-    category: "verification",
-    to: { email: opts.toEmail, name: opts.toName },
-    subject: `Document approved: ${opts.documentType}`,
-    html,
-    tag: "doc-approved",
-  });
-}
-
 export async function sendDocumentRejectedEmail(opts: {
   toEmail: string;
   toName: string;
@@ -809,7 +781,7 @@ export async function sendDocumentRejectedEmail(opts: {
         <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
       </div>
       <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
-        Please open the trader dashboard, address the issue above, and re-upload the document.
+        Please open the app, go to your trader dashboard, and upload a replacement ${safeType} document to resolve this.
       </p>`,
   });
   await dispatchEmail({
