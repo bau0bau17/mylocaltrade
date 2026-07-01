@@ -4,7 +4,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
-import { useGetEnquiries, getGetEnquiriesQueryKey } from '@workspace/api-client-react';
+import {
+  useGetEnquiries,
+  getGetEnquiriesQueryKey,
+  useGetEligibleEnquiriesForReview,
+} from '@workspace/api-client-react';
 import { EnquiryCard } from '@/components/EnquiryCard';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -15,6 +19,17 @@ export default function MyEnquiriesScreen() {
   const { data, isLoading } = useGetEnquiries({
     query: { enabled: !isAdmin, queryKey: getGetEnquiriesQueryKey() },
   });
+  // A review can only be left once the customer has confirmed the job is done
+  // (and not on cancelled or already-reviewed jobs). The eligible endpoint is
+  // the single source of truth, so we only surface the review button for
+  // enquiries it returns.
+  const { data: eligibleData } = useGetEligibleEnquiriesForReview({
+    query: { enabled: !isAdmin, queryKey: ['/api/reviews/eligible'] },
+  });
+  const eligibleIds = React.useMemo(
+    () => new Set((eligibleData?.enquiries ?? []).map((e) => e.enquiryId)),
+    [eligibleData],
+  );
 
   if (isAdmin) {
     return (
@@ -65,7 +80,7 @@ export default function MyEnquiriesScreen() {
                   </Text>
                 </View>
               )}
-              {item.status !== 'pending' && (
+              {eligibleIds.has(item.id) && (
                 <Pressable
                   style={styles.reviewBtn}
                   onPress={() =>

@@ -11,4 +11,9 @@ import type { ConversationSummary } from "./conversationSummary";
 export interface ConversationDetailResponse {
   conversation: ConversationSummary;
   messages: ConversationMessage[];
+  /** Short-lived signed GET URLs for the photos the customer attached to
+the original enquiry. Empty when there were none. Both parties to the
+conversation are authorised to view these.
+ */
+  enquiryAttachments?: string[];
 }

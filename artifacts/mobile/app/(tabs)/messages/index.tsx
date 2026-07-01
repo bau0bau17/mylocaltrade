@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
@@ -114,6 +114,14 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { data, isLoading, refetch, isRefetching } = useGetConversations();
+
+  // Re-pull the list (and its per-row unread badges) each time the screen gains
+  // focus, so counts clear right after the user reads a thread and comes back.
+  useFocusEffect(
+    React.useCallback(() => {
+      void refetch();
+    }, [refetch]),
+  );
 
   if (isLoading && !isRefetching) {
     return (

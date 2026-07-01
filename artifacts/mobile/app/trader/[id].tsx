@@ -11,6 +11,7 @@ import {
   useSaveTrader,
   useUnsaveTrader,
   getGetSavedTradersQueryKey,
+  useGetEligibleEnquiriesForReview,
 } from '@workspace/api-client-react';
 import { ReviewsSection } from '@/components/ReviewsSection';
 import { formatResponseTime, isTopRated, isFastResponder } from '@/components/TraderCard';
@@ -37,6 +38,14 @@ export default function TraderProfileScreen() {
     query: { enabled: canSave, queryKey: getGetSavedTradersQueryKey() },
   });
   const isSaved = !!savedData?.traders?.some((t) => t.id === Number(id));
+
+  // Only offer "Write a review" when this customer actually has a reviewable
+  // job with this trader (job confirmed done, not cancelled, not yet reviewed).
+  const { data: eligibleData } = useGetEligibleEnquiriesForReview({
+    query: { enabled: canSave, queryKey: ['/api/reviews/eligible'] },
+  });
+  const canWriteReview =
+    canSave && (eligibleData?.enquiries ?? []).some((e) => e.traderId === Number(id));
 
   const invalidateSaved = () =>
     queryClient.invalidateQueries({ queryKey: getGetSavedTradersQueryKey() });
@@ -308,9 +317,11 @@ export default function TraderProfileScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionTitle}>Reviews</Text>
-              <Pressable onPress={() => router.push(`/write-review/${trader.id}`)}>
-                <Text style={styles.sectionAction}>Write a review</Text>
-              </Pressable>
+              {canWriteReview ? (
+                <Pressable onPress={() => router.push(`/write-review/${trader.id}`)}>
+                  <Text style={styles.sectionAction}>Write a review</Text>
+                </Pressable>
+              ) : null}
             </View>
             <ReviewsSection traderId={trader.id} />
           </View>

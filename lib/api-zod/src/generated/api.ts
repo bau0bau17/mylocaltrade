@@ -1823,6 +1823,12 @@ export const GetConversationResponse = zod.object({
       createdAt: zod.date(),
     }),
   ),
+  enquiryAttachments: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      "Short-lived signed GET URLs for the photos the customer attached to\nthe original enquiry. Empty when there were none. Both parties to the\nconversation are authorised to view these.\n",
+    ),
 });
 
 /**

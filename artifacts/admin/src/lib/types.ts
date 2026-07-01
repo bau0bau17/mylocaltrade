@@ -299,6 +299,7 @@ export interface DashboardSummary {
   totals: { totalTraders: number; totalCustomers: number };
   expiringSoonCount: number;
   enquiriesLast7d: number;
+  openConversationReports: number;
   recentActivity: {
     id: number;
     action: string;

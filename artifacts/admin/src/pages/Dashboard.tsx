@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/StatusBadge";
 import { relativeTime } from "@/lib/format";
-import { Users, FileWarning, Mail, ClipboardList } from "lucide-react";
+import { Users, FileWarning, Mail, ClipboardList, ShieldAlert } from "lucide-react";
 
 // Mirror the Traders page filter list exactly so every status a reviewer can
 // filter by also appears (and is counted) on the dashboard, in the same order.
@@ -28,8 +28,8 @@ export default function Dashboard() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-40" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
@@ -57,7 +57,7 @@ export default function Dashboard() {
         <p className="text-sm text-muted-foreground">Operational overview at a glance.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard
           icon={<Users className="w-4 h-4" />}
           label="Total traders"
@@ -71,6 +71,15 @@ export default function Dashboard() {
             value={underReview}
             hint="Click to review"
             highlight={underReview > 0}
+          />
+        </Link>
+        <Link href="/conversation-reports?status=OPEN">
+          <StatCard
+            icon={<ShieldAlert className="w-4 h-4" />}
+            label="Open reports"
+            value={data.openConversationReports}
+            hint="Conversation reports to review"
+            highlight={data.openConversationReports > 0}
           />
         </Link>
         <Link href="/expiring-documents">

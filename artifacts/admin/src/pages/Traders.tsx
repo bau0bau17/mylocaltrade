@@ -129,6 +129,7 @@ export default function Traders() {
   const pages = data?.pages ?? [];
   const firstPage = pages[0];
   const counts = firstPage?.counts ?? [];
+  const allCount = counts.reduce((n, c) => n + c.count, 0);
   const registerCounts = firstPage?.registerCounts ?? [];
   const aiCounts = firstPage?.aiCounts ?? [];
 
@@ -146,6 +147,26 @@ export default function Traders() {
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-2" data-testid="status-tabs">
+        <StatusTab
+          label="All"
+          count={allCount}
+          active={status === "ALL"}
+          onClick={() => setStatus("ALL")}
+          testId="tab-status-all"
+        />
+        {REVIEW_FILTER_STATUSES.map((s) => (
+          <StatusTab
+            key={s}
+            label={STATUS_LABELS[s]}
+            count={counts.find((x) => x.status === s)?.count ?? 0}
+            active={status === s}
+            onClick={() => setStatus(s)}
+            testId={`tab-status-${s}`}
+          />
+        ))}
+      </div>
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Filters</CardTitle>
@@ -161,22 +182,6 @@ export default function Traders() {
               data-testid="input-search-traders"
             />
           </div>
-          <Select value={status} onValueChange={(v) => setStatus(v as TraderStatus | "ALL")}>
-            <SelectTrigger className="w-full sm:w-64" data-testid="select-status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All statuses</SelectItem>
-              {REVIEW_FILTER_STATUSES.map((s) => {
-                const c = counts.find((x) => x.status === s)?.count ?? 0;
-                return (
-                  <SelectItem key={s} value={s}>
-                    {STATUS_LABELS[s]} ({c})
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
           <Select
             value={registerCheck}
             onValueChange={(v) => setRegisterCheck(v as RegisterCheckStatus | "NONE" | "ALL")}
@@ -330,5 +335,37 @@ export default function Traders() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function StatusTab({
+  label,
+  count,
+  active,
+  onClick,
+  testId,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  testId: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-background text-foreground hover:bg-muted"
+      }`}
+    >
+      <span>{label}</span>
+      <span className={`text-xs tabular-nums ${active ? "opacity-90" : "text-muted-foreground"}`}>
+        {count}
+      </span>
+    </button>
   );
 }

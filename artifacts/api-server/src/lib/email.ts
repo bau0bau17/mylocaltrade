@@ -685,7 +685,7 @@ export async function sendEnquirySentToCustomerEmail(opts: {
         <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeMessage}</p>
       </div>
       <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
-        For your safety, please keep all conversation inside MyLocalTrade until you're confident in the trader. Never share bank details or pay outside the platform before work is agreed.
+        For your safety, please keep all conversation inside MyLocalTrade until you're confident in the trader. Never share your bank details, and don't pay for or deposit against any work before it's agreed.
       </p>`,
   });
   await dispatchEmail({
@@ -1264,7 +1264,7 @@ export async function sendNewMessageEmail(opts: {
         </a>
       </div>
       <p style="color: #6B7280; font-size: 12px; line-height: 1.6; margin: 24px 0 0; text-align: center;">
-        For your safety, never share bank details or pay outside the platform without verifying the trader.
+        For your safety, never share your bank details, and don't pay for any work before you've verified the trader and agreed what's being done.
       </p>`,
   });
   await dispatchEmail({

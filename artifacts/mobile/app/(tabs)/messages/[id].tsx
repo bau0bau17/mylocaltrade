@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  Image,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
@@ -139,6 +141,7 @@ export default function ConversationThreadScreen() {
   const [showStatus, setShowStatus] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [photoViewer, setPhotoViewer] = useState<number | null>(null);
 
   if (isAdmin) {
     return (
@@ -156,6 +159,7 @@ export default function ConversationThreadScreen() {
 
   const conv = data?.conversation;
   const messages = data?.messages ?? [];
+  const enquiryAttachments = data?.enquiryAttachments ?? [];
   const closed =
     conv?.status === "CLOSED" || conv?.status === "BLOCKED";
 
@@ -603,11 +607,40 @@ export default function ConversationThreadScreen() {
           );
         }}
         ListHeaderComponent={
-          <View style={styles.safetyBanner}>
-            <Feather name="shield" size={14} color={Colors.light.primary} />
-            <Text style={styles.safetyText}>
-              For your safety, keep all conversations and payments inside MyLocalTrade.
-            </Text>
+          <View>
+            <View style={styles.safetyBanner}>
+              <Feather name="shield" size={14} color={Colors.light.primary} />
+              <Text style={styles.safetyText}>
+                For your safety, keep all conversations inside MyLocalTrade until you're
+                confident in the trader. Never share your bank details, and don't pay for
+                any work before it's agreed.
+              </Text>
+            </View>
+            {enquiryAttachments.length > 0 ? (
+              <View style={styles.enquiryPhotos}>
+                <Text style={styles.enquiryPhotosLabel}>Photos from the enquiry</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.enquiryPhotosRow}
+                >
+                  {enquiryAttachments.map((uri, idx) => (
+                    <Pressable
+                      key={`${uri}-${idx}`}
+                      onPress={() => setPhotoViewer(idx)}
+                      accessibilityRole="imagebutton"
+                      accessibilityLabel={`Open enquiry photo ${idx + 1}`}
+                    >
+                      <Image
+                        source={{ uri }}
+                        style={styles.enquiryPhotoThumb}
+                        resizeMode="cover"
+                      />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
           </View>
         }
         ListEmptyComponent={
@@ -822,6 +855,70 @@ export default function ConversationThreadScreen() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={photoViewer !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhotoViewer(null)}
+      >
+        <View style={styles.photoViewerBackdrop}>
+          <Pressable
+            style={styles.photoViewerClose}
+            onPress={() => setPhotoViewer(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Close photo"
+          >
+            <Feather name="x" size={26} color="#fff" />
+          </Pressable>
+          {photoViewer !== null && enquiryAttachments[photoViewer] ? (
+            <Image
+              source={{ uri: enquiryAttachments[photoViewer] }}
+              style={styles.photoViewerImage}
+              resizeMode="contain"
+            />
+          ) : null}
+          {photoViewer !== null && enquiryAttachments.length > 1 ? (
+            <View style={styles.photoViewerNav}>
+              <Pressable
+                disabled={photoViewer <= 0}
+                onPress={() =>
+                  setPhotoViewer((i) => (i != null ? Math.max(0, i - 1) : i))
+                }
+                style={styles.photoViewerNavBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Previous photo"
+              >
+                <Feather
+                  name="chevron-left"
+                  size={28}
+                  color={photoViewer <= 0 ? "#555" : "#fff"}
+                />
+              </Pressable>
+              <Text style={styles.photoViewerCount}>
+                {photoViewer + 1} / {enquiryAttachments.length}
+              </Text>
+              <Pressable
+                disabled={photoViewer >= enquiryAttachments.length - 1}
+                onPress={() =>
+                  setPhotoViewer((i) =>
+                    i != null ? Math.min(enquiryAttachments.length - 1, i + 1) : i,
+                  )
+                }
+                style={styles.photoViewerNavBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Next photo"
+              >
+                <Feather
+                  name="chevron-right"
+                  size={28}
+                  color={photoViewer >= enquiryAttachments.length - 1 ? "#555" : "#fff"}
+                />
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -1033,6 +1130,59 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   safetyText: { flex: 1, fontSize: 11, color: Colors.light.textSecondary, lineHeight: 16 },
+  enquiryPhotos: { marginBottom: 12 },
+  enquiryPhotosLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Colors.light.textMuted,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    marginBottom: 6,
+  },
+  enquiryPhotosRow: { gap: 8, paddingRight: 4 },
+  enquiryPhotoThumb: {
+    width: 84,
+    height: 84,
+    borderRadius: 10,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  photoViewerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.94)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  photoViewerClose: {
+    position: "absolute",
+    top: 48,
+    right: 20,
+    zIndex: 2,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  photoViewerImage: { width: "100%", height: "80%" },
+  photoViewerNav: {
+    position: "absolute",
+    bottom: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 24,
+  },
+  photoViewerNavBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
+  },
+  photoViewerCount: { color: "#fff", fontSize: 14, fontWeight: "600", minWidth: 54, textAlign: "center" },
   systemRow: { alignItems: "center", paddingVertical: 4 },
   systemText: {
     fontSize: 11,

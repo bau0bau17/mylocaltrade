@@ -179,7 +179,8 @@ function ClassicTabLayout() {
         // Some inner screens own their own bottom UI (chat composer, etc.)
         // and the absolutely-positioned tab bar would cover it. Hide the
         // tab bar on those routes so the bottom controls are visible.
-        const hideTabBar = r.name === "messages/[id]";
+        const hideTabBar =
+          r.name === "messages/[id]" || r.name === "enquiry/[traderId]";
         return (
           <Tabs.Screen
             key={r.name}

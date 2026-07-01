@@ -14,6 +14,7 @@ import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
+import { useGetEligibleEnquiriesForReview } from '@workspace/api-client-react';
 
 type Offer = {
   enquiryId: number;
@@ -70,6 +71,16 @@ export default function CompareOffersScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Review buttons are only shown for jobs that are actually reviewable
+  // (confirmed done, not cancelled, not yet reviewed) per the eligible endpoint.
+  const { data: eligibleData } = useGetEligibleEnquiriesForReview({
+    query: { enabled: !isAdmin, queryKey: ['/api/reviews/eligible'] },
+  });
+  const eligibleIds = React.useMemo(
+    () => new Set((eligibleData?.enquiries ?? []).map((e) => e.enquiryId)),
+    [eligibleData],
+  );
 
   if (isAdmin) {
     return (
@@ -173,6 +184,7 @@ export default function CompareOffersScreen() {
               <OfferCard
                 key={offer.enquiryId}
                 offer={offer}
+                reviewEligible={eligibleIds.has(offer.enquiryId)}
                 onOpenChat={
                   offer.conversationId
                     ? () => router.push(`/messages/${offer.conversationId}`)
@@ -195,11 +207,13 @@ export default function CompareOffersScreen() {
 
 function OfferCard({
   offer,
+  reviewEligible,
   onOpenChat,
   onViewProfile,
   onLeaveReview,
 }: {
   offer: Offer;
+  reviewEligible: boolean;
   onOpenChat: (() => void) | null;
   onViewProfile: () => void;
   onLeaveReview: () => void;
@@ -306,7 +320,7 @@ function OfferCard({
           <Feather name="user" size={14} color={Colors.light.primary} />
           <Text style={styles.secondaryCtaText}>View profile</Text>
         </Pressable>
-        {offer.enquiryStatus !== 'pending' && offer.hasTraderReply ? (
+        {reviewEligible ? (
           <Pressable
             style={styles.reviewCta}
             onPress={onLeaveReview}

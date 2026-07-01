@@ -17,8 +17,10 @@ import { sendNewMessageEmail } from "../lib/email";
 import { sendPushToUser } from "../lib/push-notifications";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router: IRouter = Router();
+const storage = new ObjectStorageService();
 
 const SendMessageBody = z.object({
   body: z.string().trim().min(1).max(4000),
@@ -365,6 +367,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
     // Whether the customer has already left a review for this job, so the
     // thread can show "Leave a review" vs "Review submitted".
     let hasReview = false;
+    let enquiryAttachments: string[] = [];
     if (row.conv.enquiryId) {
       const [rev] = await db
         .select({ id: reviewsTable.id })
@@ -372,6 +375,30 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         .where(eq(reviewsTable.enquiryId, row.conv.enquiryId))
         .limit(1);
       hasReview = !!rev;
+
+      // Surface the customer's original enquiry photos in the thread. They are
+      // stored as private object paths on the enquiry; both parties to this
+      // conversation are already authorised (checked above), so hand back
+      // short-lived signed GET URLs they can render/open directly.
+      const [enq] = await db
+        .select({ attachmentUrls: enquiriesTable.attachmentUrls })
+        .from(enquiriesTable)
+        .where(eq(enquiriesTable.id, row.conv.enquiryId))
+        .limit(1);
+      const rawPaths = enq?.attachmentUrls ?? [];
+      if (rawPaths.length > 0) {
+        const signed = await Promise.all(
+          rawPaths.map(async (p) => {
+            try {
+              return await storage.getObjectEntityReadURL(p, 900);
+            } catch (signErr) {
+              req.log.warn({ err: signErr, conversationId: id }, "Failed to sign enquiry attachment");
+              return null;
+            }
+          }),
+        );
+        enquiryAttachments = signed.filter((u): u is string => u != null);
+      }
     }
 
     res.json({
@@ -385,6 +412,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         hasReview,
       }),
       messages: messages.map(serializeMessage),
+      enquiryAttachments,
     });
   } catch (error) {
     req.log.error({ err: error }, "Get conversation failed");

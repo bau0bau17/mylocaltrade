@@ -3258,6 +3258,14 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ConversationMessage"
+        enquiryAttachments:
+          type: array
+          description: |
+            Short-lived signed GET URLs for the photos the customer attached to
+            the original enquiry. Empty when there were none. Both parties to the
+            conversation are authorised to view these.
+          items:
+            type: string
       required: [conversation, messages]
 
     SendMessageRequest:

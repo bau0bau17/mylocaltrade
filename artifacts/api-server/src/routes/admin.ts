@@ -1312,7 +1312,8 @@ router.post("/admin/traders/:userId/unsuspend", authMiddleware, adminOnly, async
 // GET /api/admin/dashboard — high-level operational summary
 router.get("/admin/dashboard", authMiddleware, adminOnly, async (req, res) => {
   try {
-    const [statusCounts, recentAudit, totals, expiringDocs, recentEnquiries] = await Promise.all([
+    const [statusCounts, recentAudit, totals, expiringDocs, recentEnquiries, openReports] =
+      await Promise.all([
       db
         .select({
           status: traderProfilesTable.verificationStatus,
@@ -1360,6 +1361,10 @@ router.get("/admin/dashboard", authMiddleware, adminOnly, async (req, res) => {
         .select({ count: sql<number>`count(*)::int` })
         .from(enquiriesTable)
         .where(gte(enquiriesTable.createdAt, sql`now() - interval '7 days'`)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(conversationReportsTable)
+        .where(eq(conversationReportsTable.status, "OPEN")),
     ]);
 
     res.json({
@@ -1367,6 +1372,7 @@ router.get("/admin/dashboard", authMiddleware, adminOnly, async (req, res) => {
       totals: totals[0],
       expiringSoonCount: expiringDocs[0]?.count ?? 0,
       enquiriesLast7d: recentEnquiries[0]?.count ?? 0,
+      openConversationReports: openReports[0]?.count ?? 0,
       recentActivity: recentAudit.map((r) => ({
         ...r,
         createdAt: r.createdAt.toISOString(),

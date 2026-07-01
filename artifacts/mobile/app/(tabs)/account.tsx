@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { getApiUrl } from '@/lib/api-url';
 import Colors from '@/constants/colors';
@@ -60,13 +60,26 @@ export default function AccountScreen() {
   const router = useRouter();
   const { user, isAuthenticated, isTrader, isAdmin, logout, token: adminToken } = useAuth();
   const qc = useQueryClient();
-  const { data: unreadData } = useGetConversationsUnreadCount({
+  const { data: unreadData, refetch: refetchUnread } = useGetConversationsUnreadCount({
     query: {
       queryKey: getGetConversationsUnreadCountQueryKey(),
       enabled: isAuthenticated && !isAdmin,
+      refetchOnWindowFocus: true,
     },
   });
   const unreadCount = unreadData?.unreadCount ?? 0;
+
+  // Refresh the unread badge whenever this screen regains focus (e.g. after the
+  // user reads a thread and navigates back). refetchOnWindowFocus alone does not
+  // fire on in-app screen navigation in React Native, so the badge would
+  // otherwise stay stale until the next cold app foreground.
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isAuthenticated && !isAdmin) {
+        void refetchUnread();
+      }
+    }, [isAuthenticated, isAdmin, refetchUnread]),
+  );
 
   const { data: me } = useGetMe({
     query: {
