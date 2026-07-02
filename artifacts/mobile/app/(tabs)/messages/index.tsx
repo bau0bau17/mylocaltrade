@@ -113,7 +113,7 @@ export default function MessagesIndexScreen() {
 function MessagesList({ isTrader }: { isTrader: boolean }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { data, isLoading, refetch, isRefetching } = useGetConversations();
+  const { data, isLoading, isError, refetch, isRefetching } = useGetConversations();
 
   // Re-pull the list (and its per-row unread badges) each time the screen gains
   // focus, so counts clear right after the user reads a thread and comes back.
@@ -127,6 +127,31 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
+
+  // If the request failed and we have nothing cached to show, surface a clear
+  // error with a retry action instead of leaving a spinner up or showing a
+  // misleading "no conversations" empty state.
+  if (isError && !data) {
+    return (
+      <View style={styles.centered}>
+        <View style={styles.emptyIcon}>
+          <Feather name="alert-circle" size={28} color={Colors.light.primary} />
+        </View>
+        <Text style={styles.emptyTitle}>Couldn't load your messages</Text>
+        <Text style={styles.emptySub}>
+          Please check your connection and try again.
+        </Text>
+        <Pressable
+          style={styles.cta}
+          onPress={() => refetch()}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+        >
+          <Text style={styles.ctaText}>Try again</Text>
+        </Pressable>
       </View>
     );
   }

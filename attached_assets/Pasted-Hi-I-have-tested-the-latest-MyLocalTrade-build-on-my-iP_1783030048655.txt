@@ -1,0 +1,143 @@
+Hi,
+
+I have tested the latest MyLocalTrade build on my iPhone through TestFlight and found a few issues that need to be fixed/implemented. I will attach screenshots for each point.
+
+1. Hide “List your business” CTA for Premium traders
+
+On the home screen, there is a card saying:
+
+“List your business – Go Premium from £9.99/month”
+
+Once a trader account already has an active Premium subscription, this card should be hidden for that user.
+
+Expected behaviour:
+
+- If the user/trader does not have Premium: show the “List your business / Go Premium” card.
+- If the user/trader already has an active Premium subscription: hide this card.
+
+I have attached a screenshot where I marked this card in yellow.
+
+2. Remove “payments” wording from chat safety banner
+
+In the chat screen, the banner currently says:
+
+“For your safety, keep all conversations and payments inside MyLocalTrade.”
+
+This needs to be changed because MyLocalTrade does not process customer-to-trader job payments inside the app.
+
+Please change the text to something like:
+
+“For your safety, keep all conversations inside MyLocalTrade.”
+
+Or:
+
+“For your safety, keep your communication inside MyLocalTrade.”
+
+Important: please remove the word “payments” from this banner.
+
+3. Loading spinner stuck on Messages screen
+
+On the Messages screen, there is a loading spinner showing in the middle of the screen. It looks like it is loading, but it stays stuck and does not do anything.
+
+Please check this behaviour.
+
+Expected behaviour:
+
+- If data is loading, the spinner should disappear once conversations are loaded.
+- If there is no data, show an empty state message.
+- If there is an error, show a proper error message or retry option.
+- The spinner should not remain stuck permanently.
+
+I have attached a screenshot showing the stuck loading circle.
+
+4. Trader cannot reply to customer review
+
+After a customer leaves a review, the trader receives an email saying they can open the trader dashboard and reply publicly to the review.
+
+However, in the trader account/app, I cannot find or add a reply to the review.
+
+Please either:
+
+- implement the trader review reply feature, or
+- remove/change the wording from the email if replies are not supported yet.
+
+Preferred fix: please implement the ability for traders to reply publicly to approved customer reviews.
+
+I have attached a screenshot of the email where it says the trader can reply.
+
+5. Trader gallery upload does not appear publicly
+
+In the trader account, I can upload gallery images, but the uploaded gallery does not appear on the public website/profile.
+
+Please check that gallery uploads are:
+
+- saved correctly,
+- linked to the correct trader profile,
+- shown publicly on the trader profile/website,
+- retained after pressing Save Gallery.
+
+I have attached a screenshot of the gallery upload screen.
+
+6. Customer uploaded quote photos not visible on trader side
+
+When a customer sends a quote/enquiry and uploads photos, the trader side only shows text like:
+
+“[1 photo attached]”
+
+But the trader cannot actually view/open the uploaded photo in the message/enquiry.
+
+Please fix this so that uploaded photos are visible and accessible to the trader.
+
+Expected behaviour:
+
+- Customer uploads one or more photos when sending the quote/enquiry.
+- Trader receives the enquiry.
+- Trader can see the attached photo thumbnails or attachment links.
+- Trader can tap/open the photos from inside the chat/enquiry.
+
+I have attached a screenshot showing the trader side where it only says “[1 photo attached]”.
+
+7. Email “Open conversation” button does not open directly in the app
+
+When I receive an email notification for a new message, the email contains an “Open conversation” button.
+
+At the moment, when I tap this button, it opens a web page first, then redirects me to a Replit/Expo preview page, and then asks me to allow opening another app / Expo Go.
+
+This is not the correct user experience.
+
+Expected behaviour:
+
+- Tapping “Open conversation” from the email should open the installed MyLocalTrade TestFlight app directly.
+- It should deep-link straight to the correct conversation/message thread if possible.
+- It should not open the Replit web preview page.
+- It should not ask the user to open Expo Go.
+- If the app is not installed, then it can fall back to a web/app download page, but for TestFlight users it should open the app directly.
+
+I have attached screenshots showing the email and the redirect behaviour.
+
+8. Prefer backend-only fixes if possible
+
+If any of these issues can be fixed through the backend, database, admin/email templates, or configuration only, please do that first so we can avoid creating another iOS TestFlight build unnecessarily.
+
+However, if any fix requires changes to the mobile app code, that is also fine — please implement it properly. Avoiding another build would be ideal, but correctness is more important.
+
+Expected approach:
+
+- Apply backend-only fixes where possible.
+- Only require a new iOS build where the mobile app code genuinely needs to change.
+- Please clearly tell me which fixes require a new TestFlight build and which ones can go live through backend/email/template changes only.
+
+Summary
+
+Please fix these issues in the TestFlight/mobile app flow and related backend/admin/email logic where needed:
+
+1. Hide Premium upsell card for already subscribed Premium traders.
+2. Remove “payments” wording from the chat safety banner.
+3. Fix stuck loading spinner on Messages screen.
+4. Add trader public reply feature for reviews, or update the email wording.
+5. Make trader gallery uploads appear publicly.
+6. Make customer quote/enquiry photo attachments visible to traders.
+7. Fix email deep links so “Open conversation” opens directly in the MyLocalTrade TestFlight app, not Replit/Expo preview.
+8. Where possible, apply fixes backend-side/email-template/configuration-side to avoid another iOS build, but if a mobile build is required, please implement it properly and confirm which items need a new TestFlight build.
+
+Thanks.

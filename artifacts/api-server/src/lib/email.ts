@@ -1227,7 +1227,12 @@ export async function sendNewMessageEmail(opts: {
   // Truncate preview to a safe length so we never leak entire long messages.
   const trimmed = opts.preview.length > 140 ? opts.preview.slice(0, 140) + "…" : opts.preview;
   const safePreview = escapeHtml(trimmed);
-  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
+  const webBase = getApiBaseUrl().replace(/\/api$/, "");
+  // Point the CTA at a deep-link redirect page that opens the installed app
+  // straight to this conversation (mylocaltrade://messages/<id>), falling back
+  // to the landing page if the app isn't installed. Avoids the old behaviour of
+  // landing on a web page / Expo preview.
+  const openUrl = `${webBase}/open?c=${opts.conversationId}`;
   const trimmedService =
     typeof opts.serviceRequired === "string" && opts.serviceRequired.trim().length > 0
       ? opts.serviceRequired.trim().slice(0, 80)
@@ -1259,7 +1264,7 @@ export async function sendNewMessageEmail(opts: {
         <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safePreview}</p>
       </div>
       <div style="text-align: center; margin-bottom: 8px;">
-        <a href="${dashboardUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
+        <a href="${openUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
           Open conversation
         </a>
       </div>

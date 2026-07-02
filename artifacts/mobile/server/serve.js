@@ -14,6 +14,11 @@ const fs = require("fs");
 const path = require("path");
 
 const TEMPLATE_PATH = path.resolve(__dirname, "templates", "landing-page.html");
+const OPEN_TEMPLATE_PATH = path.resolve(
+  __dirname,
+  "templates",
+  "open-redirect.html",
+);
 const basePath = (process.env.BASE_PATH || "/").replace(/\/+$/, "");
 const PORT = process.env.PORT || 18115;
 
@@ -31,6 +36,9 @@ const appName = getAppName();
 const landingPage = fs
   .readFileSync(TEMPLATE_PATH, "utf-8")
   .replace(/APP_NAME_PLACEHOLDER/g, appName);
+const openRedirectTemplate = fs
+  .readFileSync(OPEN_TEMPLATE_PATH, "utf-8")
+  .replace(/APP_NAME_PLACEHOLDER/g, appName);
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
@@ -44,6 +52,26 @@ const server = http.createServer((req, res) => {
   if (pathname === "/status" || pathname === "/healthz") {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify({ status: "ok" }));
+    return;
+  }
+
+  // Deep-link redirect: email "Open conversation" buttons point here. We bounce
+  // the visitor into the installed native app via its custom scheme
+  // (mylocaltrade://messages/<id>), with the landing page as a visible fallback
+  // when the app isn't installed. No Expo Go / dev preview is ever involved.
+  if (pathname === "/open") {
+    const raw = url.searchParams.get("c");
+    const id = raw && /^[0-9]+$/.test(raw) ? raw : null;
+    const deepLink = id ? `mylocaltrade://messages/${id}` : "mylocaltrade://";
+    const html = openRedirectTemplate.replace(
+      /DEEP_LINK_PLACEHOLDER/g,
+      deepLink,
+    );
+    res.writeHead(200, {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    });
+    res.end(html);
     return;
   }
 

@@ -16,6 +16,7 @@ import { TraderCard } from '@/components/TraderCard';
 import { HomeFooter } from '@/components/HomeFooter';
 import { useLocation } from '@/hooks/useLocation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSubscription } from '@/lib/revenuecat';
 import type { FeatherIconName } from '@/types/feather-icons';
 
 const CATEGORIES: { name: string; icon: FeatherIconName }[] = [
@@ -53,6 +54,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const location = useLocation();
   const { isAuthenticated, isCustomer } = useAuth();
+  const { hasTraderSubscription } = useSubscription();
   const showCustomerSections = isAuthenticated && isCustomer;
 
   const { data: featuredData, isLoading: isLoadingFeatured } = useGetFeaturedTraders({ limit: 5 });
@@ -289,18 +291,22 @@ export default function HomeScreen() {
           )}
         </View>
 
-        <Pressable style={styles.traderCtaBanner} onPress={() => router.push('/pricing')}>
-          <View style={styles.traderCtaLeft}>
-            <View style={styles.traderCtaBadge}>
-              <Text style={styles.traderCtaBadgeText}>FOR TRADERS</Text>
+        {/* Trader upsell — hidden once the trader already has an active
+            Premium subscription (nothing left to upsell). */}
+        {!hasTraderSubscription ? (
+          <Pressable style={styles.traderCtaBanner} onPress={() => router.push('/pricing')}>
+            <View style={styles.traderCtaLeft}>
+              <View style={styles.traderCtaBadge}>
+                <Text style={styles.traderCtaBadgeText}>FOR TRADERS</Text>
+              </View>
+              <Text style={styles.traderCtaTitle}>List your business</Text>
+              <Text style={styles.traderCtaSub}>Go Premium from £9.99/month</Text>
             </View>
-            <Text style={styles.traderCtaTitle}>List your business</Text>
-            <Text style={styles.traderCtaSub}>Go Premium from £9.99/month</Text>
-          </View>
-          <View style={styles.traderCtaArrow}>
-            <Feather name="arrow-right" size={18} color={Colors.light.primary} />
-          </View>
-        </Pressable>
+            <View style={styles.traderCtaArrow}>
+              <Feather name="arrow-right" size={18} color={Colors.light.primary} />
+            </View>
+          </Pressable>
+        ) : null}
 
         <HomeFooter />
       </ScrollView>
