@@ -7,7 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { Star, Check, X, Flag, AlertTriangle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Star, Check, X, Flag, AlertTriangle, Eye } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 
@@ -26,7 +35,43 @@ interface AdminReview {
   traderReplyAt: string | null;
   moderatedAt: string | null;
   moderationNotes: string | null;
+  jobReference: string | null;
   createdAt: string;
+}
+
+interface JobView {
+  jobReference: string | null;
+  conversation: {
+    id: number;
+    customerId: number;
+    customerName: string | null;
+    customerEmail: string | null;
+    traderProfileId: number;
+    traderBusinessName: string | null;
+    status: string;
+    serviceRequired: string | null;
+    postcode: string | null;
+    createdAt: string;
+    customerAcceptedAt: string | null;
+    customerCompletedAt: string | null;
+    cancelledAt: string | null;
+  };
+  enquiry: {
+    id: number;
+    message: string;
+    serviceRequired: string;
+    preferredDate: string | null;
+    createdAt: string;
+  } | null;
+  messages: Array<{
+    id: number;
+    senderUserId: number;
+    senderRole: string;
+    body: string;
+    systemMessage: boolean;
+    createdAt: string;
+  }>;
+  attachments: string[];
 }
 
 const STATUS_FILTERS: Array<{ value: ReviewStatus | "ALL"; label: string }> = [
@@ -56,6 +101,146 @@ function Stars({ rating }: { rating: number }) {
         />
       ))}
     </div>
+  );
+}
+
+function JobModerationDialog({ review }: { review: AdminReview }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const job = useMutation({
+    mutationFn: () =>
+      api<JobView>(`/api/admin/reviews/${review.id}/job`, {
+        query: { reason: reason.trim() },
+      }),
+  });
+
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) {
+      setReason("");
+      job.reset();
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" data-testid={`view-job-${review.id}`}>
+          <Eye className="w-3.5 h-3.5 mr-1" /> View job
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>
+            Job {review.jobReference ?? (review.enquiryId ? `#${review.enquiryId}` : "")}
+          </DialogTitle>
+          <DialogDescription>
+            Opening the full conversation and photos is recorded in the audit log. Enter a
+            reason to continue.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!job.data ? (
+          <div className="space-y-3">
+            <Textarea
+              placeholder="Reason for viewing this job (recorded in the audit log)"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+              data-testid={`job-reason-${review.id}`}
+            />
+            {job.error && (
+              <Alert variant="destructive">
+                <AlertDescription>{(job.error as Error).message}</AlertDescription>
+              </Alert>
+            )}
+            <Button
+              disabled={reason.trim().length < 5 || job.isPending}
+              onClick={() => job.mutate()}
+              data-testid={`job-confirm-${review.id}`}
+            >
+              View conversation &amp; photos
+            </Button>
+          </div>
+        ) : (
+          <ScrollArea className="flex-1 -mr-4 pr-4">
+            <div className="space-y-4 text-sm">
+              <div className="space-y-1">
+                <div className="font-medium">
+                  {job.data.conversation.traderBusinessName} · {job.data.conversation.customerName}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {job.data.jobReference ? `${job.data.jobReference} · ` : ""}
+                  {job.data.conversation.serviceRequired ?? "Job"}
+                  {job.data.conversation.postcode ? ` · ${job.data.conversation.postcode}` : ""}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Hired{" "}
+                  {job.data.conversation.customerAcceptedAt
+                    ? formatDateTime(job.data.conversation.customerAcceptedAt)
+                    : "—"}
+                  {job.data.conversation.customerCompletedAt
+                    ? ` · Completed ${formatDateTime(job.data.conversation.customerCompletedAt)}`
+                    : ""}
+                </div>
+              </div>
+
+              {job.data.enquiry && (
+                <div className="rounded-md bg-muted/30 p-3 space-y-1">
+                  <div className="text-xs font-medium text-foreground/80">Original enquiry</div>
+                  <p className="whitespace-pre-line">{job.data.enquiry.message}</p>
+                </div>
+              )}
+
+              {job.data.attachments.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-medium text-foreground/80">
+                    Customer photos ({job.data.attachments.length})
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {job.data.attachments.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noreferrer">
+                        <img
+                          src={url}
+                          alt={`Job photo ${i + 1}`}
+                          className="w-full h-24 object-cover rounded-md border"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-foreground/80">
+                  Conversation ({job.data.messages.length})
+                </div>
+                {job.data.messages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`rounded-md p-2 text-xs ${
+                      m.systemMessage
+                        ? "bg-muted/40 text-muted-foreground italic text-center"
+                        : m.senderRole === "trader"
+                          ? "bg-primary/5"
+                          : "bg-muted/30"
+                    }`}
+                  >
+                    {!m.systemMessage && (
+                      <div className="font-medium mb-0.5 capitalize">{m.senderRole}</div>
+                    )}
+                    <div className="whitespace-pre-line">{m.body}</div>
+                    <div className="text-[10px] text-muted-foreground mt-1">
+                      {formatDateTime(m.createdAt)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ScrollArea>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -153,13 +338,23 @@ export default function ReviewsPage() {
                           <span className="font-medium text-sm">{r.customerName}</span>
                           <Badge variant={STATUS_VARIANT[r.status]}>{r.status}</Badge>
                           <Stars rating={r.rating} />
+                          {r.jobReference ? (
+                            <Badge variant="outline" data-testid={`job-ref-${r.id}`}>
+                              {r.jobReference}
+                            </Badge>
+                          ) : null}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Trader #{r.traderId} · enquiry #{r.enquiryId} · submitted {formatDateTime(r.createdAt)}
                         </div>
                       </div>
-                      <div className="text-xs text-muted-foreground whitespace-nowrap">
-                        {r.moderatedAt ? `Moderated ${formatDateTime(r.moderatedAt)}` : null}
+                      <div className="flex flex-col items-end gap-2 whitespace-nowrap">
+                        <JobModerationDialog review={r} />
+                        {r.moderatedAt ? (
+                          <span className="text-xs text-muted-foreground">
+                            Moderated {formatDateTime(r.moderatedAt)}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 

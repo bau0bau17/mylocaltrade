@@ -3175,6 +3175,13 @@ components:
           format: date-time
           nullable: true
           description: When review submission became eligible (set at customer confirmation).
+        jobReference:
+          type: string
+          nullable: true
+          description: |
+            Human-readable unique job reference (e.g. MLT-000123), allocated when
+            the customer hires the trader. Null until hired. Shown in the chat
+            header to both parties; never shown on public reviews.
         hasReview:
           type: boolean
           nullable: true

@@ -1701,6 +1701,12 @@ export const GetConversationsResponse = zod.object({
         .describe(
           "When review submission became eligible (set at customer confirmation).",
         ),
+      jobReference: zod
+        .string()
+        .nullish()
+        .describe(
+          "Human-readable unique job reference (e.g. MLT-000123), allocated when\nthe customer hires the trader. Null until hired. Shown in the chat\nheader to both parties; never shown on public reviews.\n",
+        ),
       hasReview: zod
         .boolean()
         .nullish()
@@ -1800,6 +1806,12 @@ export const GetConversationResponse = zod.object({
       .nullish()
       .describe(
         "When review submission became eligible (set at customer confirmation).",
+      ),
+    jobReference: zod
+      .string()
+      .nullish()
+      .describe(
+        "Human-readable unique job reference (e.g. MLT-000123), allocated when\nthe customer hires the trader. Null until hired. Shown in the chat\nheader to both parties; never shown on public reviews.\n",
       ),
     hasReview: zod
       .boolean()

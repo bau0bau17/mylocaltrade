@@ -50,6 +50,11 @@ conversation is unmuted or muted indefinitely.
   cancellationReason?: string | null;
   /** When review submission became eligible (set at customer confirmation). */
   reviewUnlockedAt?: Date | null;
+  /** Human-readable unique job reference (e.g. MLT-000123), allocated when
+the customer hires the trader. Null until hired. Shown in the chat
+header to both parties; never shown on public reviews.
+ */
+  jobReference?: string | null;
   /** Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses. */
   hasReview?: boolean | null;
   createdAt: Date;

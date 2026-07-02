@@ -18,6 +18,7 @@ import { sendPushToUser } from "../lib/push-notifications";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { jobReferenceOf, formatJobReference } from "../lib/job-reference";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -108,6 +109,7 @@ function serializeConversation(
     cancelledByRole: c.cancelledByRole,
     cancellationReason: c.cancellationReason,
     reviewUnlockedAt: c.reviewUnlockedAt?.toISOString() ?? null,
+    jobReference: jobReferenceOf(c),
     hasReview: extras.hasReview ?? null,
     createdAt: c.createdAt.toISOString(),
   };
@@ -736,7 +738,11 @@ router.post("/conversations/:id/accept", authMiddleware, async (req, res) => {
       const now = new Date();
       await db
         .update(conversationsTable)
-        .set({ customerAcceptedAt: now, updatedAt: now })
+        .set({
+          customerAcceptedAt: now,
+          jobReference: conv.jobReference ?? formatJobReference(conv.id),
+          updatedAt: now,
+        })
         .where(eq(conversationsTable.id, id));
       await postSystemMessage(id, "The customer accepted the offer and hired the trader.");
     }

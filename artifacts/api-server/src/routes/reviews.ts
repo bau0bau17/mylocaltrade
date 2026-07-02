@@ -6,6 +6,7 @@ import {
   traderProfilesTable,
   usersTable,
   conversationsTable,
+  messagesTable,
 } from "@workspace/db/schema";
 import { and, eq, ne, sql, desc, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
@@ -14,8 +15,11 @@ import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit } from "../lib/trader-status";
 import { sendReviewApprovedEmail, sendReviewReplyEmail } from "../lib/email";
 import { logger } from "../lib/logger";
+import { ObjectStorageService } from "../lib/objectStorage";
+import { jobReferenceOf } from "../lib/job-reference";
 
 const router: IRouter = Router();
+const storage = new ObjectStorageService();
 
 // Statuses considered publicly discoverable for review retrieval. Mirrors the
 // visibility used by the public trader detail endpoint.
@@ -423,12 +427,22 @@ router.get("/admin/reviews", authMiddleware, adminOnly, async (req, res) => {
       ? eq(reviewsTable.status, status)
       : isNotNull(reviewsTable.id);
     const rows = await db
-      .select({ review: reviewsTable, customerName: usersTable.fullName })
+      .select({
+        review: reviewsTable,
+        customerName: usersTable.fullName,
+        conv: conversationsTable,
+      })
       .from(reviewsTable)
       .innerJoin(usersTable, eq(reviewsTable.customerId, usersTable.id))
+      .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, reviewsTable.enquiryId))
       .where(where)
       .orderBy(desc(reviewsTable.createdAt));
-    const reviews = await Promise.all(rows.map((r) => serializeReview(r.review, r.customerName)));
+    const reviews = await Promise.all(
+      rows.map(async (r) => ({
+        ...(await serializeReview(r.review, r.customerName)),
+        jobReference: r.conv ? jobReferenceOf(r.conv) : null,
+      })),
+    );
     res.json({ reviews });
   } catch (error) {
     req.log.error({ err: error }, "Admin list reviews failed");
@@ -531,6 +545,141 @@ router.post("/admin/reviews/:id/moderate", authMiddleware, adminOnly, async (req
     }
     req.log.error({ err: error }, "Moderate review failed");
     res.status(500).json({ error: "Failed to moderate review" });
+  }
+});
+
+// GET /api/admin/reviews/:id/job?reason=... — reason-gated, audit-logged view of
+// the full job behind a review: conversation lifecycle, all messages, the
+// original enquiry, and short-lived signed URLs for the customer's photos.
+// Every access is recorded in the audit log with the supplied reason.
+router.get("/admin/reviews/:id/job", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid review id" });
+      return;
+    }
+    const rawReason = typeof req.query.reason === "string" ? req.query.reason.trim() : "";
+    if (rawReason.length < 5) {
+      res.status(400).json({ error: "A reason (at least 5 characters) is required to view the job." });
+      return;
+    }
+    const reason = rawReason.slice(0, 500);
+    const adminId = (req as AuthenticatedRequest).userId;
+
+    const [review] = await db
+      .select()
+      .from(reviewsTable)
+      .where(eq(reviewsTable.id, id))
+      .limit(1);
+    if (!review) {
+      res.status(404).json({ error: "Review not found" });
+      return;
+    }
+    if (review.enquiryId == null) {
+      res.status(404).json({ error: "This review is not linked to a job." });
+      return;
+    }
+
+    const [row] = await db
+      .select({
+        conv: conversationsTable,
+        customerName: usersTable.fullName,
+        customerEmail: usersTable.email,
+        traderBusinessName: traderProfilesTable.businessName,
+      })
+      .from(conversationsTable)
+      .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
+      .innerJoin(traderProfilesTable, eq(conversationsTable.traderProfileId, traderProfilesTable.id))
+      .where(eq(conversationsTable.enquiryId, review.enquiryId))
+      .limit(1);
+    if (!row) {
+      res.status(404).json({ error: "Job conversation not found." });
+      return;
+    }
+
+    const messages = await db
+      .select()
+      .from(messagesTable)
+      .where(eq(messagesTable.conversationId, row.conv.id))
+      .orderBy(messagesTable.createdAt);
+
+    const [enq] = await db
+      .select()
+      .from(enquiriesTable)
+      .where(eq(enquiriesTable.id, review.enquiryId))
+      .limit(1);
+
+    let attachments: string[] = [];
+    const rawPaths = enq?.attachmentUrls ?? [];
+    if (rawPaths.length > 0) {
+      const signed = await Promise.all(
+        rawPaths.map(async (p) => {
+          try {
+            return await storage.getObjectEntityReadURL(p, 900);
+          } catch (signErr) {
+            logger.warn({ err: signErr, reviewId: id }, "Failed to sign enquiry attachment");
+            return null;
+          }
+        }),
+      );
+      attachments = signed.filter((u): u is string => u != null);
+    }
+
+    // Record every access, with the reason, before returning the data.
+    await logAudit({
+      userId: row.conv.customerId,
+      action: "ADMIN_VIEWED_CONVERSATION",
+      performedBy: adminId,
+      details: {
+        context: "REVIEW_MODERATION",
+        reviewId: id,
+        conversationId: row.conv.id,
+        enquiryId: review.enquiryId,
+        traderId: review.traderId,
+      },
+      notes: reason,
+    });
+
+    res.json({
+      jobReference: jobReferenceOf(row.conv),
+      conversation: {
+        id: row.conv.id,
+        customerId: row.conv.customerId,
+        customerName: row.customerName,
+        customerEmail: row.customerEmail,
+        traderProfileId: row.conv.traderProfileId,
+        traderBusinessName: row.traderBusinessName,
+        status: row.conv.status,
+        serviceRequired: row.conv.serviceRequired,
+        postcode: row.conv.postcode,
+        createdAt: row.conv.createdAt.toISOString(),
+        customerAcceptedAt: row.conv.customerAcceptedAt?.toISOString() ?? null,
+        customerCompletedAt: row.conv.customerCompletedAt?.toISOString() ?? null,
+        cancelledAt: row.conv.cancelledAt?.toISOString() ?? null,
+      },
+      enquiry: enq
+        ? {
+            id: enq.id,
+            message: enq.message,
+            serviceRequired: enq.serviceRequired,
+            preferredDate: enq.preferredDate,
+            createdAt: enq.createdAt.toISOString(),
+          }
+        : null,
+      messages: messages.map((m) => ({
+        id: m.id,
+        senderUserId: m.senderUserId,
+        senderRole: m.senderRole,
+        body: m.body,
+        systemMessage: m.systemMessage,
+        createdAt: m.createdAt.toISOString(),
+      })),
+      attachments,
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin view review job failed");
+    res.status(500).json({ error: "Failed to load job" });
   }
 });
 

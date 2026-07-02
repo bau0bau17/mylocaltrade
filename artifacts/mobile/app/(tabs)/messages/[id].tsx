@@ -475,6 +475,11 @@ export default function ConversationThreadScreen() {
               {conv.serviceRequired}
             </Text>
           ) : null}
+          {conv.jobReference ? (
+            <Text style={styles.headerJobRef} numberOfLines={1}>
+              Job {conv.jobReference}
+            </Text>
+          ) : null}
           <View style={styles.headerPills}>
             <View style={[styles.statusPill, stageDisplay.pill]}>
               <Text style={[styles.statusPillText, stageDisplay.text]}>{stageDisplay.label}</Text>
@@ -951,6 +956,7 @@ const styles = StyleSheet.create({
   },
   headerName: { fontSize: 16, fontWeight: "700", color: Colors.light.text },
   headerSub: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
+  headerJobRef: { fontSize: 12, fontWeight: "600", color: Colors.light.textSecondary, marginTop: 2 },
   headerPills: { flexDirection: "row", gap: 6, marginTop: 6 },
   statusPill: {
     paddingHorizontal: 8,

@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, varchar, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, varchar, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -13,6 +13,11 @@ export const conversationsTable = pgTable(
     traderUserId: integer("trader_user_id").notNull().references(() => usersTable.id),
     traderProfileId: integer("trader_profile_id").notNull().references(() => traderProfilesTable.id),
     enquiryId: integer("enquiry_id").references(() => enquiriesTable.id),
+    // Human-readable unique job reference (e.g. MLT-000123). Allocated when the
+    // customer hires the trader; used for review verification. Null until hired.
+    // Deterministic from the conversation id, so it can be derived on the fly
+    // for older rows that predate this column.
+    jobReference: varchar("job_reference", { length: 32 }),
     serviceRequired: varchar("service_required", { length: 255 }),
     postcode: varchar("postcode", { length: 16 }),
     status: varchar("status", { length: 32 }).notNull().default("AWAITING_TRADER_REPLY"),
@@ -54,6 +59,7 @@ export const conversationsTable = pgTable(
     customerIdx: index("conv_customer_idx").on(t.customerId, t.lastMessageAt),
     traderIdx: index("conv_trader_idx").on(t.traderProfileId, t.lastMessageAt),
     statusIdx: index("conv_status_idx").on(t.status),
+    jobReferenceIdx: uniqueIndex("conv_job_reference_unique_idx").on(t.jobReference),
   }),
 );
 
