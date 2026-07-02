@@ -24,5 +24,6 @@
 - [EAS iOS builds](eas-ios-builds.md) — profiles→backends; "Unable to install"=simulator/device-profile issue; EAS_NO_VCS=1 needed in sandbox (Git ref None tradeoff); preview points at dev domain.
 - [Monorepo project-reference stale .d.ts](monorepo-project-reference-dts.md) — editing lib/* src isn't enough; dependents typecheck against emitted dist .d.ts. Rebuild: `tsc -b lib/<pkg>/tsconfig.json --force`.
 - [Gallery / customer-upload image serving](gallery-object-serving.md) — /objects/... isn't publicly served & RN <Image> can't load relative URIs (black); need membership-scoped public route + absolute URL helper.
+- [Expo artifact owns prod web root](expo-artifact-prod-root.md) — deployed root `/` is the mobile artifact's serve.js, which by default shows an Expo Go/QR dev page + manifests; strip to a plain landing for App Store apps.
 - [Drizzle ANY(array) mis-bind](drizzle-any-array-binding.md) — raw sql`col = ANY(${jsArray})` throws "malformed array literal" in Postgres; use inArray(). Fails only in prod with data, not empty dev DB.
 - [Email OTP verification](email-otp-verification.md) — in-app code is primary, link is fallback; share ONE finalize helper; unauthenticated verify must collapse all non-lockout failures to one generic 400 (+dummy bcrypt) to avoid enumeration.
