@@ -17,6 +17,7 @@ import { ReviewsSection } from '@/components/ReviewsSection';
 import { formatResponseTime, isTopRated, isFastResponder } from '@/components/TraderCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { detectSpecialisms, SPECIALISM_BY_KEY } from '@/constants/specialisms';
+import { objectImageUrl } from '@/lib/api-url';
 
 export default function TraderProfileScreen() {
   const { id } = useLocalSearchParams();
@@ -307,7 +308,7 @@ export default function TraderProfileScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryRow}>
                 {trader.galleryUrls.map((url, idx) => (
                   <Pressable key={`${url}-${idx}`} onPress={() => setLightboxIndex(idx)}>
-                    <Image source={{ uri: url }} style={styles.galleryThumb} resizeMode="cover" />
+                    <Image source={{ uri: objectImageUrl(url) }} style={styles.galleryThumb} resizeMode="cover" />
                   </Pressable>
                 ))}
               </ScrollView>
@@ -423,7 +424,7 @@ export default function TraderProfileScreen() {
         <Pressable style={styles.lightboxBackdrop} onPress={() => setLightboxIndex(null)}>
           {lightboxIndex !== null && trader.galleryUrls?.[lightboxIndex] ? (
             <Image
-              source={{ uri: trader.galleryUrls[lightboxIndex] }}
+              source={{ uri: objectImageUrl(trader.galleryUrls[lightboxIndex]) }}
               style={styles.lightboxImage}
               resizeMode="contain"
             />

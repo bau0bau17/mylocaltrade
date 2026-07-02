@@ -17,3 +17,23 @@ export function getApiUrl(): string {
 
   return "";
 }
+
+// Turn a stored gallery object path (e.g. "/objects/customer-uploads/42/v/uuid")
+// into an absolute URL that React Native <Image> can load via the public
+// gallery-file serving endpoint. Local picker URIs (file://, ph://, etc.) and
+// already-absolute http(s) URLs are returned unchanged so freshly-picked images
+// can be previewed before they are saved.
+export function objectImageUrl(
+  path: string | null | undefined,
+): string | undefined {
+  if (!path) return undefined;
+  if (/^(https?:|file:|content:|data:|assets-library:|ph:)/i.test(path)) {
+    return path;
+  }
+  if (path.startsWith("/objects/")) {
+    return `${getApiUrl()}/api/customer/uploads/gallery-file?path=${encodeURIComponent(
+      path,
+    )}`;
+  }
+  return path;
+}

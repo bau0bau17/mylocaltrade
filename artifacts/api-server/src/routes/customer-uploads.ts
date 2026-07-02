@@ -1,8 +1,11 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
+import { sql } from "drizzle-orm";
+import { db } from "@workspace/db";
+import { traderProfilesTable } from "@workspace/db/schema";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -59,5 +62,73 @@ router.post(
     }
   },
 );
+
+// GET /api/customer/uploads/gallery-file?path=/objects/customer-uploads/...
+// Public, unauthenticated endpoint that streams a gallery image so it can be
+// rendered by React Native <Image> (which cannot load a bare /objects/... path
+// and has no access to the private object bucket). To avoid exposing arbitrary
+// private customer uploads, we only serve a path that is actually referenced in
+// some trader's published galleryUrls — i.e. an image the trader chose to make
+// public. Anything else (documents, un-published uploads) returns 404.
+const GalleryFileQuery = z.object({
+  path: z.string().min(1).max(512),
+});
+
+router.get("/customer/uploads/gallery-file", async (req, res) => {
+  try {
+    const parsed = GalleryFileQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid path" });
+      return;
+    }
+    const normalized = storage.normalizeObjectEntityPath(parsed.data.path);
+    if (!normalized.startsWith("/objects/customer-uploads/")) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    // Only serve images published in a trader's gallery. gallery_urls is a JSON
+    // array of these paths; cast to jsonb so the containment operator can check
+    // membership across all profiles.
+    const referenced = await db
+      .select({ id: traderProfilesTable.id })
+      .from(traderProfilesTable)
+      .where(
+        sql`${traderProfilesTable.galleryUrls}::jsonb @> ${JSON.stringify([
+          normalized,
+        ])}::jsonb`,
+      )
+      .limit(1);
+    if (referenced.length === 0) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    const file = await storage.getObjectEntityFile(normalized);
+    const [meta] = await file.getMetadata();
+    res.setHeader(
+      "Content-Type",
+      (meta.contentType as string) || "application/octet-stream",
+    );
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    if (meta.size) res.setHeader("Content-Length", String(meta.size));
+    await new Promise<void>((resolve, reject) => {
+      file
+        .createReadStream()
+        .on("error", reject)
+        .on("end", resolve)
+        .pipe(res);
+    });
+  } catch (error: unknown) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    req.log.error({ err: error }, "Gallery file serve failed");
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to load image" });
+    }
+  }
+});
 
 export default router;

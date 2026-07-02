@@ -5,6 +5,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import Colors from '@/constants/colors';
+import { objectImageUrl } from '@/lib/api-url';
 import {
   useGetTraderProfile,
   useUpdateTraderProfile,
@@ -35,6 +36,11 @@ export default function GalleryScreen() {
   const { mutateAsync: getUploadUrl } = useGetCustomerUploadUrl();
 
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  // Maps a freshly-uploaded object path to its local device URI so the trader
+  // sees the picked image immediately. Before "Save Gallery" the object is not
+  // yet referenced in any profile, so the public serving endpoint would 404;
+  // once saved and refetched, the resolved server URL takes over.
+  const [localPreviews, setLocalPreviews] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -93,6 +99,7 @@ export default function GalleryScreen() {
       });
       if (!putRes.ok) throw new Error('Upload to storage failed');
       setGalleryUrls(prev => [...prev, urlResp.objectPath]);
+      setLocalPreviews(prev => ({ ...prev, [urlResp.objectPath]: asset.uri }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Upload failed';
       Alert.alert('Upload failed', msg);
@@ -168,7 +175,7 @@ export default function GalleryScreen() {
           <View style={styles.grid}>
             {galleryUrls.map((url, idx) => (
               <View key={`${url}-${idx}`} style={styles.imageCard}>
-                <Image source={{ uri: url }} style={styles.image} resizeMode="cover" />
+                <Image source={{ uri: localPreviews[url] ?? objectImageUrl(url) }} style={styles.image} resizeMode="cover" />
                 <Pressable style={styles.removeButton} onPress={() => removeImage(idx)}>
                   <Feather name="x" size={16} color={Colors.light.white} />
                 </Pressable>
