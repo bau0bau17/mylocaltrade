@@ -9,26 +9,49 @@ import twilio from "twilio";
 //
 // Credentials come from three secrets (never hard-code them):
 //   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID
-// When they are absent (e.g. local dev), callers fall back to the existing
-// self-generated email OTP path.
+//
+// Test vs live: in production we use the live (unsuffixed) secrets. Everywhere
+// else (dev) we prefer the "_TEST" suffixed secrets, falling back to the live
+// ones if no test value is set. This lets the test credentials live alongside
+// the live ones under distinct names, so going live needs no code change — just
+// add the unsuffixed live secrets. When none are set, callers fall back to the
+// existing self-generated email OTP path.
+//
+// Note: Twilio's built-in "Test Credentials" do NOT work with the Verify API —
+// these should be real account credentials (a trial account is fine for
+// testing; SMS can be sent to verified numbers).
+
+function resolveCred(base: string): string | undefined {
+  const live = process.env[base];
+  const test = process.env[`${base}_TEST`];
+  if (process.env.NODE_ENV === "production") return live || undefined;
+  return test || live || undefined;
+}
+
+export function twilioCreds(): {
+  accountSid?: string;
+  authToken?: string;
+  serviceSid?: string;
+} {
+  return {
+    accountSid: resolveCred("TWILIO_ACCOUNT_SID"),
+    authToken: resolveCred("TWILIO_AUTH_TOKEN"),
+    serviceSid: resolveCred("TWILIO_VERIFY_SERVICE_SID"),
+  };
+}
 
 export function isTwilioVerifyConfigured(): boolean {
-  return Boolean(
-    process.env.TWILIO_ACCOUNT_SID &&
-      process.env.TWILIO_AUTH_TOKEN &&
-      process.env.TWILIO_VERIFY_SERVICE_SID,
-  );
+  const { accountSid, authToken, serviceSid } = twilioCreds();
+  return Boolean(accountSid && authToken && serviceSid);
 }
 
 let cachedClient: ReturnType<typeof twilio> | null = null;
 
 function getClient(): ReturnType<typeof twilio> | null {
-  if (!isTwilioVerifyConfigured()) return null;
+  const { accountSid, authToken } = twilioCreds();
+  if (!accountSid || !authToken) return null;
   if (!cachedClient) {
-    cachedClient = twilio(
-      process.env.TWILIO_ACCOUNT_SID as string,
-      process.env.TWILIO_AUTH_TOKEN as string,
-    );
+    cachedClient = twilio(accountSid, authToken);
   }
   return cachedClient;
 }
@@ -58,7 +81,7 @@ export async function startPhoneVerification(
 ): Promise<StartVerificationResult> {
   const client = getClient();
   if (!client) return { ok: false };
-  const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID as string;
+  const serviceSid = twilioCreds().serviceSid as string;
   const verification = await client.verify.v2
     .services(serviceSid)
     .verifications.create({ to: phoneE164, channel: "sms" });
@@ -76,7 +99,7 @@ export async function checkPhoneVerification(
 ): Promise<CheckVerificationResult> {
   const client = getClient();
   if (!client) return { approved: false };
-  const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID as string;
+  const serviceSid = twilioCreds().serviceSid as string;
   try {
     const check = await client.verify.v2
       .services(serviceSid)
