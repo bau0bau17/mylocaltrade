@@ -153,6 +153,19 @@ const cancellationRequestLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Phone OTP: per-device (IP) hourly cap so a single device cannot burn through
+// SMS credits. The per-number hourly cap, the per-account 60s resend cooldown
+// and the per-account attempt limit live in routes/trader-phone.ts (they need
+// the authenticated account / resolved number, which are not available at this
+// middleware layer). Twilio Verify enforces its own per-number limits on top.
+const phoneOtpIpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 15,
+  message: { error: "Too many verification requests from this device. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use(
   "/api/webhooks/stripe",
   express.raw({ type: "application/json" }),
@@ -166,7 +179,7 @@ app.use("/api/auth/register", authLimiter);
 app.use("/api/auth/resend-verification", resendLimiter);
 app.use("/api/auth/forgot-password", resendLimiter);
 app.use("/api/auth/reset-password", authLimiter);
-app.use("/api/trader/phone/send-otp", resendLimiter);
+app.use("/api/trader/phone/send-otp", phoneOtpIpLimiter);
 app.use("/api/contact", contactLimiter);
 app.use("/api/enquiries", enquiriesLimiter);
 app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);

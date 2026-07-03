@@ -28,3 +28,4 @@
 - [Email/web → app deep links](email-to-app-deep-link.md) — bounce via a web redirect page to the existing custom scheme (no build); universal links need associatedDomains+AASA (build). Tester bugs are often just an old build.
 - [Drizzle ANY(array) mis-bind](drizzle-any-array-binding.md) — raw sql`col = ANY(${jsArray})` throws "malformed array literal" in Postgres; use inArray(). Fails only in prod with data, not empty dev DB.
 - [Email OTP verification](email-otp-verification.md) — in-app code is primary, link is fallback; share ONE finalize helper; unauthenticated verify must collapse all non-lockout failures to one generic 400 (+dummy bcrypt) to avoid enumeration.
+- [Trader phone OTP — Twilio Verify](trader-phone-otp-twilio.md) — SMS via Twilio Verify (email fallback); phoneOtpHash=null ⇒ Twilio owns code; backend-only (mobile fetch, keep response shape); per-number rate limit lives in the handler on canonical E.164, not middleware.

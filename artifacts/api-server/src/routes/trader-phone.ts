@@ -7,6 +7,12 @@ import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, logAudit } from "../lib/trader-status";
 import { deliverTraderPhoneOtp } from "../lib/otp-delivery";
+import {
+  isTwilioVerifyConfigured,
+  startPhoneVerification,
+  checkPhoneVerification,
+  toUkE164,
+} from "../lib/twilio-verify";
 
 const router: IRouter = Router();
 
@@ -21,6 +27,40 @@ function generateOtp(): string {
 
 function normalisePhone(input: string): string {
   return input.replace(/\s+/g, "").trim();
+}
+
+// Per-number send cap (SMS-bombing protection). Applies to EVERY send-otp call
+// — including the default "verify my registered number" flow — keyed on the
+// canonical E.164 so 07…/+447…/447… variants of the same number share one
+// bucket. This complements the per-device (IP) cap in app.ts and the per-account
+// 60s cooldown below. In-memory, matching this codebase's existing
+// express-rate-limit MemoryStore approach (per-instance under autoscale).
+const PHONE_SEND_WINDOW_MS = 60 * 60 * 1000;
+const PHONE_SEND_MAX = 5;
+const phoneSendCounts = new Map<string, { count: number; resetAt: number }>();
+
+function takePhoneSendSlot(phoneKey: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  // Opportunistic sweep so the map cannot grow without bound.
+  if (phoneSendCounts.size > 2000) {
+    for (const [key, entry] of phoneSendCounts) {
+      if (entry.resetAt <= now) phoneSendCounts.delete(key);
+    }
+  }
+  const existing = phoneSendCounts.get(phoneKey);
+  if (!existing || existing.resetAt <= now) {
+    phoneSendCounts.set(phoneKey, { count: 1, resetAt: now + PHONE_SEND_WINDOW_MS });
+    return { allowed: true };
+  }
+  if (existing.count >= PHONE_SEND_MAX) {
+    return { allowed: false, retryAfter: Math.ceil((existing.resetAt - now) / 1000) };
+  }
+  existing.count += 1;
+  return { allowed: true };
+}
+
+function canonicalPhoneKey(phone: string): string {
+  return toUkE164(phone) ?? normalisePhone(phone).toLowerCase();
 }
 
 async function loadTrader(req: AuthenticatedRequest) {
@@ -50,21 +90,22 @@ router.post("/trader/phone/send-otp", authMiddleware, async (req, res) => {
       return;
     }
 
-    // Optional: allow updating phone in same call.
+    // Optional: allow updating the phone in the same call.
     const newPhoneRaw = typeof (req.body as { phone?: unknown })?.phone === "string"
       ? (req.body as { phone: string }).phone
       : null;
 
     let phoneToUse = profile.phone;
     if (newPhoneRaw && newPhoneRaw.trim().length > 0) {
-      const cleaned = normalisePhone(newPhoneRaw);
       if (!UK_PHONE_REGEX.test(newPhoneRaw.trim())) {
         res.status(400).json({ error: "Please enter a valid UK mobile number (07… or +447…)." });
         return;
       }
-      phoneToUse = cleaned;
+      phoneToUse = normalisePhone(newPhoneRaw);
     }
 
+    // Per-account resend cooldown — durable guardrail against resend spam and
+    // SMS cost (works across autoscale instances since it lives in the DB).
     if (profile.phoneOtpLastSentAt) {
       const elapsed = Date.now() - profile.phoneOtpLastSentAt.getTime();
       if (elapsed < RESEND_COOLDOWN_MS) {
@@ -77,17 +118,70 @@ router.post("/trader/phone/send-otp", authMiddleware, async (req, res) => {
       }
     }
 
+    // Per-number hourly cap — applies to both the registered-number and the
+    // "different number" flows, keyed on the canonical number.
+    const phoneSlot = takePhoneSendSlot(canonicalPhoneKey(phoneToUse));
+    if (!phoneSlot.allowed) {
+      res.status(429).json({
+        error: "Too many codes requested for this number. Please try again later.",
+        retryAfter: phoneSlot.retryAfter,
+      });
+      return;
+    }
+
+    // Primary path: Twilio Verify sends the SMS and owns the code. We store no
+    // local hash (phoneOtpHash = null) so /verify knows to check against Twilio.
+    if (isTwilioVerifyConfigured()) {
+      const e164 = toUkE164(phoneToUse);
+      if (!e164) {
+        res.status(400).json({ error: "Please enter a valid UK mobile number (07… or +447…)." });
+        return;
+      }
+
+      try {
+        const started = await startPhoneVerification(e164);
+        if (!started.ok) {
+          req.log.error({ userId: user.id, status: started.status }, "Twilio Verify start not pending");
+          res.status(503).json({ error: "Could not send verification code. Please try again shortly." });
+          return;
+        }
+      } catch (err) {
+        req.log.error({ err, userId: user.id }, "Twilio Verify start threw");
+        res.status(503).json({ error: "Could not send verification code. Please try again shortly." });
+        return;
+      }
+
+      await db
+        .update(traderProfilesTable)
+        .set({
+          phone: e164,
+          phoneOtpHash: null,
+          phoneOtpExpiresAt: new Date(Date.now() + OTP_TTL_MS),
+          phoneOtpAttempts: 0,
+          phoneOtpLastSentAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(traderProfilesTable.userId, user.id));
+
+      req.log.info({ userId: user.id, channel: "sms" }, "Trader phone OTP dispatched via Twilio Verify");
+      logAudit({ userId: user.id, action: "PHONE_OTP_SENT", details: { phone: e164, channel: "sms" } });
+
+      res.json({
+        message: "Verification code sent by SMS.",
+        phoneMasked: maskPhone(e164),
+        expiresInSeconds: Math.floor(OTP_TTL_MS / 1000),
+        // Twilio owns the code — never surface it, even in dev.
+        mockCode: undefined,
+      });
+      return;
+    }
+
+    // Fallback path (no Twilio configured, e.g. local dev): self-generated code
+    // delivered by email, reusing the existing verification logic unchanged.
     const code = generateOtp();
     const codeHash = await bcryptjs.hash(code, 10);
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-    // Deliver the code FIRST, then persist OTP state only on confirmed
-    // delivery. This keeps send atomic: a failed/unconfigured delivery never
-    // leaves a live code or a cooldown lock with nothing actually sent, so the
-    // user can retry immediately. During development this goes out by email
-    // (Brevo), reusing the same verification logic. At launch, flip
-    // OTP_DELIVERY_CHANNEL to "sms" to deliver via Brevo SMS instead — the
-    // generation/expiry/cooldown/attempt logic stays exactly the same.
     let delivery: Awaited<ReturnType<typeof deliverTraderPhoneOtp>>;
     try {
       delivery = await deliverTraderPhoneOtp({
@@ -170,7 +264,9 @@ router.post("/trader/phone/verify", authMiddleware, async (req, res) => {
       return;
     }
 
-    if (!profile.phoneOtpHash || !profile.phoneOtpExpiresAt) {
+    // A send must have happened (this window is set by both the Twilio and the
+    // email path), otherwise there is nothing to check.
+    if (!profile.phoneOtpExpiresAt) {
       res.status(400).json({ error: "Request a verification code first." });
       return;
     }
@@ -183,8 +279,34 @@ router.post("/trader/phone/verify", authMiddleware, async (req, res) => {
       return;
     }
 
-    const ok = await bcryptjs.compare(code, profile.phoneOtpHash);
-    if (!ok) {
+    // Twilio path when configured and no local hash is pending; otherwise fall
+    // back to comparing the locally-generated (email) code.
+    const useTwilio = isTwilioVerifyConfigured() && !profile.phoneOtpHash;
+
+    let approved = false;
+    if (useTwilio) {
+      const e164 = toUkE164(profile.phone);
+      if (!e164) {
+        res.status(400).json({ error: "Request a verification code first." });
+        return;
+      }
+      try {
+        const result = await checkPhoneVerification(e164, code);
+        approved = result.approved;
+      } catch (err) {
+        req.log.error({ err, userId: user.id }, "Twilio Verify check threw");
+        res.status(503).json({ error: "Could not verify code. Please try again shortly." });
+        return;
+      }
+    } else {
+      if (!profile.phoneOtpHash) {
+        res.status(400).json({ error: "Request a verification code first." });
+        return;
+      }
+      approved = await bcryptjs.compare(code, profile.phoneOtpHash);
+    }
+
+    if (!approved) {
       await db
         .update(traderProfilesTable)
         .set({
@@ -209,6 +331,7 @@ router.post("/trader/phone/verify", authMiddleware, async (req, res) => {
       .update(traderProfilesTable)
       .set({
         phoneVerified: true,
+        phoneVerifiedAt: new Date(),
         phoneOtpHash: null,
         phoneOtpExpiresAt: null,
         phoneOtpAttempts: 0,

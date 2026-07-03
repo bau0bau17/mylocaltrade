@@ -141,6 +141,7 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   privacyVersion: varchar("privacy_version", { length: 20 }),
 
   // --- Phone verification (Phase 2) ---
+  phoneVerifiedAt: timestamp("phone_verified_at"),
   phoneOtpHash: varchar("phone_otp_hash", { length: 255 }),
   phoneOtpExpiresAt: timestamp("phone_otp_expires_at"),
   phoneOtpAttempts: integer("phone_otp_attempts").notNull().default(0),
