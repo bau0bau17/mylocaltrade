@@ -9,24 +9,12 @@ import twilio from "twilio";
 //
 // Credentials come from three secrets (never hard-code them):
 //   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID
-//
-// Test vs live: in production we use the live (unsuffixed) secrets. Everywhere
-// else (dev) we prefer the "_TEST" suffixed secrets, falling back to the live
-// ones if no test value is set. This lets the test credentials live alongside
-// the live ones under distinct names, so going live needs no code change — just
-// add the unsuffixed live secrets. When none are set, callers fall back to the
-// existing self-generated email OTP path.
+// When they are absent (e.g. local dev), callers fall back to the existing
+// self-generated email OTP path.
 //
 // Note: Twilio's built-in "Test Credentials" do NOT work with the Verify API —
-// these should be real account credentials (a trial account is fine for
-// testing; SMS can be sent to verified numbers).
-
-function resolveCred(base: string): string | undefined {
-  const live = process.env[base];
-  const test = process.env[`${base}_TEST`];
-  if (process.env.NODE_ENV === "production") return live || undefined;
-  return test || live || undefined;
-}
+// these must be real account credentials (a trial account is fine for testing;
+// SMS can only be sent to verified numbers on a trial).
 
 export function twilioCreds(): {
   accountSid?: string;
@@ -34,9 +22,9 @@ export function twilioCreds(): {
   serviceSid?: string;
 } {
   return {
-    accountSid: resolveCred("TWILIO_ACCOUNT_SID"),
-    authToken: resolveCred("TWILIO_AUTH_TOKEN"),
-    serviceSid: resolveCred("TWILIO_VERIFY_SERVICE_SID"),
+    accountSid: process.env.TWILIO_ACCOUNT_SID,
+    authToken: process.env.TWILIO_AUTH_TOKEN,
+    serviceSid: process.env.TWILIO_VERIFY_SERVICE_SID,
   };
 }
 
