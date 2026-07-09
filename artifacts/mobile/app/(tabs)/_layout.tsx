@@ -4,7 +4,7 @@ import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { router, Tabs, usePathname, useGlobalSearchParams } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useMemo, useRef } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -15,7 +15,13 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 // Inner routes that live inside the (tabs) group so they inherit the same
 // bottom tab bar as the four primary tabs. They are hidden from the bar
 // (href: null) and use the shared ScreenHeader as their top bar.
-const INNER_ROUTES: { name: string; title: string; parent: string }[] = [
+const INNER_ROUTES: {
+  name: string;
+  title: string;
+  parent: string;
+  /** Optional decorative icon rendered in the header's top-right slot. */
+  rightIcon?: React.ReactNode;
+}[] = [
   { name: "legal-support", title: "Legal & Support", parent: "/account" },
   { name: "auth/login", title: "Log In", parent: "/account" },
   { name: "auth/register-customer", title: "Register", parent: "/account" },
@@ -25,7 +31,18 @@ const INNER_ROUTES: { name: string; title: string; parent: string }[] = [
   { name: "auth/reset-password", title: "Reset Password", parent: "/auth/login" },
   { name: "pricing", title: "Subscription Plans", parent: "/account" },
   { name: "enquiry/[traderId]", title: "Send Enquiry", parent: "/traders" },
-  { name: "trader-dashboard/index", title: "Trader Onboarding", parent: "/account" },
+  {
+    name: "trader-dashboard/index",
+    title: "Trader Onboarding",
+    parent: "/account",
+    rightIcon: (
+      <MaterialCommunityIcons
+        name="shield-check"
+        size={20}
+        color={Colors.light.secondary}
+      />
+    ),
+  },
   { name: "trader-dashboard/edit-profile", title: "Edit Profile", parent: "/account" },
   { name: "trader-dashboard/leads", title: "My Leads", parent: "/account" },
   { name: "trader-dashboard/billing", title: "Billing & Plan", parent: "/account" },
@@ -278,6 +295,7 @@ function ClassicTabLayout() {
               header: ({ route, options }) => (
                 <ScreenHeader
                   title={(options.title as string) ?? r.title}
+                  rightSlot={r.rightIcon}
                   showBack
                   onBack={() => {
                     // Inner routes are registered as hidden Tabs.Screen
