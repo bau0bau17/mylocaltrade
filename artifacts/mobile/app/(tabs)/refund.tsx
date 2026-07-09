@@ -24,7 +24,7 @@ export default function RefundScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          This policy is issued by Service Provider LTD, a company registered in England and Wales under company number 15830141, trading as MyLocalTrade (registered office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ), and outlines the terms regarding refunds and cancellations for trader subscriptions on the MyLocalTrade platform.
+          This policy is issued by Service Provider LTD, a company registered in England and Wales under company number 15830141, trading as MyLocalTrade, and outlines the terms regarding refunds and cancellations for trader subscriptions on the MyLocalTrade platform. Our registered office address is shown in the contact section below.
         </Text>
       </View>
 
