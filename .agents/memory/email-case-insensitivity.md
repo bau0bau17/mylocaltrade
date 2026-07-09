@@ -12,9 +12,11 @@ silently failed.
 **Rule:** every user lookup by email must be case-insensitive
 (`lower(email) = lower(input)`), and new registrations store email lowercased.
 
-**Legacy duplicates:** production contains a real case-variant pair —
-`lucian.dpd@gmail.com` (customer) and `Lucian.dpd@gmail.com` (trader), same
-person, two live accounts created under the old case-sensitive checks.
+**Legacy duplicates:** production contains a real case-variant pair — the same
+address exists once all-lowercase (customer account) and once with a capital
+first letter (trader account), same person, two live accounts created under
+the old case-sensitive checks. Find it with:
+`SELECT lower(email), count(*) FROM users GROUP BY 1 HAVING count(*) > 1`.
 Because of this:
 - Single-user lookups must be deterministic: prefer exact typed casing, then
   the canonical all-lowercase row, then lowest id (see `findUserByEmail` in
