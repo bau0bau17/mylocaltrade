@@ -23,7 +23,7 @@ export default function PrivacyScreen() {
       <Text style={styles.title}>Privacy Policy</Text>
       
       <View style={styles.section}>
-        <Text style={styles.lastUpdated}>Last Updated: June 2026</Text>
+        <Text style={styles.lastUpdated}>Last Updated: 9 July 2026</Text>
         <Text style={styles.paragraph}>
           This Privacy Policy explains how Service Provider LTD (company registered in England and Wales under company number 15830141, registered office: 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ), trading as MyLocalTrade ("we", "us", "our"), collects, uses, discloses, and safeguards your personal data when you use our mobile application.
         </Text>
@@ -67,6 +67,9 @@ export default function PrivacyScreen() {
           - To improve our services and app functionality{'\n'}
           - To send service-related communications{'\n'}
           - To comply with legal and regulatory requirements
+        </Text>
+        <Text style={styles.paragraph}>
+          We may use SMS, RCS or similar messaging services to send account verification codes, login codes, phone number verification codes, security alerts and service-related account messages. These messages are used for account access, registration, login and security purposes. We do not use these verification messages for marketing or promotional purposes. We do not sell personal information or share messaging opt-in data or consent with third parties for marketing purposes.
         </Text>
       </View>
 

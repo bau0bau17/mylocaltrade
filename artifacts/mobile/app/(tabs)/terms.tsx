@@ -23,6 +23,7 @@ export default function TermsScreen() {
       <Text style={styles.title}>Terms & Conditions</Text>
       
       <View style={styles.section}>
+        <Text style={styles.lastUpdated}>Last Updated: 9 July 2026</Text>
         <Text style={styles.paragraph}>
           These terms and conditions ("Terms") govern your use of the MyLocalTrade mobile application ("App"), operated by Service Provider LTD ("Company", "we", "us"), a company registered in England and Wales under company number 15830141, trading as MyLocalTrade.
         </Text>
@@ -49,6 +50,9 @@ export default function TermsScreen() {
         <Text style={styles.heading}>3. User Accounts</Text>
         <Text style={styles.paragraph}>
           You must be at least 18 years of age to use this App. You are responsible for maintaining the confidentiality of your account and password, and for restricting access to your device. You accept responsibility for all activities that occur under your account.
+        </Text>
+        <Text style={styles.paragraph}>
+          When you register, log in, verify your phone number or request account access, you may receive one-time verification or security messages from MyLocalTrade by SMS, RCS or similar messaging services. These messages are sent only when you request them and are used solely for account access, verification and security — not for marketing or promotional purposes.
         </Text>
       </View>
 
@@ -121,8 +125,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: Colors.light.text,
-    marginBottom: 24,
+    marginBottom: 8,
     letterSpacing: 0.3,
+  },
+  lastUpdated: {
+    fontSize: 12,
+    color: Colors.light.textMuted,
+    fontStyle: 'italic',
+    marginBottom: 16,
   },
   section: {
     marginBottom: 24,

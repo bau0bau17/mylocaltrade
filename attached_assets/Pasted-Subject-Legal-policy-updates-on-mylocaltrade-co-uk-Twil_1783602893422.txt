@@ -1,0 +1,23 @@
+Subject: Legal / policy updates on mylocaltrade.co.uk (Twilio / Google RCS compliance)
+
+The following changes were made on the MyLocalTrade landing website for Twilio/Google RCS Sender compliance. The mobile app's legal screens should be kept consistent with these:
+
+1. Privacy Policy (https://mylocaltrade.co.uk/privacy-policy)
+Added the following paragraph under "2. How We Use Your Data" (Last updated date changed to 9 July 2026):
+
+"We may use SMS, RCS or similar messaging services to send account verification codes, login codes, phone number verification codes, security alerts and service-related account messages. These messages are used for account access, registration, login and security purposes. We do not use these verification messages for marketing or promotional purposes. We do not sell personal information or share messaging opt-in data or consent with third parties for marketing purposes."
+
+2. Terms & Conditions (https://mylocaltrade.co.uk/terms)
+Added the following paragraph under "3. Accounts" (Last updated date changed to 9 July 2026):
+
+"When you register, log in, verify your phone number or request account access, you may receive one-time verification or security messages from MyLocalTrade by SMS, RCS or similar messaging services. These messages are sent only when you request them and are used solely for account access, verification and security — not for marketing or promotional purposes."
+
+3. New public page: https://mylocaltrade.co.uk/rcs-opt-in
+A permanent public page explaining the SMS/RCS OTP flow: messages are one-time verification codes only (registration, login, phone verification, account security), sent only when the user requests a code, never used for marketing. Includes the opt-in proof image and links to Privacy Policy and Terms.
+
+4. New public assets:
+
+Opt-in proof image: https://mylocaltrade.co.uk/rcs-opt-in.png (phone verification screen mockup: "Verify your phone number", mobile number field, "Send verification code" button, consent text mentioning one-time verification by SMS or RCS for account access and security)
+RCS sender logo: https://mylocaltrade.co.uk/rcs-logo.png (224×224 PNG)
+RCS sender banner: https://mylocaltrade.co.uk/rcs-banner.jpg (1440×448 JPEG)
+Note for the app: these are website-only changes — nothing affects the mobile app build or TestFlight. However, the app's phone verification screen should match the opt-in mockup wording where possible (mention of "one-time verification code by SMS or RCS", "account access and security", and links to Privacy Policy / Terms), and any in-app copies of the Privacy Policy / Terms should be synced with the texts above.

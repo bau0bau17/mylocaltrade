@@ -133,9 +133,9 @@ export default function VerifyPhoneScreen() {
           <Feather name="smartphone" size={28} color={Colors.light.secondary} />
         </View>
 
-        <Text style={styles.title}>Confirm your mobile number</Text>
+        <Text style={styles.title}>Verify your phone number</Text>
         <Text style={styles.subtitle}>
-          We use your phone number to contact you about leads and account issues. It's never shared publicly.
+          We'll send you a one-time verification code by SMS or RCS to confirm your number, for account access and security. Your number is never shared publicly or used for marketing.
         </Text>
 
         {!otpSent ? (
@@ -187,6 +187,13 @@ export default function VerifyPhoneScreen() {
                 <Text style={styles.primaryBtnText}>Send verification code</Text>
               )}
             </Pressable>
+
+            <Text style={styles.consentText}>
+              By tapping "Send verification code" you agree to receive a one-time verification code by SMS or RCS, used for account access and security only — never for marketing. Message and data rates may apply. See our{' '}
+              <Text style={styles.consentLink} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
+              {' '}and{' '}
+              <Text style={styles.consentLink} onPress={() => router.push('/terms')}>Terms</Text>.
+            </Text>
           </View>
         ) : (
           <View style={styles.card}>
@@ -282,6 +289,8 @@ const styles = StyleSheet.create({
   inputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.light.background, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 12, paddingHorizontal: 14, height: 52, gap: 10 },
   input: { flex: 1, height: '100%', fontSize: 15, color: Colors.light.text },
   sentTo: { fontSize: 13, color: Colors.light.textSecondary, textAlign: 'center' },
+  consentText: { fontSize: 11, color: Colors.light.textMuted, lineHeight: 16, textAlign: 'center' },
+  consentLink: { color: Colors.light.primary, fontWeight: '600', textDecorationLine: 'underline' },
   primaryBtn: { backgroundColor: Colors.light.secondary, height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   primaryBtnText: { color: Colors.light.white, fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
   secondaryBtn: { backgroundColor: 'transparent', height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.light.border },
