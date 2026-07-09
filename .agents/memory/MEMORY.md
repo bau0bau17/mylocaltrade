@@ -4,6 +4,7 @@
 - [RevenueCat cancellation red LogBox](revenuecat-cancellation-logbox.md) — catching userCancelled isn't enough; native SDK logs "Purchase was cancelled" at ERROR → red LogBox. Demote via setLogHandler, match only that message.
 - [RevenueCat identity before purchase](revenuecat-identity-before-purchase.md) — configure is anonymous; logIn-in-effect races the buy button → purchases orphan on $RCAnonymousID, invisible to sync+webhook. Force logIn before purchase/restore.
 - [GestureHandlerRootView flex](gesturehandlerrootview-release-touches.md) — root GestureHandlerRootView needs flex:1; plain RN Pressable bypasses RNGH so this alone rarely kills all taps.
+- [Global tap-to-dismiss keyboard](global-tap-keyboard-dismiss.md) — root TouchableWithoutFeedback broke ScrollView on device; use passive onTouchStart/End tap detection instead.
 - [.replit [nix] change kills workflows](replit-nix-change-needs-rebuild.md) — after a .replit [nix] edit, workflows start then die; restart_workflow lies; fix = user reloads workspace to rebuild env.
 - [SubscriptionProvider value loop](subscription-provider-value-loop.md) — never depend on the whole useSubscription() object in effect deps; provider rebuilds it each render → infinite refresh loop.
 - [Public trader visibility](trader-public-visibility.md) — listing driven by VERIFICATION, never subscription; Premium only adds perks; predicate duplicated across public routes — update all.

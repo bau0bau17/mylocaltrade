@@ -10,7 +10,13 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef } from "react";
-import { Platform, Keyboard, TouchableWithoutFeedback } from "react-native";
+import {
+  Platform,
+  Keyboard,
+  TextInput,
+  findNodeHandle,
+  type GestureResponderEvent,
+} from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -91,18 +97,69 @@ function useNotificationDeepLinks() {
   }, [router, isAdmin]);
 }
 
+// App-wide "tap anywhere outside an input to close the keyboard".
+//
+// Deliberately NOT a Touchable/Pressable wrapper: a root-level touchable
+// enters the responder negotiation and can conflict with ScrollView/gesture
+// handling on some screens (reported: document-upload screen stopped
+// scrolling after a tap). Instead we use the passive onTouchStart/onTouchEnd
+// View props, which merely observe touches during bubbling and NEVER claim
+// the gesture — so scrolling, buttons, swipes and list rows are untouched.
+//
+// A touch counts as a "tap" only if the finger barely moved between start
+// and end (drags/scrolls move further and are ignored). We also skip the
+// dismiss when the tap landed on the currently focused TextInput itself, so
+// tapping inside the field to move the cursor doesn't close the keyboard.
+function useTapOutsideKeyboardDismiss() {
+  // Keyed by touch identifier so simultaneous fingers don't overwrite each
+  // other's start position (a second finger would otherwise corrupt the
+  // tap-vs-drag measurement of the first).
+  const touchStarts = useRef(new Map<string, { x: number; y: number }>());
+
+  const onTouchStart = (e: GestureResponderEvent) => {
+    const { identifier, pageX, pageY } = e.nativeEvent;
+    touchStarts.current.set(String(identifier), { x: pageX, y: pageY });
+  };
+
+  const onTouchEnd = (e: GestureResponderEvent) => {
+    const key = String(e.nativeEvent.identifier);
+    const start = touchStarts.current.get(key);
+    touchStarts.current.delete(key);
+    if (!start) return;
+
+    const dx = Math.abs(e.nativeEvent.pageX - start.x);
+    const dy = Math.abs(e.nativeEvent.pageY - start.y);
+    if (dx > 10 || dy > 10) return; // it was a drag/scroll, not a tap
+
+    const focusedInput = TextInput.State.currentlyFocusedInput?.();
+    if (!focusedInput) return; // keyboard not open — nothing to do
+
+    // Fail-safe: only dismiss when we can positively establish that the tap
+    // landed on a DIFFERENT view than the focused input. If either tag is
+    // unavailable (e.g. renderer internals change), do nothing rather than
+    // risk closing the keyboard while the user taps their own input.
+    const focusedTag = findNodeHandle(focusedInput as unknown as React.Component);
+    const rawTarget = e.nativeEvent.target as unknown;
+    const targetTag = typeof rawTarget === "number" ? rawTarget : null;
+    if (focusedTag == null || targetTag == null) return;
+    if (targetTag === focusedTag) return; // tap on the input itself
+
+    Keyboard.dismiss();
+  };
+
+  return { onTouchStart, onTouchEnd };
+}
+
 function RootLayoutNav() {
   useNotificationDeepLinks();
+  const tapDismiss = useTapOutsideKeyboardDismiss();
 
   return (
-    // App-wide "tap anywhere outside an input to close the keyboard".
-    // TouchableWithoutFeedback only fires for taps that no child component
-    // claims (buttons, inputs, list rows handle their own touches first), so
-    // it never steals presses — it only catches taps on "dead" background
-    // areas and dismisses the keyboard. Scrolling and swipes are unaffected
-    // because touchables only trigger on a stationary tap release.
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-    <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
+    <View
+      style={{ flex: 1, backgroundColor: Colors.light.background }}
+      onTouchStart={tapDismiss.onTouchStart}
+      onTouchEnd={tapDismiss.onTouchEnd}
+    >
       <View style={{ flex: 1 }}>
       <Stack
       screenOptions={{
@@ -124,7 +181,6 @@ function RootLayoutNav() {
     </Stack>
       </View>
     </View>
-    </TouchableWithoutFeedback>
   );
 }
 
