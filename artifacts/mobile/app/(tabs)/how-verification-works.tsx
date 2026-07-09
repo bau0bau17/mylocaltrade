@@ -36,7 +36,7 @@ export default function HowVerificationWorksScreen() {
         <Text style={styles.heading}>1. Account checks</Text>
         <Text style={styles.paragraph}>
           • Email address is verified before a trader can complete onboarding.{'\n'}
-          • Phone number is verified using a one-time code sent by SMS.{'\n'}
+          • Phone number is verified using a one-time verification code sent by SMS or RCS. This is part of the trader verification checks and is never used for marketing.{'\n'}
           • Where a trader registers as a limited company, the Companies House number is checked at signup and the company must be listed as active.{'\n'}
           • Business details (main trade, description, address, services, service areas and opening hours) are completed by the trader and stored on their profile.
         </Text>

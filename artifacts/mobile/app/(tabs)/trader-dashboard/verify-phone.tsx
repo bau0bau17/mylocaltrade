@@ -135,7 +135,8 @@ export default function VerifyPhoneScreen() {
 
         <Text style={styles.title}>Verify your phone number</Text>
         <Text style={styles.subtitle}>
-          We'll send you a one-time verification code by SMS or RCS to confirm your number, for account access and security. Your number is never shared publicly or used for marketing.
+          To continue setting up your trader profile, you need to verify your mobile number. MyLocalTrade will send you a one-time verification code by SMS or RCS.{'\n\n'}
+          This verification is required as part of the trader checks for account access, security and trust. Your number is never shared publicly.
         </Text>
 
         {!otpSent ? (
@@ -189,7 +190,8 @@ export default function VerifyPhoneScreen() {
             </Pressable>
 
             <Text style={styles.consentText}>
-              By tapping "Send verification code" you agree to receive a one-time verification code by SMS or RCS, used for account access and security only — never for marketing. Message and data rates may apply. See our{' '}
+              By continuing, you agree to receive a one-time verification message from MyLocalTrade by SMS or RCS, used for trader phone verification, account access and security only — never for marketing, advertising, promotions or bulk messaging. Message and data rates may apply.{'\n\n'}
+              If you prefer not to receive the SMS/RCS code, you can choose not to continue with this step, but this may prevent you from completing trader verification or publishing and maintaining a verified trader profile. See our{' '}
               <Text style={styles.consentLink} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
               {' '}and{' '}
               <Text style={styles.consentLink} onPress={() => router.push('/terms')}>Terms</Text>.
