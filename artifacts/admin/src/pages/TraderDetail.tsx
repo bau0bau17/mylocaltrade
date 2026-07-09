@@ -493,8 +493,10 @@ export default function TraderDetail({ userId }: Props) {
                 label="Additional services"
                 value={profile.additionalServices?.join(", ") || "—"}
               />
-              <Field label="Town" value={profile.town} />
-              <Field label="Postcode" value={profile.postcode} />
+              <Field
+                label="Address"
+                value={[profile.businessAddress, profile.town, profile.postcode].filter(Boolean).join(", ")}
+              />
               <Field
                 label="Service areas"
                 value={profile.serviceAreas?.join(", ") || "—"}

@@ -19,9 +19,6 @@ export default function EditProfileScreen() {
     businessName: '',
     contactName: '',
     phone: '',
-    businessAddress: '',
-    town: '',
-    postcode: '',
     businessDescription: '',
     website: '',
   });
@@ -32,9 +29,6 @@ export default function EditProfileScreen() {
         businessName: profile.businessName || '',
         contactName: profile.contactName || '',
         phone: profile.phone || '',
-        businessAddress: profile.businessAddress || '',
-        town: profile.town || '',
-        postcode: profile.postcode || '',
         businessDescription: profile.businessDescription || '',
         website: profile.website || '',
       });
@@ -118,37 +112,6 @@ export default function EditProfileScreen() {
           />
         </View>
 
-        <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Location</Text>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Business Address</Text>
-          <TextInput
-            style={styles.input}
-            value={formData.businessAddress}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, businessAddress: text }))}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.inputGroup, { flex: 2, marginRight: 12 }]}>
-            <Text style={styles.label}>Town/City</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.town}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, town: text }))}
-            />
-          </View>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Postcode</Text>
-            <TextInput
-              style={styles.input}
-              value={formData.postcode}
-              onChangeText={(text) => setFormData(prev => ({ ...prev, postcode: text }))}
-              autoCapitalize="characters"
-            />
-          </View>
-        </View>
-
         <Text style={[styles.sectionTitle, { marginTop: 16 }]}>About Your Business</Text>
 
         <View style={styles.inputGroup}>
@@ -214,9 +177,6 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: 14,
-  },
-  row: {
-    flexDirection: 'row',
   },
   inputGroup: {
     gap: 6,
