@@ -1,12 +1,13 @@
 import { BlurView } from "expo-blur";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { router, Tabs } from "expo-router";
+import { router, Tabs, usePathname, useGlobalSearchParams } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@expo/vector-icons";
-import React from "react";
+import React, { useMemo, useRef } from "react";
 import { Platform, StyleSheet, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import Colors from "@/constants/colors";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -53,6 +54,89 @@ const INNER_ROUTES: { name: string; title: string; parent: string }[] = [
   { name: "write-review/[traderId]", title: "Write a Review", parent: "/traders" },
 ];
 
+// ---------------------------------------------------------------------------
+// iOS-style "swipe from the left edge to go back".
+//
+// The inner pages here are hidden Tabs screens, not native stack pushes, so
+// the built-in iOS back gesture does not exist for them. This adds it
+// manually: a pan gesture that only recognises touches STARTING within the
+// left 40px of the screen, moving rightwards. On activation it navigates to
+// the same destination the header back button would (returnTo param when
+// present, otherwise the route's declared parent) — so the gesture and the
+// button always agree.
+//
+// Safety: hitSlop confines recognition to the edge strip; failOffsetY hands
+// vertical movements to ScrollViews untouched; failOffsetX kills leftward
+// drags. Anywhere outside the edge strip the detector never engages, so
+// lists, carousels and taps behave exactly as before.
+// ---------------------------------------------------------------------------
+
+function routeNameToPath(name: string): string {
+  const path = "/" + name.replace(/\/index$/, "");
+  return path === "/index" ? "/" : path;
+}
+
+const BACK_TARGETS = INNER_ROUTES.map((r) => ({
+  pattern: new RegExp(
+    "^" + routeNameToPath(r.name).replace(/\[[^/\]]+\]/g, "[^/]+") + "$",
+  ),
+  parent: r.parent,
+}));
+
+function resolveBackTarget(pathname: string): string | null {
+  for (const t of BACK_TARGETS) {
+    if (t.pattern.test(pathname)) return t.parent;
+  }
+  return null;
+}
+
+function EdgeSwipeBack({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<{ returnTo?: string }>();
+
+  // Refs so the gesture callback always sees the CURRENT route without
+  // having to rebuild the gesture on every navigation.
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+  const returnToRef = useRef<string | undefined>(undefined);
+  returnToRef.current =
+    typeof params.returnTo === "string" ? params.returnTo : undefined;
+
+  const gesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .hitSlop({ left: 0, width: 40 }) // only touches starting at the left edge
+        .activeOffsetX(28) // must move 28px rightwards to count
+        .failOffsetX(-12) // any leftward drag cancels it
+        .failOffsetY([-16, 16]) // vertical movement = scrolling, not a back swipe
+        .runOnJS(true)
+        .onEnd((e, success) => {
+          // Navigate only when the gesture COMPLETED as a deliberate back
+          // swipe: released after dragging far enough or flicking fast
+          // enough rightwards. This keeps it cancelable mid-gesture (like
+          // the native iOS back swipe) and avoids accidental triggers.
+          if (!success) return;
+          if (e.translationX < 60 && e.velocityX < 500) return;
+          const target =
+            returnToRef.current ?? resolveBackTarget(pathnameRef.current);
+          if (target) {
+            router.replace(target as Parameters<typeof router.replace>[0]);
+          }
+        }),
+    [],
+  );
+
+  if (Platform.OS === "web") return <>{children}</>;
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <View style={{ flex: 1 }} collapsable={false}>
+        {children}
+      </View>
+    </GestureDetector>
+  );
+}
+
 function NativeTabLayout() {
   return (
     <NativeTabs>
@@ -92,6 +176,7 @@ function ClassicTabLayout() {
   const theme = Colors.light;
 
   return (
+    <EdgeSwipeBack>
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: theme.tabActive,
@@ -217,6 +302,7 @@ function ClassicTabLayout() {
         );
       })}
     </Tabs>
+    </EdgeSwipeBack>
   );
 }
 
