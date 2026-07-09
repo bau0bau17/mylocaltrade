@@ -10,7 +10,7 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useRef } from "react";
-import { Platform } from "react-native";
+import { Platform, Keyboard, TouchableWithoutFeedback } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -95,6 +95,13 @@ function RootLayoutNav() {
   useNotificationDeepLinks();
 
   return (
+    // App-wide "tap anywhere outside an input to close the keyboard".
+    // TouchableWithoutFeedback only fires for taps that no child component
+    // claims (buttons, inputs, list rows handle their own touches first), so
+    // it never steals presses — it only catches taps on "dead" background
+    // areas and dismisses the keyboard. Scrolling and swipes are unaffected
+    // because touchables only trigger on a stationary tap release.
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
       <View style={{ flex: 1 }}>
       <Stack
@@ -117,6 +124,7 @@ function RootLayoutNav() {
     </Stack>
       </View>
     </View>
+    </TouchableWithoutFeedback>
   );
 }
 

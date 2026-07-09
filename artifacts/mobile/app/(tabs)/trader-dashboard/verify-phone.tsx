@@ -7,8 +7,6 @@ import {
   Pressable,
   ActivityIndicator,
   ScrollView,
-  Keyboard,
-  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -150,8 +148,6 @@ export default function VerifyPhoneScreen() {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <View>
         <View style={styles.iconBubble}>
           <Feather name="smartphone" size={28} color={Colors.light.secondary} />
         </View>
@@ -288,8 +284,6 @@ export default function VerifyPhoneScreen() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
-        </View>
-        </TouchableWithoutFeedback>
       </ScrollView>
       </KeyboardAvoidingView>
     </View>
