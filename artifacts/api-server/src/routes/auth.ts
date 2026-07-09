@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import bcryptjs from "bcryptjs";
 import { db } from "@workspace/db";
 import { usersTable, traderProfilesTable, subscriptionsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   RegisterCustomerBody,
   RegisterTraderBody,
@@ -180,6 +180,35 @@ async function releasePriorEmail(
 
 const router: IRouter = Router();
 
+// Case-insensitive email lookup. Registration historically stored emails with
+// whatever casing the user typed (e.g. "Lucian.Dpd@..."), so every lookup by
+// email must compare lower(stored) = lower(input) or logins/resets silently
+// fail for users who type a different casing than they registered with.
+const emailEquals = (email: string) =>
+  sql`lower(${usersTable.email}) = ${email.trim().toLowerCase()}`;
+
+// Resolve a single user by email, tolerating legacy rows where the same email
+// exists more than once with different casing (created before duplicate checks
+// became case-insensitive). Deterministic preference order:
+//   1. exact casing as typed (legacy accounts keep working exactly as before),
+//   2. the canonical all-lowercase row,
+//   3. oldest account.
+async function findUserByEmail(email: string) {
+  const typed = email.trim();
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(emailEquals(typed))
+    .orderBy(
+      sql`(${usersTable.email} = ${typed}) DESC`,
+      sql`(${usersTable.email} = lower(${usersTable.email})) DESC`,
+      usersTable.id,
+    )
+    .limit(1);
+  return user;
+}
+
+
 router.post("/auth/register/customer", async (req, res) => {
   try {
     const body = RegisterCustomerBody.parse(req.body);
@@ -187,7 +216,7 @@ router.post("/auth/register/customer", async (req, res) => {
     const [existing] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, body.email))
+      .where(emailEquals(body.email))
       .limit(1);
     const reopen = pickReopenContext(existing);
     if (existing && !reopen) {
@@ -203,7 +232,9 @@ router.post("/auth/register/customer", async (req, res) => {
     const user = await db.transaction(async (tx) => {
       if (reopen) await releasePriorEmail(tx, reopen.priorUserId, reopen.priorRole);
       const [created] = await tx.insert(usersTable).values({
-        email: body.email,
+        // Stored lowercased so new accounts are already canonical; lookups
+        // remain case-insensitive (emailEquals) for legacy mixed-case rows.
+        email: body.email.toLowerCase(),
         passwordHash,
         fullName: body.fullName,
         phone: body.phone || null,
@@ -272,7 +303,7 @@ router.post("/auth/register/trader", async (req, res) => {
     const [existing] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, body.email))
+      .where(emailEquals(body.email))
       .limit(1);
     const reopen = pickReopenContext(existing);
     if (existing && !reopen) {
@@ -366,7 +397,9 @@ router.post("/auth/register/trader", async (req, res) => {
     const result = await db.transaction(async (tx) => {
       if (reopen) await releasePriorEmail(tx, reopen.priorUserId, reopen.priorRole);
       const [user] = await tx.insert(usersTable).values({
-        email: body.email,
+        // Stored lowercased so new accounts are already canonical; lookups
+        // remain case-insensitive (emailEquals) for legacy mixed-case rows.
+        email: body.email.toLowerCase(),
         passwordHash,
         fullName: body.contactName,
         phone: body.phone,
@@ -455,7 +488,7 @@ router.post("/auth/login", async (req, res) => {
   try {
     const body = LoginBody.parse(req.body);
 
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, body.email)).limit(1);
+    const user = await findUserByEmail(body.email);
     if (!user) {
       res.status(401).json({ error: "Invalid email or password" });
       return;
@@ -566,7 +599,7 @@ router.post("/auth/resend-verification", async (req, res) => {
 
     const GENERIC_RESPONSE = { message: "If an account exists with that email, a verification email has been sent." };
 
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    const user = await findUserByEmail(email);
     if (!user) {
       res.json(GENERIC_RESPONSE);
       return;
@@ -635,7 +668,7 @@ router.post("/auth/verify-email-code", async (req, res) => {
       return;
     }
 
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+    const user = await findUserByEmail(email);
 
     // Uniform failure response. We deliberately do NOT distinguish between an
     // unknown email, an already-verified account, a missing/expired code, or a
@@ -731,12 +764,9 @@ router.post("/auth/forgot-password", async (req, res) => {
       message: "If an account exists with that email, a password reset code has been sent.",
     };
 
-    const normalisedEmail = email.trim().toLowerCase();
-    const [user] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.email, normalisedEmail))
-      .limit(1);
+    // Pass the email as typed (trim only) so the helper's exact-casing
+    // precedence still applies for legacy duplicate accounts.
+    const user = await findUserByEmail(email);
 
     // Unknown email or an irreversibly deleted/anonymised account: respond
     // generically without sending anything.
@@ -808,14 +838,11 @@ router.post("/auth/reset-password", async (req, res) => {
     }
 
     const INVALID = { error: "Invalid or expired code." };
-    const normalisedEmail = email.trim().toLowerCase();
     const normalisedCode = code.trim();
 
-    const [user] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.email, normalisedEmail))
-      .limit(1);
+    // Pass the email as typed (trim only) so the helper's exact-casing
+    // precedence still applies for legacy duplicate accounts.
+    const user = await findUserByEmail(email);
 
     const hasActiveOtp =
       !!user &&

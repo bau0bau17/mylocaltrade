@@ -45,7 +45,7 @@ interface Props {
   userId: number;
 }
 
-type ActionType = "approve" | "reject" | "suspend" | "request-info" | "unsuspend";
+type ActionType = "approve" | "reject" | "suspend" | "request-info" | "unsuspend" | "reset-verification";
 
 interface ActionDialogState {
   type: ActionType;
@@ -109,6 +109,14 @@ const ACTION_LABELS: Record<ActionType, { title: string; description: string; ne
     needsReason: "none",
     verb: "Lift suspension",
   },
+  "reset-verification": {
+    title: "Reset verification",
+    description:
+      "Send this trader back to the start of the verification journey (phone step). Their uploaded documents and all check results are deleted, and they are removed from public listings until re-verified. Business profile details are kept. No email or push is sent. This cannot be undone.",
+    needsReason: "none",
+    verb: "Reset verification",
+    variant: "destructive",
+  },
 };
 
 export default function TraderDetail({ userId }: Props) {
@@ -149,7 +157,10 @@ export default function TraderDetail({ userId }: Props) {
       } else if (type === "reject" || type === "suspend") {
         body.reason = reason;
       }
-      return api(path, { method: "POST", body: type === "unsuspend" ? undefined : body });
+      return api(path, {
+        method: "POST",
+        body: type === "unsuspend" || type === "reset-verification" ? undefined : body,
+      });
     },
     onSuccess: (_data, vars) => {
       toast({ title: `Action complete`, description: ACTION_LABELS[vars.type].title });
@@ -404,6 +415,13 @@ export default function TraderDetail({ userId }: Props) {
               </Button>
               <Button variant="outline" onClick={() => openAction("suspend")} data-testid="button-suspend">
                 <Pause className="w-4 h-4 mr-1.5" /> Suspend
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => openAction("reset-verification")}
+                data-testid="button-reset-verification"
+              >
+                <RefreshCw className="w-4 h-4 mr-1.5" /> Reset verification
               </Button>
             </>
           )}

@@ -20,6 +20,7 @@ export const TRADER_AUDIT_ACTIONS = [
   "TRADER_REJECTED",
   "TRADER_SUSPENDED",
   "TRADER_UNSUSPENDED",
+  "TRADER_VERIFICATION_RESET",
   "SUBSCRIPTION_ACTIVATED",
   "SUBSCRIPTION_CANCELLED",
   // --- Cooling-off / cancellation requests (file-and-record flow) ---

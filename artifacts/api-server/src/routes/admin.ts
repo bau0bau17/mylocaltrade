@@ -1309,6 +1309,105 @@ router.post("/admin/traders/:userId/unsuspend", authMiddleware, adminOnly, async
   }
 });
 
+// POST /api/admin/traders/:userId/reset-verification — wind a trader back to
+// the start of the verification journey (phone step) so the whole flow can be
+// exercised again. Intended as an admin testing/support tool: it clears phone
+// verification, deletes uploaded documents, and wipes every recorded check
+// result (AI, VAT, domain, register) plus approval/rejection state. The
+// business profile data itself (name, address, services, etc.) is preserved.
+// Deliberately silent: no email or push is sent to the trader.
+router.post("/admin/traders/:userId/reset-verification", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { userId: adminId } = req as AuthenticatedRequest;
+    const userId = Number.parseInt(String(req.params.userId), 10);
+    if (!Number.isFinite(userId)) {
+      res.status(400).json({ error: "Invalid user id" });
+      return;
+    }
+    const [profile] = await db
+      .select()
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (!profile) {
+      res.status(404).json({ error: "Trader not found" });
+      return;
+    }
+
+    const docs = await db
+      .select()
+      .from(traderDocumentsTable)
+      .where(eq(traderDocumentsTable.userId, userId));
+    await db.delete(traderDocumentsTable).where(eq(traderDocumentsTable.userId, userId));
+    // Best-effort blob cleanup so reset doesn't leave orphaned files in
+    // object storage; a failure here never blocks the reset itself.
+    for (const doc of docs) {
+      try {
+        const file = await storage.getObjectEntityFile(doc.objectPath);
+        await file.delete({ ignoreNotFound: true });
+      } catch (e) {
+        req.log.warn({ err: e, documentId: doc.id }, "Failed to delete object from storage");
+      }
+    }
+
+    const [updated] = await db
+      .update(traderProfilesTable)
+      .set({
+        verificationStatus: TRADER_STATUS.PENDING_PHONE_VERIFICATION,
+        // A reset trader is no longer publicly listed until re-verified.
+        isActive: false,
+        phoneVerified: false,
+        phoneVerifiedAt: null,
+        phoneOtpHash: null,
+        phoneOtpExpiresAt: null,
+        phoneOtpAttempts: 0,
+        phoneOtpLastSentAt: null,
+        // The stored profile data is kept, but the completion flag is cleared
+        // so the onboarding checklist walks through every step again; saving
+        // the (prefilled) business profile re-derives it server-side.
+        businessProfileCompleted: false,
+        documentsSubmitted: false,
+        submittedForReviewAt: null,
+        verifiedAt: null,
+        verifiedByAdminId: null,
+        verificationNotes: null,
+        rejectedAt: null,
+        rejectionReason: null,
+        needsMoreInfoReason: null,
+        revalidationDueAt: null,
+        revalidationRemindedAt: null,
+        revalidationOverdue: false,
+        aiVerificationStatus: null,
+        aiVerificationData: null,
+        aiVerificationCheckedAt: null,
+        vatVerificationStatus: null,
+        vatVerificationData: null,
+        vatVerificationCheckedAt: null,
+        domainVerificationStatus: null,
+        domainVerificationData: null,
+        domainVerificationCheckedAt: null,
+        registerCheckStatus: null,
+        registerCheckData: null,
+        registerCheckCheckedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(traderProfilesTable.userId, userId))
+      .returning();
+
+    await logAudit({
+      userId,
+      action: "TRADER_VERIFICATION_RESET",
+      performedBy: adminId,
+      details: { previousStatus: profile.verificationStatus },
+    });
+
+    res.json({ profile: updated });
+  } catch (error) {
+    req.log.error({ err: error }, "Reset trader verification failed");
+    res.status(500).json({ error: "Failed to reset trader verification" });
+  }
+});
+
 // GET /api/admin/dashboard — high-level operational summary
 router.get("/admin/dashboard", authMiddleware, adminOnly, async (req, res) => {
   try {
