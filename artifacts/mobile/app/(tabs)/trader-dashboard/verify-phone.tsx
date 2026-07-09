@@ -1,5 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  ScrollView,
+  Keyboard,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -128,7 +140,18 @@ export default function VerifyPhoneScreen() {
         <View style={{ width: 36 }} />
       </View>
 
-      <View style={styles.content}>
+      <KeyboardAvoidingView
+        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+      <ScrollView
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View>
         <View style={styles.iconBubble}>
           <Feather name="smartphone" size={28} color={Colors.light.secondary} />
         </View>
@@ -265,7 +288,10 @@ export default function VerifyPhoneScreen() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
-      </View>
+        </View>
+        </TouchableWithoutFeedback>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -276,7 +302,8 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: Colors.light.card, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.light.border },
   headerTitle: { fontSize: 17, fontWeight: '700', color: Colors.light.text },
-  content: { flex: 1, alignItems: 'stretch', paddingTop: 8 },
+  content: { flex: 1 },
+  contentContainer: { paddingTop: 8 },
   iconBubble: { width: 64, height: 64, borderRadius: 20, backgroundColor: Colors.light.secondaryMuted, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.light.border, alignSelf: 'center', marginBottom: 18 },
   title: { fontSize: 22, fontWeight: '700', color: Colors.light.text, textAlign: 'center', marginBottom: 6 },
   subtitle: { fontSize: 13, color: Colors.light.textSecondary, textAlign: 'center', lineHeight: 19, marginBottom: 22, paddingHorizontal: 8 },
