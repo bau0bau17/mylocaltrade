@@ -209,7 +209,7 @@ export default function VerifyPhoneScreen() {
             </Pressable>
 
             <Text style={styles.consentText}>
-              By continuing, you agree to receive a one-time verification message from MyLocalTrade by SMS or RCS, used for trader phone verification, account access and security only — never for marketing, advertising, promotions or bulk messaging. Message and data rates may apply.{'\n\n'}
+              By continuing, you agree to receive a one-time verification message from MyLocalTrade by SMS or RCS, used for trader phone verification, account access, security and trust only — never for marketing, advertising, promotions, discounts or bulk messaging. Message and data rates may apply.{'\n\n'}
               If you prefer not to receive the SMS/RCS code, you can choose not to continue with this step, but this may prevent you from completing trader verification or publishing and maintaining a verified trader profile. See our{' '}
               <Text style={styles.consentLink} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
               {' '}and{' '}
