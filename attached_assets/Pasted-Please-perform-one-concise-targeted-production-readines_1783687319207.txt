@@ -1,0 +1,85 @@
+Please perform one concise, targeted production readiness audit of MyLocalTrade.
+
+Important:
+- Do not start builds, publish, migrate, install large dependencies or run long/expensive tests.
+- Do not make broad refactors.
+- Focus on real launch blockers and important inconsistencies.
+- Keep the report concise to avoid unnecessary Replit Agent usage.
+- You may make only small, clearly necessary text corrections where the current wording is factually wrong, but do not publish or start a build.
+
+First, perform a targeted Stripe audit.
+
+MyLocalTrade does not use Stripe for trader subscriptions in the iOS app. Trader subscriptions are handled through Apple In-App Purchase / App Store subscriptions.
+
+Search the entire project for:
+- Stripe
+- stripe.com
+- Stripe Checkout
+- Stripe Billing
+- payment processor wording that implies Stripe
+- outdated subscription or payment wording
+
+Check:
+- mobile app screens
+- in-app Privacy Policy
+- in-app Terms & Conditions
+- landing website
+- public Privacy Policy
+- public Terms
+- admin portal
+- backend/API
+- email templates
+- subscription and billing pages
+- onboarding text
+- help/support content
+- seeded or placeholder content
+
+For user-facing wording, ensure it correctly states that:
+- iOS subscriptions are processed by Apple through the App Store;
+- billing, renewals and cancellations are managed through the user’s Apple ID / App Store subscription settings;
+- Apple’s payment and subscription terms apply;
+- MyLocalTrade does not directly collect or store Apple payment card details.
+
+Do not remove Stripe code blindly. If Stripe is genuinely used for any separate legitimate purpose, report it before changing anything.
+
+Then perform a concise production readiness audit covering:
+- iOS app
+- backend/API
+- database
+- admin portal
+- trader and customer flows
+- authentication and permissions
+- Apple in-app subscription flow
+- messaging, uploads, reviews and notifications
+- Twilio phone verification
+- submitted RCS compliance implementation
+- Privacy Policy, Terms and public compliance URLs
+- App Store/TestFlight launch readiness
+
+Return only these sections:
+
+1. Stripe findings
+- every place Stripe was found
+- which references were user-facing
+- which references were corrected
+- whether any active Stripe integration remains
+
+2. Completed and launch-ready
+
+3. Must fix before public launch
+
+4. Requires manual testing because it cannot be confirmed from code
+
+5. Nice-to-have after launch
+
+6. Launch readiness score out of 100
+
+7. Final verdict
+- would you approve launch tomorrow?
+- if not, list only the exact blockers
+
+Also confirm:
+- whether a new TestFlight build is required
+- whether the backend or landing website needs republishing
+
+Do not start a build or publish anything yet.

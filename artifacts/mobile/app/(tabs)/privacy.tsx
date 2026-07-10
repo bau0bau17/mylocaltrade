@@ -37,7 +37,7 @@ export default function PrivacyScreen() {
           Personal Data: We may collect personally identifiable information, such as your name, email address, telephone number, and location when you register for an account.
         </Text>
         <Text style={styles.paragraph}>
-          Trader Data: If you register as a tradesperson, we collect business details, verification documents, and payment information for subscriptions.
+          Trader Data: If you register as a tradesperson, we collect business details and verification documents. We do not collect or store your payment card details: subscription payments are processed by the Apple App Store (managed by RevenueCat) on iOS, or by Stripe for any card payments made on the web.
         </Text>
         <Text style={styles.paragraph}>
           Technical Data: We automatically collect certain information about your device, including IP address, device type, operating system, and usage patterns.
