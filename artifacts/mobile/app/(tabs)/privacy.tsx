@@ -37,7 +37,7 @@ export default function PrivacyScreen() {
           Personal Data: We may collect personally identifiable information, such as your name, email address, telephone number, and location when you register for an account.
         </Text>
         <Text style={styles.paragraph}>
-          Trader Data: If you register as a tradesperson, we collect business details and verification documents. We do not collect or store your payment card details: subscription payments are processed by the Apple App Store (managed by RevenueCat) on iOS, or by Stripe for any card payments made on the web.
+          Trader Data: If you register as a tradesperson, we collect business details and verification documents. We do not collect or store your payment card details. Subscriptions purchased through the MyLocalTrade iOS app are processed by Apple through the App Store, with subscription status managed through RevenueCat. If additional payment methods are introduced in the future, the relevant payment provider and terms will be disclosed before payment.
         </Text>
         <Text style={styles.paragraph}>
           Technical Data: We automatically collect certain information about your device, including IP address, device type, operating system, and usage patterns.
@@ -62,7 +62,7 @@ export default function PrivacyScreen() {
         <Text style={styles.paragraph}>
           - To facilitate connections between customers and tradespeople{'\n'}
           - To manage your account and subscriptions{'\n'}
-          - To process subscription payments — on iOS through the Apple App Store, with subscriptions managed by RevenueCat; card payments made on the web are processed by Stripe{'\n'}
+          - To process subscription payments — on iOS through the Apple App Store, with subscription status managed by RevenueCat{'\n'}
           - To improve our services and app functionality{'\n'}
           - To send service-related communications{'\n'}
           - To comply with legal and regulatory requirements
@@ -75,7 +75,7 @@ export default function PrivacyScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>4. Data Sharing</Text>
         <Text style={styles.paragraph}>
-          We may share your data with the providers that operate our service: Apple (App Store) and RevenueCat, which process and manage trader subscriptions purchased on iOS; Stripe, which processes card payments made on the web; our email provider (Brevo); and our hosting provider. We do not sell your personal data to third parties. When you send an enquiry to a trader, the trader receives your name, the service required, your preferred date, your message and — if you choose to provide it — your phone number, so they can respond to your request. Your email address is not shared with the trader by default; replies come back through the in-app messaging system.
+          We may share your data with the providers that operate our service: Apple (App Store) and RevenueCat, which process and manage trader subscriptions purchased on iOS; our email provider (Brevo); and our hosting provider. We do not sell your personal data to third parties. When you send an enquiry to a trader, the trader receives your name, the service required, your preferred date, your message and — if you choose to provide it — your phone number, so they can respond to your request. Your email address is not shared with the trader by default; replies come back through the in-app messaging system.
         </Text>
       </View>
 

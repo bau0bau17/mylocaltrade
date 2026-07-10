@@ -46,7 +46,7 @@ export default function CookiePolicyScreen() {
           <Text style={styles.bold}>Analytics:</Text> Help us understand how the app is used so we can improve it. Where required, these are only used with your consent.
         </Text>
         <Text style={styles.paragraph}>
-          <Text style={styles.bold}>Payment provider:</Text> Trader subscriptions on iOS are purchased through the Apple App Store and managed by RevenueCat. Where traders subscribe or pay on the web, our card payment provider (Stripe) may set cookies to process the transaction securely.
+          <Text style={styles.bold}>Payment provider:</Text> Trader subscriptions on iOS are purchased through the Apple App Store and managed by RevenueCat.
         </Text>
       </View>
 
@@ -60,7 +60,7 @@ export default function CookiePolicyScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>4. Third parties</Text>
         <Text style={styles.paragraph}>
-          We use trusted third parties to deliver email (Brevo), subscription payments (the Apple App Store and RevenueCat on iOS; Stripe on the web) and hosting. These providers may set their own cookies under their own policies.
+          We use trusted third parties to deliver email (Brevo), subscription payments (the Apple App Store and RevenueCat on iOS) and hosting. These providers may set their own cookies under their own policies.
         </Text>
       </View>
 
