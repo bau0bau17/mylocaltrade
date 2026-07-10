@@ -276,14 +276,6 @@ export default function BusinessProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
-      <View style={[styles.headerRow, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={20} color={Colors.light.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Business Profile</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
       <KeyboardAwareScrollViewCompat
         style={{ flex: 1 }}
         contentContainerStyle={{

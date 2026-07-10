@@ -10,12 +10,11 @@ export default function HowVerificationWorksScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={{
-        paddingTop: insets.top + 16,
+        paddingTop: 16,
         paddingBottom: insets.bottom + 24,
         paddingHorizontal: 20,
       }}
     >
-      <Text style={styles.title}>How Verification Works</Text>
 
       <View style={styles.summaryBox}>
         <Text style={styles.summaryText}>

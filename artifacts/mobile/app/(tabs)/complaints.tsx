@@ -15,12 +15,11 @@ export default function ComplaintsScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={{
-        paddingTop: insets.top + 16,
+        paddingTop: 16,
         paddingBottom: tabBarHeight + insets.bottom + 32,
         paddingHorizontal: 20,
       }}
     >
-      <Text style={styles.title}>Complaints Procedure</Text>
 
       <View style={styles.section}>
         <Text style={styles.paragraph}>

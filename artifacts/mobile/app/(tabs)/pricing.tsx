@@ -170,7 +170,7 @@ export default function PricingScreen() {
       contentContainerStyle={[
         styles.content,
         { 
-          paddingTop: insets.top + 24,
+          paddingTop: 16,
           paddingBottom: tabBarHeight + insets.bottom + 32
         }
       ]}

@@ -89,7 +89,7 @@ export default function ResetPasswordScreen() {
         style={[
           styles.container,
           styles.center,
-          { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 },
+          { paddingTop: 24, paddingBottom: insets.bottom + 24 },
         ]}
       >
         <View style={[styles.iconBubble, { backgroundColor: Colors.light.secondaryMuted }]}>
@@ -116,7 +116,7 @@ export default function ResetPasswordScreen() {
         <View style={styles.iconBubble}>
           <Feather name="lock" size={28} color={Colors.light.primary} />
         </View>
-        <Text style={styles.title}>Reset Password</Text>
+        <Text style={styles.title}>Set a new password</Text>
         <Text style={styles.subtitle}>Enter the 6-digit code we emailed you and choose a new password.</Text>
       </View>
 

@@ -159,9 +159,8 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
   const conversations: ConversationSummary[] = data?.conversations ?? [];
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
         <Text style={styles.subtitle}>
           {isTrader ? "Conversations with customers" : "Conversations with traders"}
         </Text>

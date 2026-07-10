@@ -69,14 +69,6 @@ export default function TraderReviewsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
-      <View style={[styles.headerRow, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={() => router.back()} style={styles.iconBtn}>
-          <Feather name="arrow-left" size={20} color={Colors.light.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>My reviews</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 24 }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={Colors.light.primary} />}

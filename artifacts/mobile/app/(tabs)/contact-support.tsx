@@ -90,14 +90,7 @@ export default function ContactSupportScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 44) }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={10}>
-          <Feather name="chevron-left" size={24} color={Colors.light.primary} />
-        </Pressable>
-        <Text style={styles.title}>Contact Support</Text>
-      </View>
-
+    <View style={styles.container}>
       {rateLimited ? (
         <ScrollView
           contentContainerStyle={[styles.successContainer, { paddingBottom: insets.bottom + 32 }]}

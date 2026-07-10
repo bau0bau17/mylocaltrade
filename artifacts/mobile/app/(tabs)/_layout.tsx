@@ -283,6 +283,10 @@ function ClassicTabLayout() {
         // tab bar on those routes so the bottom controls are visible.
         const hideTabBar =
           r.name === "messages/[id]" || r.name === "enquiry/[traderId]";
+        // The conversation screen renders its own rich header (name, status,
+        // actions) with its own back button, so hide the shared ScreenHeader
+        // there to avoid a duplicate header stacked on top of it.
+        const hideHeader = r.name === "messages/[id]";
         return (
           <Tabs.Screen
             key={r.name}
@@ -290,7 +294,7 @@ function ClassicTabLayout() {
             options={{
               href: null,
               title: r.title,
-              headerShown: true,
+              headerShown: !hideHeader,
               ...(hideTabBar ? { tabBarStyle: { display: "none" } } : {}),
               header: ({ route, options }) => (
                 <ScreenHeader

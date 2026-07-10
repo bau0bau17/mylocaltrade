@@ -129,15 +129,7 @@ export default function VerifyPhoneScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={20} color={Colors.light.text} />
-        </Pressable>
-        <Text style={styles.headerTitle}>Verify Phone Number</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
+    <View style={[styles.container, { paddingTop: 12, paddingBottom: insets.bottom + 16 }]}>
       <KeyboardAvoidingView
         style={styles.content}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

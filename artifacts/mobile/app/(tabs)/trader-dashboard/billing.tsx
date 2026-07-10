@@ -163,11 +163,9 @@ export default function BillingScreen() {
     <>
     <ScrollView
       style={s.container}
-      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 32, paddingHorizontal: 20 }}
+      contentContainerStyle={{ paddingTop: 12, paddingBottom: insets.bottom + 32, paddingHorizontal: 20 }}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} />}
     >
-      <Text style={s.title}>Billing & Plan</Text>
-
       {inCoolingOff ? (
         <View style={s.coolingCard}>
           <View style={s.coolingHeader}>

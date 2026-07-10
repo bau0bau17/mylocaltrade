@@ -15,12 +15,11 @@ export default function PrivacyScreen() {
     <ScrollView 
       style={styles.container}
       contentContainerStyle={{
-        paddingTop: insets.top + 16,
+        paddingTop: 16,
         paddingBottom: tabBarHeight + insets.bottom + 32,
         paddingHorizontal: 20,
       }}
     >
-      <Text style={styles.title}>Privacy Policy</Text>
       
       <View style={styles.section}>
         <Text style={styles.lastUpdated}>Last Updated: 9 July 2026</Text>

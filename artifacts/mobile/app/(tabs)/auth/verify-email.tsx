@@ -116,7 +116,7 @@ export default function VerifyEmailScreen() {
 
   if (verified) {
     return (
-      <View style={[styles.container, styles.center, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+      <View style={[styles.container, styles.center, { paddingTop: 24, paddingBottom: insets.bottom + 24 }]}>
         <View style={[styles.iconBubble, { backgroundColor: Colors.light.secondaryMuted }]}>
           <Feather name="check-circle" size={32} color={Colors.light.secondary} />
         </View>
@@ -128,13 +128,13 @@ export default function VerifyEmailScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+    <View style={[styles.container, { paddingTop: 16, paddingBottom: insets.bottom + 16 }]}>
       <View style={styles.content}>
         <View style={styles.iconBubble}>
           <Feather name="mail" size={28} color={Colors.light.primary} />
         </View>
 
-        <Text style={styles.title}>Verify your email</Text>
+        <Text style={styles.title}>Check your inbox</Text>
         <Text style={styles.subtitle}>Enter the 6-digit code we sent to:</Text>
         <Text style={styles.email}>{email ?? 'your email address'}</Text>
 

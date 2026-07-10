@@ -87,7 +87,7 @@ export default function WriteReviewScreen() {
 
   if (eligibleForThisTrader.length === 0) {
     return (
-      <View style={[styles.center, { paddingTop: insets.top + 40, paddingHorizontal: 24 }]}>
+      <View style={[styles.center, { paddingTop: 40, paddingHorizontal: 24 }]}>
         <Feather name="info" size={28} color={Colors.light.textMuted} />
         <Text style={styles.emptyTitle}>No reviewable jobs</Text>
         <Text style={styles.emptyText}>
@@ -103,17 +103,9 @@ export default function WriteReviewScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: Colors.light.background }}
-      contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: insets.bottom + 32, paddingHorizontal: 20 }}
+      contentContainerStyle={{ paddingTop: 12, paddingBottom: insets.bottom + 32, paddingHorizontal: 20 }}
       keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => router.back()} style={styles.iconBtn}>
-          <Feather name="arrow-left" size={20} color={Colors.light.text} />
-        </Pressable>
-        <Text style={styles.title}>Leave a review</Text>
-        <View style={{ width: 36 }} />
-      </View>
-
       {eligibleForThisTrader.length > 1 && (
         <View style={styles.section}>
           <Text style={styles.label}>Which job?</Text>

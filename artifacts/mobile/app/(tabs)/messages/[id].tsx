@@ -47,11 +47,15 @@ function fmtTime(iso: string) {
 }
 
 export default function ConversationThreadScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, returnTo } = useLocalSearchParams<{ id: string; returnTo?: string }>();
   const conversationId = Number(id);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
+  const goBack = () =>
+    router.replace(
+      (returnTo ?? "/messages") as Parameters<typeof router.replace>[0],
+    );
   const { isTrader, isAdmin, user } = useAuth();
   const listRef = useRef<FlatList>(null);
 
@@ -441,8 +445,15 @@ export default function ConversationThreadScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={Colors.light.primary} />
+      <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
+        <View style={[styles.headerCard, { paddingTop: insets.top + 8 }]}>
+          <Pressable onPress={goBack} style={styles.headerBackBtn} hitSlop={10}>
+            <Feather name="chevron-left" size={24} color={Colors.light.primary} />
+          </Pressable>
+        </View>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.light.primary} />
+        </View>
       </View>
     );
   }
@@ -451,7 +462,7 @@ export default function ConversationThreadScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>Could not load conversation.</Text>
-        <Pressable style={styles.cta} onPress={() => router.back()}>
+        <Pressable style={styles.cta} onPress={goBack}>
           <Text style={styles.ctaText}>Go Back</Text>
         </Pressable>
       </View>
@@ -462,10 +473,13 @@ export default function ConversationThreadScreen() {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: Colors.light.background }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 44 : 0}
+      keyboardVerticalOffset={0}
     >
       <Stack.Screen options={{ title: otherName || "Conversation" }} />
-      <View style={styles.headerCard}>
+      <View style={[styles.headerCard, { paddingTop: insets.top + 8 }]}>
+        <Pressable onPress={goBack} style={styles.headerBackBtn} hitSlop={10}>
+          <Feather name="chevron-left" size={24} color={Colors.light.primary} />
+        </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerName} numberOfLines={1}>
             {otherName}
@@ -953,6 +967,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerName: { fontSize: 16, fontWeight: "700", color: Colors.light.text },
   headerSub: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },

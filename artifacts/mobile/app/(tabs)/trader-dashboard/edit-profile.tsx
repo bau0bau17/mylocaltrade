@@ -60,16 +60,12 @@ export default function EditProfileScreen() {
     <KeyboardAwareScrollViewCompat
       style={{ flex: 1 }}
       contentContainerStyle={{
-        paddingTop: insets.top + 16,
+        paddingTop: 12,
         paddingBottom: 16,
         paddingHorizontal: 20,
       }}
       bottomOffset={60}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Edit Profile</Text>
-      </View>
-
       <View style={styles.form}>
         <Text style={styles.sectionTitle}>Basic Information</Text>
 

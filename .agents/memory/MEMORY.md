@@ -1,3 +1,4 @@
+- [Mobile inner-screen single header](mobile-inner-screen-single-header.md) — (tabs) inner routes get ONE shared ScreenHeader; screens must not add a local header/duplicate title or insets.top to top padding; messages/[id] is the hideHeader exception.
 - [expo-router NativeTabs hidden triggers](expo-router-native-tabs-hidden-triggers.md) — native iOS opens but inner screens won't navigate; unstable NativeTabs can't push to hidden triggers; use classic Tabs.
 - [RevenueCat empty offerings debugging](revenuecat-empty-offerings-debugging.md) — RC "offerings empty" is generic; offerings response is cached, only updateOffering busts it; device triage inside.
 - [RevenueCat Test Store is debug-only](revenuecat-test-store-debug-only.md) — test_ key crashes Release builds at configure; no standalone Test Store build exists. Don't force it.

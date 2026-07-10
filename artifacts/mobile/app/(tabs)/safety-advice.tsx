@@ -10,12 +10,11 @@ export default function SafetyAdviceScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={{
-        paddingTop: insets.top + 16,
+        paddingTop: 16,
         paddingBottom: insets.bottom + 24,
         paddingHorizontal: 20,
       }}
     >
-      <Text style={styles.title}>Customer Safety Advice</Text>
 
       <View style={styles.section}>
         <Text style={styles.paragraph}>

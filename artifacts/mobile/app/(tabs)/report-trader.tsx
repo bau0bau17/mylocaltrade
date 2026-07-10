@@ -21,12 +21,11 @@ export default function ReportTraderScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={{
-        paddingTop: insets.top + 16,
+        paddingTop: 16,
         paddingBottom: tabBarHeight + insets.bottom + 32,
         paddingHorizontal: 20,
       }}
     >
-      <Text style={styles.title}>Report a Trader</Text>
 
       <View style={styles.section}>
         <Text style={styles.paragraph}>

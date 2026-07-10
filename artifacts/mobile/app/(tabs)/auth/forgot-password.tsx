@@ -52,7 +52,7 @@ export default function ForgotPasswordScreen() {
         <View style={styles.logoWrap}>
           <Feather name="key" size={28} color={Colors.light.primary} />
         </View>
-        <Text style={styles.title}>Forgot Password</Text>
+        <Text style={styles.title}>Forgot your password?</Text>
         <Text style={styles.subtitle}>
           Enter your email and we'll send you a 6-digit code to reset your password.
         </Text>

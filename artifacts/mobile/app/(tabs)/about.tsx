@@ -13,7 +13,7 @@ export default function AboutScreen() {
     <ScrollView 
       style={styles.container}
       contentContainerStyle={{
-        paddingTop: insets.top + 16,
+        paddingTop: 16,
         paddingBottom: tabBarHeight + insets.bottom + 32,
         paddingHorizontal: 20,
       }}
@@ -22,7 +22,6 @@ export default function AboutScreen() {
         <View style={styles.logoWrap}>
           <Feather name="briefcase" size={28} color={Colors.light.primary} />
         </View>
-        <Text style={styles.title}>About MyLocalTrade</Text>
       </View>
       
       <View style={styles.section}>
