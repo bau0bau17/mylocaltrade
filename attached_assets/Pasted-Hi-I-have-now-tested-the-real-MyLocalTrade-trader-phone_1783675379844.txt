@@ -1,0 +1,69 @@
+Hi,
+
+I have now tested the real MyLocalTrade trader phone verification flow in the latest TestFlight build. I will attach the screenshots showing the full process.
+
+Please use these real screenshots to update the Twilio / Google RCS compliance content on the MyLocalTrade landing website.
+
+Important:
+The SMS/RCS verification flow is for TRADERS only as part of trader onboarding and verification. It is not a general customer registration or login SMS flow.
+
+Please update:
+
+https://mylocaltrade.co.uk/rcs-opt-in.png
+
+and:
+
+https://mylocaltrade.co.uk/rcs-opt-in
+
+The screenshots show the actual flow:
+
+1. Trader Onboarding displays “Pending phone verification”.
+2. The trader taps “Verify phone”.
+3. The trader chooses the registered number or “Use a different number”.
+4. The trader enters a UK mobile number.
+5. The app clearly explains that MyLocalTrade will send a one-time verification code by SMS or RCS.
+6. The notice explains that the message is used for trader phone verification, account access, security and trust only.
+7. The trader taps “Send verification code”.
+8. A 6-digit code is sent.
+9. The trader enters the code and taps “Verify code”.
+10. The Phone verified step is marked as Completed.
+
+Please use the screenshot showing the mobile number field, the “Send verification code” button, and the consent wording as the main public proof image.
+
+The proof image should clearly show:
+- MyLocalTrade branding;
+- trader phone verification;
+- the mobile number field;
+- the “Send verification code” button;
+- one-time verification code by SMS or RCS;
+- trader verification, account access, security and trust purpose;
+- that the message is never used for marketing, advertising, promotions or bulk messaging;
+- links to Privacy Policy and Terms where visible.
+
+Please do not use a generic mockup if the real screenshot can be used clearly. You may crop or present the screenshot cleanly, but do not alter the meaning or create a flow that does not exist in the app.
+
+Please make sure:
+
+https://mylocaltrade.co.uk/rcs-opt-in.png
+
+is a direct, publicly accessible PNG image URL without login and does not return 404.
+
+Please also update the /rcs-opt-in page so it accurately explains:
+
+- the flow is for traders only;
+- the trader actively taps “Send verification code”;
+- a 6-digit one-time code is sent by SMS or RCS;
+- the code is entered back into the app;
+- phone verification is required to continue trader verification;
+- the sender is not used for marketing or promotional messaging;
+- the trader can choose not to continue before requesting the code, but may then be unable to complete trader verification;
+- standard STOP/START carrier controls may apply after a message has been received.
+
+Please preserve the existing landing page design, branding, layout, header, footer, fonts, colours and functionality.
+
+After implementation, please confirm that these URLs are live and accessible without login:
+
+https://mylocaltrade.co.uk/rcs-opt-in.png
+https://mylocaltrade.co.uk/rcs-opt-in
+https://mylocaltrade.co.uk/privacy-policy
+https://mylocaltrade.co.uk/terms
