@@ -115,7 +115,7 @@ export default function HowVerificationWorksScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>8. Reporting concerns</Text>
         <Text style={styles.paragraph}>
-          If you believe a trader has provided false information, or you have a safety concern, please use the "Report a Trader" page or email support@mylocaltrade.co.uk.
+          If you believe a trader has provided false information, or you have a safety concern, please use the "Report a Trader" page.
         </Text>
       </View>
     </ScrollView>

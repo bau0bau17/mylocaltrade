@@ -1,17 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 
-const CONTACT_EMAIL = 'support@mylocaltrade.co.uk';
-
 export function CompanyFooter() {
   const router = useRouter();
-
-  const handleContact = () => {
-    Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=MyLocalTrade%20Enquiry`);
-  };
 
   return (
     <View style={styles.container}>
@@ -31,11 +25,6 @@ export function CompanyFooter() {
           <Text style={styles.linkText}>Refunds</Text>
         </Pressable>
       </View>
-
-      <Pressable style={styles.contactButton} onPress={handleContact}>
-        <Feather name="mail" size={14} color={Colors.light.primary} />
-        <Text style={styles.contactButtonText}>Contact Us</Text>
-      </Pressable>
 
       <View style={styles.companyBlock}>
         <View style={styles.companyNameRow}>
@@ -87,24 +76,6 @@ const styles = StyleSheet.create({
     color: Colors.light.primary,
     fontWeight: '600',
     letterSpacing: 0.2,
-  },
-  contactButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: Colors.light.primaryMuted,
-    paddingHorizontal: 24,
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: `${Colors.light.primary}33`,
-    marginBottom: 20,
-  },
-  contactButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.light.primary,
-    letterSpacing: 0.3,
   },
   companyBlock: {
     alignItems: 'center',

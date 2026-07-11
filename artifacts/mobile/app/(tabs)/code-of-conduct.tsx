@@ -68,7 +68,7 @@ export default function CodeOfConductScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>6. Reviews</Text>
         <Text style={styles.paragraph}>
-          Do not solicit fake or misleading reviews. Reply to customer reviews respectfully. Disputes about reviews should be raised with us at support@mylocaltrade.co.uk.
+          Do not solicit fake or misleading reviews. Reply to customer reviews respectfully.
         </Text>
       </View>
 

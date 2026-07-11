@@ -1,13 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useLocalSearchParams } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { ReportForm } from '@/components/ReportForm';
-
-const SUPPORT_EMAIL = 'support@mylocaltrade.co.uk';
 
 export default function ReportTraderScreen() {
   const insets = useSafeAreaInsets();
@@ -80,21 +77,6 @@ export default function ReportTraderScreen() {
           We aim to acknowledge reports within 2 working days. Where appropriate, we will investigate, contact the trader for their response, and may suspend or remove their listing while we review. We will keep you informed of the outcome where possible.
         </Text>
       </View>
-
-      <View style={styles.section}>
-        <Text style={styles.heading}>Prefer to email?</Text>
-        <Text style={styles.paragraph}>
-          You can also email us at {SUPPORT_EMAIL} with the trader's business name and location, a clear description of your concern, any supporting documents or photos, and your contact details.
-        </Text>
-      </View>
-
-      <Pressable
-        style={styles.contactBtn}
-        onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Report a trader`)}
-      >
-        <Feather name="mail" size={16} color={Colors.light.primary} />
-        <Text style={styles.contactBtnText}>Report a trader by email</Text>
-      </Pressable>
     </ScrollView>
   );
 }
@@ -113,6 +95,4 @@ const styles = StyleSheet.create({
   },
   heading: { fontSize: 16, fontWeight: '600', color: Colors.light.text, marginBottom: 12 },
   paragraph: { fontSize: 14, color: Colors.light.textSecondary, lineHeight: 22, marginBottom: 10 },
-  contactBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.light.primaryMuted, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: Colors.light.border, marginTop: 12 },
-  contactBtnText: { fontSize: 14, fontWeight: '700', color: Colors.light.primary },
 });

@@ -1,0 +1,59 @@
+Please remove support@mylocaltrade.co.uk from the screenshots shown and from the entire mobile app.
+
+This email address is no longer active or usable.
+
+Important:
+- Do not replace it with another email address.
+- Do not add any new contact method.
+- Do not add a temporary email address.
+- Do not add a contact form yet.
+- Do not add a support button, mailto link, phone number or placeholder.
+- For now, there should be no contact option shown in these areas.
+
+Please perform a full search across the mobile app and remove every reference to:
+
+support@mylocaltrade.co.uk
+
+This includes:
+- Complaints Procedure
+- How Verification Works
+- Reporting concerns
+- Help and Support
+- Privacy Policy
+- Terms and Conditions
+- Legal or safety pages
+- Report a Trader pages
+- Email buttons
+- mailto links
+- hidden text
+- placeholder content
+- any other user-facing screen or component
+
+Please also remove any surrounding wording that tells users to contact or email support, unless the sentence can remain accurate without offering a contact method.
+
+For example:
+
+Change:
+“Please use the ‘Report a Trader’ page or email support@mylocaltrade.co.uk.”
+
+To:
+“Please use the ‘Report a Trader’ page.”
+
+For the Complaints Procedure page:
+- remove the email address;
+- remove the “Email support@mylocaltrade.co.uk” button;
+- remove any instruction telling users to contact support by email;
+- do not replace it with anything else for now.
+
+I will implement a new contact strategy later, most likely an in-app contact form. That is not part of this task.
+
+Do not remove any existing in-app reporting functionality such as “Report a Trader”. Only remove the email address, email buttons, mailto actions and related contact wording.
+
+After completing the change, please confirm:
+1. There are zero remaining references to support@mylocaltrade.co.uk in the mobile app.
+2. There are no remaining email buttons or mailto links related to this address.
+3. No replacement contact method was added.
+4. Which screens/files were updated.
+5. Whether a new TestFlight build is required.
+
+Do not start a new build yet. I am grouping this with other mobile changes.

@@ -64,13 +64,6 @@ export default function CookiePolicyScreen() {
         </Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.heading}>5. Contact</Text>
-        <Text style={styles.paragraph}>
-          For any questions about this policy, contact us at support@mylocaltrade.co.uk.
-        </Text>
-      </View>
-
       <View style={styles.legalNote}>
         <Text style={styles.legalNoteText}>
           Last updated: {new Date().toLocaleDateString('en-GB', { year: 'numeric', month: 'long' })}.

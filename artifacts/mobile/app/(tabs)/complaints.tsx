@@ -1,11 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
-
-const SUPPORT_EMAIL = 'support@mylocaltrade.co.uk';
 
 export default function ComplaintsScreen() {
   const insets = useSafeAreaInsets();
@@ -43,7 +40,7 @@ export default function ComplaintsScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>2. Complaints about MyLocalTrade</Text>
         <Text style={styles.paragraph}>
-          If your complaint is about the platform itself (for example, billing, account access, or how a trader is listed), please contact us at {SUPPORT_EMAIL}.
+          If your complaint is about the platform itself (for example, billing, account access, or how a trader is listed), it will be reviewed under this procedure.
         </Text>
       </View>
 
@@ -76,11 +73,6 @@ export default function ComplaintsScreen() {
           • For gas-related issues — Gas Safe Register (gassaferegister.co.uk)
         </Text>
       </View>
-
-      <Pressable style={styles.contactBtn} onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Complaint`)}>
-        <Feather name="mail" size={16} color={Colors.light.primary} />
-        <Text style={styles.contactBtnText}>Email {SUPPORT_EMAIL}</Text>
-      </Pressable>
     </ScrollView>
   );
 }
@@ -91,6 +83,4 @@ const styles = StyleSheet.create({
   section: { marginBottom: 24 },
   heading: { fontSize: 16, fontWeight: '600', color: Colors.light.text, marginBottom: 12 },
   paragraph: { fontSize: 14, color: Colors.light.textSecondary, lineHeight: 22, marginBottom: 10 },
-  contactBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.light.primaryMuted, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: Colors.light.border, marginTop: 12 },
-  contactBtnText: { fontSize: 14, fontWeight: '700', color: Colors.light.primary },
 });
