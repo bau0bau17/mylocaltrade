@@ -1,0 +1,59 @@
+Please perform a quick, read-only check of the current mobile app code. I am not sure whether I already asked you to implement the latest legal and policy updates.
+
+Important:
+
+- Do not make changes.
+- Do not run a build, publish or deploy.
+- Do not perform a broad audit.
+- Use targeted searches and inspect only the relevant existing legal/profile files.
+- Keep the answer concise to minimise Replit Agent usage.
+
+Please check whether the mobile app currently includes all of the following:
+
+1. Privacy Policy wording covering:
+   - Profile Change Requests and Admin approval;
+   - current approved values remaining active during review;
+   - reviews taking up to 48 hours;
+   - phone-number verification through Twilio;
+   - contact details hidden before quote acceptance/hire;
+   - verified contact details shared only between the customer and hired trader after hire;
+   - Structured Quotes and quote history;
+   - MyLocalTrade not processing customer-to-trader job payments;
+   - Apple App Store/RevenueCat subscriptions, with no Stripe wording.
+
+2. Terms wording covering:
+   - accurate profile information;
+   - protected profile changes requiring Admin review;
+   - phone verification;
+   - communication remaining in MyLocalTrade before hire;
+   - contact details becoming available after hire;
+   - Structured Quotes, acceptance and job records;
+   - actual job payments being arranged separately between customer and trader.
+
+3. RCS wording:
+   - RCS remains described as trader phone verification only;
+   - it is not incorrectly expanded to customer verification;
+   - it remains consistent with the already-submitted Twilio RCS materials.
+
+4. Legal versioning:
+   - Privacy Policy and Terms version incremented;
+   - accurate effective date;
+   - existing users required to re-accept the material update using the existing legal-acceptance system.
+
+5. Other in-app wording:
+   - customer flow does not incorrectly say “Post your job” or claim automatic job distribution;
+   - Structured Quotes and Compare Offers are described accurately;
+   - no `support@mylocaltrade.co.uk` or user-facing Stripe references remain.
+
+Return only a small table with:
+
+- Requirement
+- Implemented
+- Missing/partial
+- File/location
+
+Then provide one final line:
+
+“New changes required: Yes/No.”
+
+Do not correct anything yet. I only want confirmation of the current state.
