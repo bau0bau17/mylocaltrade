@@ -15,4 +15,5 @@ export * from "./user-reports";
 export * from "./push-tokens";
 export * from "./contact-block-attempts";
 export * from "./promo-codes";
+export * from "./quotes";
 export * from "./promo-redemptions";

@@ -28,12 +28,14 @@ import type {
   CategoriesResponse,
   CheckoutSessionResponse,
   CompaniesHouseSearchResponse,
+  CompareOffersResponse,
   ConversationDetailResponse,
   ConversationListResponse,
   ConversationMessage,
   CreateCancellationRequest,
   CreateCheckoutRequest,
   CreateEnquiryRequest,
+  CreateQuoteRequest,
   CreateReportRequest,
   CreateReviewRequest,
   DeleteTraderDocumentResponse,
@@ -63,6 +65,7 @@ import type {
   PostAccountDeletionCancelBody,
   PostAccountDeletionRequest200,
   PostAccountDeletionRequestBody,
+  QuoteResponse,
   RegisterCustomerRequest,
   RegisterPendingResponse,
   RegisterPushTokenRequest,
@@ -3940,6 +3943,81 @@ export function useGetEnquiries<
 }
 
 /**
+ * @summary Customer's enquiries grouped by original request, with structured quotes for side-by-side comparison
+ */
+export const getCompareEnquiriesUrl = () => {
+  return `/api/enquiries/compare`;
+};
+
+export const compareEnquiries = async (
+  options?: RequestInit,
+): Promise<CompareOffersResponse> => {
+  return customFetch<CompareOffersResponse>(getCompareEnquiriesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getCompareEnquiriesQueryKey = () => {
+  return [`/api/enquiries/compare`] as const;
+};
+
+export const getCompareEnquiriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof compareEnquiries>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof compareEnquiries>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getCompareEnquiriesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof compareEnquiries>>
+  > = ({ signal }) => compareEnquiries({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof compareEnquiries>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type CompareEnquiriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof compareEnquiries>>
+>;
+export type CompareEnquiriesQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Customer's enquiries grouped by original request, with structured quotes for side-by-side comparison
+ */
+
+export function useCompareEnquiries<
+  TData = Awaited<ReturnType<typeof compareEnquiries>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof compareEnquiries>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getCompareEnquiriesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get all trade categories
  */
 export const getGetCategoriesUrl = () => {
@@ -4597,6 +4675,432 @@ export const useAcceptConversationOffer = <
   TContext
 > => {
   return useMutation(getAcceptConversationOfferMutationOptions(options));
+};
+
+/**
+ * @summary Trader sends a structured quote in a conversation (replaces any pending quote flow via revise)
+ */
+export const getCreateQuoteUrl = (id: number) => {
+  return `/api/conversations/${id}/quotes`;
+};
+
+export const createQuote = async (
+  id: number,
+  createQuoteRequest: CreateQuoteRequest,
+  options?: RequestInit,
+): Promise<QuoteResponse> => {
+  return customFetch<QuoteResponse>(getCreateQuoteUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createQuoteRequest),
+  });
+};
+
+export const getCreateQuoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createQuote>>,
+    TError,
+    { id: number; data: BodyType<CreateQuoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createQuote>>,
+  TError,
+  { id: number; data: BodyType<CreateQuoteRequest> },
+  TContext
+> => {
+  const mutationKey = ["createQuote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createQuote>>,
+    { id: number; data: BodyType<CreateQuoteRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return createQuote(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateQuoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createQuote>>
+>;
+export type CreateQuoteMutationBody = BodyType<CreateQuoteRequest>;
+export type CreateQuoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Trader sends a structured quote in a conversation (replaces any pending quote flow via revise)
+ */
+export const useCreateQuote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createQuote>>,
+    TError,
+    { id: number; data: BodyType<CreateQuoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createQuote>>,
+  TError,
+  { id: number; data: BodyType<CreateQuoteRequest> },
+  TContext
+> => {
+  return useMutation(getCreateQuoteMutationOptions(options));
+};
+
+/**
+ * @summary Trader replaces their pending quote with a new version (history preserved)
+ */
+export const getReviseQuoteUrl = (id: number) => {
+  return `/api/quotes/${id}/revise`;
+};
+
+export const reviseQuote = async (
+  id: number,
+  createQuoteRequest: CreateQuoteRequest,
+  options?: RequestInit,
+): Promise<QuoteResponse> => {
+  return customFetch<QuoteResponse>(getReviseQuoteUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createQuoteRequest),
+  });
+};
+
+export const getReviseQuoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviseQuote>>,
+    TError,
+    { id: number; data: BodyType<CreateQuoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reviseQuote>>,
+  TError,
+  { id: number; data: BodyType<CreateQuoteRequest> },
+  TContext
+> => {
+  const mutationKey = ["reviseQuote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reviseQuote>>,
+    { id: number; data: BodyType<CreateQuoteRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return reviseQuote(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReviseQuoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reviseQuote>>
+>;
+export type ReviseQuoteMutationBody = BodyType<CreateQuoteRequest>;
+export type ReviseQuoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Trader replaces their pending quote with a new version (history preserved)
+ */
+export const useReviseQuote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reviseQuote>>,
+    TError,
+    { id: number; data: BodyType<CreateQuoteRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reviseQuote>>,
+  TError,
+  { id: number; data: BodyType<CreateQuoteRequest> },
+  TContext
+> => {
+  return useMutation(getReviseQuoteMutationOptions(options));
+};
+
+/**
+ * @summary Trader withdraws their pending quote
+ */
+export const getWithdrawQuoteUrl = (id: number) => {
+  return `/api/quotes/${id}/withdraw`;
+};
+
+export const withdrawQuote = async (
+  id: number,
+  options?: RequestInit,
+): Promise<QuoteResponse> => {
+  return customFetch<QuoteResponse>(getWithdrawQuoteUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getWithdrawQuoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof withdrawQuote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof withdrawQuote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["withdrawQuote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof withdrawQuote>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return withdrawQuote(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type WithdrawQuoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof withdrawQuote>>
+>;
+
+export type WithdrawQuoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Trader withdraws their pending quote
+ */
+export const useWithdrawQuote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof withdrawQuote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof withdrawQuote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getWithdrawQuoteMutationOptions(options));
+};
+
+/**
+ * @summary Customer accepts a pending quote (triggers the existing hire flow and job reference)
+ */
+export const getAcceptQuoteUrl = (id: number) => {
+  return `/api/quotes/${id}/accept`;
+};
+
+export const acceptQuote = async (
+  id: number,
+  options?: RequestInit,
+): Promise<QuoteResponse> => {
+  return customFetch<QuoteResponse>(getAcceptQuoteUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAcceptQuoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptQuote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acceptQuote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["acceptQuote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acceptQuote>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return acceptQuote(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AcceptQuoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acceptQuote>>
+>;
+
+export type AcceptQuoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Customer accepts a pending quote (triggers the existing hire flow and job reference)
+ */
+export const useAcceptQuote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptQuote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof acceptQuote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getAcceptQuoteMutationOptions(options));
+};
+
+/**
+ * @summary Customer declines a pending quote
+ */
+export const getDeclineQuoteUrl = (id: number) => {
+  return `/api/quotes/${id}/decline`;
+};
+
+export const declineQuote = async (
+  id: number,
+  options?: RequestInit,
+): Promise<QuoteResponse> => {
+  return customFetch<QuoteResponse>(getDeclineQuoteUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getDeclineQuoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof declineQuote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof declineQuote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["declineQuote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof declineQuote>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return declineQuote(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeclineQuoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof declineQuote>>
+>;
+
+export type DeclineQuoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Customer declines a pending quote
+ */
+export const useDeclineQuote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof declineQuote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof declineQuote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeclineQuoteMutationOptions(options));
 };
 
 /**

@@ -7,6 +7,7 @@
  */
 import type { ConversationMessage } from "./conversationMessage";
 import type { ConversationSummary } from "./conversationSummary";
+import type { Quote } from "./quote";
 
 export interface ConversationDetailResponse {
   conversation: ConversationSummary;
@@ -16,4 +17,8 @@ the original enquiry. Empty when there were none. Both parties to the
 conversation are authorised to view these.
  */
   enquiryAttachments?: string[];
+  /** All structured quotes in this conversation, newest first, including
+revision history. Both parties to the conversation may view these.
+ */
+  quotes?: Quote[];
 }

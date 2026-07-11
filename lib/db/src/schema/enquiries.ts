@@ -24,6 +24,13 @@ export const enquiriesTable = pgTable("enquiries", {
     urgency?: "routine" | "soon" | "urgent";
   }>(),
   status: varchar("status", { length: 20 }).notNull().default("pending"),
+  // Stable group id linking enquiries that came from the same original customer
+  // request sent to multiple traders. Assigned server-side on creation (reuses
+  // the group of a recent enquiry by the same customer with an identical
+  // normalised serviceRequired); Compare Offers groups by this instead of live
+  // free-text matching. Nullable only for legacy rows the backfill could not
+  // group reliably.
+  requestGroupId: varchar("request_group_id", { length: 36 }),
   reminderSentAt: timestamp("reminder_sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

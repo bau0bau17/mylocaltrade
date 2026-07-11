@@ -9,6 +9,7 @@ import {
   traderProfilesTable,
   enquiriesTable,
   reviewsTable,
+  quotesTable,
 } from "@workspace/db/schema";
 import { and, eq, desc, sql, inArray } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
@@ -18,7 +19,11 @@ import { sendPushToUser } from "../lib/push-notifications";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
 import { ObjectStorageService } from "../lib/objectStorage";
-import { jobReferenceOf, formatJobReference } from "../lib/job-reference";
+import { jobReferenceOf } from "../lib/job-reference";
+import { postSystemMessage } from "../lib/system-messages";
+import { deriveStage } from "../lib/conversation-stage";
+import { ensureHired } from "../lib/hire";
+import { serializeQuote } from "../lib/quotes";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -115,21 +120,6 @@ function serializeConversation(
   };
 }
 
-// Single source of truth for the lifecycle stage shown to both parties. Derived
-// from the audit timestamps so the headline pill never contradicts the actual
-// state (e.g. showing "Awaiting trader reply" after the customer has hired).
-// Precedence: cancelled > job done > awaiting customer confirmation > hired >
-// closed/blocked > awaiting reply.
-function deriveStage(c: ConversationRow) {
-  if (c.cancelledAt) return "CANCELLED" as const;
-  if (c.customerCompletedAt) return "JOB_DONE" as const;
-  if (c.traderMarkedDoneAt && c.customerAcceptedAt)
-    return "AWAITING_CUSTOMER_CONFIRMATION" as const;
-  if (c.customerAcceptedAt) return "HIRED" as const;
-  if (c.status === "CLOSED" || c.status === "BLOCKED") return "CLOSED" as const;
-  return "AWAITING_REPLY" as const;
-}
-
 function serializeMessage(m: MessageRow) {
   return {
     id: m.id,
@@ -155,41 +145,6 @@ async function getActorContext(userId: number, userRole: string) {
     return { role: "trader" as const, traderProfileId: profile?.id ?? null };
   }
   return { role: userRole as "customer" | "admin", traderProfileId: null };
-}
-
-// Insert a system milestone message (e.g. offer accepted / work done / job
-// cancelled) and surface it to the chosen party by bumping their unread counter
-// + last-message preview, so lifecycle actions notify whoever needs to act next.
-// notify: which side should see it as unread. "trader" for customer-driven
-// actions (accept/complete), "customer" when the trader marks work done; for a
-// cancellation we notify only the opposite party (the canceller already knows).
-async function postSystemMessage(
-  conversationId: number,
-  body: string,
-  notify: "trader" | "customer" | "both" = "trader",
-) {
-  const now = new Date();
-  await db.insert(messagesTable).values({
-    conversationId,
-    senderUserId: null,
-    senderRole: "system",
-    body,
-    systemMessage: true,
-  });
-  await db
-    .update(conversationsTable)
-    .set({
-      lastMessageAt: now,
-      lastMessagePreview: body.slice(0, 200),
-      ...(notify === "trader" || notify === "both"
-        ? { traderUnreadCount: sql`${conversationsTable.traderUnreadCount} + 1` }
-        : {}),
-      ...(notify === "customer" || notify === "both"
-        ? { customerUnreadCount: sql`${conversationsTable.customerUnreadCount} + 1` }
-        : {}),
-      updatedAt: now,
-    })
-    .where(eq(conversationsTable.id, conversationId));
 }
 
 // GET /api/conversations/unread-count — total unread across my conversations
@@ -403,6 +358,14 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
       }
     }
 
+    // Structured quotes (newest first, including revision history). Both
+    // parties are already authorised above.
+    const quoteRows = await db
+      .select()
+      .from(quotesTable)
+      .where(eq(quotesTable.conversationId, id))
+      .orderBy(desc(quotesTable.createdAt));
+
     res.json({
       conversation: serializeConversation(row.conv, {
         customerName: row.customerName,
@@ -415,6 +378,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
       }),
       messages: messages.map(serializeMessage),
       enquiryAttachments,
+      quotes: quoteRows.map((q) => serializeQuote(q)),
     });
   } catch (error) {
     req.log.error({ err: error }, "Get conversation failed");
@@ -734,18 +698,8 @@ router.post("/conversations/:id/accept", authMiddleware, async (req, res) => {
       return;
     }
 
-    if (!conv.customerAcceptedAt) {
-      const now = new Date();
-      await db
-        .update(conversationsTable)
-        .set({
-          customerAcceptedAt: now,
-          jobReference: conv.jobReference ?? formatJobReference(conv.id),
-          updatedAt: now,
-        })
-        .where(eq(conversationsTable.id, id));
-      await postSystemMessage(id, "The customer accepted the offer and hired the trader.");
-    }
+    // Race-safe, idempotent hire shared with structured-quote acceptance.
+    await ensureHired(id);
 
     res.json({ ok: true });
   } catch (error) {

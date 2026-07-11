@@ -14,6 +14,7 @@ import {
   cancellationRequestsTable,
   REPORT_CATEGORIES,
   reviewsTable,
+  quotesTable,
 } from "@workspace/db/schema";
 import { pushTokensTable } from "@workspace/db/schema";
 import { alias } from "drizzle-orm/pg-core";
@@ -23,6 +24,7 @@ import { authMiddleware, adminOnly, revokeUserSessions } from "../lib/auth";
 import { sendPushToUser } from "../lib/push-notifications";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { serializeQuote } from "../lib/quotes";
 import {
   TRADER_STATUS,
   evaluateDocumentsComplete,
@@ -1720,6 +1722,15 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
           .where(eq(messagesTable.conversationId, id))
           .orderBy(messagesTable.createdAt)
       : [];
+    // Structured quotes follow the same active-moderation gate as message
+    // bodies: they contain pricing detail admins only need for disputes.
+    const quotes = canReadMessages
+      ? await db
+          .select()
+          .from(quotesTable)
+          .where(eq(quotesTable.conversationId, id))
+          .orderBy(desc(quotesTable.createdAt))
+      : [];
 
     await logAudit({
       userId: row.conv.customerId,
@@ -1747,6 +1758,7 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
         lastMessageAt: row.conv.lastMessageAt.toISOString(),
       },
       messagesAccessible: canReadMessages,
+      quotes: quotes.map((q) => serializeQuote(q)),
       contactBypass: {
         threshold: CONTACT_BYPASS_THRESHOLD,
         total: attemptStats.total,

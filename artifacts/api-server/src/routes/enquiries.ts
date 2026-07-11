@@ -1,7 +1,11 @@
 import { Router, type IRouter } from "express";
+import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
-import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable } from "@workspace/db/schema";
-import { eq, desc, and, isNull, isNotNull, inArray, sql } from "drizzle-orm";
+import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable, quotesTable } from "@workspace/db/schema";
+import { eq, desc, and, isNull, isNotNull, inArray, sql, gte } from "drizzle-orm";
+import { deriveStage } from "../lib/conversation-stage";
+import { serializeQuote, type SerializedQuote } from "../lib/quotes";
+import { computeResponseTimes } from "../lib/response-times";
 import { authMiddleware } from "../lib/auth";
 import { CreateEnquiryBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
@@ -107,6 +111,27 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       (normalisedAttachments.length > 0
         ? `\n\n[${normalisedAttachments.length} photo${normalisedAttachments.length === 1 ? "" : "s"} attached]`
         : "");
+    // Group enquiries that came from the same original request so Compare
+    // Offers can show them side by side. Heuristic: same customer asking for
+    // the same (normalised) service within 30 days joins the existing group;
+    // otherwise a fresh group id is minted.
+    const serviceKey = serviceRequired.trim().toLowerCase();
+    const groupWindowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [recentGroup] = await db
+      .select({ gid: enquiriesTable.requestGroupId })
+      .from(enquiriesTable)
+      .where(
+        and(
+          eq(enquiriesTable.customerId, userId),
+          isNotNull(enquiriesTable.requestGroupId),
+          sql`lower(btrim(${enquiriesTable.serviceRequired})) = ${serviceKey}`,
+          gte(enquiriesTable.createdAt, groupWindowStart),
+        ),
+      )
+      .orderBy(desc(enquiriesTable.createdAt))
+      .limit(1);
+    const requestGroupId = recentGroup?.gid ?? randomUUID();
+
     const { enquiry, conversationId } = await db.transaction(async (tx) => {
       const [enq] = await tx
         .insert(enquiriesTable)
@@ -120,6 +145,7 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
           attachmentUrls: normalisedAttachments,
           specialistFields: specialistFields ?? null,
           status: "pending",
+          requestGroupId,
         })
         .returning();
       const [conv] = await tx
@@ -289,17 +315,15 @@ router.get("/enquiries/compare", authMiddleware, async (req, res) => {
         serviceRequired: enquiriesTable.serviceRequired,
         enquiryStatus: enquiriesTable.status,
         enquiryCreatedAt: enquiriesTable.createdAt,
+        requestGroupId: enquiriesTable.requestGroupId,
         traderProfileId: traderProfilesTable.id,
         traderUserId: traderProfilesTable.userId,
         traderBusinessName: traderProfilesTable.businessName,
         traderTown: traderProfilesTable.town,
         traderRating: traderProfilesTable.rating,
         traderReviewCount: traderProfilesTable.reviewCount,
-        conversationId: conversationsTable.id,
-        traderStatus: conversationsTable.traderStatus,
-        conversationStatus: conversationsTable.status,
-        lastMessageAt: conversationsTable.lastMessageAt,
-        lastMessagePreview: conversationsTable.lastMessagePreview,
+        traderVerificationStatus: traderProfilesTable.verificationStatus,
+        conv: conversationsTable,
       })
       .from(enquiriesTable)
       .innerJoin(traderProfilesTable, eq(enquiriesTable.traderId, traderProfilesTable.id))
@@ -307,14 +331,30 @@ router.get("/enquiries/compare", authMiddleware, async (req, res) => {
       .where(eq(enquiriesTable.customerId, userId))
       .orderBy(desc(enquiriesTable.createdAt));
 
-    // Pull the latest trader message per conversation so the customer sees the
-    // actual response (the conversation preview can be the customer's own
-    // message if the trader hasn't replied).
-    const conversationIds = rows.map((r) => r.conversationId).filter((c): c is number => c != null);
-    const latestTraderByConv = new Map<
-      number,
-      { body: string; createdAt: Date }
-    >();
+    const conversationIds = rows
+      .map((r) => r.conv?.id)
+      .filter((c): c is number => c != null);
+
+    // Latest structured quote per conversation (revisions are inserted last,
+    // so the newest row IS the current version of the quote chain).
+    const latestQuoteByConv = new Map<number, SerializedQuote>();
+    if (conversationIds.length > 0) {
+      const quoteRows = await db
+        .select()
+        .from(quotesTable)
+        .where(inArray(quotesTable.conversationId, conversationIds))
+        .orderBy(desc(quotesTable.createdAt));
+      for (const q of quoteRows) {
+        if (!latestQuoteByConv.has(q.conversationId)) {
+          latestQuoteByConv.set(q.conversationId, serializeQuote(q));
+        }
+      }
+    }
+
+    // Whether the trader has replied at all (drives "Awaiting reply" states),
+    // plus the latest reply preview kept for older installed app builds that
+    // still render free-text replies as offers.
+    const latestTraderByConv = new Map<number, { body: string; createdAt: Date }>();
     if (conversationIds.length > 0) {
       const traderMessages = await db
         .select({
@@ -333,41 +373,20 @@ router.get("/enquiries/compare", authMiddleware, async (req, res) => {
       for (const m of traderMessages) {
         if (m.conversationId == null) continue;
         if (!latestTraderByConv.has(m.conversationId)) {
-          latestTraderByConv.set(m.conversationId, {
-            body: m.body,
-            createdAt: m.createdAt,
-          });
+          latestTraderByConv.set(m.conversationId, { body: m.body, createdAt: m.createdAt });
         }
       }
     }
 
-    type Offer = {
-      enquiryId: number;
-      enquiryStatus: string;
-      enquiryCreatedAt: string;
-      traderProfileId: number;
-      traderUserId: number;
-      traderBusinessName: string;
-      traderTown: string | null;
-      traderRating: number | null;
-      traderReviewCount: number;
-      conversationId: number | null;
-      traderStatus: string | null;
-      conversationStatus: string | null;
-      lastMessageAt: string | null;
-      lastTraderReplyPreview: string | null;
-      lastTraderReplyAt: string | null;
-      hasTraderReply: boolean;
-    };
+    // "Replies fast" badge data, same median metric as trader search.
+    const responseTimes = await computeResponseTimes(
+      Array.from(new Set(rows.map((r) => r.traderProfileId))),
+    );
 
-    const groups = new Map<string, { serviceRequired: string; offers: Offer[] }>();
-    for (const r of rows) {
-      const key = r.serviceRequired.trim().toLowerCase();
-      if (!groups.has(key)) {
-        groups.set(key, { serviceRequired: r.serviceRequired, offers: [] });
-      }
-      const traderReply = r.conversationId != null ? latestTraderByConv.get(r.conversationId) : undefined;
-      groups.get(key)!.offers.push({
+    type Offer = ReturnType<typeof toOffer>;
+    function toOffer(r: (typeof rows)[number]) {
+      const traderReply = r.conv ? latestTraderByConv.get(r.conv.id) : undefined;
+      return {
         enquiryId: r.enquiryId,
         enquiryStatus: r.enquiryStatus,
         enquiryCreatedAt: r.enquiryCreatedAt.toISOString(),
@@ -377,32 +396,59 @@ router.get("/enquiries/compare", authMiddleware, async (req, res) => {
         traderTown: r.traderTown ?? null,
         traderRating: r.traderRating != null ? Number(r.traderRating) : null,
         traderReviewCount: r.traderReviewCount ?? 0,
-        conversationId: r.conversationId ?? null,
-        traderStatus: r.traderStatus ?? null,
-        conversationStatus: r.conversationStatus ?? null,
-        lastMessageAt: r.lastMessageAt ? r.lastMessageAt.toISOString() : null,
+        traderVerified: r.traderVerificationStatus === "VERIFIED",
+        traderResponseTimeMinutes: responseTimes.get(r.traderProfileId) ?? null,
+        conversationId: r.conv?.id ?? null,
+        traderStatus: r.conv?.traderStatus ?? null,
+        conversationStatus: r.conv?.status ?? null,
+        stage: r.conv ? deriveStage(r.conv) : null,
+        lastMessageAt: r.conv?.lastMessageAt?.toISOString() ?? null,
+        quote: r.conv ? latestQuoteByConv.get(r.conv.id) ?? null : null,
+        hasTraderReply: !!traderReply,
+        // Legacy fields consumed by app builds that predate structured
+        // quotes; not part of the current API contract.
         lastTraderReplyPreview: traderReply?.body.slice(0, 240) ?? null,
         lastTraderReplyAt: traderReply ? traderReply.createdAt.toISOString() : null,
-        hasTraderReply: !!traderReply,
-      });
+      };
     }
 
+    // Group strictly by requestGroupId. Rows that somehow missed the startup
+    // backfill fall back to a per-enquiry group so nothing disappears.
+    const groups = new Map<string, { requestGroupId: string; serviceRequired: string; offers: Offer[] }>();
+    for (const r of rows) {
+      const key = r.requestGroupId ?? `enq-${r.enquiryId}`;
+      if (!groups.has(key)) {
+        groups.set(key, { requestGroupId: key, serviceRequired: r.serviceRequired, offers: [] });
+      }
+      groups.get(key)!.offers.push(toOffer(r));
+    }
+
+    const quoteRank = (o: Offer) => {
+      if (!o.quote) return 3;
+      if (o.quote.status === "PENDING" || o.quote.status === "ACCEPTED") return 0;
+      if (o.quote.status === "EXPIRED") return 1;
+      return 2; // declined / withdrawn / revised tail
+    };
+
     const result = Array.from(groups.values())
-      // Newest job first (by most recent enquiry in the group)
       .map((g) => ({
         ...g,
+        // Actionable quotes first, then quoted-but-lapsed, then replies
+        // without a quote, then silence — each bucket newest first.
         offers: g.offers.sort((a, b) => {
-          // Replies first, then by recency
+          const qr = quoteRank(a) - quoteRank(b);
+          if (qr !== 0) return qr;
           if (a.hasTraderReply !== b.hasTraderReply) return a.hasTraderReply ? -1 : 1;
-          const at = a.lastTraderReplyAt ?? a.enquiryCreatedAt;
-          const bt = b.lastTraderReplyAt ?? b.enquiryCreatedAt;
+          const at = a.quote?.createdAt ?? a.lastMessageAt ?? a.enquiryCreatedAt;
+          const bt = b.quote?.createdAt ?? b.lastMessageAt ?? b.enquiryCreatedAt;
           return bt.localeCompare(at);
         }),
       }))
+      // Newest job first (by most recent enquiry in the group)
       .sort((a, b) => {
-        const aLatest = a.offers[0]?.enquiryCreatedAt ?? "";
-        const bLatest = b.offers[0]?.enquiryCreatedAt ?? "";
-        return bLatest.localeCompare(aLatest);
+        const aLatest = Math.max(...a.offers.map((o) => Date.parse(o.enquiryCreatedAt)));
+        const bLatest = Math.max(...b.offers.map((o) => Date.parse(o.enquiryCreatedAt)));
+        return bLatest - aLatest;
       });
 
     res.json({ groups: result, totalGroups: result.length });

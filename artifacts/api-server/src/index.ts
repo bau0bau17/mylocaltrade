@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { bootstrapAdminFromEnv } from "./lib/admin-bootstrap";
 import { backfillJobReferences } from "./lib/job-reference-backfill";
+import { backfillRequestGroups } from "./lib/request-group-backfill";
 
 const rawPort = process.env["PORT"];
 
@@ -23,4 +24,5 @@ app.listen(port, () => {
   startScheduler();
   void bootstrapAdminFromEnv();
   void backfillJobReferences();
+  void backfillRequestGroups();
 });

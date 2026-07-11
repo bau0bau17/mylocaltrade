@@ -1596,6 +1596,97 @@ export const GetEnquiriesResponse = zod.object({
 });
 
 /**
+ * @summary Customer's enquiries grouped by original request, with structured quotes for side-by-side comparison
+ */
+export const CompareEnquiriesResponse = zod.object({
+  groups: zod.array(
+    zod.object({
+      requestGroupId: zod
+        .string()
+        .describe(
+          "Stable identifier linking enquiries from the same original request.",
+        ),
+      serviceRequired: zod.string(),
+      offers: zod.array(
+        zod.object({
+          enquiryId: zod.number(),
+          enquiryStatus: zod.string(),
+          enquiryCreatedAt: zod.date(),
+          traderProfileId: zod.number(),
+          traderBusinessName: zod.string(),
+          traderTown: zod.string().nullish(),
+          traderRating: zod.number().nullish(),
+          traderReviewCount: zod.number(),
+          traderVerified: zod.boolean(),
+          traderResponseTimeMinutes: zod
+            .number()
+            .nullish()
+            .describe(
+              'Median response time in minutes, used for the \"Replies fast\" badge.',
+            ),
+          conversationId: zod.number().nullish(),
+          traderStatus: zod.string().nullish(),
+          conversationStatus: zod.string().nullish(),
+          stage: zod
+            .string()
+            .nullish()
+            .describe(
+              "Derived conversation lifecycle stage (HIRED, JOB_DONE, etc.). Null when no conversation exists yet.",
+            ),
+          lastMessageAt: zod.date().nullish(),
+          quote: zod
+            .object({
+              id: zod.number(),
+              conversationId: zod.number(),
+              enquiryId: zod.number().nullish(),
+              traderProfileId: zod.number(),
+              amountPence: zod
+                .number()
+                .describe("Quoted price in pence (e.g. 45000 = £450.00)."),
+              priceType: zod.enum(["FIXED", "ESTIMATE"]),
+              description: zod.string(),
+              notes: zod.string().nullish(),
+              validUntil: zod
+                .date()
+                .nullish()
+                .describe("When the quote expires. Null = no expiry."),
+              status: zod.enum([
+                "PENDING",
+                "ACCEPTED",
+                "DECLINED",
+                "WITHDRAWN",
+                "REVISED",
+                "EXPIRED",
+              ]),
+              revisionOfQuoteId: zod
+                .number()
+                .nullish()
+                .describe("The quote this one replaced, if it is a revision."),
+              acceptedAt: zod.date().nullish(),
+              declinedAt: zod.date().nullish(),
+              withdrawnAt: zod.date().nullish(),
+              createdAt: zod.date(),
+            })
+            .describe(
+              "A structured quote a trader sent within a conversation. Prices are\ninteger pence (minor units). Status is the effective status: quotes\nstored as PENDING whose validUntil has passed are reported as EXPIRED.\n",
+            )
+            .nullish()
+            .describe(
+              "The latest structured quote in this conversation (its current revision), or null if the trader has not sent one.",
+            ),
+          hasTraderReply: zod
+            .boolean()
+            .describe(
+              "Whether the trader has replied in the conversation at all.",
+            ),
+        }),
+      ),
+    }),
+  ),
+  totalGroups: zod.number(),
+});
+
+/**
  * @summary Get all trade categories
  */
 export const GetCategoriesResponse = zod.object({
@@ -1841,6 +1932,49 @@ export const GetConversationResponse = zod.object({
     .describe(
       "Short-lived signed GET URLs for the photos the customer attached to\nthe original enquiry. Empty when there were none. Both parties to the\nconversation are authorised to view these.\n",
     ),
+  quotes: zod
+    .array(
+      zod
+        .object({
+          id: zod.number(),
+          conversationId: zod.number(),
+          enquiryId: zod.number().nullish(),
+          traderProfileId: zod.number(),
+          amountPence: zod
+            .number()
+            .describe("Quoted price in pence (e.g. 45000 = £450.00)."),
+          priceType: zod.enum(["FIXED", "ESTIMATE"]),
+          description: zod.string(),
+          notes: zod.string().nullish(),
+          validUntil: zod
+            .date()
+            .nullish()
+            .describe("When the quote expires. Null = no expiry."),
+          status: zod.enum([
+            "PENDING",
+            "ACCEPTED",
+            "DECLINED",
+            "WITHDRAWN",
+            "REVISED",
+            "EXPIRED",
+          ]),
+          revisionOfQuoteId: zod
+            .number()
+            .nullish()
+            .describe("The quote this one replaced, if it is a revision."),
+          acceptedAt: zod.date().nullish(),
+          declinedAt: zod.date().nullish(),
+          withdrawnAt: zod.date().nullish(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "A structured quote a trader sent within a conversation. Prices are\ninteger pence (minor units). Status is the effective status: quotes\nstored as PENDING whose validUntil has passed are reported as EXPIRED.\n",
+        ),
+    )
+    .optional()
+    .describe(
+      "All structured quotes in this conversation, newest first, including\nrevision history. Both parties to the conversation may view these.\n",
+    ),
 });
 
 /**
@@ -1892,6 +2026,210 @@ export const AcceptConversationOfferParams = zod.object({
 
 export const AcceptConversationOfferResponse = zod.object({
   ok: zod.boolean(),
+});
+
+/**
+ * @summary Trader sends a structured quote in a conversation (replaces any pending quote flow via revise)
+ */
+export const CreateQuoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const createQuoteBodyAmountPenceMax = 100000000;
+
+export const createQuoteBodyDescriptionMin = 3;
+export const createQuoteBodyDescriptionMax = 2000;
+
+export const createQuoteBodyNotesMax = 1000;
+
+export const CreateQuoteBody = zod.object({
+  amountPence: zod
+    .number()
+    .min(1)
+    .max(createQuoteBodyAmountPenceMax)
+    .describe("Quoted price in pence (e.g. 45000 = £450.00). Max £1,000,000."),
+  priceType: zod.enum(["FIXED", "ESTIMATE"]),
+  description: zod
+    .string()
+    .min(createQuoteBodyDescriptionMin)
+    .max(createQuoteBodyDescriptionMax)
+    .describe("What the quoted work includes."),
+  notes: zod.string().max(createQuoteBodyNotesMax).nullish(),
+  validUntil: zod
+    .date()
+    .nullish()
+    .describe("Optional expiry. Must be in the future when provided."),
+});
+
+/**
+ * @summary Trader replaces their pending quote with a new version (history preserved)
+ */
+export const ReviseQuoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const reviseQuoteBodyAmountPenceMax = 100000000;
+
+export const reviseQuoteBodyDescriptionMin = 3;
+export const reviseQuoteBodyDescriptionMax = 2000;
+
+export const reviseQuoteBodyNotesMax = 1000;
+
+export const ReviseQuoteBody = zod.object({
+  amountPence: zod
+    .number()
+    .min(1)
+    .max(reviseQuoteBodyAmountPenceMax)
+    .describe("Quoted price in pence (e.g. 45000 = £450.00). Max £1,000,000."),
+  priceType: zod.enum(["FIXED", "ESTIMATE"]),
+  description: zod
+    .string()
+    .min(reviseQuoteBodyDescriptionMin)
+    .max(reviseQuoteBodyDescriptionMax)
+    .describe("What the quoted work includes."),
+  notes: zod.string().max(reviseQuoteBodyNotesMax).nullish(),
+  validUntil: zod
+    .date()
+    .nullish()
+    .describe("Optional expiry. Must be in the future when provided."),
+});
+
+/**
+ * @summary Trader withdraws their pending quote
+ */
+export const WithdrawQuoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const WithdrawQuoteResponse = zod.object({
+  quote: zod
+    .object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      enquiryId: zod.number().nullish(),
+      traderProfileId: zod.number(),
+      amountPence: zod
+        .number()
+        .describe("Quoted price in pence (e.g. 45000 = £450.00)."),
+      priceType: zod.enum(["FIXED", "ESTIMATE"]),
+      description: zod.string(),
+      notes: zod.string().nullish(),
+      validUntil: zod
+        .date()
+        .nullish()
+        .describe("When the quote expires. Null = no expiry."),
+      status: zod.enum([
+        "PENDING",
+        "ACCEPTED",
+        "DECLINED",
+        "WITHDRAWN",
+        "REVISED",
+        "EXPIRED",
+      ]),
+      revisionOfQuoteId: zod
+        .number()
+        .nullish()
+        .describe("The quote this one replaced, if it is a revision."),
+      acceptedAt: zod.date().nullish(),
+      declinedAt: zod.date().nullish(),
+      withdrawnAt: zod.date().nullish(),
+      createdAt: zod.date(),
+    })
+    .describe(
+      "A structured quote a trader sent within a conversation. Prices are\ninteger pence (minor units). Status is the effective status: quotes\nstored as PENDING whose validUntil has passed are reported as EXPIRED.\n",
+    ),
+});
+
+/**
+ * @summary Customer accepts a pending quote (triggers the existing hire flow and job reference)
+ */
+export const AcceptQuoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AcceptQuoteResponse = zod.object({
+  quote: zod
+    .object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      enquiryId: zod.number().nullish(),
+      traderProfileId: zod.number(),
+      amountPence: zod
+        .number()
+        .describe("Quoted price in pence (e.g. 45000 = £450.00)."),
+      priceType: zod.enum(["FIXED", "ESTIMATE"]),
+      description: zod.string(),
+      notes: zod.string().nullish(),
+      validUntil: zod
+        .date()
+        .nullish()
+        .describe("When the quote expires. Null = no expiry."),
+      status: zod.enum([
+        "PENDING",
+        "ACCEPTED",
+        "DECLINED",
+        "WITHDRAWN",
+        "REVISED",
+        "EXPIRED",
+      ]),
+      revisionOfQuoteId: zod
+        .number()
+        .nullish()
+        .describe("The quote this one replaced, if it is a revision."),
+      acceptedAt: zod.date().nullish(),
+      declinedAt: zod.date().nullish(),
+      withdrawnAt: zod.date().nullish(),
+      createdAt: zod.date(),
+    })
+    .describe(
+      "A structured quote a trader sent within a conversation. Prices are\ninteger pence (minor units). Status is the effective status: quotes\nstored as PENDING whose validUntil has passed are reported as EXPIRED.\n",
+    ),
+});
+
+/**
+ * @summary Customer declines a pending quote
+ */
+export const DeclineQuoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeclineQuoteResponse = zod.object({
+  quote: zod
+    .object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      enquiryId: zod.number().nullish(),
+      traderProfileId: zod.number(),
+      amountPence: zod
+        .number()
+        .describe("Quoted price in pence (e.g. 45000 = £450.00)."),
+      priceType: zod.enum(["FIXED", "ESTIMATE"]),
+      description: zod.string(),
+      notes: zod.string().nullish(),
+      validUntil: zod
+        .date()
+        .nullish()
+        .describe("When the quote expires. Null = no expiry."),
+      status: zod.enum([
+        "PENDING",
+        "ACCEPTED",
+        "DECLINED",
+        "WITHDRAWN",
+        "REVISED",
+        "EXPIRED",
+      ]),
+      revisionOfQuoteId: zod
+        .number()
+        .nullish()
+        .describe("The quote this one replaced, if it is a revision."),
+      acceptedAt: zod.date().nullish(),
+      declinedAt: zod.date().nullish(),
+      withdrawnAt: zod.date().nullish(),
+      createdAt: zod.date(),
+    })
+    .describe(
+      "A structured quote a trader sent within a conversation. Prices are\ninteger pence (minor units). Status is the effective status: quotes\nstored as PENDING whose validUntil has passed are reported as EXPIRED.\n",
+    ),
 });
 
 /**
@@ -2056,6 +2394,49 @@ export const GetAdminConversationResponse = zod.object({
     lastMessageAt: zod.date(),
   }),
   messagesAccessible: zod.boolean(),
+  quotes: zod
+    .array(
+      zod
+        .object({
+          id: zod.number(),
+          conversationId: zod.number(),
+          enquiryId: zod.number().nullish(),
+          traderProfileId: zod.number(),
+          amountPence: zod
+            .number()
+            .describe("Quoted price in pence (e.g. 45000 = £450.00)."),
+          priceType: zod.enum(["FIXED", "ESTIMATE"]),
+          description: zod.string(),
+          notes: zod.string().nullish(),
+          validUntil: zod
+            .date()
+            .nullish()
+            .describe("When the quote expires. Null = no expiry."),
+          status: zod.enum([
+            "PENDING",
+            "ACCEPTED",
+            "DECLINED",
+            "WITHDRAWN",
+            "REVISED",
+            "EXPIRED",
+          ]),
+          revisionOfQuoteId: zod
+            .number()
+            .nullish()
+            .describe("The quote this one replaced, if it is a revision."),
+          acceptedAt: zod.date().nullish(),
+          declinedAt: zod.date().nullish(),
+          withdrawnAt: zod.date().nullish(),
+          createdAt: zod.date(),
+        })
+        .describe(
+          "A structured quote a trader sent within a conversation. Prices are\ninteger pence (minor units). Status is the effective status: quotes\nstored as PENDING whose validUntil has passed are reported as EXPIRED.\n",
+        ),
+    )
+    .optional()
+    .describe(
+      "Structured quotes in this conversation (newest first), included only\nwhen the conversation is accessible to the admin (reported), for\ndispute investigation.\n",
+    ),
   messages: zod.array(
     zod.object({
       id: zod.number(),

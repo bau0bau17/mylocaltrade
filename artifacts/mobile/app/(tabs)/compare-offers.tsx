@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -14,65 +14,44 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { getApiUrl } from '@/lib/api-url';
-import { useGetEligibleEnquiriesForReview } from '@workspace/api-client-react';
+import {
+  useCompareEnquiries,
+  useGetEligibleEnquiriesForReview,
+  getCompareEnquiriesQueryKey,
+  type CompareOffer,
+  type CompareGroup,
+} from '@workspace/api-client-react';
 
-type Offer = {
-  enquiryId: number;
-  enquiryStatus: string;
-  enquiryCreatedAt: string;
-  traderProfileId: number;
-  traderUserId: number;
-  traderBusinessName: string;
-  traderTown: string | null;
-  traderRating: number | null;
-  traderReviewCount: number;
-  conversationId: number | null;
-  traderStatus: 'NEW' | 'CONTACTED' | 'QUOTED' | 'COMPLETED' | null;
-  conversationStatus: string | null;
-  lastMessageAt: string | null;
-  lastTraderReplyPreview: string | null;
-  lastTraderReplyAt: string | null;
-  hasTraderReply: boolean;
-};
+function fmtPounds(amountPence: number) {
+  const pounds = amountPence / 100;
+  return `£${pounds.toLocaleString('en-GB', {
+    minimumFractionDigits: pounds % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
 
-type Group = { serviceRequired: string; offers: Offer[] };
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+/** A PENDING quote whose validUntil has passed is shown as expired. */
+function effectiveQuoteStatus(q: NonNullable<CompareOffer['quote']>): string {
+  if (q.status === 'PENDING' && q.validUntil && new Date(q.validUntil).getTime() <= Date.now()) {
+    return 'EXPIRED';
+  }
+  return q.status;
+}
 
 export default function CompareOffersScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
-  const { token, isAdmin } = useAuth();
-  const apiUrl = getApiUrl();
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { isAdmin } = useAuth();
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    try {
-      setError(null);
-      const res = await fetch(`${apiUrl}/api/enquiries/compare`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `HTTP ${res.status}`);
-      }
-      const data = (await res.json()) as { groups: Group[] };
-      setGroups(data.groups);
-    } catch (e: any) {
-      setError(e?.message || 'Failed to load offers');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [apiUrl, token]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data, isLoading, error, refetch, isRefetching } = useCompareEnquiries({
+    query: { enabled: !isAdmin, queryKey: getCompareEnquiriesQueryKey() },
+  });
+  const groups: CompareGroup[] = data?.groups ?? [];
 
   // Review buttons are only shown for jobs that are actually reviewable
   // (confirmed done, not cancelled, not yet reviewed) per the eligible endpoint.
@@ -92,7 +71,7 @@ export default function CompareOffersScreen() {
     );
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -104,8 +83,10 @@ export default function CompareOffersScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.emptyTitle}>Couldn't load offers</Text>
-        <Text style={styles.emptySubtitle}>{error}</Text>
-        <Pressable style={styles.retryBtn} onPress={() => { setLoading(true); void load(); }}>
+        <Text style={styles.emptySubtitle}>
+          {error instanceof Error ? error.message : 'Failed to load offers'}
+        </Text>
+        <Pressable style={styles.retryBtn} onPress={() => refetch()}>
           <Text style={styles.retryText}>Try again</Text>
         </Pressable>
       </View>
@@ -118,8 +99,8 @@ export default function CompareOffersScreen() {
         <Feather name="inbox" size={42} color={Colors.light.textSecondary} />
         <Text style={styles.emptyTitle}>No offers to compare yet</Text>
         <Text style={styles.emptySubtitle}>
-          Send enquiries to a few traders for the same job and they'll appear here
-          side by side so you can compare their replies.
+          Send enquiries to a few traders for the same job and their quotes will
+          appear here side by side.
         </Text>
         <Pressable
           style={styles.emptyCta}
@@ -140,19 +121,19 @@ export default function CompareOffersScreen() {
       contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 24 }}
       refreshControl={
         <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => { setRefreshing(true); void load(); }}
+          refreshing={isRefetching}
+          onRefresh={() => refetch()}
           tintColor={Colors.light.primary}
         />
       }
     >
       <Text style={styles.intro}>
         Each card below groups the traders you've contacted for the same job.
-        Swipe horizontally inside a card to compare their responses.
+        Swipe horizontally inside a card to compare their quotes.
       </Text>
 
       {groups.map((group) => (
-        <View key={group.serviceRequired} style={styles.groupCard}>
+        <View key={group.requestGroupId} style={styles.groupCard}>
           <View style={styles.groupHeader}>
             <Feather name="briefcase" size={14} color={Colors.light.primary} />
             <Text style={styles.groupTitle} numberOfLines={2}>{group.serviceRequired}</Text>
@@ -189,7 +170,11 @@ export default function CompareOffersScreen() {
                 reviewEligible={eligibleIds.has(offer.enquiryId)}
                 onOpenChat={
                   offer.conversationId
-                    ? () => router.push(`/messages/${offer.conversationId}`)
+                    ? () =>
+                        router.push({
+                          pathname: `/messages/${offer.conversationId}` as never,
+                          params: { returnTo: '/compare-offers' },
+                        } as never)
                     : null
                 }
                 onViewProfile={() => router.push(`/trader/${offer.traderProfileId}`)}
@@ -214,13 +199,18 @@ function OfferCard({
   onViewProfile,
   onLeaveReview,
 }: {
-  offer: Offer;
+  offer: CompareOffer;
   reviewEligible: boolean;
   onOpenChat: (() => void) | null;
   onViewProfile: () => void;
   onLeaveReview: () => void;
 }) {
+  const quote = offer.quote ?? null;
+  const quoteStatus = quote ? effectiveQuoteStatus(quote) : null;
   const ratingIsNumber = offer.traderRating != null && Number.isFinite(offer.traderRating);
+  const repliesFast =
+    offer.traderResponseTimeMinutes != null && offer.traderResponseTimeMinutes <= 60;
+
   const reviewWord = offer.traderReviewCount === 1 ? 'review' : 'reviews';
   const ratingPhrase =
     ratingIsNumber && offer.traderReviewCount > 0
@@ -230,15 +220,19 @@ function OfferCard({
       : offer.traderReviewCount > 0
       ? `${offer.traderReviewCount} ${reviewWord}`
       : 'no rating yet';
-  const replyPhrase = offer.hasTraderReply
-    ? `trader replied${offer.lastTraderReplyAt ? ` ${formatRelative(offer.lastTraderReplyAt)}` : ''}`
+  const quotePhrase = quote
+    ? `quoted ${fmtPounds(quote.amountPence)} ${quote.priceType === 'FIXED' ? 'fixed price' : 'estimate'}, ${
+        (QUOTE_STATUS_META[quoteStatus ?? ''] ?? { label: quoteStatus ?? '' }).label
+      }`.toLowerCase()
+    : offer.hasTraderReply
+    ? 'trader replied, no quote yet'
     : `awaiting trader reply, enquiry sent ${formatRelative(offer.enquiryCreatedAt)}`;
   const summaryLabel = [
     offer.traderBusinessName,
     offer.traderTown ? `in ${offer.traderTown}` : null,
-    resolvePill(offer.traderStatus, offer.hasTraderReply).label.toLowerCase(),
+    offer.traderVerified ? 'verified' : null,
     ratingPhrase,
-    replyPhrase,
+    quotePhrase,
   ]
     .filter(Boolean)
     .join(', ');
@@ -248,14 +242,19 @@ function OfferCard({
       <View accessible accessibilityLabel={summaryLabel}>
         <View style={styles.offerTop}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.traderName} numberOfLines={1}>{offer.traderBusinessName}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.traderName} numberOfLines={1}>{offer.traderBusinessName}</Text>
+              {offer.traderVerified ? (
+                <Feather name="check-circle" size={12} color={Colors.light.success} />
+              ) : null}
+            </View>
             {offer.traderTown ? (
               <Text style={styles.traderTown} numberOfLines={1}>
                 <Feather name="map-pin" size={10} color={Colors.light.textSecondary} /> {offer.traderTown}
               </Text>
             ) : null}
           </View>
-          <TraderStatusPill status={offer.traderStatus} hasReply={offer.hasTraderReply} />
+          <StagePill offer={offer} quoteStatus={quoteStatus} />
         </View>
 
         <View style={styles.ratingRow}>
@@ -272,28 +271,47 @@ function OfferCard({
               </Text>
             </>
           )}
+          {repliesFast ? (
+            <View style={styles.fastBadge}>
+              <Feather name="zap" size={9} color="#B45309" />
+              <Text style={styles.fastBadgeText}>Replies fast</Text>
+            </View>
+          ) : null}
         </View>
 
-        <View style={styles.replyBox}>
-          <Text style={styles.replyLabel}>
-            {offer.hasTraderReply ? 'Trader reply' : 'Awaiting reply'}
-          </Text>
-          {offer.hasTraderReply ? (
-            <>
-              <Text style={styles.replyBody} numberOfLines={5}>
-                {offer.lastTraderReplyPreview}
+        {quote ? (
+          <View style={[styles.quoteBox, quoteStatus === 'ACCEPTED' && styles.quoteBoxAccepted]}>
+            <View style={styles.quoteTopRow}>
+              <Text style={styles.quoteLabel}>Quote</Text>
+              <QuoteStatusPill status={quoteStatus!} />
+            </View>
+            <View style={styles.quoteAmountRow}>
+              <Text style={styles.quoteAmount}>{fmtPounds(quote.amountPence)}</Text>
+              <Text style={styles.quotePriceType}>
+                {quote.priceType === 'FIXED' ? 'Fixed price' : 'Estimate'}
               </Text>
-              <Text style={styles.replyTime}>
-                {offer.lastTraderReplyAt ? formatRelative(offer.lastTraderReplyAt) : ''}
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.replyMuted}>
-              Sent {formatRelative(offer.enquiryCreatedAt)}. The trader has not
-              responded yet.
+            </View>
+            <Text style={styles.quoteDescription} numberOfLines={3}>
+              {quote.description}
             </Text>
-          )}
-        </View>
+            {quoteStatus === 'PENDING' && quote.validUntil ? (
+              <Text style={styles.quoteValidity}>Valid until {fmtDate(quote.validUntil)}</Text>
+            ) : quoteStatus === 'EXPIRED' && quote.validUntil ? (
+              <Text style={styles.quoteValidity}>Expired {fmtDate(quote.validUntil)}</Text>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.replyBox}>
+            <Text style={styles.replyLabel}>
+              {offer.hasTraderReply ? 'No quote yet' : 'Awaiting reply'}
+            </Text>
+            <Text style={styles.replyMuted}>
+              {offer.hasTraderReply
+                ? 'The trader has replied but not sent a quote yet. Open the chat to ask for one.'
+                : `Sent ${formatRelative(offer.enquiryCreatedAt)}. The trader has not responded yet.`}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.ctaCol}>
@@ -302,10 +320,20 @@ function OfferCard({
             style={styles.primaryCta}
             onPress={onOpenChat}
             accessibilityRole="button"
-            accessibilityLabel={`Open chat with ${offer.traderBusinessName}`}
+            accessibilityLabel={
+              quoteStatus === 'PENDING'
+                ? `View quote from ${offer.traderBusinessName}`
+                : `Open chat with ${offer.traderBusinessName}`
+            }
           >
-            <Feather name="message-circle" size={14} color="#fff" />
-            <Text style={styles.primaryCtaText}>Open chat</Text>
+            <Feather
+              name={quoteStatus === 'PENDING' ? 'file-text' : 'message-circle'}
+              size={14}
+              color="#fff"
+            />
+            <Text style={styles.primaryCtaText}>
+              {quoteStatus === 'PENDING' ? 'View quote' : 'Open chat'}
+            </Text>
           </Pressable>
         ) : (
           <View style={styles.awaitingChat}>
@@ -338,28 +366,46 @@ function OfferCard({
   );
 }
 
-const PILL_MAP: Record<string, { label: string; bg: string; fg: string }> = {
-  NEW: { label: 'New', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
-  CONTACTED: { label: 'Contacted', bg: 'rgba(59, 130, 246, 0.14)', fg: '#1D4ED8' },
-  QUOTED: { label: 'Quoted', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
-  COMPLETED: { label: 'Completed', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+const QUOTE_STATUS_META: Record<string, { label: string; bg: string; fg: string }> = {
+  PENDING: { label: 'Quote received', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+  ACCEPTED: { label: 'Accepted', bg: 'rgba(6, 214, 160, 0.18)', fg: '#047857' },
+  DECLINED: { label: 'Declined', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+  WITHDRAWN: { label: 'Withdrawn', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+  EXPIRED: { label: 'Expired', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
+  REVISED: { label: 'Revised', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
 };
-const AWAITING_PILL = { label: 'Awaiting', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' };
 
-function resolvePill(status: Offer['traderStatus'], hasReply: boolean) {
-  if (status && PILL_MAP[status]) return PILL_MAP[status];
-  if (hasReply) return PILL_MAP.CONTACTED;
-  return AWAITING_PILL;
+function QuoteStatusPill({ status }: { status: string }) {
+  const v = QUOTE_STATUS_META[status] ?? QUOTE_STATUS_META.DECLINED;
+  return (
+    <View style={[styles.pill, { backgroundColor: v.bg }]}>
+      <Text style={[styles.pillText, { color: v.fg }]}>{v.label}</Text>
+    </View>
+  );
 }
 
-function TraderStatusPill({
-  status,
-  hasReply,
-}: {
-  status: Offer['traderStatus'];
-  hasReply: boolean;
-}) {
-  const v = resolvePill(status, hasReply);
+const STAGE_META: Record<string, { label: string; bg: string; fg: string }> = {
+  HIRED: { label: 'Hired', bg: 'rgba(59, 130, 246, 0.14)', fg: '#1D4ED8' },
+  AWAITING_CUSTOMER_CONFIRMATION: { label: 'Confirm done', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' },
+  JOB_DONE: { label: 'Job done', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' },
+  CANCELLED: { label: 'Cancelled', bg: 'rgba(239, 71, 111, 0.14)', fg: '#BE123C' },
+  CLOSED: { label: 'Closed', bg: 'rgba(107, 114, 128, 0.14)', fg: '#374151' },
+};
+const AWAITING_PILL = { label: 'Awaiting', bg: 'rgba(245, 158, 11, 0.14)', fg: '#B45309' };
+const REPLIED_PILL = { label: 'Replied', bg: 'rgba(59, 130, 246, 0.14)', fg: '#1D4ED8' };
+const QUOTED_PILL = { label: 'Quoted', bg: 'rgba(16, 185, 129, 0.14)', fg: '#047857' };
+
+function StagePill({ offer, quoteStatus }: { offer: CompareOffer; quoteStatus: string | null }) {
+  let v;
+  if (offer.stage && STAGE_META[offer.stage]) {
+    v = STAGE_META[offer.stage];
+  } else if (quoteStatus === 'PENDING' || quoteStatus === 'ACCEPTED') {
+    v = QUOTED_PILL;
+  } else if (offer.hasTraderReply) {
+    v = REPLIED_PILL;
+  } else {
+    v = AWAITING_PILL;
+  }
   return (
     <View style={[styles.pill, { backgroundColor: v.bg }]}>
       <Text style={[styles.pillText, { color: v.fg }]}>{v.label}</Text>
@@ -455,18 +501,46 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   offerTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  traderName: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  traderName: { fontSize: 14, fontWeight: '700', color: Colors.light.text, flexShrink: 1 },
   traderTown: { fontSize: 11, color: Colors.light.textSecondary, marginTop: 2 },
 
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
   ratingText: { fontSize: 12, fontWeight: '700', color: Colors.light.text },
   reviewCount: { fontSize: 11, color: Colors.light.textSecondary },
+  fastBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    marginLeft: 4,
+  },
+  fastBadgeText: { fontSize: 9, fontWeight: '700', color: '#B45309', letterSpacing: 0.2 },
 
-  replyBox: { borderRadius: 10, backgroundColor: Colors.light.surface ?? '#F9FAFB', padding: 10, gap: 4 },
+  quoteBox: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.surface ?? '#F9FAFB',
+    padding: 10,
+    gap: 5,
+    marginTop: 8,
+  },
+  quoteBoxAccepted: { borderColor: Colors.light.success },
+  quoteTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  quoteLabel: { fontSize: 10, fontWeight: '700', color: Colors.light.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
+  quoteAmountRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  quoteAmount: { fontSize: 20, fontWeight: '800', color: Colors.light.text },
+  quotePriceType: { fontSize: 11, fontWeight: '600', color: Colors.light.textSecondary },
+  quoteDescription: { fontSize: 12, color: Colors.light.text, lineHeight: 17 },
+  quoteValidity: { fontSize: 10, fontWeight: '600', color: Colors.light.textSecondary },
+
+  replyBox: { borderRadius: 10, backgroundColor: Colors.light.surface ?? '#F9FAFB', padding: 10, gap: 4, marginTop: 8 },
   replyLabel: { fontSize: 10, fontWeight: '700', color: Colors.light.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 },
-  replyBody: { fontSize: 12, color: Colors.light.text, lineHeight: 17 },
-  replyTime: { fontSize: 10, color: Colors.light.textSecondary, marginTop: 2 },
-  replyMuted: { fontSize: 12, color: Colors.light.textSecondary, fontStyle: 'italic' },
+  replyMuted: { fontSize: 12, color: Colors.light.textSecondary, fontStyle: 'italic', lineHeight: 17 },
 
   ctaCol: { gap: 6 },
   primaryCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: 9, backgroundColor: Colors.light.primary },

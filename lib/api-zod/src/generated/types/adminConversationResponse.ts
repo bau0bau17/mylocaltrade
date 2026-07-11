@@ -7,9 +7,15 @@
  */
 import type { AdminConversationResponseConversation } from "./adminConversationResponseConversation";
 import type { AdminConversationResponseMessagesItem } from "./adminConversationResponseMessagesItem";
+import type { Quote } from "./quote";
 
 export interface AdminConversationResponse {
   conversation: AdminConversationResponseConversation;
   messagesAccessible: boolean;
+  /** Structured quotes in this conversation (newest first), included only
+when the conversation is accessible to the admin (reported), for
+dispute investigation.
+ */
+  quotes?: Quote[];
   messages: AdminConversationResponseMessagesItem[];
 }

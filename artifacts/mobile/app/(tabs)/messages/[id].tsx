@@ -33,9 +33,16 @@ import {
   useCompleteConversationJob,
   useTraderMarkConversationDone,
   useCancelConversationJob,
+  useCreateQuote,
+  useReviseQuote,
+  useWithdrawQuote,
+  useAcceptQuote,
+  useDeclineQuote,
   getGetConversationQueryKey,
   getGetConversationsQueryKey,
   getGetConversationsUnreadCountQueryKey,
+  getCompareEnquiriesQueryKey,
+  type Quote,
 } from "@workspace/api-client-react";
 
 const TRADER_STATUSES = ["NEW", "CONTACTED", "QUOTED", "COMPLETED"] as const;
@@ -45,6 +52,52 @@ function fmtTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
+
+function fmtPounds(amountPence: number) {
+  const pounds = amountPence / 100;
+  return `£${pounds.toLocaleString("en-GB", {
+    minimumFractionDigits: pounds % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** A stored PENDING quote whose expiry has passed is shown as expired. */
+function effectiveStatus(q: Quote): Quote["status"] | "EXPIRED" {
+  if (
+    q.status === "PENDING" &&
+    q.validUntil &&
+    new Date(q.validUntil).getTime() <= Date.now()
+  ) {
+    return "EXPIRED";
+  }
+  return q.status;
+}
+
+/** Parse a "£450" / "450.50" style input into pence, or null if invalid. */
+function parsePoundsToPence(raw: string): number | null {
+  const cleaned = raw.replace(/[£,\s]/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  const pence = Math.round(parseFloat(cleaned) * 100);
+  if (!Number.isFinite(pence) || pence < 1 || pence > 100_000_000) return null;
+  return pence;
+}
+
+const QUOTE_STATUS_LABEL: Record<string, string> = {
+  PENDING: "Awaiting response",
+  ACCEPTED: "Accepted",
+  DECLINED: "Declined",
+  WITHDRAWN: "Withdrawn",
+  REVISED: "Revised",
+  EXPIRED: "Expired",
+};
 
 export default function ConversationThreadScreen() {
   const { id, returnTo } = useLocalSearchParams<{ id: string; returnTo?: string }>();
@@ -130,6 +183,28 @@ export default function ConversationThreadScreen() {
     },
   });
 
+  const invalidateQuoteRelated = () => {
+    qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+    qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+    qc.invalidateQueries({ queryKey: getCompareEnquiriesQueryKey() });
+  };
+
+  const createQuoteMutation = useCreateQuote({
+    mutation: { onSuccess: invalidateQuoteRelated },
+  });
+  const reviseQuoteMutation = useReviseQuote({
+    mutation: { onSuccess: invalidateQuoteRelated },
+  });
+  const withdrawQuoteMutation = useWithdrawQuote({
+    mutation: { onSuccess: invalidateQuoteRelated },
+  });
+  const acceptQuoteMutation = useAcceptQuote({
+    mutation: { onSuccess: invalidateQuoteRelated },
+  });
+  const declineQuoteMutation = useDeclineQuote({
+    mutation: { onSuccess: invalidateQuoteRelated },
+  });
+
   const reportMutation = useReportConversation();
 
   const muteMutation = useMuteConversation({
@@ -146,6 +221,13 @@ export default function ConversationThreadScreen() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [photoViewer, setPhotoViewer] = useState<number | null>(null);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const [quoteMode, setQuoteMode] = useState<"create" | "revise">("create");
+  const [quoteAmount, setQuoteAmount] = useState("");
+  const [quotePriceType, setQuotePriceType] = useState<"FIXED" | "ESTIMATE">("FIXED");
+  const [quoteDescription, setQuoteDescription] = useState("");
+  const [quoteNotes, setQuoteNotes] = useState("");
+  const [quoteValidDays, setQuoteValidDays] = useState<number | null>(14);
 
   if (isAdmin) {
     return (
@@ -166,6 +248,20 @@ export default function ConversationThreadScreen() {
   const enquiryAttachments = data?.enquiryAttachments ?? [];
   const closed =
     conv?.status === "CLOSED" || conv?.status === "BLOCKED";
+
+  // Quotes arrive newest first; the head of the list is the current version
+  // of the quote chain (older revisions keep status REVISED).
+  const quotes = data?.quotes ?? [];
+  const currentQuote = quotes[0] ?? null;
+  const currentQuoteStatus = currentQuote ? effectiveStatus(currentQuote) : null;
+  const hasLivePendingQuote = currentQuoteStatus === "PENDING";
+  const hasAcceptedQuote = currentQuoteStatus === "ACCEPTED";
+  const quoteBusy =
+    createQuoteMutation.isPending ||
+    reviseQuoteMutation.isPending ||
+    withdrawQuoteMutation.isPending ||
+    acceptQuoteMutation.isPending ||
+    declineQuoteMutation.isPending;
 
   const otherName = useMemo(() => {
     if (!conv) return "";
@@ -260,6 +356,116 @@ export default function ConversationThreadScreen() {
         acceptMutation.mutate(
           { id: conversationId },
           { onError: () => Alert.alert("Error", "Could not accept the offer.") },
+        ),
+    });
+  };
+
+  const openQuoteForm = (mode: "create" | "revise") => {
+    setQuoteMode(mode);
+    if (mode === "revise" && currentQuote) {
+      setQuoteAmount((currentQuote.amountPence / 100).toFixed(2).replace(/\.00$/, ""));
+      setQuotePriceType(currentQuote.priceType);
+      setQuoteDescription(currentQuote.description);
+      setQuoteNotes(currentQuote.notes ?? "");
+      setQuoteValidDays(14);
+    } else {
+      setQuoteAmount("");
+      setQuotePriceType("FIXED");
+      setQuoteDescription("");
+      setQuoteNotes("");
+      setQuoteValidDays(14);
+    }
+    setQuoteOpen(true);
+  };
+
+  const onSubmitQuote = () => {
+    const amountPence = parsePoundsToPence(quoteAmount);
+    if (amountPence == null) {
+      Alert.alert("Check the price", "Enter a valid amount, e.g. 450 or 450.50 (up to £1,000,000).");
+      return;
+    }
+    const description = quoteDescription.trim();
+    if (description.length < 3) {
+      Alert.alert("Add a description", "Briefly describe what the quoted work includes.");
+      return;
+    }
+    const notesViolation = detectContactInfo(`${description} ${quoteNotes}`);
+    if (notesViolation) {
+      Alert.alert("Quote blocked", contactViolationMessage(notesViolation));
+      return;
+    }
+    const body = {
+      amountPence,
+      priceType: quotePriceType,
+      description,
+      notes: quoteNotes.trim() ? quoteNotes.trim() : null,
+      validUntil:
+        quoteValidDays != null
+          ? new Date(Date.now() + quoteValidDays * 24 * 60 * 60 * 1000).toISOString()
+          : null,
+    };
+    const opts = {
+      onSuccess: () => setQuoteOpen(false),
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : "Could not send the quote. Please try again.";
+        Alert.alert("Error", msg);
+      },
+    };
+    if (quoteMode === "revise" && currentQuote) {
+      reviseQuoteMutation.mutate({ id: currentQuote.id, data: body }, opts);
+    } else {
+      createQuoteMutation.mutate({ id: conversationId, data: body }, opts);
+    }
+  };
+
+  const onWithdrawQuote = () => {
+    if (!currentQuote) return;
+    confirmAction({
+      title: "Withdraw this quote",
+      message: "The customer will no longer be able to accept it. You can send a new quote afterwards.",
+      confirmLabel: "Withdraw quote",
+      destructive: true,
+      onConfirm: () =>
+        withdrawQuoteMutation.mutate(
+          { id: currentQuote.id },
+          { onError: () => Alert.alert("Error", "Could not withdraw the quote.") },
+        ),
+    });
+  };
+
+  const onAcceptQuote = () => {
+    if (!currentQuote) return;
+    confirmAction({
+      title: "Accept this quote",
+      message: `Accept ${fmtPounds(currentQuote.amountPence)} (${
+        currentQuote.priceType === "FIXED" ? "fixed price" : "estimate"
+      }) and hire ${otherName} for this job?`,
+      confirmLabel: "Accept & hire",
+      onConfirm: () =>
+        acceptQuoteMutation.mutate(
+          { id: currentQuote.id },
+          {
+            onError: (err: unknown) => {
+              const msg =
+                err instanceof Error ? err.message : "Could not accept the quote.";
+              Alert.alert("Error", msg);
+            },
+          },
+        ),
+    });
+  };
+
+  const onDeclineQuote = () => {
+    if (!currentQuote) return;
+    confirmAction({
+      title: "Decline this quote",
+      message: `Decline ${otherName}'s quote of ${fmtPounds(currentQuote.amountPence)}? They can still send you a new one.`,
+      confirmLabel: "Decline quote",
+      destructive: true,
+      onConfirm: () =>
+        declineQuoteMutation.mutate(
+          { id: currentQuote.id },
+          { onError: () => Alert.alert("Error", "Could not decline the quote.") },
         ),
     });
   };
@@ -669,6 +875,134 @@ export default function ConversationThreadScreen() {
         }
       />
 
+      {currentQuote && conv.stage !== "CANCELLED" ? (
+        <View style={styles.quoteCard}>
+          <View style={styles.quoteHeaderRow}>
+            <View style={styles.quoteTitleWrap}>
+              <Feather name="file-text" size={14} color={Colors.light.primary} />
+              <Text style={styles.quoteTitle}>
+                {isTrader ? "Your quote" : `Quote from ${otherName}`}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.quoteStatusPill,
+                currentQuoteStatus === "ACCEPTED" && styles.quotePillAccepted,
+                (currentQuoteStatus === "DECLINED" ||
+                  currentQuoteStatus === "WITHDRAWN" ||
+                  currentQuoteStatus === "EXPIRED") &&
+                  styles.quotePillEnded,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.quoteStatusPillText,
+                  currentQuoteStatus === "ACCEPTED" && styles.quotePillAcceptedText,
+                  (currentQuoteStatus === "DECLINED" ||
+                    currentQuoteStatus === "WITHDRAWN" ||
+                    currentQuoteStatus === "EXPIRED") &&
+                    styles.quotePillEndedText,
+                ]}
+              >
+                {QUOTE_STATUS_LABEL[currentQuoteStatus ?? ""] ?? currentQuoteStatus}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.quoteAmountRow}>
+            <Text style={styles.quoteAmount}>{fmtPounds(currentQuote.amountPence)}</Text>
+            <Text style={styles.quotePriceType}>
+              {currentQuote.priceType === "FIXED" ? "Fixed price" : "Estimate"}
+            </Text>
+          </View>
+          <Text style={styles.quoteDescription} numberOfLines={3}>
+            {currentQuote.description}
+          </Text>
+          {currentQuote.notes ? (
+            <Text style={styles.quoteNotes} numberOfLines={2}>
+              {currentQuote.notes}
+            </Text>
+          ) : null}
+          {currentQuote.validUntil && hasLivePendingQuote ? (
+            <Text style={styles.quoteValidity}>
+              Valid until {fmtDate(currentQuote.validUntil)}
+            </Text>
+          ) : currentQuoteStatus === "EXPIRED" && currentQuote.validUntil ? (
+            <Text style={styles.quoteValidity}>
+              Expired on {fmtDate(currentQuote.validUntil)}
+            </Text>
+          ) : null}
+          {!closed && !isTrader && hasLivePendingQuote ? (
+            <View style={styles.quoteActionsRow}>
+              <Pressable
+                style={[styles.quoteBtn, styles.quoteBtnPrimary, quoteBusy && styles.quoteBtnDisabled]}
+                disabled={quoteBusy}
+                onPress={onAcceptQuote}
+              >
+                {acceptQuoteMutation.isPending ? (
+                  <ActivityIndicator size="small" color={Colors.light.white} />
+                ) : (
+                  <>
+                    <Feather name="check-circle" size={14} color={Colors.light.white} />
+                    <Text style={styles.quoteBtnPrimaryText}>Accept & hire</Text>
+                  </>
+                )}
+              </Pressable>
+              <Pressable
+                style={[styles.quoteBtn, styles.quoteBtnGhost, quoteBusy && styles.quoteBtnDisabled]}
+                disabled={quoteBusy}
+                onPress={onDeclineQuote}
+              >
+                <Text style={styles.quoteBtnGhostText}>Decline</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {!closed && isTrader && (hasLivePendingQuote || currentQuoteStatus === "EXPIRED") ? (
+            <View style={styles.quoteActionsRow}>
+              <Pressable
+                style={[styles.quoteBtn, styles.quoteBtnPrimary, quoteBusy && styles.quoteBtnDisabled]}
+                disabled={quoteBusy}
+                onPress={() => openQuoteForm("revise")}
+              >
+                <Feather name="edit-2" size={14} color={Colors.light.white} />
+                <Text style={styles.quoteBtnPrimaryText}>
+                  {currentQuoteStatus === "EXPIRED" ? "Reissue quote" : "Revise"}
+                </Text>
+              </Pressable>
+              {hasLivePendingQuote ? (
+                <Pressable
+                  style={[styles.quoteBtn, styles.quoteBtnGhost, quoteBusy && styles.quoteBtnDisabled]}
+                  disabled={quoteBusy}
+                  onPress={onWithdrawQuote}
+                >
+                  {withdrawQuoteMutation.isPending ? (
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                  ) : (
+                    <Text style={styles.quoteBtnGhostText}>Withdraw</Text>
+                  )}
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {!closed &&
+          isTrader &&
+          !hasLivePendingQuote &&
+          !hasAcceptedQuote &&
+          currentQuoteStatus !== "EXPIRED" &&
+          conv.stage !== "JOB_DONE" ? (
+            <View style={styles.quoteActionsRow}>
+              <Pressable
+                style={[styles.quoteBtn, styles.quoteBtnPrimary, quoteBusy && styles.quoteBtnDisabled]}
+                disabled={quoteBusy}
+                onPress={() => openQuoteForm("create")}
+              >
+                <Feather name="plus" size={14} color={Colors.light.white} />
+                <Text style={styles.quoteBtnPrimaryText}>Send a new quote</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       {conv.stage === "CANCELLED" ? (
         <View style={styles.lifecycleBar}>
           <View style={styles.lifecycleDone}>
@@ -705,22 +1039,31 @@ export default function ConversationThreadScreen() {
       ) : !isTrader && !closed ? (
         <View style={styles.lifecycleBar}>
           {conv.stage === "AWAITING_REPLY" || (!conv.customerAcceptedAt && conv.stage !== "CLOSED") ? (
-            <Pressable
-              style={styles.lifecycleBtn}
-              onPress={onAccept}
-              disabled={acceptMutation.isPending}
-            >
-              {acceptMutation.isPending ? (
-                <ActivityIndicator size="small" color={Colors.light.white} />
-              ) : (
-                <>
-                  <Feather name="check-circle" size={16} color={Colors.light.white} />
-                  <Text style={styles.lifecycleBtnText} numberOfLines={1}>
-                    Accept offer & hire {otherName}
-                  </Text>
-                </>
-              )}
-            </Pressable>
+            hasLivePendingQuote ? (
+              <View style={styles.lifecycleDone}>
+                <Feather name="file-text" size={14} color={Colors.light.textSecondary} />
+                <Text style={styles.lifecycleDoneText}>
+                  Review the quote above to hire {otherName}.
+                </Text>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.lifecycleBtn}
+                onPress={onAccept}
+                disabled={acceptMutation.isPending}
+              >
+                {acceptMutation.isPending ? (
+                  <ActivityIndicator size="small" color={Colors.light.white} />
+                ) : (
+                  <>
+                    <Feather name="check-circle" size={16} color={Colors.light.white} />
+                    <Text style={styles.lifecycleBtnText} numberOfLines={1}>
+                      Accept offer & hire {otherName}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            )
           ) : (
             <>
               {conv.stage === "AWAITING_CUSTOMER_CONFIRMATION" ? (
@@ -771,13 +1114,26 @@ export default function ConversationThreadScreen() {
               )}
             </Pressable>
           ) : (
-            <View style={styles.lifecycleDone}>
-              <Feather name="clock" size={14} color={Colors.light.textSecondary} />
-              <Text style={styles.lifecycleDoneText}>
-                Waiting for {otherName} to hire you. Once hired, you can mark the work
-                as completed.
-              </Text>
-            </View>
+            <>
+              <View style={styles.lifecycleDone}>
+                <Feather name="clock" size={14} color={Colors.light.textSecondary} />
+                <Text style={styles.lifecycleDoneText}>
+                  {hasLivePendingQuote
+                    ? `Your quote has been sent. Waiting for ${otherName} to respond.`
+                    : `Waiting for ${otherName} to hire you. Send a quote to set out your price.`}
+                </Text>
+              </View>
+              {!currentQuote ? (
+                <Pressable
+                  style={styles.lifecycleBtn}
+                  onPress={() => openQuoteForm("create")}
+                  disabled={quoteBusy}
+                >
+                  <Feather name="file-text" size={16} color={Colors.light.white} />
+                  <Text style={styles.lifecycleBtnText}>Send a quote</Text>
+                </Pressable>
+              ) : null}
+            </>
           )}
         </View>
       ) : null}
@@ -873,6 +1229,143 @@ export default function ConversationThreadScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal
+        visible={quoteOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQuoteOpen(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <View style={[styles.modalCard, { maxHeight: "85%" }]}>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <Text style={styles.modalTitle}>
+                {quoteMode === "revise" ? "Revise your quote" : "Send a quote"}
+              </Text>
+              <Text style={styles.modalSub}>
+                {quoteMode === "revise"
+                  ? "This replaces your previous quote. The customer will be notified."
+                  : `Set out your price for ${conv.serviceRequired || "this job"}. The customer can accept it to hire you.`}
+              </Text>
+
+              <Text style={styles.quoteFieldLabel}>Price (£)</Text>
+              <TextInput
+                style={styles.quoteInput}
+                value={quoteAmount}
+                onChangeText={setQuoteAmount}
+                placeholder="e.g. 450"
+                placeholderTextColor={Colors.light.textMuted}
+                keyboardType="decimal-pad"
+                maxLength={12}
+              />
+
+              <Text style={styles.quoteFieldLabel}>Price type</Text>
+              <View style={styles.quoteChipRow}>
+                {(
+                  [
+                    { v: "FIXED", label: "Fixed price" },
+                    { v: "ESTIMATE", label: "Estimate" },
+                  ] as const
+                ).map((opt) => (
+                  <Pressable
+                    key={opt.v}
+                    style={[styles.quoteChip, quotePriceType === opt.v && styles.quoteChipActive]}
+                    onPress={() => setQuotePriceType(opt.v)}
+                  >
+                    <Text
+                      style={[
+                        styles.quoteChipText,
+                        quotePriceType === opt.v && styles.quoteChipTextActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Text style={styles.quoteFieldLabel}>What's included</Text>
+              <TextInput
+                style={[styles.quoteInput, styles.quoteInputMultiline]}
+                value={quoteDescription}
+                onChangeText={setQuoteDescription}
+                placeholder="Describe the work this quote covers…"
+                placeholderTextColor={Colors.light.textMuted}
+                multiline
+                maxLength={2000}
+              />
+
+              <Text style={styles.quoteFieldLabel}>Notes (optional)</Text>
+              <TextInput
+                style={[styles.quoteInput, styles.quoteInputMultiline]}
+                value={quoteNotes}
+                onChangeText={setQuoteNotes}
+                placeholder="e.g. materials included, start date…"
+                placeholderTextColor={Colors.light.textMuted}
+                multiline
+                maxLength={1000}
+              />
+
+              <Text style={styles.quoteFieldLabel}>Quote valid for</Text>
+              <View style={styles.quoteChipRow}>
+                {(
+                  [
+                    { v: 7, label: "7 days" },
+                    { v: 14, label: "14 days" },
+                    { v: 30, label: "30 days" },
+                    { v: null, label: "No expiry" },
+                  ] as const
+                ).map((opt) => (
+                  <Pressable
+                    key={String(opt.v)}
+                    style={[styles.quoteChip, quoteValidDays === opt.v && styles.quoteChipActive]}
+                    onPress={() => setQuoteValidDays(opt.v)}
+                  >
+                    <Text
+                      style={[
+                        styles.quoteChipText,
+                        quoteValidDays === opt.v && styles.quoteChipTextActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={styles.modalActions}>
+                <Pressable
+                  style={[styles.modalBtn, styles.modalBtnGhost]}
+                  onPress={() => setQuoteOpen(false)}
+                >
+                  <Text style={styles.modalBtnGhostText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.modalBtn,
+                    styles.modalBtnPrimary,
+                    (createQuoteMutation.isPending || reviseQuoteMutation.isPending) &&
+                      styles.modalBtnDisabled,
+                  ]}
+                  disabled={createQuoteMutation.isPending || reviseQuoteMutation.isPending}
+                  onPress={onSubmitQuote}
+                >
+                  {createQuoteMutation.isPending || reviseQuoteMutation.isPending ? (
+                    <ActivityIndicator size="small" color={Colors.light.white} />
+                  ) : (
+                    <Text style={styles.modalBtnPrimaryText}>
+                      {quoteMode === "revise" ? "Send revised quote" : "Send quote"}
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal
@@ -1108,7 +1601,109 @@ const styles = StyleSheet.create({
   modalBtnGhostText: { color: Colors.light.text, fontWeight: "700", fontSize: 14 },
   modalBtnDanger: { backgroundColor: Colors.light.error },
   modalBtnDangerText: { color: Colors.light.white, fontWeight: "700", fontSize: 14 },
+  modalBtnPrimary: { backgroundColor: Colors.light.primary },
+  modalBtnPrimaryText: { color: Colors.light.white, fontWeight: "700", fontSize: 14 },
   modalBtnDisabled: { opacity: 0.5 },
+
+  quoteCard: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.surface,
+    gap: 6,
+  },
+  quoteHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  quoteTitleWrap: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
+  quoteTitle: { fontSize: 13, fontWeight: "700", color: Colors.light.text, flexShrink: 1 },
+  quoteStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: Colors.light.primaryMuted,
+  },
+  quoteStatusPillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: Colors.light.primary,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  quotePillAccepted: { backgroundColor: "rgba(6, 214, 160, 0.14)" },
+  quotePillAcceptedText: { color: Colors.light.success },
+  quotePillEnded: {
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  quotePillEndedText: { color: Colors.light.textSecondary },
+  quoteAmountRow: { flexDirection: "row", alignItems: "baseline", gap: 8 },
+  quoteAmount: { fontSize: 22, fontWeight: "800", color: Colors.light.text },
+  quotePriceType: { fontSize: 12, fontWeight: "600", color: Colors.light.textSecondary },
+  quoteDescription: { fontSize: 13, color: Colors.light.text, lineHeight: 18 },
+  quoteNotes: { fontSize: 12, color: Colors.light.textSecondary, fontStyle: "italic" },
+  quoteValidity: { fontSize: 11, fontWeight: "600", color: Colors.light.textSecondary },
+  quoteActionsRow: { flexDirection: "row", gap: 8, marginTop: 4 },
+  quoteBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: 40,
+    borderRadius: 10,
+  },
+  quoteBtnPrimary: { backgroundColor: Colors.light.primary },
+  quoteBtnPrimaryText: { color: Colors.light.white, fontWeight: "700", fontSize: 13 },
+  quoteBtnGhost: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  quoteBtnGhostText: { color: Colors.light.text, fontWeight: "700", fontSize: 13 },
+  quoteBtnDisabled: { opacity: 0.5 },
+  quoteFieldLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: Colors.light.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  quoteInput: {
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: Colors.light.text,
+    backgroundColor: Colors.light.background,
+  },
+  quoteInputMultiline: { minHeight: 70, textAlignVertical: "top" },
+  quoteChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  quoteChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.background,
+  },
+  quoteChipActive: {
+    borderColor: Colors.light.primary,
+    backgroundColor: Colors.light.primaryMuted,
+  },
+  quoteChipText: { fontSize: 12, fontWeight: "600", color: Colors.light.textSecondary },
+  quoteChipTextActive: { color: Colors.light.primary },
   iconBtn: {
     width: 36,
     height: 36,

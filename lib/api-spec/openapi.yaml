@@ -30,6 +30,8 @@ tags:
     description: Trade categories
   - name: conversations
     description: Customer-trader conversations and messages
+  - name: quotes
+    description: Structured quotes sent by traders within conversations
   - name: reports
     description: Profile-level reports about a trader or customer
   - name: push-tokens
@@ -1387,6 +1389,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /enquiries/compare:
+    get:
+      operationId: compareEnquiries
+      tags: [enquiries]
+      summary: Customer's enquiries grouped by original request, with structured quotes for side-by-side comparison
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Grouped offers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompareOffersResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only customers can compare enquiries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /categories:
     get:
       operationId: getCategories
@@ -1594,6 +1623,213 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OkResponse"
+
+  /conversations/{id}/quotes:
+    post:
+      operationId: createQuote
+      tags: [quotes]
+      summary: Trader sends a structured quote in a conversation (replaces any pending quote flow via revise)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuoteRequest"
+      responses:
+        "201":
+          description: Quote created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuoteResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only the trader in this conversation can send a quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conversation closed/cancelled, or a pending quote already exists (revise it instead)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /quotes/{id}/revise:
+    post:
+      operationId: reviseQuote
+      tags: [quotes]
+      summary: Trader replaces their pending quote with a new version (history preserved)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuoteRequest"
+      responses:
+        "201":
+          description: Revised quote created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuoteResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only the trader who sent the quote can revise it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Only pending quotes can be revised
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /quotes/{id}/withdraw:
+    post:
+      operationId: withdrawQuote
+      tags: [quotes]
+      summary: Trader withdraws their pending quote
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Quote withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuoteResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only the trader who sent the quote can withdraw it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Only pending quotes can be withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /quotes/{id}/accept:
+    post:
+      operationId: acceptQuote
+      tags: [quotes]
+      summary: Customer accepts a pending quote (triggers the existing hire flow and job reference)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Quote accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuoteResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only the customer in this conversation can accept the quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Quote is no longer pending (expired, declined, withdrawn, revised or already accepted)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /quotes/{id}/decline:
+    post:
+      operationId: declineQuote
+      tags: [quotes]
+      summary: Customer declines a pending quote
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Quote declined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuoteResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only the customer in this conversation can decline the quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Quote is no longer pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /conversations/{id}/complete:
     post:
@@ -3273,7 +3509,200 @@ components:
             conversation are authorised to view these.
           items:
             type: string
+        quotes:
+          type: array
+          description: |
+            All structured quotes in this conversation, newest first, including
+            revision history. Both parties to the conversation may view these.
+          items:
+            $ref: "#/components/schemas/Quote"
       required: [conversation, messages]
+
+    Quote:
+      type: object
+      description: |
+        A structured quote a trader sent within a conversation. Prices are
+        integer pence (minor units). Status is the effective status: quotes
+        stored as PENDING whose validUntil has passed are reported as EXPIRED.
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        enquiryId:
+          type: integer
+          nullable: true
+        traderProfileId:
+          type: integer
+        amountPence:
+          type: integer
+          description: Quoted price in pence (e.g. 45000 = £450.00).
+        priceType:
+          type: string
+          enum: [FIXED, ESTIMATE]
+        description:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        validUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the quote expires. Null = no expiry.
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, DECLINED, WITHDRAWN, REVISED, EXPIRED]
+        revisionOfQuoteId:
+          type: integer
+          nullable: true
+          description: The quote this one replaced, if it is a revision.
+        acceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+        declinedAt:
+          type: string
+          format: date-time
+          nullable: true
+        withdrawnAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - conversationId
+        - traderProfileId
+        - amountPence
+        - priceType
+        - description
+        - status
+        - createdAt
+
+    CreateQuoteRequest:
+      type: object
+      properties:
+        amountPence:
+          type: integer
+          minimum: 1
+          maximum: 100000000
+          description: Quoted price in pence (e.g. 45000 = £450.00). Max £1,000,000.
+        priceType:
+          type: string
+          enum: [FIXED, ESTIMATE]
+        description:
+          type: string
+          minLength: 3
+          maxLength: 2000
+          description: What the quoted work includes.
+        notes:
+          type: string
+          maxLength: 1000
+          nullable: true
+        validUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional expiry. Must be in the future when provided.
+      required: [amountPence, priceType, description]
+
+    QuoteResponse:
+      type: object
+      properties:
+        quote:
+          $ref: "#/components/schemas/Quote"
+      required: [quote]
+
+    CompareOffer:
+      type: object
+      properties:
+        enquiryId:
+          type: integer
+        enquiryStatus:
+          type: string
+        enquiryCreatedAt:
+          type: string
+          format: date-time
+        traderProfileId:
+          type: integer
+        traderBusinessName:
+          type: string
+        traderTown:
+          type: string
+          nullable: true
+        traderRating:
+          type: number
+          nullable: true
+        traderReviewCount:
+          type: integer
+        traderVerified:
+          type: boolean
+        traderResponseTimeMinutes:
+          type: integer
+          nullable: true
+          description: Median response time in minutes, used for the "Replies fast" badge.
+        conversationId:
+          type: integer
+          nullable: true
+        traderStatus:
+          type: string
+          nullable: true
+        conversationStatus:
+          type: string
+          nullable: true
+        stage:
+          type: string
+          nullable: true
+          description: Derived conversation lifecycle stage (HIRED, JOB_DONE, etc.). Null when no conversation exists yet.
+        lastMessageAt:
+          type: string
+          format: date-time
+          nullable: true
+        quote:
+          allOf:
+            - $ref: "#/components/schemas/Quote"
+          nullable: true
+          description: The latest structured quote in this conversation (its current revision), or null if the trader has not sent one.
+        hasTraderReply:
+          type: boolean
+          description: Whether the trader has replied in the conversation at all.
+      required:
+        - enquiryId
+        - enquiryStatus
+        - enquiryCreatedAt
+        - traderProfileId
+        - traderBusinessName
+        - traderReviewCount
+        - traderVerified
+        - hasTraderReply
+
+    CompareGroup:
+      type: object
+      properties:
+        requestGroupId:
+          type: string
+          description: Stable identifier linking enquiries from the same original request.
+        serviceRequired:
+          type: string
+        offers:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompareOffer"
+      required: [requestGroupId, serviceRequired, offers]
+
+    CompareOffersResponse:
+      type: object
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompareGroup"
+        totalGroups:
+          type: integer
+      required: [groups, totalGroups]
 
     SendMessageRequest:
       type: object
@@ -3444,6 +3873,14 @@ components:
             - lastMessageAt
         messagesAccessible:
           type: boolean
+        quotes:
+          type: array
+          description: |
+            Structured quotes in this conversation (newest first), included only
+            when the conversation is accessible to the admin (reported), for
+            dispute investigation.
+          items:
+            $ref: "#/components/schemas/Quote"
         messages:
           type: array
           items:

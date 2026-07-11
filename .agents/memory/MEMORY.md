@@ -33,4 +33,5 @@
 - [Email OTP verification](email-otp-verification.md) — in-app code is primary, link is fallback; share ONE finalize helper; unauthenticated verify must collapse all non-lockout failures to one generic 400 (+dummy bcrypt) to avoid enumeration.
 - [Email case-insensitivity](email-case-insensitivity.md) — all email lookups lower()-compare; prod has a legacy case-variant duplicate pair, so lookups need exact-casing-first ordering & NO unique lower(email) index.
 - [Trader phone OTP — Twilio Verify](trader-phone-otp-twilio.md) — SMS via Twilio Verify (email fallback); phoneOtpHash=null ⇒ Twilio owns code; backend-only (mobile fetch, keep response shape); per-number rate limit lives in the handler on canonical E.164, not middleware.
+- [Quote lifecycle invariants](quotes-one-pending-invariant.md) — one PENDING quote per conversation is a partial unique index (23505→409), expiry is lazy (no cron); digit-heavy test strings trip the contact filter.
 - [Tab-bar-aware bottom padding](tab-bar-aware-bottom-padding.md) — tab bar is absolute; scroll content needs tabBarHeight+insets.bottom padding; exceptions & multi-component hook pitfall inside.

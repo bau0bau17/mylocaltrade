@@ -1,0 +1,147 @@
+Hi,
+
+I would like you to implement Structured Quotes and properly integrate them with the existing Compare Offers feature in the MyLocalTrade mobile app.
+
+Important scope:
+
+- This task is only for the MyLocalTrade mobile app, backend/API, database and, where necessary, the admin portal.
+- Do not make any landing-page or public-website changes.
+- Do not create a public trader directory as part of this task.
+- Preserve the existing enquiry, conversation, hiring, job-reference, review, subscription and notification systems.
+
+## Current problem
+
+The existing Compare Offers screen treats the trader’s latest chat message as an “offer”. This is not a genuine structured quote and makes comparison unreliable.
+
+Please replace this behaviour with a proper structured quote system.
+
+## Trader quote flow
+
+From an existing customer conversation, the trader should be able to select “Send quote” and enter:
+
+- price in GBP;
+- price type: Fixed Price or Estimate;
+- description of the work included;
+- optional notes;
+- validity/expiry date.
+
+The quote should have a clear status:
+
+- Pending;
+- Accepted;
+- Declined;
+- Withdrawn;
+- Revised;
+- Expired.
+
+Please store prices in integer minor units/pence, not floating-point values.
+
+## Customer flow
+
+The customer should be able to:
+
+- view the complete structured quote inside the conversation;
+- accept or decline it;
+- open Compare Offers and compare genuine quotes;
+- see trader name, rating, badges, price, price type, description, expiry date and current status.
+
+Do not use the trader’s latest chat message as an offer after structured quotes are implemented.
+
+## Security and quote history
+
+Please ensure:
+
+- only the trader in the conversation can create, revise or withdraw their quote;
+- only the customer in the conversation can accept or decline it;
+- expired, declined or withdrawn quotes cannot be accepted;
+- accepted quotes remain available as an immutable historical record;
+- revisions preserve the previous quote/version history;
+- duplicate acceptance and race conditions are prevented;
+- all endpoints enforce authentication and conversation ownership;
+- private quote information is never exposed to unrelated users.
+
+## Existing hiring and job-reference integration
+
+Please connect quote acceptance to the existing hiring/job system rather than creating a separate competing workflow.
+
+Where appropriate, accepting a quote should:
+
+- use the existing hire logic;
+- mark the relevant trader as hired for that enquiry;
+- trigger the existing readable job reference, such as MLT-000123;
+- preserve the existing review eligibility and job history rules.
+
+Please check carefully how this interacts with the existing “Hire trader” behaviour and avoid duplicate hire actions.
+
+## Compare Offers grouping
+
+The existing Compare Offers grouping relies on matching free-text service names. Please replace this with a stable enquiry/request group identifier.
+
+Quotes that belong to the same original customer request should be grouped together even when they were sent to different traders.
+
+Please:
+
+- investigate the safest way to introduce the group identifier;
+- preserve existing enquiries and conversations;
+- backfill existing records only where grouping can be determined reliably;
+- never group unrelated enquiries merely because their service names are similar.
+
+## Notifications
+
+Use the existing notification infrastructure for:
+
+- new quote received;
+- quote accepted;
+- quote declined;
+- quote revised;
+- quote withdrawn.
+
+Avoid excessive or duplicate push/email notifications and respect the user’s existing notification settings.
+
+## Admin
+
+Add only the minimum admin visibility needed to investigate quote disputes.
+
+Admin access must use the existing permissions, moderation safeguards and audit principles. Do not expose quotes to unauthorised administrators or users.
+
+## Important payment clarification
+
+A structured quote is only an offer for work between the customer and trader.
+
+- MyLocalTrade does not process the customer’s payment for the actual job.
+- Do not add job-payment processing.
+- Do not add Stripe.
+- Do not change Apple App Store/RevenueCat subscriptions.
+- The customer and trader arrange job payment separately outside MyLocalTrade.
+
+## Verification
+
+Please verify that the implementation does not break:
+
+- Request a Quote/enquiry creation;
+- conversations and messages;
+- customer photo attachments;
+- hiring;
+- job references;
+- reviews and review eligibility;
+- push and email notifications;
+- Apple/RevenueCat subscriptions;
+- existing enquiries without structured quotes.
+
+Please typecheck and test the mobile, backend and shared API/schema packages affected by the change.
+
+After implementation, give me a concise report confirming:
+
+1. Database/schema changes and migrations required.
+2. API endpoints added or changed.
+3. Mobile screens/components changed.
+4. How quote acceptance interacts with the existing hire flow.
+5. How Compare Offers now groups related enquiries.
+6. Notifications implemented.
+7. Admin changes, if any.
+8. Tests/typechecks completed.
+9. Manual TestFlight tests still required.
+10. Whether the backend needs republishing.
+11. Confirmation that a new TestFlight build is required.
+
+Do not start an EAS build, submit to TestFlight, publish or deploy anything yet. I want to review the completed implementation and include it with the other mobile changes in one final build.

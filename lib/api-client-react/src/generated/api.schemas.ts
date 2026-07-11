@@ -800,6 +800,52 @@ export interface ConversationMessage {
   createdAt: string;
 }
 
+export type QuotePriceType =
+  (typeof QuotePriceType)[keyof typeof QuotePriceType];
+
+export const QuotePriceType = {
+  FIXED: "FIXED",
+  ESTIMATE: "ESTIMATE",
+} as const;
+
+export type QuoteStatus = (typeof QuoteStatus)[keyof typeof QuoteStatus];
+
+export const QuoteStatus = {
+  PENDING: "PENDING",
+  ACCEPTED: "ACCEPTED",
+  DECLINED: "DECLINED",
+  WITHDRAWN: "WITHDRAWN",
+  REVISED: "REVISED",
+  EXPIRED: "EXPIRED",
+} as const;
+
+/**
+ * A structured quote a trader sent within a conversation. Prices are
+integer pence (minor units). Status is the effective status: quotes
+stored as PENDING whose validUntil has passed are reported as EXPIRED.
+
+ */
+export interface Quote {
+  id: number;
+  conversationId: number;
+  enquiryId?: number | null;
+  traderProfileId: number;
+  /** Quoted price in pence (e.g. 45000 = £450.00). */
+  amountPence: number;
+  priceType: QuotePriceType;
+  description: string;
+  notes?: string | null;
+  /** When the quote expires. Null = no expiry. */
+  validUntil?: string | null;
+  status: QuoteStatus;
+  /** The quote this one replaced, if it is a revision. */
+  revisionOfQuoteId?: number | null;
+  acceptedAt?: string | null;
+  declinedAt?: string | null;
+  withdrawnAt?: string | null;
+  createdAt: string;
+}
+
 export interface ConversationDetailResponse {
   conversation: ConversationSummary;
   messages: ConversationMessage[];
@@ -808,6 +854,78 @@ the original enquiry. Empty when there were none. Both parties to the
 conversation are authorised to view these.
  */
   enquiryAttachments?: string[];
+  /** All structured quotes in this conversation, newest first, including
+revision history. Both parties to the conversation may view these.
+ */
+  quotes?: Quote[];
+}
+
+export type CreateQuoteRequestPriceType =
+  (typeof CreateQuoteRequestPriceType)[keyof typeof CreateQuoteRequestPriceType];
+
+export const CreateQuoteRequestPriceType = {
+  FIXED: "FIXED",
+  ESTIMATE: "ESTIMATE",
+} as const;
+
+export interface CreateQuoteRequest {
+  /**
+   * Quoted price in pence (e.g. 45000 = £450.00). Max £1,000,000.
+   * @minimum 1
+   * @maximum 100000000
+   */
+  amountPence: number;
+  priceType: CreateQuoteRequestPriceType;
+  /**
+   * What the quoted work includes.
+   * @minLength 3
+   * @maxLength 2000
+   */
+  description: string;
+  /** @maxLength 1000 */
+  notes?: string | null;
+  /** Optional expiry. Must be in the future when provided. */
+  validUntil?: string | null;
+}
+
+export interface QuoteResponse {
+  quote: Quote;
+}
+
+export interface CompareOffer {
+  enquiryId: number;
+  enquiryStatus: string;
+  enquiryCreatedAt: string;
+  traderProfileId: number;
+  traderBusinessName: string;
+  traderTown?: string | null;
+  traderRating?: number | null;
+  traderReviewCount: number;
+  traderVerified: boolean;
+  /** Median response time in minutes, used for the "Replies fast" badge. */
+  traderResponseTimeMinutes?: number | null;
+  conversationId?: number | null;
+  traderStatus?: string | null;
+  conversationStatus?: string | null;
+  /** Derived conversation lifecycle stage (HIRED, JOB_DONE, etc.). Null when no conversation exists yet. */
+  stage?: string | null;
+  lastMessageAt?: string | null;
+  /** The latest structured quote in this conversation (its current revision), or null if the trader has not sent one. */
+  quote?: Quote | null;
+  /** Whether the trader has replied in the conversation at all. */
+  hasTraderReply: boolean;
+}
+
+export interface CompareGroup {
+  /** Stable identifier linking enquiries from the same original request. */
+  requestGroupId: string;
+  serviceRequired: string;
+  offers: CompareOffer[];
+}
+
+export interface CompareOffersResponse {
+  groups: CompareGroup[];
+  totalGroups: number;
 }
 
 export interface SendMessageRequest {
@@ -933,6 +1051,11 @@ export type AdminConversationResponseMessagesItem = {
 export interface AdminConversationResponse {
   conversation: AdminConversationResponseConversation;
   messagesAccessible: boolean;
+  /** Structured quotes in this conversation (newest first), included only
+when the conversation is accessible to the admin (reported), for
+dispute investigation.
+ */
+  quotes?: Quote[];
   messages: AdminConversationResponseMessagesItem[];
 }
 

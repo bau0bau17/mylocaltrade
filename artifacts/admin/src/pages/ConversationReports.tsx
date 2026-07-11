@@ -11,6 +11,11 @@ import { ShieldAlert, MessageSquare, Eye, Check, X, Ban, AlertTriangle } from "l
 import { formatDateTime } from "@/lib/format";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 
+const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+function formatPounds(amountPence: number): string {
+  return gbp.format(amountPence / 100);
+}
+
 interface AdminConversationReport {
   id: number;
   conversationId: number;
@@ -46,6 +51,18 @@ interface AdminConvMessage {
   createdAt: string;
 }
 
+interface AdminConvQuote {
+  id: number;
+  amountPence: number;
+  priceType: string;
+  description: string;
+  notes: string | null;
+  validUntil: string | null;
+  status: string;
+  revisionOfQuoteId: number | null;
+  createdAt: string;
+}
+
 interface AdminConvResponse {
   conversation: {
     id: number;
@@ -59,6 +76,7 @@ interface AdminConvResponse {
   };
   messagesAccessible: boolean;
   messages: AdminConvMessage[];
+  quotes?: AdminConvQuote[];
   contactBypass: {
     threshold: number;
     total: number;
@@ -291,9 +309,49 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
       </div>
     );
   }
+  const quotes = data.quotes ?? [];
   return (
     <div className="space-y-3">
       {bypassPanel}
+      {quotes.length > 0 ? (
+        <div
+          className="border rounded-md bg-muted/30 p-3 space-y-2"
+          data-testid={`quotes-panel-${conversationId}`}
+        >
+          <div className="flex items-center gap-2 font-semibold text-sm">
+            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+            Quotes ({quotes.length})
+          </div>
+          <ul className="space-y-2 text-sm max-h-64 overflow-y-auto">
+            {quotes.map((q) => (
+              <li key={q.id} className="border-b border-border/50 last:border-0 pb-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-semibold">
+                    {formatPounds(q.amountPence)}
+                    <span className="font-normal text-muted-foreground text-xs">
+                      {" "}· {q.priceType === "ESTIMATE" ? "Estimate" : "Fixed price"}
+                    </span>
+                  </span>
+                  <span className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">
+                    {q.status}
+                  </span>
+                </div>
+                <p className="text-xs whitespace-pre-wrap break-words">{q.description}</p>
+                {q.notes ? (
+                  <p className="text-xs text-muted-foreground italic whitespace-pre-wrap break-words">
+                    {q.notes}
+                  </p>
+                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  {formatDateTime(q.createdAt)}
+                  {q.validUntil ? ` · valid until ${formatDateTime(q.validUntil)}` : ""}
+                  {q.revisionOfQuoteId ? ` · revision of #${q.revisionOfQuoteId}` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="border rounded-md bg-muted/30 max-h-96 overflow-y-auto p-3 space-y-2">
       {data.messages.length === 0 ? (
         <p className="text-sm text-muted-foreground italic">No messages.</p>
