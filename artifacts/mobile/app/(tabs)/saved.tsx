@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView, ActivityIndicator, Pressable, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -8,12 +8,14 @@ import { useGetSavedTraders } from '@workspace/api-client-react';
 import { TraderCard } from '@/components/TraderCard';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 export default function SavedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const { data, isLoading } = useGetSavedTraders();
+  const { data, isLoading, refetch } = useGetSavedTraders();
+  const { refreshing, onRefresh } = usePullToRefresh(refetch);
 
   return (
     <View style={styles.container}>
@@ -50,21 +52,31 @@ export default function SavedScreen() {
           renderItem={({ item }) => <TraderCard trader={item} />}
           contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+          }
         />
       ) : (
-        <View style={styles.centered}>
-          <View style={styles.emptyIconWrap}>
-            <Feather name="bookmark" size={32} color={Colors.light.textMuted} />
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+          }
+        >
+          <View style={styles.centered}>
+            <View style={styles.emptyIconWrap}>
+              <Feather name="bookmark" size={32} color={Colors.light.textMuted} />
+            </View>
+            <Text style={styles.emptyTitle}>No saved traders yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Browse tradespeople and tap the bookmark icon to save them here for easy access.
+            </Text>
+            <Pressable style={styles.ctaButton} onPress={() => router.push('/(tabs)/traders')}>
+              <Feather name="search" size={16} color={Colors.light.white} style={{ marginRight: 8 }} />
+              <Text style={styles.ctaText}>Browse Traders</Text>
+            </Pressable>
           </View>
-          <Text style={styles.emptyTitle}>No saved traders yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Browse tradespeople and tap the bookmark icon to save them here for easy access.
-          </Text>
-          <Pressable style={styles.ctaButton} onPress={() => router.push('/(tabs)/traders')}>
-            <Feather name="search" size={16} color={Colors.light.white} style={{ marginRight: 8 }} />
-            <Text style={styles.ctaText}>Browse Traders</Text>
-          </Pressable>
-        </View>
+        </ScrollView>
       )}
     </View>
   );

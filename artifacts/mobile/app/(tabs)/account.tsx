@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Image, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -7,6 +7,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { getApiUrl } from '@/lib/api-url';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import type { FeatherIconName } from '@/types/feather-icons';
 import {
@@ -60,6 +61,7 @@ export default function AccountScreen() {
   const router = useRouter();
   const { user, isAuthenticated, isTrader, isAdmin, logout, token: adminToken } = useAuth();
   const qc = useQueryClient();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const { data: unreadData, refetch: refetchUnread } = useGetConversationsUnreadCount({
     query: {
       queryKey: getGetConversationsUnreadCountQueryKey(),
@@ -230,6 +232,9 @@ export default function AccountScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+        }
       >
       <View style={styles.profileCard}>
         <View style={styles.avatar}>

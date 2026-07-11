@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -15,6 +15,7 @@ import { CategoryCard } from '@/components/CategoryCard';
 import { TraderCard } from '@/components/TraderCard';
 import { HomeFooter } from '@/components/HomeFooter';
 import { useLocation } from '@/hooks/useLocation';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/lib/revenuecat';
 import type { FeatherIconName } from '@/types/feather-icons';
@@ -61,17 +62,18 @@ export default function HomeScreen() {
   // never to logged-in customers (or any other signed-in non-trader role).
   const showTraderPromos = !isAuthenticated || isTrader;
 
-  const { data: featuredData, isLoading: isLoadingFeatured } = useGetFeaturedTraders({ limit: 5 });
+  const { data: featuredData, isLoading: isLoadingFeatured, refetch: refetchFeatured } = useGetFeaturedTraders({ limit: 5 });
   const featuredTraders = featuredData?.traders ?? [];
   // Customers still see real featured listings; when there are none, the
   // whole section is hidden for them instead of showing a trader CTA.
   const showFeaturedSection = isLoadingFeatured || featuredTraders.length > 0 || showTraderPromos;
-  const { data: enquiriesData } = useGetEnquiries({
+  const { data: enquiriesData, refetch: refetchEnquiries } = useGetEnquiries({
     query: { enabled: showCustomerSections, queryKey: getGetEnquiriesQueryKey() },
   });
-  const { data: savedData } = useGetSavedTraders({
+  const { data: savedData, refetch: refetchSaved } = useGetSavedTraders({
     query: { enabled: showCustomerSections, queryKey: getGetSavedTradersQueryKey() },
   });
+  const { refreshing, onRefresh } = usePullToRefresh(refetchFeatured, refetchEnquiries, refetchSaved);
   const recentEnquiries = (enquiriesData?.enquiries ?? []).slice(0, 2);
   const savedTraders = (savedData?.traders ?? []).slice(0, 5);
 
@@ -142,6 +144,9 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+        }
       >
         <View style={styles.trustSection}>
           <View style={styles.trustItem}>

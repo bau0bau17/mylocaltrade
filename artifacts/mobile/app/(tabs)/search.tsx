@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, FlatList, Pressable, ActivityIndicator, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, FlatList, Pressable, ActivityIndicator, ScrollView, Modal, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
@@ -13,6 +13,7 @@ import {
   type ListTradersParams,
 } from '@workspace/api-client-react';
 import { useLocation } from '@/hooks/useLocation';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import type { FeatherIconName } from '@/types/feather-icons';
 import { SPECIALISMS, type SpecialismKey } from '@/constants/specialisms';
 
@@ -187,12 +188,13 @@ export default function SearchScreen() {
     ...(planFilter !== 'all' ? { plan: planFilter } : {}),
     ...(activeSpecialism ? { specialism: activeSpecialism.keywords[0] } : {}),
   };
-  const { data, isLoading } = useListTraders(searchParams, {
+  const { data, isLoading, refetch } = useListTraders(searchParams, {
     query: {
       queryKey: getListTradersQueryKey(searchParams),
       enabled: hasSearched || !!activeSpecialism,
     },
   });
+  const { refreshing, onRefresh } = usePullToRefresh(refetch);
 
   const handleSearch = () => {
     setHasSearched(true);
@@ -435,8 +437,17 @@ export default function SearchScreen() {
               renderItem={({ item }) => <TraderCard trader={item} />}
               contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 84 + 20 }}
               showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+              }
             />
           ) : (
+            <ScrollView
+              contentContainerStyle={{ flexGrow: 1 }}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+              }
+            >
             <View style={styles.emptyState}>
               <View style={styles.emptyIconWrap}>
                 <Feather name="search" size={32} color={Colors.light.textMuted} />
@@ -459,6 +470,7 @@ export default function SearchScreen() {
                 </Pressable>
               )}
             </View>
+            </ScrollView>
           )}
         </View>
       )}

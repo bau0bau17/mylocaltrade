@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Pressable, TextInput, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import { getApiUrl } from '@/lib/api-url';
 import { useSubscription, isUserCancelledError } from '@/lib/revenuecat';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import type { PurchasesPackage } from 'react-native-purchases';
 
 interface PromoPreview {
@@ -27,7 +28,7 @@ interface PromoPreview {
 export default function PricingScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
-  const { data: plansData, isLoading: isLoadingPlans } = useGetSubscriptionPlans();
+  const { data: plansData, isLoading: isLoadingPlans, refetch: refetchPlans } = useGetSubscriptionPlans();
   const { token, isTrader, isAuthenticated } = useAuth();
   const router = useRouter();
   const subscription = useSubscription();
@@ -38,12 +39,13 @@ export default function PricingScreen() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState<'monthly' | 'annual' | null>(null);
 
-  const { data: onboardingStatus, isLoading: isLoadingOnboarding } = useGetTraderOnboardingStatus({
+  const { data: onboardingStatus, isLoading: isLoadingOnboarding, refetch: refetchOnboarding } = useGetTraderOnboardingStatus({
     query: {
       queryKey: ['/api/trader/onboarding-status'],
       enabled: Boolean(isTrader && token),
     },
   });
+  const { refreshing, onRefresh } = usePullToRefresh(refetchPlans, refetchOnboarding);
   const verifiedStatus: 'unknown' | 'verified' | 'not_verified' =
     !isTrader || !token
       ? 'not_verified'
@@ -203,6 +205,9 @@ export default function PricingScreen() {
         }
       ]}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+      }
     >
       <View style={styles.header}>
         <View style={styles.headerIconWrap}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView, ActivityIndicator, Pressable, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
@@ -7,12 +7,14 @@ import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useGetSavedTraders } from '@workspace/api-client-react';
 import { TraderCard } from '@/components/TraderCard';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 export default function SavedTradersScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
-  const { data, isLoading } = useGetSavedTraders();
+  const { data, isLoading, refetch } = useGetSavedTraders();
+  const { refreshing, onRefresh } = usePullToRefresh(refetch);
 
   return (
     <View style={styles.container}>
@@ -26,23 +28,33 @@ export default function SavedTradersScreen() {
           keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => <TraderCard trader={item} />}
           contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 20 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+          }
         />
       ) : (
-        <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>No saved traders</Text>
-          <Text style={styles.emptySubtitle}>
-            Browse traders and tap the bookmark icon to save them here.
-          </Text>
-          <Pressable
-            style={styles.emptyCta}
-            onPress={() => router.push('/(tabs)/search')}
-            accessibilityRole="button"
-            accessibilityLabel="Find a trader"
-          >
-            <Feather name="search" size={16} color="#fff" />
-            <Text style={styles.emptyCtaText}>Find a trader</Text>
-          </Pressable>
-        </View>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+          }
+        >
+          <View style={styles.centered}>
+            <Text style={styles.emptyTitle}>No saved traders</Text>
+            <Text style={styles.emptySubtitle}>
+              Browse traders and tap the bookmark icon to save them here.
+            </Text>
+            <Pressable
+              style={styles.emptyCta}
+              onPress={() => router.push('/(tabs)/search')}
+              accessibilityRole="button"
+              accessibilityLabel="Find a trader"
+            >
+              <Feather name="search" size={16} color="#fff" />
+              <Text style={styles.emptyCtaText}>Find a trader</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
       )}
     </View>
   );

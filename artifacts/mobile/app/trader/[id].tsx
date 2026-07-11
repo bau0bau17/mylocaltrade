@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, Alert, Image, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, Alert, Image, Modal, Dimensions, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,12 +18,14 @@ import { formatResponseTime, isTopRated, isFastResponder } from '@/components/Tr
 import { useAuth } from '@/contexts/AuthContext';
 import { detectSpecialisms, SPECIALISM_BY_KEY } from '@/constants/specialisms';
 import { objectImageUrl } from '@/lib/api-url';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 export default function TraderProfileScreen() {
   const { id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { refreshing, onRefresh } = usePullToRefresh();
   const { isAuthenticated, user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isTraderViewer = user?.role === 'trader';
@@ -123,6 +125,9 @@ export default function TraderProfileScreen() {
       <ScrollView 
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+        }
       >
         <View style={[styles.headerCover, { paddingTop: Math.max(insets.top, 50) + 12 }]}>
           <View style={styles.headerNavRow}>

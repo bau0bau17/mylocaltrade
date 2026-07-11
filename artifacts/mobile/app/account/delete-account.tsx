@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +20,7 @@ import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
 import { getGetMeQueryKey } from '@workspace/api-client-react';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 type DeletionStatus = {
   deletionStatus: string | null;
@@ -125,6 +127,7 @@ export default function DeleteAccountScreen() {
       <PendingDeletionView
         status={status!}
         token={token!}
+        onRefreshStatus={fetchStatus}
         onCancelled={async () => {
           await fetchStatus();
           qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
@@ -153,13 +156,16 @@ export default function DeleteAccountScreen() {
 function PendingDeletionView({
   status,
   token,
+  onRefreshStatus,
   onCancelled,
 }: {
   status: DeletionStatus;
   token: string;
+  onRefreshStatus: () => Promise<void>;
   onCancelled: () => Promise<void>;
 }) {
   const insets = useSafeAreaInsets();
+  const { refreshing, onRefresh } = usePullToRefresh(onRefreshStatus);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState('');
@@ -234,7 +240,12 @@ function PendingDeletionView({
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: 'Deletion status' }} />
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+        }
+      >
         <View style={styles.warnCard}>
           <Feather name="clock" size={22} color={Colors.light.error} />
           <View style={{ flex: 1 }}>

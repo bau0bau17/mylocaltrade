@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ScrollView, ActivityIndicator, Pressable, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
@@ -12,22 +12,24 @@ import {
 } from '@workspace/api-client-react';
 import { EnquiryCard } from '@/components/EnquiryCard';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 export default function MyEnquiriesScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { isAdmin } = useAuth();
-  const { data, isLoading } = useGetEnquiries({
+  const { data, isLoading, refetch: refetchEnquiries } = useGetEnquiries({
     query: { enabled: !isAdmin, queryKey: getGetEnquiriesQueryKey() },
   });
   // A review can only be left once the customer has confirmed the job is done
   // (and not on cancelled or already-reviewed jobs). The eligible endpoint is
   // the single source of truth, so we only surface the review button for
   // enquiries it returns.
-  const { data: eligibleData } = useGetEligibleEnquiriesForReview({
+  const { data: eligibleData, refetch: refetchEligible } = useGetEligibleEnquiriesForReview({
     query: { enabled: !isAdmin, queryKey: ['/api/reviews/eligible'] },
   });
+  const { refreshing, onRefresh } = usePullToRefresh(refetchEnquiries, refetchEligible);
   const eligibleIds = React.useMemo(
     () => new Set((eligibleData?.enquiries ?? []).map((e) => e.enquiryId)),
     [eligibleData],
@@ -96,23 +98,33 @@ export default function MyEnquiriesScreen() {
             </View>
           )}
           contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 20 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+          }
         />
       ) : (
-        <View style={styles.centered}>
-          <Text style={styles.emptyTitle}>No enquiries yet</Text>
-          <Text style={styles.emptySubtitle}>
-            When you send enquiries to traders, they will appear here.
-          </Text>
-          <Pressable
-            style={[styles.compareBtn, styles.emptyCta]}
-            onPress={() => router.push('/(tabs)/search')}
-            accessibilityRole="button"
-            accessibilityLabel="Find a trader"
-          >
-            <Feather name="search" size={16} color="#fff" />
-            <Text style={styles.compareBtnText}>Find a trader</Text>
-          </Pressable>
-        </View>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
+          }
+        >
+          <View style={styles.centered}>
+            <Text style={styles.emptyTitle}>No enquiries yet</Text>
+            <Text style={styles.emptySubtitle}>
+              When you send enquiries to traders, they will appear here.
+            </Text>
+            <Pressable
+              style={[styles.compareBtn, styles.emptyCta]}
+              onPress={() => router.push('/(tabs)/search')}
+              accessibilityRole="button"
+              accessibilityLabel="Find a trader"
+            >
+              <Feather name="search" size={16} color="#fff" />
+              <Text style={styles.compareBtnText}>Find a trader</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
       )}
     </View>
   );
