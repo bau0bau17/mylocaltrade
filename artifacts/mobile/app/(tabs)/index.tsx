@@ -53,11 +53,19 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const location = useLocation();
-  const { isAuthenticated, isCustomer } = useAuth();
+  const { isAuthenticated, isCustomer, isTrader } = useAuth();
   const { hasTraderSubscription } = useSubscription();
   const showCustomerSections = isAuthenticated && isCustomer;
+  // Trader-conversion promos (Get featured, List your business, Premium
+  // pricing) are only shown to logged-out visitors and trader accounts —
+  // never to logged-in customers (or any other signed-in non-trader role).
+  const showTraderPromos = !isAuthenticated || isTrader;
 
   const { data: featuredData, isLoading: isLoadingFeatured } = useGetFeaturedTraders({ limit: 5 });
+  const featuredTraders = featuredData?.traders ?? [];
+  // Customers still see real featured listings; when there are none, the
+  // whole section is hidden for them instead of showing a trader CTA.
+  const showFeaturedSection = isLoadingFeatured || featuredTraders.length > 0 || showTraderPromos;
   const { data: enquiriesData } = useGetEnquiries({
     query: { enabled: showCustomerSections, queryKey: getGetEnquiriesQueryKey() },
   });
@@ -246,54 +254,57 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Featured Traders
-              {location.city && !location.isLoading && (
-                <Text style={styles.sectionLocation}> in {location.city}</Text>
-              )}
-            </Text>
-            <Pressable onPress={() => router.push('/(tabs)/traders')} style={styles.seeAllBtn}>
-              <Text style={styles.seeAll}>See all</Text>
-              <Feather name="arrow-right" size={13} color={Colors.light.primary} />
-            </Pressable>
-          </View>
-
-          {isLoadingFeatured ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={Colors.light.primary} />
-              <Text style={styles.loadingText}>Loading traders...</Text>
-            </View>
-          ) : featuredData?.traders && featuredData.traders.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-              {featuredData.traders.map((trader) => (
-                <View key={trader.id} style={styles.featuredCardWrapper}>
-                  <TraderCard trader={trader} />
-                </View>
-              ))}
-            </ScrollView>
-          ) : (
-            <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconWrap}>
-                <Feather name="award" size={28} color={Colors.light.featured} />
-              </View>
-              <Text style={styles.emptyTitle}>Featured traders coming soon</Text>
-              <Text style={styles.emptySubtext}>
-                {location.city
-                  ? `Be the first featured trader in ${location.city}`
-                  : 'Be the first to get featured in your area'}
+        {showFeaturedSection && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                Featured Traders
+                {location.city && !location.isLoading && (
+                  <Text style={styles.sectionLocation}> in {location.city}</Text>
+                )}
               </Text>
-              <Pressable style={styles.emptyCtaBtn} onPress={() => router.push('/pricing')}>
-                <Text style={styles.emptyCtaText}>Get featured · from £9.99/month</Text>
+              <Pressable onPress={() => router.push('/(tabs)/traders')} style={styles.seeAllBtn}>
+                <Text style={styles.seeAll}>See all</Text>
+                <Feather name="arrow-right" size={13} color={Colors.light.primary} />
               </Pressable>
             </View>
-          )}
-        </View>
 
-        {/* Trader upsell — hidden once the trader already has an active
-            Premium subscription (nothing left to upsell). */}
-        {!hasTraderSubscription ? (
+            {isLoadingFeatured ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={Colors.light.primary} />
+                <Text style={styles.loadingText}>Loading traders...</Text>
+              </View>
+            ) : featuredTraders.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
+                {featuredTraders.map((trader) => (
+                  <View key={trader.id} style={styles.featuredCardWrapper}>
+                    <TraderCard trader={trader} />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconWrap}>
+                  <Feather name="award" size={28} color={Colors.light.featured} />
+                </View>
+                <Text style={styles.emptyTitle}>Featured traders coming soon</Text>
+                <Text style={styles.emptySubtext}>
+                  {location.city
+                    ? `Be the first featured trader in ${location.city}`
+                    : 'Be the first to get featured in your area'}
+                </Text>
+                <Pressable style={styles.emptyCtaBtn} onPress={() => router.push('/pricing')}>
+                  <Text style={styles.emptyCtaText}>Get featured · from £9.99/month</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Trader upsell — never shown to logged-in customers, and hidden
+            once the trader already has an active Premium subscription
+            (nothing left to upsell). */}
+        {showTraderPromos && !hasTraderSubscription ? (
           <Pressable style={styles.traderCtaBanner} onPress={() => router.push('/pricing')}>
             <View style={styles.traderCtaLeft}>
               <View style={styles.traderCtaBadge}>

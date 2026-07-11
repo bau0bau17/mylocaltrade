@@ -28,7 +28,7 @@ export default function PricingScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const { data: plansData, isLoading: isLoadingPlans } = useGetSubscriptionPlans();
-  const { token, isTrader } = useAuth();
+  const { token, isTrader, isAuthenticated } = useAuth();
   const router = useRouter();
   const subscription = useSubscription();
 
@@ -164,6 +164,34 @@ export default function PricingScreen() {
     );
   }
 
+  // Signed-in non-trader accounts (customers, admins) must never see trader
+  // plan marketing or Premium pricing — show a neutral notice instead.
+  if (isAuthenticated && !isTrader) {
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: 16, paddingBottom: tabBarHeight + insets.bottom + 32 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.gateBanner}>
+          <Feather name="briefcase" size={18} color={Colors.light.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.gateTitle}>Plans are for trade businesses</Text>
+            <Text style={styles.gateBody}>
+              These subscriptions are for tradespeople who want to be listed on MyLocalTrade. As a customer, you can browse and contact traders for free.
+            </Text>
+            <Pressable style={styles.gateBtn} onPress={() => router.push('/(tabs)/traders')}>
+              <Text style={styles.gateBtnText}>Browse local traders</Text>
+            </Pressable>
+          </View>
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView 
       style={styles.container}
@@ -210,9 +238,13 @@ export default function PricingScreen() {
             <Text style={styles.gateBody}>
               These subscriptions are for tradespeople who want to be listed on MyLocalTrade. Customers browse and contact traders for free.
             </Text>
-            <Pressable style={styles.gateBtn} onPress={() => router.push('/auth/register-trader')}>
-              <Text style={styles.gateBtnText}>Register as a trader</Text>
-            </Pressable>
+            {/* Trader-conversion CTA is only shown to logged-out visitors —
+                never to logged-in customers. */}
+            {!isAuthenticated && (
+              <Pressable style={styles.gateBtn} onPress={() => router.push('/auth/register-trader')}>
+                <Text style={styles.gateBtnText}>Register as a trader</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       )}
