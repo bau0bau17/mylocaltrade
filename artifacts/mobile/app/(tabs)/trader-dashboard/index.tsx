@@ -212,15 +212,23 @@ export default function TraderOnboardingDashboard() {
             </Text>
           </View>
           <Text style={styles.legalBannerBody}>
-            We&apos;ve updated our policies. Please review and re-accept to keep using your account.
+            We&apos;ve updated our Privacy Policy and Terms to explain profile-change reviews, phone verification, structured quotes and when verified contact details become available after hire. Please review the full documents and accept to continue.
           </Text>
+          <View style={styles.legalBannerLinks}>
+            <Pressable onPress={() => router.push('/privacy')}>
+              <Text style={styles.legalBannerLink}>Read the Privacy Policy</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push('/terms')}>
+              <Text style={styles.legalBannerLink}>Read the Terms &amp; Conditions</Text>
+            </Pressable>
+          </View>
           <Pressable
             onPress={handleAcceptLegal}
             disabled={acceptingLegal}
             style={[styles.legalBannerBtn, acceptingLegal && { opacity: 0.6 }]}
           >
             <Text style={styles.legalBannerBtnText}>
-              {acceptingLegal ? 'Saving…' : 'Review & accept'}
+              {acceptingLegal ? 'Saving…' : 'Accept updated terms'}
             </Text>
           </Pressable>
         </View>
@@ -623,6 +631,8 @@ const styles = StyleSheet.create({
   legalBannerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   legalBannerTitle: { fontSize: 14, fontWeight: '700', color: WARNING },
   legalBannerBody: { fontSize: 13, color: Colors.light.text, lineHeight: 18 },
+  legalBannerLinks: { marginTop: 8, gap: 6 },
+  legalBannerLink: { fontSize: 13, fontWeight: '600', color: Colors.light.primary, textDecorationLine: 'underline' },
   legalBannerBtn: { marginTop: 10, alignSelf: 'flex-start', backgroundColor: WARNING, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   legalBannerBtnText: { color: Colors.light.white, fontSize: 13, fontWeight: '700' },
   revalOverdueBanner: { backgroundColor: Colors.light.errorMuted, borderColor: Colors.light.error },

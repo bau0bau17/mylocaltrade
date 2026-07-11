@@ -69,6 +69,28 @@ export default function AboutScreen() {
         </View>
       </View>
 
+      <View style={styles.section}>
+        <Text style={styles.heading}>How MyLocalTrade Works — For Customers</Text>
+        <View style={styles.promiseCard}>
+          <StepRow n={1} text="Find traders and request quotes." />
+          <StepRow n={2} text="Chat and receive Structured Quotes." />
+          <StepRow n={3} text="Compare and accept a quote." />
+          <StepRow n={4} text="Contact details become available after hire." />
+          <StepRow n={5} text="Complete the job and leave a review." />
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>How MyLocalTrade Works — For Traders</Text>
+        <View style={styles.promiseCard}>
+          <StepRow n={1} text="Create and verify a trader profile." />
+          <StepRow n={2} text="Receive customer enquiries." />
+          <StepRow n={3} text="Chat and send Structured Quotes." />
+          <StepRow n={4} text="Get hired when a quote is accepted." />
+          <StepRow n={5} text="Complete jobs and build reputation." />
+        </View>
+      </View>
+
       <View style={styles.legalNote}>
         <Feather name="info" size={14} color={Colors.light.textMuted} />
         <Text style={styles.legalNoteText}>
@@ -76,6 +98,17 @@ export default function AboutScreen() {
         </Text>
       </View>
     </ScrollView>
+  );
+}
+
+function StepRow({ n, text }: { n: number; text: string }) {
+  return (
+    <View style={styles.stepRow}>
+      <View style={styles.stepBadge}>
+        <Text style={styles.stepBadgeText}>{n}</Text>
+      </View>
+      <Text style={styles.stepText}>{text}</Text>
+    </View>
   );
 }
 
@@ -154,6 +187,30 @@ const styles = StyleSheet.create({
   promiseDesc: {
     fontSize: 12,
     color: Colors.light.textSecondary,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stepBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.light.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.light.primary,
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.light.textSecondary,
+    lineHeight: 20,
   },
   legalNote: {
     flexDirection: 'row',

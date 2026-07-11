@@ -1,5 +1,7 @@
-export const CURRENT_TERMS_VERSION = "1.0.0";
-export const CURRENT_PRIVACY_VERSION = "1.0.0";
+// 1.1.0 (11 July 2026): profile-change reviews, phone verification, structured
+// quotes, post-hire contact disclosure and customer-to-trader payment position.
+export const CURRENT_TERMS_VERSION = "1.1.0";
+export const CURRENT_PRIVACY_VERSION = "1.1.0";
 
 export interface LegalAcceptanceState {
   termsCurrent: string;
