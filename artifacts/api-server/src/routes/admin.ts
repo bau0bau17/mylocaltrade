@@ -46,9 +46,24 @@ import {
   sendTraderMoreInfoRequestedEmail,
   sendTraderSuspendedEmail,
 } from "../lib/email";
+import { reconcileDocumentsState } from "./trader-documents";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
+
+// A document no longer needs expiry attention once the trader has uploaded a
+// newer document of the same type that an admin has APPROVED and that is not
+// itself expired. Without this, replaced documents linger in the "Expiring
+// documents" console forever.
+const notSupersededByApprovedReplacement = sql`NOT EXISTS (
+  SELECT 1 FROM trader_documents newer
+  WHERE newer.user_id = ${traderDocumentsTable.userId}
+    AND newer.type = ${traderDocumentsTable.type}
+    AND newer.id <> ${traderDocumentsTable.id}
+    AND newer.created_at >= ${traderDocumentsTable.createdAt}
+    AND newer.status = 'APPROVED'
+    AND (newer.expires_at IS NULL OR newer.expires_at > now())
+)`;
 
 const REVIEWABLE_STATUSES = [
   TRADER_STATUS.UNDER_REVIEW,
@@ -763,6 +778,98 @@ router.post("/admin/documents/:id/reject", authMiddleware, adminOnly, async (req
   }
 });
 
+const SetDocumentExpiryBody = z.object({
+  // "YYYY-MM-DD" (interpreted as end of that day, UK-facing) or null to clear.
+  expiresAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD")
+    .nullable(),
+});
+
+// POST /api/admin/documents/:id/expiry — manually set or clear a document's
+// expiry date. Setting a past date marks the document as expired (the trader
+// status sweep and evaluation pick it up); a future date brings a lapsed
+// document back within validity.
+router.post("/admin/documents/:id/expiry", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { userId: adminId } = req as AuthenticatedRequest;
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid id" });
+      return;
+    }
+    const body = SetDocumentExpiryBody.parse(req.body);
+
+    let expiresAt: Date | null = null;
+    if (body.expiresAt !== null) {
+      // End of the given day in UTC so a document "expires 11 Jul" remains
+      // valid throughout 11 July. Round-trip the components so impossible
+      // dates (e.g. 2026-02-30) are rejected instead of silently normalised
+      // by the Date constructor.
+      const [y, m, d] = body.expiresAt.split("-").map(Number);
+      expiresAt = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
+      if (
+        expiresAt.getUTCFullYear() !== y ||
+        expiresAt.getUTCMonth() !== m - 1 ||
+        expiresAt.getUTCDate() !== d
+      ) {
+        res.status(400).json({ error: "Invalid date" });
+        return;
+      }
+      if (y < 2000 || y > 2100) {
+        res.status(400).json({ error: "Date out of range" });
+        return;
+      }
+    }
+
+    const [existing] = await db
+      .select()
+      .from(traderDocumentsTable)
+      .where(eq(traderDocumentsTable.id, id))
+      .limit(1);
+    if (!existing) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+
+    const [doc] = await db
+      .update(traderDocumentsTable)
+      .set({ expiresAt, updatedAt: new Date() })
+      .where(eq(traderDocumentsTable.id, id))
+      .returning();
+
+    await logAudit({
+      userId: doc.userId,
+      action: "DOCUMENT_EXPIRY_SET",
+      performedBy: adminId,
+      details: {
+        documentId: doc.id,
+        type: doc.type,
+        previousExpiresAt: existing.expiresAt ? existing.expiresAt.toISOString() : null,
+        expiresAt: doc.expiresAt ? doc.expiresAt.toISOString() : null,
+      },
+    });
+
+    // Re-evaluate the trader immediately so an expiry in the past flips them
+    // to EXPIRED_DOCUMENTS (and a corrected future date can restore them).
+    await reconcileDocumentsState(doc.userId);
+
+    res.json({
+      document: {
+        ...doc,
+        expiresAt: doc.expiresAt ? doc.expiresAt.toISOString() : null,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid request", details: error.issues });
+      return;
+    }
+    req.log.error({ err: error }, "Set document expiry failed");
+    res.status(500).json({ error: "Failed to set document expiry" });
+  }
+});
+
 const ApproveTraderBody = z.object({ notes: z.string().max(500).optional() });
 const RejectTraderBody = z.object({ reason: z.string().min(5).max(500) });
 const RequestInfoBody = z.object({ notes: z.string().min(5).max(500) });
@@ -1447,6 +1554,7 @@ router.get("/admin/attention-counts", authMiddleware, adminOnly, async (req, res
             isNotNull(traderDocumentsTable.expiresAt),
             lte(traderDocumentsTable.expiresAt, sql`now() + interval '30 days'`),
             inArray(traderDocumentsTable.status, ["APPROVED", "PENDING_REVIEW", "EXPIRED"]),
+            notSupersededByApprovedReplacement,
           ),
         ),
       db
@@ -1546,6 +1654,7 @@ router.get("/admin/dashboard", authMiddleware, adminOnly, async (req, res) => {
             ),
             sql`${traderDocumentsTable.expiresAt} > now()`,
             inArray(traderDocumentsTable.status, ["APPROVED", "PENDING_REVIEW"]),
+            notSupersededByApprovedReplacement,
           ),
         ),
       db
@@ -1602,6 +1711,7 @@ router.get("/admin/expiring-documents", authMiddleware, adminOnly, async (req, r
             sql`now() + (${within} || ' days')::interval`,
           ),
           inArray(traderDocumentsTable.status, ["APPROVED", "PENDING_REVIEW", "EXPIRED"]),
+          notSupersededByApprovedReplacement,
         ),
       )
       .orderBy(asc(traderDocumentsTable.expiresAt));

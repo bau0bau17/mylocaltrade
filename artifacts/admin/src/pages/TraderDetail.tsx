@@ -134,6 +134,7 @@ export default function TraderDetail({ userId }: Props) {
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [accessReason, setAccessReason] = useState("");
   const [reason, setReason] = useState("");
+  const [expiryEdit, setExpiryEdit] = useState<{ docId: number; value: string } | null>(null);
 
   // Release the blob URL when the component unmounts so we don't leak memory
   // if the admin closes the page while a preview is still open.
@@ -196,6 +197,29 @@ export default function TraderDetail({ userId }: Props) {
     onError: (err) => {
       toast({
         title: "Update failed",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const docExpiryMutation = useMutation({
+    mutationFn: async ({ docId, expiresAt }: { docId: number; expiresAt: string | null }) => {
+      return api(`/api/admin/documents/${docId}/expiry`, {
+        method: "POST",
+        body: { expiresAt },
+      });
+    },
+    onSuccess: (_data, vars) => {
+      toast({ title: vars.expiresAt ? "Expiry date saved" : "Expiry date cleared" });
+      queryClient.invalidateQueries({ queryKey: detailKey });
+      qc.invalidateQueries({ queryKey: ["admin", "expiring-documents"] });
+      qc.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+      setExpiryEdit(null);
+    },
+    onError: (err) => {
+      toast({
+        title: "Failed to save expiry date",
         description: err instanceof Error ? err.message : "Unknown error",
         variant: "destructive",
       });
@@ -773,6 +797,50 @@ export default function TraderDetail({ userId }: Props) {
                               Approved — enter a reason above to re-open or download.
                             </div>
                           )}
+                          {expiryEdit?.docId === doc.id && (
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                              <input
+                                type="date"
+                                className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                                value={expiryEdit.value}
+                                onChange={(e) =>
+                                  setExpiryEdit({ docId: doc.id, value: e.target.value })
+                                }
+                                data-testid={`input-expiry-${doc.id}`}
+                              />
+                              <Button
+                                size="sm"
+                                disabled={!expiryEdit.value || docExpiryMutation.isPending}
+                                onClick={() =>
+                                  docExpiryMutation.mutate({ docId: doc.id, expiresAt: expiryEdit.value })
+                                }
+                                data-testid={`button-expiry-save-${doc.id}`}
+                              >
+                                Save
+                              </Button>
+                              {doc.expiresAt && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={docExpiryMutation.isPending}
+                                  onClick={() =>
+                                    docExpiryMutation.mutate({ docId: doc.id, expiresAt: null })
+                                  }
+                                  data-testid={`button-expiry-clear-${doc.id}`}
+                                >
+                                  Clear date
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setExpiryEdit(null)}
+                                data-testid={`button-expiry-cancel-${doc.id}`}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2 flex-wrap">
                           <Button
@@ -792,6 +860,23 @@ export default function TraderDetail({ userId }: Props) {
                             data-testid={`button-download-${doc.id}`}
                           >
                             <Download className="w-4 h-4 mr-1" /> Download
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setExpiryEdit(
+                                expiryEdit?.docId === doc.id
+                                  ? null
+                                  : {
+                                      docId: doc.id,
+                                      value: doc.expiresAt ? doc.expiresAt.slice(0, 10) : "",
+                                    },
+                              )
+                            }
+                            data-testid={`button-expiry-edit-${doc.id}`}
+                          >
+                            {doc.expiresAt ? "Edit expiry" : "Set expiry"}
                           </Button>
                           {doc.status === "PENDING_REVIEW" && (
                             <>

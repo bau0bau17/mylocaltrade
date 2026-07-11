@@ -33,6 +33,7 @@ interface TraderDoc {
   rejectionReason: string | null;
   createdAt: string;
   reviewedAt: string | null;
+  expiresAt: string | null;
 }
 
 interface AuditEntry {
@@ -178,6 +179,8 @@ export default function AdminTraderDetail() {
 
   const [modal, setModal] = useState<{ kind: ActionKind; documentId?: number } | null>(null);
   const [reason, setReason] = useState('');
+  // Inline per-document expiry editor (admin can set/correct the expiry date).
+  const [expiryEdit, setExpiryEdit] = useState<{ docId: number; value: string } | null>(null);
 
   // GDPR/ICO: optional reason captured before opening any document. Sent to
   // the server so it lands in the audit log next to the access record.
@@ -405,6 +408,43 @@ export default function AdminTraderDetail() {
       await load();
     } catch (e) {
       Alert.alert('Action failed', e instanceof Error ? e.message : 'Please try again');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setDocumentExpiry = async (docId: number, expiresAt: string | null) => {
+    if (expiresAt !== null) {
+      // Round-trip the components so impossible dates (e.g. 2026-02-30) are
+      // rejected rather than silently normalised by the Date constructor.
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(expiresAt);
+      const y = match ? Number(match[1]) : NaN;
+      const m = match ? Number(match[2]) : NaN;
+      const d = match ? Number(match[3]) : NaN;
+      const parsed = match ? new Date(Date.UTC(y, m - 1, d)) : null;
+      const valid =
+        parsed !== null &&
+        parsed.getUTCFullYear() === y &&
+        parsed.getUTCMonth() === m - 1 &&
+        parsed.getUTCDate() === d;
+      if (!valid) {
+        Alert.alert('Invalid date', 'Enter a real date as YYYY-MM-DD, e.g. 2027-07-11.');
+        return;
+      }
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/admin/documents/${docId}/expiry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ expiresAt }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to save expiry date');
+      setExpiryEdit(null);
+      await load();
+    } catch (e) {
+      Alert.alert('Failed', e instanceof Error ? e.message : 'Please try again');
     } finally {
       setBusy(false);
     }
@@ -864,9 +904,15 @@ export default function AdminTraderDetail() {
                     <Text style={styles.docTitle} numberOfLines={1}>{doc.originalFilename}</Text>
                     <Text style={styles.docMeta}>
                       {DOC_LABEL[doc.type] ?? doc.type} · {formatSize(doc.sizeBytes)}
+                      {doc.expiresAt ? ` · expires ${formatDate(doc.expiresAt)}` : ''}
                     </Text>
                     <View style={styles.docPills}>
                       <DocPill status={doc.status} />
+                      {doc.expiresAt && new Date(doc.expiresAt).getTime() < Date.now() ? (
+                        <View style={[styles.smallPill, { backgroundColor: 'rgba(234,88,12,0.14)' }]}>
+                          <Text style={[styles.smallPillText, { color: '#C2410C' }]}>Expired</Text>
+                        </View>
+                      ) : null}
                     </View>
                     {doc.rejectionReason ? (
                       <Text style={styles.rejectionText}>{doc.rejectionReason}</Text>
@@ -875,6 +921,46 @@ export default function AdminTraderDetail() {
                       <Text style={styles.lockedHint}>
                         Approved — type a reason above to re-open.
                       </Text>
+                    ) : null}
+                    {expiryEdit?.docId === doc.id ? (
+                      <View style={styles.expiryEditBox}>
+                        <TextInput
+                          style={styles.expiryInput}
+                          value={expiryEdit.value}
+                          onChangeText={(t) => setExpiryEdit({ docId: doc.id, value: t })}
+                          placeholder="YYYY-MM-DD"
+                          placeholderTextColor={Colors.light.textMuted}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          keyboardType="numbers-and-punctuation"
+                          maxLength={10}
+                        />
+                        <View style={styles.expiryBtnRow}>
+                          <Pressable
+                            style={[styles.expiryBtn, { backgroundColor: Colors.light.primary }]}
+                            onPress={() => setDocumentExpiry(doc.id, expiryEdit.value.trim())}
+                            disabled={busy || !expiryEdit.value.trim()}
+                          >
+                            <Text style={styles.expiryBtnText}>Save</Text>
+                          </Pressable>
+                          {doc.expiresAt ? (
+                            <Pressable
+                              style={[styles.expiryBtn, styles.expiryBtnOutline]}
+                              onPress={() => setDocumentExpiry(doc.id, null)}
+                              disabled={busy}
+                            >
+                              <Text style={[styles.expiryBtnText, { color: Colors.light.text }]}>Clear</Text>
+                            </Pressable>
+                          ) : null}
+                          <Pressable
+                            style={[styles.expiryBtn, styles.expiryBtnOutline]}
+                            onPress={() => setExpiryEdit(null)}
+                            disabled={busy}
+                          >
+                            <Text style={[styles.expiryBtnText, { color: Colors.light.textMuted }]}>Cancel</Text>
+                          </Pressable>
+                        </View>
+                      </View>
                     ) : null}
                   </View>
                   <View style={styles.docActions}>
@@ -892,6 +978,19 @@ export default function AdminTraderDetail() {
                         size={14}
                         color={isLocked ? Colors.light.textMuted : Colors.light.primary}
                       />
+                    </Pressable>
+                    <Pressable
+                      style={styles.iconBtn}
+                      onPress={() =>
+                        setExpiryEdit(
+                          expiryEdit?.docId === doc.id
+                            ? null
+                            : { docId: doc.id, value: doc.expiresAt ? doc.expiresAt.slice(0, 10) : '' },
+                        )
+                      }
+                      disabled={busy}
+                    >
+                      <Feather name="calendar" size={14} color={Colors.light.text} />
                     </Pressable>
                     {doc.status === 'PENDING_REVIEW' && (
                       <>
@@ -1397,6 +1496,12 @@ const styles = StyleSheet.create({
   docPills: { flexDirection: 'row', gap: 6, marginTop: 6 },
   rejectionText: { fontSize: 11, color: Colors.light.error, marginTop: 4, fontStyle: 'italic' },
   docActions: { flexDirection: 'row', gap: 6 },
+  expiryEditBox: { marginTop: 8, gap: 6 },
+  expiryInput: { borderWidth: 1, borderColor: Colors.light.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, fontSize: 13, color: Colors.light.text, backgroundColor: Colors.light.surface },
+  expiryBtnRow: { flexDirection: 'row', gap: 6 },
+  expiryBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  expiryBtnOutline: { borderWidth: 1, borderColor: Colors.light.border, backgroundColor: Colors.light.card },
+  expiryBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   iconBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: Colors.light.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.light.border },
   iconBtnDisabled: { opacity: 0.5, backgroundColor: Colors.light.surface, borderColor: Colors.light.border },
   lockedHint: { fontSize: 11, color: Colors.light.textMuted, marginTop: 4, fontStyle: 'italic' },
