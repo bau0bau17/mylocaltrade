@@ -44,7 +44,7 @@ const INNER_ROUTES: {
     ),
   },
   { name: "trader-dashboard/edit-profile", title: "Edit Profile", parent: "/account" },
-  { name: "trader-dashboard/leads", title: "My Leads", parent: "/account" },
+  { name: "trader-dashboard/leads", title: "Enquiries & Leads", parent: "/account" },
   { name: "trader-dashboard/billing", title: "Billing & Plan", parent: "/account" },
   { name: "trader-dashboard/services", title: "My Services", parent: "/account" },
   { name: "trader-dashboard/gallery", title: "Gallery", parent: "/account" },

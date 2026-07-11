@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, RefreshControl, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -14,6 +15,7 @@ import { useSubscription } from '@/lib/revenuecat';
 
 export default function BillingScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
 
   const { data: status, isLoading, refetch, isRefetching } = useGetSubscriptionStatus({
@@ -163,7 +165,7 @@ export default function BillingScreen() {
     <>
     <ScrollView
       style={s.container}
-      contentContainerStyle={{ paddingTop: 12, paddingBottom: insets.bottom + 32, paddingHorizontal: 20 }}
+      contentContainerStyle={{ paddingTop: 12, paddingBottom: tabBarHeight + insets.bottom + 32, paddingHorizontal: 20 }}
       refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} />}
     >
       {inCoolingOff ? (

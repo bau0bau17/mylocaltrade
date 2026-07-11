@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -11,6 +12,7 @@ const CODE_LENGTH = 6;
 
 export default function VerifyEmailScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { email, pollToken } = useLocalSearchParams<{ email: string; pollToken?: string }>();
   const { resendVerification, verifyEmailCode } = useAuth();
@@ -116,7 +118,7 @@ export default function VerifyEmailScreen() {
 
   if (verified) {
     return (
-      <View style={[styles.container, styles.center, { paddingTop: 24, paddingBottom: insets.bottom + 24 }]}>
+      <View style={[styles.container, styles.center, { paddingTop: 24, paddingBottom: tabBarHeight + insets.bottom + 24 }]}>
         <View style={[styles.iconBubble, { backgroundColor: Colors.light.secondaryMuted }]}>
           <Feather name="check-circle" size={32} color={Colors.light.secondary} />
         </View>
@@ -128,7 +130,7 @@ export default function VerifyEmailScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: 16, paddingBottom: insets.bottom + 16 }]}>
+    <View style={[styles.container, { paddingTop: 16, paddingBottom: tabBarHeight + insets.bottom + 16 }]}>
       <View style={styles.content}>
         <View style={styles.iconBubble}>
           <Feather name="mail" size={28} color={Colors.light.primary} />

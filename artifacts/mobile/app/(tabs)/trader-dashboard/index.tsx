@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -23,6 +24,7 @@ type OnboardingStatus = TraderOnboardingStatus;
 
 export default function TraderOnboardingDashboard() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { token, user, isTrader, resendVerification } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
@@ -174,7 +176,7 @@ export default function TraderOnboardingDashboard() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingTop: 16, paddingBottom: insets.bottom + 80, paddingHorizontal: 20 }}
+      contentContainerStyle={{ paddingTop: 16, paddingBottom: tabBarHeight + insets.bottom + 32, paddingHorizontal: 20 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchStatus(); }} tintColor={Colors.light.primary} />}
     >
 
@@ -342,7 +344,7 @@ export default function TraderOnboardingDashboard() {
           </View>
           <View style={styles.checklistMain}>
             <View style={styles.checklistTopLine}>
-              <Text style={styles.checklistLabel}>My Leads</Text>
+              <Text style={styles.checklistLabel}>Enquiries & Leads</Text>
               {newLeadsCount > 0 ? (
                 <View style={styles.newLeadsBadge}>
                   <Text style={styles.newLeadsBadgeText}>

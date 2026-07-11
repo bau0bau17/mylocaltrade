@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -21,6 +22,7 @@ const OTP_LENGTH = 6;
 
 export default function VerifyPhoneScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { token, isTrader } = useAuth();
 
@@ -129,13 +131,13 @@ export default function VerifyPhoneScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: 12, paddingBottom: insets.bottom + 16 }]}>
+    <View style={[styles.container, { paddingTop: 12, paddingBottom: tabBarHeight + 16 }]}>
       <KeyboardAvoidingView
         style={styles.content}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
       <ScrollView
-        contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: 24 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}

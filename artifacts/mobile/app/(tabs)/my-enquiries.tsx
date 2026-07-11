@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -14,6 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function MyEnquiriesScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { isAdmin } = useAuth();
   const { data, isLoading } = useGetEnquiries({
@@ -93,7 +95,7 @@ export default function MyEnquiriesScreen() {
               )}
             </View>
           )}
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 20 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 20 }}
         />
       ) : (
         <View style={styles.centered}>

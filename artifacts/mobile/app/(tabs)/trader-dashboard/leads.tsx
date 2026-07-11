@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from 'expo-router';
 import Colors from '@/constants/colors';
 import { EnquiryCard } from '@/components/EnquiryCard';
@@ -9,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const { isTrader } = useAuth();
 
   const { data, isLoading, refetch, isRefetching } = useGetEnquiries({
@@ -63,7 +65,7 @@ export default function LeadsScreen() {
         data={data?.enquiries || []}
         keyExtractor={item => item.id.toString()}
         renderItem={({ item }) => <EnquiryCard enquiry={item} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 20 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 20 }}
         refreshControl={
           <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} />
         }

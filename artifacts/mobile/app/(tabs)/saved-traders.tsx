@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -9,6 +10,7 @@ import { TraderCard } from '@/components/TraderCard';
 
 export default function SavedTradersScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { data, isLoading } = useGetSavedTraders();
 
@@ -23,7 +25,7 @@ export default function SavedTradersScreen() {
           data={data.traders}
           keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => <TraderCard trader={item} />}
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 20 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 20 }}
         />
       ) : (
         <View style={styles.centered}>

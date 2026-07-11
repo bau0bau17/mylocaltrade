@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -16,6 +17,7 @@ export default function WriteReviewScreen() {
   const { traderId, enquiryId } = useLocalSearchParams<{ traderId: string; enquiryId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
 
   const traderIdNum = Number(traderId);
   const initialEnquiryId = enquiryId ? Number(enquiryId) : null;
@@ -103,7 +105,7 @@ export default function WriteReviewScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: Colors.light.background }}
-      contentContainerStyle={{ paddingTop: 12, paddingBottom: insets.bottom + 32, paddingHorizontal: 20 }}
+      contentContainerStyle={{ paddingTop: 12, paddingBottom: tabBarHeight + insets.bottom + 32, paddingHorizontal: 20 }}
       keyboardShouldPersistTaps="handled"
     >
       {eligibleForThisTrader.length > 1 && (

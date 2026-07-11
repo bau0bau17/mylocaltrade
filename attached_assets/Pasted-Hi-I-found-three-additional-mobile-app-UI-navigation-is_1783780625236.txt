@@ -1,0 +1,57 @@
+Hi,
+
+I found three additional mobile app UI/navigation issues. Please review the attached screenshots.
+
+1. Excessive empty space / duplicate header
+
+On the Business Profile screen there is a very large unnecessary gap below the main navigation header, followed by a second local back button and another “Business Profile” title.
+
+Please:
+- keep only one header and one back button;
+- remove the duplicate internal header and excessive top padding;
+- move the page content directly below the shared app header with normal spacing;
+- audit all other mobile screens for the same duplicate-header or excessive-top-spacing issue;
+- apply a consistent shared fix rather than patching only this screen.
+
+2. Bottom content hidden behind the tab bar
+
+On the Billing & Plan screen, the text at the bottom is covered by the fixed bottom navigation bar and cannot be read properly.
+
+Please:
+- add the correct bottom safe-area/tab-bar padding to the scrollable content;
+- ensure all text and controls can be fully scrolled above the bottom navigation;
+- audit every scrollable screen in the mobile app for content hidden behind the bottom tab bar, sticky buttons or device safe area;
+- do not simply remove the text or reduce its size.
+
+3. “My Leads” and “Messages” may be confusing or duplicated
+
+Please audit the purpose, routes and functionality of:
+- My Leads
+- Messages
+
+My expected distinction is:
+- My Leads: incoming customer enquiries/job opportunities, job details and lead status;
+- Messages: the conversation inbox and chat threads with customers.
+
+Please confirm whether they currently provide genuinely different functionality.
+
+If they are distinct:
+- keep both;
+- make the distinction obvious through the labels/subtitles and destination screens;
+- consider renaming “My Leads” to “Enquiries & Leads” if that is clearer.
+
+If they currently duplicate the same data or navigate to substantially the same functionality:
+- consolidate them into one clear entry;
+- do not leave two menu items that confuse traders.
+
+Please do not remove or merge either item until you have inspected the actual routes and functionality.
+
+After completing the review, please confirm:
+1. Which screens had duplicate headers or excessive top spacing.
+2. Which screens had content hidden behind the bottom navigation.
+3. The actual functional difference between My Leads and Messages.
+4. Whether either menu item was renamed, consolidated or kept.
+5. That the mobile app typechecks successfully.
+6. Whether a new TestFlight build is required.
+
+Do not start a new build yet. I am grouping these changes with the other mobile fixes.

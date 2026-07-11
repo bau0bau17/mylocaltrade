@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -9,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function ForgotPasswordScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const params = useLocalSearchParams<{ email?: string }>();
   const { forgotPassword } = useAuth();
@@ -43,7 +45,7 @@ export default function ForgotPasswordScreen() {
       style={styles.container}
       contentContainerStyle={{
         paddingTop: 24,
-        paddingBottom: insets.bottom + 24,
+        paddingBottom: tabBarHeight + insets.bottom + 24,
         paddingHorizontal: 24,
       }}
       bottomOffset={60}

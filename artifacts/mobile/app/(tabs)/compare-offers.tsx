@@ -9,6 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -39,6 +40,7 @@ type Group = { serviceRequired: string; offers: Offer[] };
 
 export default function CompareOffersScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { token, isAdmin } = useAuth();
   const apiUrl = getApiUrl();
@@ -135,7 +137,7 @@ export default function CompareOffersScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}
+      contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 24 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}

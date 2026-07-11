@@ -9,6 +9,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
@@ -112,6 +113,7 @@ export default function MessagesIndexScreen() {
 
 function MessagesList({ isTrader }: { isTrader: boolean }) {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { data, isLoading, isError, refetch, isRefetching } = useGetConversations();
 
@@ -169,7 +171,7 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
       <FlatList
         data={conversations}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 24 }}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}

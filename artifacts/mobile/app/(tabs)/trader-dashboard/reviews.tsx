@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -29,6 +30,7 @@ function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
 
 export default function TraderReviewsScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
 
   const { data, isLoading, refetch, isRefetching } = useGetMyTraderReviews({
@@ -70,7 +72,7 @@ export default function TraderReviewsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: tabBarHeight + insets.bottom + 24 }}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={Colors.light.primary} />}
       >
         <View style={styles.summary}>

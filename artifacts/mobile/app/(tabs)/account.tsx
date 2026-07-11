@@ -278,7 +278,7 @@ export default function AccountScreen() {
             <View style={styles.separator} />
             <MenuRow icon="image" label="Gallery" onPress={() => router.push('/trader-dashboard/gallery')} />
             <View style={styles.separator} />
-            <MenuRow icon="message-square" label="My Leads" onPress={() => router.push('/trader-dashboard/leads')} />
+            <MenuRow icon="message-square" label="Enquiries & Leads" sub="New customer enquiries and job requests" onPress={() => router.push('/trader-dashboard/leads')} />
             <View style={styles.separator} />
             <MenuRow icon="message-circle" label="Messages" sub="Chat with customers" onPress={() => router.push('/messages')} accent badge={unreadCount} />
             <View style={styles.separator} />

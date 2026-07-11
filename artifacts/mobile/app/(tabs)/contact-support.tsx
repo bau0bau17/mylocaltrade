@@ -93,7 +93,7 @@ export default function ContactSupportScreen() {
     <View style={styles.container}>
       {rateLimited ? (
         <ScrollView
-          contentContainerStyle={[styles.successContainer, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[styles.successContainer, { paddingBottom: tabBarHeight + insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.successIcon, { backgroundColor: '#3A2A0E' }]}>
@@ -119,7 +119,7 @@ export default function ContactSupportScreen() {
         </ScrollView>
       ) : sent ? (
         <ScrollView
-          contentContainerStyle={[styles.successContainer, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[styles.successContainer, { paddingBottom: tabBarHeight + insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.successIcon}>
