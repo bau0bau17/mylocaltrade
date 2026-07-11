@@ -131,6 +131,13 @@ Utility scripts. Run via `pnpm --filter @workspace/scripts run <script>`.
 - Premium: £20/month or yearly (Apple In-App Purchase via RevenueCat on iOS) — everything in Basic plus featured placement, higher search ranking, unlimited gallery images, and a premium badge
 - Note: website/social links and extra services are free for all verified traders; they are not a Premium-only perk. The single stored paid plan id is `premium` (Monthly vs Yearly cadence is derived client-side from RevenueCat).
 
+## Pre-launch checklist (recorded, NOT yet implemented)
+
+1. **Separate Twilio Verify Services before enabling trader RCS.** Before enabling the approved trader-only RCS sender on Twilio, create a second, SMS-only Twilio Verify Service for customer phone-change OTPs and route trader vs customer verification through separate service SIDs (backend change: second service SID secret + routing in the shared verification helper). Reason: both flows currently share one Verify Service with `channel: "sms"`, and enabling RCS at service level would upgrade customer OTPs to RCS too.
+2. **Customer legal-version acceptance tracking — only if existing customer accounts remain active at public launch.** Keep it minimal: accepted Terms version, Privacy version and acceptance timestamp on the `users` table (which currently has no legal-version fields), plus a customer-facing re-acceptance notice. Today, only traders have acceptance storage (`trader_profiles`) and a re-acceptance banner.
+
+Do not change the pending Twilio RCS registration, publish, migrate or start a build until the user asks.
+
 ## User preferences
 
 - All user-facing copy in the app (mobile, admin, etc.) must be in English. Never use Romanian (or any other language) in UI strings, error messages, validation messages, banners, placeholders, etc. Chat replies to the user can stay in Romanian, but everything that ends up on screen for end users is English-only.
