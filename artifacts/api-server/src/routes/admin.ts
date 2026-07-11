@@ -15,6 +15,7 @@ import {
   REPORT_CATEGORIES,
   reviewsTable,
   quotesTable,
+  profileChangeRequestsTable,
 } from "@workspace/db/schema";
 import { pushTokensTable } from "@workspace/db/schema";
 import { alias } from "drizzle-orm/pg-core";
@@ -1426,6 +1427,7 @@ router.get("/admin/attention-counts", authMiddleware, adminOnly, async (req, res
       userReports,
       cancellations,
       accountDeletions,
+      profileChangeRequests,
     ] = await Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
@@ -1476,6 +1478,10 @@ router.get("/admin/attention-counts", authMiddleware, adminOnly, async (req, res
             ),
           ),
         ),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(profileChangeRequestsTable)
+        .where(eq(profileChangeRequestsTable.status, "PENDING")),
     ]);
 
     res.json({
@@ -1486,6 +1492,7 @@ router.get("/admin/attention-counts", authMiddleware, adminOnly, async (req, res
       userReports: userReports[0]?.count ?? 0,
       cancellationRequests: cancellations[0]?.count ?? 0,
       accountDeletions: accountDeletions[0]?.count ?? 0,
+      profileChangeRequests: profileChangeRequests[0]?.count ?? 0,
     });
   } catch (error) {
     req.log.error({ err: error }, "Admin attention counts failed");

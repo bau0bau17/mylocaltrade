@@ -10,6 +10,16 @@ import { ObjectStorageService } from "../lib/objectStorage";
 import { reconcileDocumentsState } from "./trader-documents";
 import { extractDomain } from "../lib/domain-check";
 import { generateVerificationToken, sendBusinessEmailVerificationEmail } from "../lib/email";
+import {
+  PROTECTED_TRADER_FIELDS,
+  traderChangeControlActive,
+  getActiveChangeRequests,
+  createChangeRequest,
+  ActiveRequestExistsError,
+  serializeOwnRequest,
+  normValue,
+  fieldLabel,
+} from "../lib/profile-change";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -109,21 +119,18 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
     const { userId } = req as AuthenticatedRequest;
     const body = UpdateTraderProfileBody.parse(req.body);
 
-    // Snapshot the verification-relevant fields BEFORE the update so we can
-    // re-run (or clear) the advisory support checks when any of them change.
+    // Snapshot the full row BEFORE the update: verification-relevant fields
+    // feed the advisory support checks below, and the protected-field values
+    // are needed to build Profile Change Requests once change control is on.
     const [prior] = await db
-      .select({
-        companyNumber: traderProfilesTable.companyNumber,
-        businessType: traderProfilesTable.businessType,
-        businessRole: traderProfilesTable.businessRole,
-        vatNumber: traderProfilesTable.vatNumber,
-        businessEmailDomain: traderProfilesTable.businessEmailDomain,
-        website: traderProfilesTable.website,
-        plan: traderProfilesTable.plan,
-      })
+      .select()
       .from(traderProfilesTable)
       .where(eq(traderProfilesTable.userId, userId))
       .limit(1);
+    if (!prior) {
+      res.status(404).json({ error: "Trader profile not found" });
+      return;
+    }
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
@@ -160,6 +167,78 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       (updateData.businessType as string | undefined) ?? prior?.businessType ?? null;
     if (effectiveBusinessType === "SOLE_TRADER") {
       updateData.companyNumber = null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Profile integrity: once the profile has been submitted for review, edits
+    // to protected fields no longer apply directly. They are stripped from the
+    // update and turned into pending Profile Change Requests instead; the
+    // approved values stay live until an admin approves each request. Enforced
+    // here (API level) so direct API calls cannot bypass the mobile UI.
+    // -----------------------------------------------------------------------
+    const changeControlActive = traderChangeControlActive(prior);
+    const createdChangeRequests: ReturnType<typeof serializeOwnRequest>[] = [];
+    if (changeControlActive) {
+      const proposedValues = new Map<string, string | null>();
+      const changedProtected = PROTECTED_TRADER_FIELDS.filter((field) => {
+        if (updateData[field] === undefined) return false;
+        const proposed = normValue(updateData[field]);
+        if (proposed === normValue((prior as Record<string, unknown>)[field])) {
+          return false;
+        }
+        proposedValues.set(field, proposed);
+        return true;
+      });
+      // Unchanged protected fields are simply dropped from the update (the
+      // client echoes the whole form back); changed ones become requests.
+      for (const field of PROTECTED_TRADER_FIELDS) {
+        if (updateData[field] !== undefined) delete updateData[field];
+      }
+
+      if (changedProtected.includes("phone")) {
+        res.status(400).json({
+          error:
+            "Phone number changes must be verified by SMS first. Use the change phone number flow.",
+          code: "PHONE_CHANGE_REQUIRES_VERIFICATION",
+        });
+        return;
+      }
+
+      if (changedProtected.length > 0) {
+        // Conflict check up front so a multi-field save is all-or-nothing.
+        const active = await getActiveChangeRequests(userId);
+        const conflicting = changedProtected.filter((field) =>
+          active.some((r) => r.field === field),
+        );
+        if (conflicting.length > 0) {
+          res.status(409).json({
+            error: `A change to your ${conflicting
+              .map((f) => fieldLabel(f).toLowerCase())
+              .join(", ")} is already pending review. Please wait for a decision before submitting another change.`,
+            conflictingFields: conflicting,
+          });
+          return;
+        }
+        try {
+          for (const field of changedProtected) {
+            const request = await createChangeRequest({
+              userId,
+              role: "trader",
+              traderProfileId: prior.id,
+              field,
+              currentValue: normValue((prior as Record<string, unknown>)[field]),
+              proposedValue: proposedValues.get(field) ?? null,
+            });
+            createdChangeRequests.push(serializeOwnRequest(request));
+          }
+        } catch (err) {
+          if (err instanceof ActiveRequestExistsError) {
+            res.status(409).json({ error: err.message });
+            return;
+          }
+          throw err;
+        }
+      }
     }
 
     // If galleryUrls is being changed, verify each NEW path against the
@@ -413,6 +492,16 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       businessProfileMissing: evalResult.requirements
         .filter(r => !r.satisfied)
         .map(r => r.label),
+      // Protected-field edits made after submission-for-review are returned
+      // here as pending change requests instead of being applied directly.
+      changeRequests: createdChangeRequests,
+      changeControlActive,
+      ...(createdChangeRequests.length > 0
+        ? {
+            reviewMessage:
+              "Your changes have been submitted for review. Your current approved information will remain active while we review the request. We’ll contact you if we need any additional information. Reviews can take up to 48 hours.",
+          }
+        : {}),
     });
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "ZodError") {

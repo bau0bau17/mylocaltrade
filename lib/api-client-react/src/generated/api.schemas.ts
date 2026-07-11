@@ -269,6 +269,38 @@ export interface UpdateLeadReminderSettingsRequest {
   leadReminderEmailEnabled?: boolean;
 }
 
+export type ProfileChangeRequestSummaryStatus =
+  (typeof ProfileChangeRequestSummaryStatus)[keyof typeof ProfileChangeRequestSummaryStatus];
+
+export const ProfileChangeRequestSummaryStatus = {
+  PENDING: "PENDING",
+  NEEDS_INFO: "NEEDS_INFO",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  CANCELLED: "CANCELLED",
+} as const;
+
+/**
+ * A pending/decided change to a protected profile field, as seen by the
+requesting user. Created automatically when a protected field is
+edited after the account is established; the live value stays
+unchanged until an admin approves the request.
+
+ */
+export interface ProfileChangeRequestSummary {
+  id: number;
+  field: string;
+  fieldLabel: string;
+  proposedValue?: string | null;
+  status: ProfileChangeRequestSummaryStatus;
+  phoneOtpVerified?: boolean;
+  adminInfoRequest?: string | null;
+  decisionReason?: string | null;
+  decidedAt?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export type TraderProfileSocialLinks = {
   facebook?: string;
   twitter?: string;
@@ -318,8 +350,10 @@ export interface TraderProfile {
   userId: number;
   businessName: string;
   contactName: string;
-  email: string;
-  phone: string;
+  /** Null on public trader responses; contact details are only revealed in hired conversations. */
+  email: string | null;
+  /** Null on public trader responses; contact details are only revealed in hired conversations. */
+  phone: string | null;
   mainCategory: string;
   additionalServices?: string[];
   businessAddress?: string | null;
@@ -363,6 +397,15 @@ businessType is LIMITED_COMPANY.
   revalidationRemindedAt?: string | null;
   revalidationOverdue?: boolean;
   createdAt?: string;
+  /** True once the profile is under change control (submitted for
+review): edits to protected fields become change requests that
+need admin approval instead of applying immediately.
+ */
+  changeControlActive?: boolean;
+  /** Present on PUT /profile responses when protected fields were routed to admin review. */
+  reviewMessage?: string | null;
+  /** Change requests created by this update (PUT /profile responses only). */
+  changeRequests?: ProfileChangeRequestSummary[];
 }
 
 export interface RevalidateProfileResponse {
@@ -846,6 +889,28 @@ export interface Quote {
   createdAt: string;
 }
 
+export type ConversationContactDetailsTrader = {
+  name?: string | null;
+  businessName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+};
+
+export type ConversationContactDetailsCustomer = {
+  name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+};
+
+/**
+ * Verified contact details for both parties, revealed post-hire.
+
+ */
+export interface ConversationContactDetails {
+  trader?: ConversationContactDetailsTrader;
+  customer?: ConversationContactDetailsCustomer;
+}
+
 export interface ConversationDetailResponse {
   conversation: ConversationSummary;
   messages: ConversationMessage[];
@@ -858,6 +923,12 @@ conversation are authorised to view these.
 revision history. Both parties to the conversation may view these.
  */
   quotes?: Quote[];
+  /** Verified contact details for both parties. Only present after the
+customer has accepted a quote or hired the trader; null before hire.
+The backend hire state is the source of truth — contact details are
+never included in pre-hire responses.
+ */
+  contactDetails?: ConversationContactDetails | null;
 }
 
 export type CreateQuoteRequestPriceType =

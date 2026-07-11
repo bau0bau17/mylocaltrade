@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  Linking,
   TextInput,
   Pressable,
   ActivityIndicator,
@@ -252,6 +253,10 @@ export default function ConversationThreadScreen() {
   // Quotes arrive newest first; the head of the list is the current version
   // of the quote chain (older revisions keep status REVISED).
   const quotes = data?.quotes ?? [];
+  // Contact details are only present in the API response after the customer
+  // accepted a quote / hired the trader (backend hire state is authoritative).
+  const contactDetails = data?.contactDetails ?? null;
+  const hired = Boolean(conv?.customerAcceptedAt);
   const currentQuote = quotes[0] ?? null;
   const currentQuoteStatus = currentQuote ? effectiveStatus(currentQuote) : null;
   const hasLivePendingQuote = currentQuoteStatus === "PENDING";
@@ -302,7 +307,14 @@ export default function ConversationThreadScreen() {
     }
   }, [data, qc]);
 
-  const violation = useMemo(() => detectContactInfo(text), [text]);
+  // Contact-sharing is only blocked BEFORE hire. Once hired, the customer and
+  // trader may exchange contact details to coordinate the job (the backend
+  // applies the same rule).
+  const hiredForFilter = Boolean(data?.conversation?.customerAcceptedAt);
+  const violation = useMemo(
+    () => (hiredForFilter ? null : detectContactInfo(text)),
+    [text, hiredForFilter],
+  );
   const violationText = violation ? contactViolationMessage(violation) : null;
 
   const onSend = () => {
@@ -389,7 +401,9 @@ export default function ConversationThreadScreen() {
       Alert.alert("Add a description", "Briefly describe what the quoted work includes.");
       return;
     }
-    const notesViolation = detectContactInfo(`${description} ${quoteNotes}`);
+    const notesViolation = hiredForFilter
+      ? null
+      : detectContactInfo(`${description} ${quoteNotes}`);
     if (notesViolation) {
       Alert.alert("Quote blocked", contactViolationMessage(notesViolation));
       return;
@@ -1003,6 +1017,53 @@ export default function ConversationThreadScreen() {
         </View>
       ) : null}
 
+      {/* Contact details (Part 7): the API only includes contactDetails after
+          the customer accepted a quote / hired, so this section can never
+          render pre-hire. Each viewer sees the OTHER party's details. */}
+      {hired && contactDetails && conv.stage !== "CANCELLED" ? (
+        <View style={styles.contactBar}>
+          <View style={styles.contactBarHeader}>
+            <Feather name="unlock" size={14} color={Colors.light.success} />
+            <Text style={styles.contactBarTitle}>Contact details available</Text>
+          </View>
+          {(() => {
+            const other = isTrader ? contactDetails.customer : contactDetails.trader;
+            const otherLabel = isTrader
+              ? contactDetails.customer?.name ?? "the customer"
+              : contactDetails.trader?.businessName ?? contactDetails.trader?.name ?? "the trader";
+            return (
+              <>
+                {other?.phone ? (
+                  <Pressable
+                    style={styles.contactBarRow}
+                    onPress={() => Linking.openURL(`tel:${other.phone}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Call ${otherLabel}`}
+                  >
+                    <Feather name="phone" size={14} color={Colors.light.primary} />
+                    <Text style={styles.contactBarLink}>{other.phone}</Text>
+                  </Pressable>
+                ) : null}
+                {other?.email ? (
+                  <Pressable
+                    style={styles.contactBarRow}
+                    onPress={() => Linking.openURL(`mailto:${other.email}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Email ${otherLabel}`}
+                  >
+                    <Feather name="mail" size={14} color={Colors.light.primary} />
+                    <Text style={styles.contactBarLink}>{other.email}</Text>
+                  </Pressable>
+                ) : null}
+                <Text style={styles.contactBarHint}>
+                  Keep important job details and agreements in this chat so there's a record you can both refer back to.
+                </Text>
+              </>
+            );
+          })()}
+        </View>
+      ) : null}
+
       {conv.stage === "CANCELLED" ? (
         <View style={styles.lifecycleBar}>
           <View style={styles.lifecycleDone}>
@@ -1514,6 +1575,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.light.border,
   },
+  contactBar: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "rgba(6, 214, 160, 0.08)",
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+    gap: 6,
+  },
+  contactBarHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  contactBarTitle: { fontSize: 13, fontWeight: "700", color: Colors.light.text },
+  contactBarRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 },
+  contactBarLink: { fontSize: 14, fontWeight: "600", color: Colors.light.primary },
+  contactBarHint: { fontSize: 11, color: Colors.light.textMuted, lineHeight: 15 },
   lifecycleBtn: {
     flexDirection: "row",
     alignItems: "center",

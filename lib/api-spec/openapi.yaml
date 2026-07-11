@@ -2741,6 +2741,48 @@ components:
         leadReminderEmailEnabled:
           type: boolean
 
+    ProfileChangeRequestSummary:
+      type: object
+      description: |
+        A pending/decided change to a protected profile field, as seen by the
+        requesting user. Created automatically when a protected field is
+        edited after the account is established; the live value stays
+        unchanged until an admin approves the request.
+      properties:
+        id:
+          type: integer
+        field:
+          type: string
+        fieldLabel:
+          type: string
+        proposedValue:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, NEEDS_INFO, APPROVED, REJECTED, CANCELLED]
+        phoneOtpVerified:
+          type: boolean
+        adminInfoRequest:
+          type: string
+          nullable: true
+        decisionReason:
+          type: string
+          nullable: true
+        decidedAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - field
+        - fieldLabel
+        - status
+        - createdAt
+
     TraderProfile:
       type: object
       properties:
@@ -2754,8 +2796,12 @@ components:
           type: string
         email:
           type: string
+          nullable: true
+          description: Null on public trader responses; contact details are only revealed in hired conversations.
         phone:
           type: string
+          nullable: true
+          description: Null on public trader responses; contact details are only revealed in hired conversations.
         mainCategory:
           type: string
         additionalServices:
@@ -2874,6 +2920,21 @@ components:
         createdAt:
           type: string
           format: date-time
+        changeControlActive:
+          type: boolean
+          description: |
+            True once the profile is under change control (submitted for
+            review): edits to protected fields become change requests that
+            need admin approval instead of applying immediately.
+        reviewMessage:
+          type: string
+          nullable: true
+          description: Present on PUT /profile responses when protected fields were routed to admin review.
+        changeRequests:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileChangeRequestSummary"
+          description: Change requests created by this update (PUT /profile responses only).
       required:
         - id
         - userId
@@ -3516,7 +3577,49 @@ components:
             revision history. Both parties to the conversation may view these.
           items:
             $ref: "#/components/schemas/Quote"
+        contactDetails:
+          nullable: true
+          description: |
+            Verified contact details for both parties. Only present after the
+            customer has accepted a quote or hired the trader; null before hire.
+            The backend hire state is the source of truth — contact details are
+            never included in pre-hire responses.
+          allOf:
+            - $ref: "#/components/schemas/ConversationContactDetails"
       required: [conversation, messages]
+
+    ConversationContactDetails:
+      type: object
+      description: |
+        Verified contact details for both parties, revealed post-hire.
+      properties:
+        trader:
+          type: object
+          properties:
+            name:
+              type: string
+              nullable: true
+            businessName:
+              type: string
+              nullable: true
+            phone:
+              type: string
+              nullable: true
+            email:
+              type: string
+              nullable: true
+        customer:
+          type: object
+          properties:
+            name:
+              type: string
+              nullable: true
+            phone:
+              type: string
+              nullable: true
+            email:
+              type: string
+              nullable: true
 
     Quote:
       type: object

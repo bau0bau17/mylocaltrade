@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ConversationContactDetails } from "./conversationContactDetails";
 import type { ConversationMessage } from "./conversationMessage";
 import type { ConversationSummary } from "./conversationSummary";
 import type { Quote } from "./quote";
@@ -21,4 +22,10 @@ conversation are authorised to view these.
 revision history. Both parties to the conversation may view these.
  */
   quotes?: Quote[];
+  /** Verified contact details for both parties. Only present after the
+customer has accepted a quote or hired the trader; null before hire.
+The backend hire state is the source of truth — contact details are
+never included in pre-hire responses.
+ */
+  contactDetails?: ConversationContactDetails | null;
 }

@@ -17,3 +17,4 @@ export * from "./contact-block-attempts";
 export * from "./promo-codes";
 export * from "./quotes";
 export * from "./promo-redemptions";
+export * from "./profile-change-requests";

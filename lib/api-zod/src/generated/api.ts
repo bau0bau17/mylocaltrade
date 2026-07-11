@@ -444,8 +444,18 @@ export const ListTradersResponse = zod.object({
       userId: zod.number(),
       businessName: zod.string(),
       contactName: zod.string(),
-      email: zod.string(),
-      phone: zod.string(),
+      email: zod
+        .string()
+        .nullable()
+        .describe(
+          "Null on public trader responses; contact details are only revealed in hired conversations.",
+        ),
+      phone: zod
+        .string()
+        .nullable()
+        .describe(
+          "Null on public trader responses; contact details are only revealed in hired conversations.",
+        ),
       mainCategory: zod.string(),
       additionalServices: zod.array(zod.string()).optional(),
       businessAddress: zod.string().nullish(),
@@ -512,6 +522,48 @@ export const ListTradersResponse = zod.object({
       revalidationRemindedAt: zod.date().nullish(),
       revalidationOverdue: zod.boolean().optional(),
       createdAt: zod.date().optional(),
+      changeControlActive: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True once the profile is under change control (submitted for\nreview): edits to protected fields become change requests that\nneed admin approval instead of applying immediately.\n",
+        ),
+      reviewMessage: zod
+        .string()
+        .nullish()
+        .describe(
+          "Present on PUT \/profile responses when protected fields were routed to admin review.",
+        ),
+      changeRequests: zod
+        .array(
+          zod
+            .object({
+              id: zod.number(),
+              field: zod.string(),
+              fieldLabel: zod.string(),
+              proposedValue: zod.string().nullish(),
+              status: zod.enum([
+                "PENDING",
+                "NEEDS_INFO",
+                "APPROVED",
+                "REJECTED",
+                "CANCELLED",
+              ]),
+              phoneOtpVerified: zod.boolean().optional(),
+              adminInfoRequest: zod.string().nullish(),
+              decisionReason: zod.string().nullish(),
+              decidedAt: zod.string().nullish(),
+              createdAt: zod.string(),
+              updatedAt: zod.string().optional(),
+            })
+            .describe(
+              "A pending\/decided change to a protected profile field, as seen by the\nrequesting user. Created automatically when a protected field is\nedited after the account is established; the live value stays\nunchanged until an admin approves the request.\n",
+            ),
+        )
+        .optional()
+        .describe(
+          "Change requests created by this update (PUT \/profile responses only).",
+        ),
     }),
   ),
   total: zod.number(),
@@ -535,8 +587,18 @@ export const GetFeaturedTradersResponse = zod.object({
       userId: zod.number(),
       businessName: zod.string(),
       contactName: zod.string(),
-      email: zod.string(),
-      phone: zod.string(),
+      email: zod
+        .string()
+        .nullable()
+        .describe(
+          "Null on public trader responses; contact details are only revealed in hired conversations.",
+        ),
+      phone: zod
+        .string()
+        .nullable()
+        .describe(
+          "Null on public trader responses; contact details are only revealed in hired conversations.",
+        ),
       mainCategory: zod.string(),
       additionalServices: zod.array(zod.string()).optional(),
       businessAddress: zod.string().nullish(),
@@ -603,6 +665,48 @@ export const GetFeaturedTradersResponse = zod.object({
       revalidationRemindedAt: zod.date().nullish(),
       revalidationOverdue: zod.boolean().optional(),
       createdAt: zod.date().optional(),
+      changeControlActive: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True once the profile is under change control (submitted for\nreview): edits to protected fields become change requests that\nneed admin approval instead of applying immediately.\n",
+        ),
+      reviewMessage: zod
+        .string()
+        .nullish()
+        .describe(
+          "Present on PUT \/profile responses when protected fields were routed to admin review.",
+        ),
+      changeRequests: zod
+        .array(
+          zod
+            .object({
+              id: zod.number(),
+              field: zod.string(),
+              fieldLabel: zod.string(),
+              proposedValue: zod.string().nullish(),
+              status: zod.enum([
+                "PENDING",
+                "NEEDS_INFO",
+                "APPROVED",
+                "REJECTED",
+                "CANCELLED",
+              ]),
+              phoneOtpVerified: zod.boolean().optional(),
+              adminInfoRequest: zod.string().nullish(),
+              decisionReason: zod.string().nullish(),
+              decidedAt: zod.string().nullish(),
+              createdAt: zod.string(),
+              updatedAt: zod.string().optional(),
+            })
+            .describe(
+              "A pending\/decided change to a protected profile field, as seen by the\nrequesting user. Created automatically when a protected field is\nedited after the account is established; the live value stays\nunchanged until an admin approves the request.\n",
+            ),
+        )
+        .optional()
+        .describe(
+          "Change requests created by this update (PUT \/profile responses only).",
+        ),
     }),
   ),
   total: zod.number(),
@@ -622,8 +726,18 @@ export const GetTraderResponse = zod.object({
   userId: zod.number(),
   businessName: zod.string(),
   contactName: zod.string(),
-  email: zod.string(),
-  phone: zod.string(),
+  email: zod
+    .string()
+    .nullable()
+    .describe(
+      "Null on public trader responses; contact details are only revealed in hired conversations.",
+    ),
+  phone: zod
+    .string()
+    .nullable()
+    .describe(
+      "Null on public trader responses; contact details are only revealed in hired conversations.",
+    ),
   mainCategory: zod.string(),
   additionalServices: zod.array(zod.string()).optional(),
   businessAddress: zod.string().nullish(),
@@ -690,6 +804,48 @@ export const GetTraderResponse = zod.object({
   revalidationRemindedAt: zod.date().nullish(),
   revalidationOverdue: zod.boolean().optional(),
   createdAt: zod.date().optional(),
+  changeControlActive: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True once the profile is under change control (submitted for\nreview): edits to protected fields become change requests that\nneed admin approval instead of applying immediately.\n",
+    ),
+  reviewMessage: zod
+    .string()
+    .nullish()
+    .describe(
+      "Present on PUT \/profile responses when protected fields were routed to admin review.",
+    ),
+  changeRequests: zod
+    .array(
+      zod
+        .object({
+          id: zod.number(),
+          field: zod.string(),
+          fieldLabel: zod.string(),
+          proposedValue: zod.string().nullish(),
+          status: zod.enum([
+            "PENDING",
+            "NEEDS_INFO",
+            "APPROVED",
+            "REJECTED",
+            "CANCELLED",
+          ]),
+          phoneOtpVerified: zod.boolean().optional(),
+          adminInfoRequest: zod.string().nullish(),
+          decisionReason: zod.string().nullish(),
+          decidedAt: zod.string().nullish(),
+          createdAt: zod.string(),
+          updatedAt: zod.string().optional(),
+        })
+        .describe(
+          "A pending\/decided change to a protected profile field, as seen by the\nrequesting user. Created automatically when a protected field is\nedited after the account is established; the live value stays\nunchanged until an admin approves the request.\n",
+        ),
+    )
+    .optional()
+    .describe(
+      "Change requests created by this update (PUT \/profile responses only).",
+    ),
 });
 
 /**
@@ -700,8 +856,18 @@ export const GetTraderProfileResponse = zod.object({
   userId: zod.number(),
   businessName: zod.string(),
   contactName: zod.string(),
-  email: zod.string(),
-  phone: zod.string(),
+  email: zod
+    .string()
+    .nullable()
+    .describe(
+      "Null on public trader responses; contact details are only revealed in hired conversations.",
+    ),
+  phone: zod
+    .string()
+    .nullable()
+    .describe(
+      "Null on public trader responses; contact details are only revealed in hired conversations.",
+    ),
   mainCategory: zod.string(),
   additionalServices: zod.array(zod.string()).optional(),
   businessAddress: zod.string().nullish(),
@@ -768,6 +934,48 @@ export const GetTraderProfileResponse = zod.object({
   revalidationRemindedAt: zod.date().nullish(),
   revalidationOverdue: zod.boolean().optional(),
   createdAt: zod.date().optional(),
+  changeControlActive: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True once the profile is under change control (submitted for\nreview): edits to protected fields become change requests that\nneed admin approval instead of applying immediately.\n",
+    ),
+  reviewMessage: zod
+    .string()
+    .nullish()
+    .describe(
+      "Present on PUT \/profile responses when protected fields were routed to admin review.",
+    ),
+  changeRequests: zod
+    .array(
+      zod
+        .object({
+          id: zod.number(),
+          field: zod.string(),
+          fieldLabel: zod.string(),
+          proposedValue: zod.string().nullish(),
+          status: zod.enum([
+            "PENDING",
+            "NEEDS_INFO",
+            "APPROVED",
+            "REJECTED",
+            "CANCELLED",
+          ]),
+          phoneOtpVerified: zod.boolean().optional(),
+          adminInfoRequest: zod.string().nullish(),
+          decisionReason: zod.string().nullish(),
+          decidedAt: zod.string().nullish(),
+          createdAt: zod.string(),
+          updatedAt: zod.string().optional(),
+        })
+        .describe(
+          "A pending\/decided change to a protected profile field, as seen by the\nrequesting user. Created automatically when a protected field is\nedited after the account is established; the live value stays\nunchanged until an admin approves the request.\n",
+        ),
+    )
+    .optional()
+    .describe(
+      "Change requests created by this update (PUT \/profile responses only).",
+    ),
 });
 
 /**
@@ -818,8 +1026,18 @@ export const UpdateTraderProfileResponse = zod.object({
   userId: zod.number(),
   businessName: zod.string(),
   contactName: zod.string(),
-  email: zod.string(),
-  phone: zod.string(),
+  email: zod
+    .string()
+    .nullable()
+    .describe(
+      "Null on public trader responses; contact details are only revealed in hired conversations.",
+    ),
+  phone: zod
+    .string()
+    .nullable()
+    .describe(
+      "Null on public trader responses; contact details are only revealed in hired conversations.",
+    ),
   mainCategory: zod.string(),
   additionalServices: zod.array(zod.string()).optional(),
   businessAddress: zod.string().nullish(),
@@ -886,6 +1104,48 @@ export const UpdateTraderProfileResponse = zod.object({
   revalidationRemindedAt: zod.date().nullish(),
   revalidationOverdue: zod.boolean().optional(),
   createdAt: zod.date().optional(),
+  changeControlActive: zod
+    .boolean()
+    .optional()
+    .describe(
+      "True once the profile is under change control (submitted for\nreview): edits to protected fields become change requests that\nneed admin approval instead of applying immediately.\n",
+    ),
+  reviewMessage: zod
+    .string()
+    .nullish()
+    .describe(
+      "Present on PUT \/profile responses when protected fields were routed to admin review.",
+    ),
+  changeRequests: zod
+    .array(
+      zod
+        .object({
+          id: zod.number(),
+          field: zod.string(),
+          fieldLabel: zod.string(),
+          proposedValue: zod.string().nullish(),
+          status: zod.enum([
+            "PENDING",
+            "NEEDS_INFO",
+            "APPROVED",
+            "REJECTED",
+            "CANCELLED",
+          ]),
+          phoneOtpVerified: zod.boolean().optional(),
+          adminInfoRequest: zod.string().nullish(),
+          decisionReason: zod.string().nullish(),
+          decidedAt: zod.string().nullish(),
+          createdAt: zod.string(),
+          updatedAt: zod.string().optional(),
+        })
+        .describe(
+          "A pending\/decided change to a protected profile field, as seen by the\nrequesting user. Created automatically when a protected field is\nedited after the account is established; the live value stays\nunchanged until an admin approves the request.\n",
+        ),
+    )
+    .optional()
+    .describe(
+      "Change requests created by this update (PUT \/profile responses only).",
+    ),
 });
 
 /**
@@ -1400,8 +1660,18 @@ export const GetSavedTradersResponse = zod.object({
       userId: zod.number(),
       businessName: zod.string(),
       contactName: zod.string(),
-      email: zod.string(),
-      phone: zod.string(),
+      email: zod
+        .string()
+        .nullable()
+        .describe(
+          "Null on public trader responses; contact details are only revealed in hired conversations.",
+        ),
+      phone: zod
+        .string()
+        .nullable()
+        .describe(
+          "Null on public trader responses; contact details are only revealed in hired conversations.",
+        ),
       mainCategory: zod.string(),
       additionalServices: zod.array(zod.string()).optional(),
       businessAddress: zod.string().nullish(),
@@ -1468,6 +1738,48 @@ export const GetSavedTradersResponse = zod.object({
       revalidationRemindedAt: zod.date().nullish(),
       revalidationOverdue: zod.boolean().optional(),
       createdAt: zod.date().optional(),
+      changeControlActive: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True once the profile is under change control (submitted for\nreview): edits to protected fields become change requests that\nneed admin approval instead of applying immediately.\n",
+        ),
+      reviewMessage: zod
+        .string()
+        .nullish()
+        .describe(
+          "Present on PUT \/profile responses when protected fields were routed to admin review.",
+        ),
+      changeRequests: zod
+        .array(
+          zod
+            .object({
+              id: zod.number(),
+              field: zod.string(),
+              fieldLabel: zod.string(),
+              proposedValue: zod.string().nullish(),
+              status: zod.enum([
+                "PENDING",
+                "NEEDS_INFO",
+                "APPROVED",
+                "REJECTED",
+                "CANCELLED",
+              ]),
+              phoneOtpVerified: zod.boolean().optional(),
+              adminInfoRequest: zod.string().nullish(),
+              decisionReason: zod.string().nullish(),
+              decidedAt: zod.string().nullish(),
+              createdAt: zod.string(),
+              updatedAt: zod.string().optional(),
+            })
+            .describe(
+              "A pending\/decided change to a protected profile field, as seen by the\nrequesting user. Created automatically when a protected field is\nedited after the account is established; the live value stays\nunchanged until an admin approves the request.\n",
+            ),
+        )
+        .optional()
+        .describe(
+          "Change requests created by this update (PUT \/profile responses only).",
+        ),
     }),
   ),
   total: zod.number(),
@@ -1974,6 +2286,31 @@ export const GetConversationResponse = zod.object({
     .optional()
     .describe(
       "All structured quotes in this conversation, newest first, including\nrevision history. Both parties to the conversation may view these.\n",
+    ),
+  contactDetails: zod
+    .object({
+      trader: zod
+        .object({
+          name: zod.string().nullish(),
+          businessName: zod.string().nullish(),
+          phone: zod.string().nullish(),
+          email: zod.string().nullish(),
+        })
+        .optional(),
+      customer: zod
+        .object({
+          name: zod.string().nullish(),
+          phone: zod.string().nullish(),
+          email: zod.string().nullish(),
+        })
+        .optional(),
+    })
+    .describe(
+      "Verified contact details for both parties, revealed post-hire.\n",
+    )
+    .nullish()
+    .describe(
+      "Verified contact details for both parties. Only present after the\ncustomer has accepted a quote or hired the trader; null before hire.\nThe backend hire state is the source of truth — contact details are\nnever included in pre-hire responses.\n",
     ),
 });
 

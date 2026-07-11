@@ -34,5 +34,6 @@
 - [Email case-insensitivity](email-case-insensitivity.md) — all email lookups lower()-compare; prod has a legacy case-variant duplicate pair, so lookups need exact-casing-first ordering & NO unique lower(email) index.
 - [Pull-to-refresh conventions](pull-to-refresh-conventions.md) — RefreshControl must cover empty-state branches too; scope refresh to the screen's refetch fns, not all active queries.
 - [Trader phone OTP — Twilio Verify](trader-phone-otp-twilio.md) — SMS via Twilio Verify (email fallback); phoneOtpHash=null ⇒ Twilio owns code; backend-only (mobile fetch, keep response shape); per-number rate limit lives in the handler on canonical E.164, not middleware.
+- [Profile change requests](profile-change-requests.md) — protected-field edits post-establishment create admin-reviewed requests; field lists live in lib/db schema; phone needs OTP before request; event types are fixed strings.
 - [Quote lifecycle invariants](quotes-one-pending-invariant.md) — one PENDING quote per conversation is a partial unique index (23505→409), expiry is lazy (no cron); digit-heavy test strings trip the contact filter.
 - [Tab-bar-aware bottom padding](tab-bar-aware-bottom-padding.md) — tab bar is absolute; scroll content needs tabBarHeight+insets.bottom padding; exceptions & multi-component hook pitfall inside.

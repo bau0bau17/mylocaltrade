@@ -39,7 +39,7 @@ const PHONE_SEND_WINDOW_MS = 60 * 60 * 1000;
 const PHONE_SEND_MAX = 5;
 const phoneSendCounts = new Map<string, { count: number; resetAt: number }>();
 
-function takePhoneSendSlot(phoneKey: string): { allowed: boolean; retryAfter?: number } {
+export function takePhoneSendSlot(phoneKey: string): { allowed: boolean; retryAfter?: number } {
   const now = Date.now();
   // Opportunistic sweep so the map cannot grow without bound.
   if (phoneSendCounts.size > 2000) {
@@ -59,7 +59,7 @@ function takePhoneSendSlot(phoneKey: string): { allowed: boolean; retryAfter?: n
   return { allowed: true };
 }
 
-function canonicalPhoneKey(phone: string): string {
+export function canonicalPhoneKey(phone: string): string {
   return toUkE164(phone) ?? normalisePhone(phone).toLowerCase();
 }
 

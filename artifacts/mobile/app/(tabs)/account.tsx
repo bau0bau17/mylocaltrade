@@ -294,6 +294,8 @@ export default function AccountScreen() {
         <>
           <Text style={styles.sectionLabel}>My Activity</Text>
           <View style={[styles.group, { marginHorizontal: 16 }]}>
+            <MenuRow icon="user" label="Personal Details" sub="Name & phone number" onPress={() => router.push('/personal-details')} />
+            <View style={styles.separator} />
             <MenuRow icon="bookmark" label="Saved Traders" onPress={() => router.push('/(tabs)/saved')} />
             <View style={styles.separator} />
             <MenuRow icon="message-circle" label="My Enquiries" onPress={() => router.push('/my-enquiries')} />

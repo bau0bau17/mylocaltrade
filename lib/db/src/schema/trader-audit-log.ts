@@ -64,6 +64,12 @@ export const TRADER_AUDIT_ACTIONS = [
   "REVALIDATION_DUE",
   "REVALIDATION_OVERDUE",
   "REVALIDATION_CONFIRMED",
+  // --- Profile change requests (protected-field edits after establishment) ---
+  "PROFILE_CHANGE_REQUESTED",
+  "PROFILE_CHANGE_APPROVED",
+  "PROFILE_CHANGE_REJECTED",
+  "PROFILE_CHANGE_INFO_REQUESTED",
+  "PROFILE_CHANGE_CANCELLED",
 ] as const;
 export type TraderAuditAction = (typeof TRADER_AUDIT_ACTIONS)[number];
 

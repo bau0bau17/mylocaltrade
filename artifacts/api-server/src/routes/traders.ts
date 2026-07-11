@@ -267,16 +267,22 @@ function formatTrader(
   responseTimeMinutes: number | null,
 ) {
   // All verified traders (free Basic and paid Premium) get a full public
-  // profile, including extra services, website and social links. Premium adds
-  // perks elsewhere (featured placement, higher search ranking and unlimited
+  // profile, including extra services and social links. Premium adds perks
+  // elsewhere (featured placement, higher search ranking and unlimited
   // gallery images), not these profile fields.
+  //
+  // Contact integrity: direct contact routes (email, phone, website) are
+  // NEVER exposed on the public profile. They are only revealed inside a
+  // conversation once the customer has accepted a quote / hired the trader
+  // (see routes/conversations.ts). The values stay stored for verification
+  // and admin use.
   return {
     id: t.id,
     userId: t.userId,
     businessName: t.businessName,
     contactName: t.contactName,
-    email: t.email,
-    phone: t.phone,
+    email: null,
+    phone: null,
     mainCategory: t.mainCategory,
     additionalServices: t.additionalServices || [],
     businessAddress: t.businessAddress,
@@ -284,7 +290,7 @@ function formatTrader(
     postcode: t.postcode,
     serviceAreas: t.serviceAreas || [],
     businessDescription: t.businessDescription,
-    website: t.website,
+    website: null,
     openingHours: t.openingHours,
     logoUrl: t.logoUrl,
     galleryUrls: t.galleryUrls || [],

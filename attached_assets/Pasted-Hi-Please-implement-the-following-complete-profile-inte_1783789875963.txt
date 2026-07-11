@@ -1,0 +1,344 @@
+Hi,
+
+Please implement the following complete profile-integrity, phone-verification and contact-visibility system for both trader and customer accounts.
+
+Please preserve the existing onboarding, account review, Twilio Verify, RCS compliance wording, Structured Quotes, Compare Offers, conversations, hiring and job-reference functionality.
+
+Do not publish, deploy or start an EAS/TestFlight build yet.
+
+# PART 1 — Profile changes must require Admin review
+
+Users may enter and edit their information normally before initially submitting their account/profile information.
+
+After the relevant information has been submitted, the approved/current values must no longer be replaced immediately by user edits.
+
+Instead, any later modification to a protected field must create a Profile Change Request for Admin review.
+
+The current approved value must remain active until the proposed value is approved.
+
+## Protected trader fields
+
+Apply this workflow to:
+
+- business/company name;
+- contact name;
+- phone number;
+- website;
+- business description.
+
+## Protected customer fields
+
+Apply this workflow to:
+
+- personal/full name;
+- phone number;
+- any equivalent identity/contact field that currently exists in the customer profile.
+
+Do not add unrelated fields to this workflow without checking with me first.
+
+## Correct trigger for traders
+
+For traders, the protection should begin when the trader profile/onboarding is submitted for review.
+
+It should remain active while the profile is:
+
+- Pending review;
+- Approved/Verified;
+- Live;
+- undergoing re-verification.
+
+Before the first submission, the trader can edit the fields normally.
+
+After submission, changes to protected fields require Admin approval.
+
+## Correct trigger for customers
+
+Customers do not use the same trader-verification status, so do not incorrectly describe them as approved traders.
+
+For customers, use the point when their initial identity/account details have been saved and the account is established.
+
+After that point, later changes to protected identity and contact details must become Profile Change Requests.
+
+Please explain in your completion report which existing customer lifecycle state you used as the technical trigger.
+
+# PART 2 — Profile Change Request workflow
+
+When a trader or customer proposes a change:
+
+1. Keep the current approved value active.
+2. Store the proposed value separately.
+3. Create a Pending Profile Change Request.
+4. Do not update the live/public/account value yet.
+5. Show “Change pending review” beside the affected field.
+6. Allow only an authorised Admin to approve and apply the change.
+7. If approved, atomically replace the current value with the approved proposed value.
+8. If rejected, keep the current value unchanged and show the rejection status and reason.
+9. If more information is required, show the Admin’s instructions to the user.
+10. Prevent multiple conflicting pending requests for the same field.
+11. Protect the workflow at API/backend level, not only in the mobile UI.
+12. Prevent users from bypassing the review through direct API requests.
+13. Record a complete audit history.
+
+The audit history should include:
+
+- user/account;
+- customer or trader role;
+- affected field;
+- previous approved value;
+- proposed value;
+- request timestamp;
+- decision;
+- Admin user;
+- decision reason;
+- decision timestamp;
+- any request-for-information history.
+
+Pending values must not appear in:
+
+- public trader profiles;
+- search results;
+- trader cards;
+- enquiries;
+- conversations;
+- public APIs;
+- notifications to unrelated users.
+
+# PART 3 — Phone-number changes and Twilio SMS/RCS verification
+
+A proposed new phone number must be verified before it can be submitted to Admin.
+
+Please reuse the existing “Check/Verify phone with SMS” flow from the trader Account Review / Trader Onboarding verification journey.
+
+Do not create an inconsistent second phone-verification system.
+
+The required flow is:
+
+1. User selects Edit/Change phone number.
+2. User enters the proposed new UK mobile number.
+3. Show the same clear SMS/RCS consent wording used in the existing account-review phone-verification flow.
+4. User actively taps “Send verification code”.
+5. Backend sends a one-time verification code through the existing Twilio Verify integration.
+6. Delivery should use SMS/RCS according to the existing approved/configured Twilio setup, with SMS fallback where RCS is unavailable.
+7. User enters the six-digit one-time code.
+8. User taps “Verify code”.
+9. Backend verifies the code through Twilio.
+10. Only after successful OTP verification should the proposed phone number be submitted as a Pending Profile Change Request.
+11. The currently approved/verified phone number must remain active until Admin approves the change.
+12. Successful OTP verification of the proposed number must not immediately replace the existing number.
+13. If Admin rejects the change, retain the current approved phone number.
+14. Do not mark the proposed number as the account’s active verified number before Admin approval.
+
+Please confirm that the RCS delivery behaviour is genuinely supported by the current Twilio configuration. Do not claim RCS delivery if production currently falls back to SMS while the RCS sender is still pending approval.
+
+## Consent wording
+
+The phone-change flow should use wording consistent with the existing trader phone-verification and submitted RCS compliance materials:
+
+“Verify your phone number
+
+MyLocalTrade will send a one-time verification code by SMS or RCS to verify this mobile number for account access, security and trust.
+
+By tapping ‘Send verification code’, you agree to receive a one-time verification message from MyLocalTrade. These messages are used only for account and phone verification, security and trust — never for marketing, advertising, promotions, discounts or bulk messaging. Message and data rates may apply.”
+
+Please keep the existing Privacy Policy and Terms links visible where they are already used in the current phone-verification flow.
+
+For a trader, the wording may additionally explain that phone verification is part of trader verification.
+
+For a customer, do not describe it as trader verification; describe it as account identity/contact verification and security.
+
+The phone-change flow should use:
+
+- the existing Twilio environment variables;
+- the existing rate limiting;
+- resend cooldown;
+- expiry rules;
+- attempt limits;
+- abuse protection;
+- E.164 UK number formatting;
+- enumeration-safe errors.
+
+Do not expose Twilio credentials in the mobile app.
+
+# PART 4 — Text shown in Edit Profile
+
+Show this message beneath the protected trader fields:
+
+“After your trader profile has been submitted, changes to your business and verified profile details will be reviewed before they appear live. Reviews can take up to 48 hours.”
+
+Show this message beneath the protected customer fields:
+
+“Changes to your submitted identity and contact details will be reviewed before they are applied to your account. Reviews can take up to 48 hours.”
+
+When a change is submitted, show:
+
+“Your changes have been submitted for review. Your current approved information will remain active while we review the request. We’ll contact you if we need any additional information. Reviews can take up to 48 hours.”
+
+For individual affected fields, show an appropriate status:
+
+- Change pending review;
+- More information required;
+- Change approved;
+- Change rejected.
+
+Do not display the unapproved proposed value publicly.
+
+# PART 5 — Admin portal
+
+Please create a Profile Change Requests section for authorised administrators.
+
+Admin should be able to:
+
+- filter by Customer or Trader;
+- see the account/user;
+- see the affected field;
+- compare the current approved value with the proposed value;
+- see whether a proposed phone number successfully passed OTP verification;
+- approve the change;
+- reject with a mandatory reason;
+- request more information;
+- see the full audit history.
+
+For sensitive changes such as company name, personal name or phone number, require an Admin reason/confirmation before applying the change.
+
+Use existing Admin authentication, role protection and audit-log patterns.
+
+# PART 6 — Contact details must remain hidden before quote acceptance/hire
+
+The goal is to keep enquiries, discussions and structured quotes inside MyLocalTrade until the customer accepts a quote or hires a trader.
+
+Before a quote is accepted or the trader is hired:
+
+- Do not show the trader’s phone number to the customer.
+- Do not show the customer’s phone number to the trader.
+- Do not expose either party’s email address.
+- Do not expose direct contact details through enquiry or conversation API responses.
+- Do not show clickable phone or email actions.
+- Communication should take place through the existing MyLocalTrade chat.
+- Customers and traders must still be able to exchange job details and photos.
+- Traders must still be able to send Structured Quotes.
+- Customers must still be able to use Compare Offers.
+
+The customer’s phone number may still be collected securely when an enquiry is submitted, but it must not be revealed to traders before hire.
+
+The trader’s phone number may remain stored for verification and Admin use, but it must not be revealed to customers before hire.
+
+# PART 7 — Contact details after quote acceptance/hire
+
+After the customer accepts a Structured Quote or completes the existing Hire Trader action:
+
+- Reveal verified contact details only to the customer and the hired trader.
+- Show a clear “Contact details available” section in the hired-job conversation.
+- Allow the customer to call the hired trader.
+- Allow the hired trader to call the customer.
+- Keep chat available and encourage users to document important job details and agreements there.
+- Continue using the existing job-reference and hiring records.
+- Do not expose contact information to traders whose quotes were not accepted.
+- Do not expose the details in unrelated conversations.
+
+Use the backend hire/accepted-quote state as the source of truth. Do not implement this only as a client-side visibility rule.
+
+If a newly approved phone-number change is applied after a trader has already been hired, ensure authorised hired conversations receive the new approved/verified number and never the pending value.
+
+# PART 8 — Website/contact-link consideration inside the app
+
+Please audit whether the trader’s website is currently shown as a clickable link before hire.
+
+If it allows customers to bypass the quote/chat flow and obtain direct contact information, do not display it as a clickable public contact route before quote acceptance/hire.
+
+The website may remain:
+
+- stored in the trader profile;
+- visible to Admin for verification;
+- subject to the Profile Change Request workflow.
+
+Please report how the current website field behaves before changing its visibility.
+
+Do not make changes to the separate landing-page project as part of this task.
+
+# PART 9 — Contact-sharing protection
+
+Please audit the existing contact-information detection/blocking behaviour in chat.
+
+Before hire, the app should discourage or block obvious attempts to share:
+
+- phone numbers;
+- email addresses;
+- external messaging handles;
+- direct contact links.
+
+After hire, the hired customer and trader may share necessary contact details because job coordination and payment take place separately outside MyLocalTrade.
+
+Please preserve reasonable error messages and avoid exposing private message content to unrelated users.
+
+# PART 10 — Important product/payment clarification
+
+MyLocalTrade does not process payment from customers to traders for the actual job.
+
+After hire, the customer and trader arrange job payment separately.
+
+Do not:
+
+- add Stripe;
+- add customer-to-trader job payment processing;
+- change Apple App Store/RevenueCat subscriptions;
+- describe the OTP/RCS message as marketing;
+- expose contact information before hire.
+
+# PART 11 — Verification and regression testing
+
+Please verify that this implementation does not break:
+
+- trader onboarding and Account Review;
+- existing “Check/Verify phone with SMS” flow;
+- Twilio Verify and current RCS/SMS wording;
+- customer accounts;
+- Request a Quote;
+- enquiry creation;
+- photo attachments;
+- conversations and messages;
+- Structured Quotes;
+- Compare Offers;
+- quote acceptance;
+- Hire Trader;
+- job references;
+- reviews and review eligibility;
+- trader search and profiles;
+- push notifications;
+- transactional emails;
+- Apple/RevenueCat subscriptions;
+- Admin verification and moderation;
+- existing accounts and enquiries.
+
+Please typecheck/test all affected:
+
+- mobile code;
+- backend/API;
+- database schema;
+- shared API specification and generated clients;
+- admin portal.
+
+# Completion report required
+
+After implementation, please confirm:
+
+1. Database/schema changes and migrations.
+2. Protected fields for traders and customers.
+3. Exact lifecycle trigger used for each account type.
+4. Profile Change Request endpoints and authorisation.
+5. Admin screens and actions.
+6. Audit history implementation.
+7. Exact phone-number change flow.
+8. How Twilio SMS/RCS verification is reused.
+9. Current RCS-versus-SMS production behaviour.
+10. Contact visibility before and after hire.
+11. Screens and API responses changed.
+12. Website-field behaviour.
+13. Contact-sharing protections.
+14. Notifications and status messages.
+15. Tests and typechecks completed.
+16. Existing-data migration or backfill requirements.
+17. Manual TestFlight tests required.
+18. Whether the backend/database/admin need republishing.
+19. Confirmation that a new TestFlight build is required.
+
+Do not start an EAS build, submit to TestFlight, publish, migrate production data or deploy anything yet. I want to review the completed work first and include all mobile changes in one build.

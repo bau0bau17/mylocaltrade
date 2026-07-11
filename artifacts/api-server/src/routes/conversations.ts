@@ -251,8 +251,13 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
       .select({
         conv: conversationsTable,
         customerName: usersTable.fullName,
+        customerPhone: usersTable.phone,
+        customerEmail: usersTable.email,
         traderBusinessName: traderProfilesTable.businessName,
         traderVerificationStatus: traderProfilesTable.verificationStatus,
+        traderContactName: traderProfilesTable.contactName,
+        traderPhone: traderProfilesTable.phone,
+        traderEmail: traderProfilesTable.email,
       })
       .from(conversationsTable)
       .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
@@ -366,6 +371,30 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
       .where(eq(quotesTable.conversationId, id))
       .orderBy(desc(quotesTable.createdAt));
 
+    // Contact reveal (Part 7): only after the customer accepted a quote /
+    // hired the trader (backend hire state is the source of truth), and only
+    // to the two participants of THIS conversation — both already verified
+    // above. Before hire, no phone/email crosses the API boundary. The values
+    // are read live from the owning records, so an admin-approved phone
+    // change automatically reaches hired conversations and a pending value
+    // never does.
+    const hired = row.conv.customerAcceptedAt != null;
+    const contactDetails = hired
+      ? {
+          trader: {
+            name: row.traderContactName,
+            businessName: row.traderBusinessName,
+            phone: row.traderPhone || null,
+            email: row.traderEmail || null,
+          },
+          customer: {
+            name: row.customerName,
+            phone: row.customerPhone || null,
+            email: row.customerEmail || null,
+          },
+        }
+      : null;
+
     res.json({
       conversation: serializeConversation(row.conv, {
         customerName: row.customerName,
@@ -379,6 +408,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
       messages: messages.map(serializeMessage),
       enquiryAttachments,
       quotes: quoteRows.map((q) => serializeQuote(q)),
+      contactDetails,
     });
   } catch (error) {
     req.log.error({ err: error }, "Get conversation failed");
@@ -423,7 +453,12 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
     // Attempt logging happens AFTER existence + participant authorization, so
     // a non-participant cannot pollute the moderation queue by hitting random
     // conversation ids with blocked content.
-    if (violation) {
+    //
+    // Contact-sharing is only blocked BEFORE hire (Part 9): once the customer
+    // has accepted a quote / hired the trader, the two parties are allowed to
+    // exchange contact details to coordinate the job.
+    const hired = conv.customerAcceptedAt != null;
+    if (violation && !hired) {
       void recordContactBlockAttempt({
         userId,
         conversationId: id,

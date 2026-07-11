@@ -19,6 +19,7 @@ import {
   Tag,
   Trash2,
   Ban,
+  UserCog,
 } from "lucide-react";
 
 interface NavItem {
@@ -37,6 +38,7 @@ interface AttentionCounts {
   userReports: number;
   cancellationRequests: number;
   accountDeletions: number;
+  profileChangeRequests: number;
 }
 
 const NAV: NavItem[] = [
@@ -52,6 +54,7 @@ const NAV: NavItem[] = [
   { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/promo-codes", label: "Promo codes", icon: Tag },
   { href: "/account-deletions", label: "Account deletions", icon: Trash2, countKey: "accountDeletions" },
+  { href: "/profile-change-requests", label: "Profile changes", icon: UserCog, countKey: "profileChangeRequests" },
 ];
 
 function isActive(itemHref: string, location: string): boolean {

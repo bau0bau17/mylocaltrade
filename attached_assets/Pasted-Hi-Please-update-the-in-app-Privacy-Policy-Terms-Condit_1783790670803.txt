@@ -1,0 +1,268 @@
+Hi,
+
+Please update the in-app Privacy Policy, Terms & Conditions and related explanatory screens so they accurately reflect the newly implemented:
+
+- Profile Change Request workflow;
+- Admin approval of protected profile changes;
+- phone-number verification;
+- Structured Quotes;
+- contact-detail visibility before and after hire;
+- customer-to-trader job-payment position.
+
+This task is for the mobile app and its in-app legal content. Do not modify the separate landing-page project.
+
+Preserve all existing legal sections that remain accurate. Integrate the new wording professionally into the current documents rather than replacing the complete Privacy Policy or Terms with short standalone text.
+
+Do not reintroduce any removed support email address or add a replacement contact method.
+
+# 1. Privacy Policy — profile information and change requests
+
+Please add or update a section using wording consistent with:
+
+## Profile information and change requests
+
+“Customers and traders provide identity, contact and profile information when creating and using a MyLocalTrade account. Traders may also provide business information, service details, verification information and documents as part of trader onboarding and verification.
+
+Before initial submission, users may be able to edit their profile information directly. After relevant account or trader-profile information has been submitted, changes to certain protected details may require review and approval by MyLocalTrade before they take effect.
+
+Protected information may include a customer’s personal name and phone number, and a trader’s business or company name, contact name, phone number, website and business description.
+
+When a protected change is requested, we may retain the current approved information while storing the proposed information separately for review. Pending information is not displayed publicly or applied to the account until it has been approved. We may approve the request, reject it or request additional information. Reviews can take up to 48 hours.
+
+We keep records of profile-change requests, previous and proposed values, review decisions, reasons and timestamps for security, fraud prevention, account integrity, dispute handling and audit purposes.”
+
+Please ensure the document does not imply that unapproved profile values immediately replace approved/live information.
+
+# 2. Privacy Policy — phone verification and Twilio
+
+Please add or update the phone-verification section using wording consistent with:
+
+## Phone-number verification
+
+“We use one-time verification codes to confirm ownership of a mobile phone number and support account access, trader verification, security and trust.
+
+For the existing trader-verification flow, a trader actively requests a verification code after reviewing the relevant consent notice. The code may be delivered by SMS or RCS through our messaging provider, Twilio, depending on service availability and the approved messaging configuration.
+
+A proposed replacement phone number must be successfully verified before it can be submitted for administrative review. Verifying a proposed number does not immediately replace the currently approved phone number. The current approved number remains active until the proposed change is approved.
+
+Verification messages are not used for marketing, advertising, promotions, discounts or bulk messaging. Message and data rates may apply.”
+
+Important RCS restriction:
+
+- The submitted Twilio/Google RCS registration currently describes the sender as being used for trader phone verification only.
+- Do not describe customer phone changes as using RCS unless the current RCS approval/registration genuinely permits that expanded use.
+- Until that is confirmed, customer phone-change verification should be described as SMS verification only.
+- Do not broaden the in-app RCS wording beyond the trader-only submitted use case.
+- Do not change the existing trader RCS consent wording in a way that conflicts with the submitted `/rcs-opt-in` page, screenshot or video.
+
+# 3. Privacy Policy — contact-detail visibility
+
+Please add or update a section using wording consistent with:
+
+## Contact details and communication between users
+
+“Before a customer accepts a structured quote or hires a trader, direct contact details such as phone numbers and email addresses are not disclosed between the customer and trader. Customers and traders should use MyLocalTrade messaging to discuss the enquiry, exchange relevant photos and receive or send quotes.
+
+When a customer accepts a quote or hires a trader, verified contact details may be made available to that customer and the hired trader for the purpose of coordinating the work.
+
+Contact details are not disclosed through this process to unrelated traders or to traders whose quotes were not accepted.
+
+Messages, quote records and job-related activity may be retained for account security, dispute handling, fraud prevention, moderation and to maintain an accurate record of the transaction journey.”
+
+Ensure this matches the actual backend/API visibility rules. Do not rely only on mobile-screen hiding.
+
+# 4. Privacy Policy — Structured Quotes and job records
+
+Please include wording consistent with:
+
+## Quotes and job records
+
+“When a trader sends a structured quote, we process information including the proposed price, whether the price is fixed or estimated, the description of work, notes, validity period, quote status and relevant timestamps.
+
+We process quote acceptance, decline, withdrawal, revision and expiry information to provide Compare Offers, maintain job history, determine when a trader has been hired and support reviews, moderation and dispute handling.
+
+Accepted quotes and their history may be retained as part of the job record and audit history.”
+
+# 5. Privacy Policy — job payments
+
+Please ensure the payment wording clearly distinguishes Apple subscriptions from payments for trade work:
+
+## Payment for trade work
+
+“MyLocalTrade does not process payments from customers to traders for the work described in an enquiry or quote. After a trader is hired, the customer and trader arrange payment for the actual work separately.
+
+Subscriptions purchased in the MyLocalTrade iOS app are separate from customer-to-trader job payments and are processed by Apple through the App Store, with subscription status managed through RevenueCat. MyLocalTrade does not collect or store Apple payment-card details.”
+
+Do not add Stripe references.
+
+# 6. Terms & Conditions — accurate profile information
+
+Please add or update the Terms using wording consistent with:
+
+## Account and profile information
+
+“Customers and traders must provide accurate, current and truthful account and profile information.
+
+Traders must not misrepresent their identity, business, services, qualifications, verification status or contact details. Customers must not impersonate another person or submit misleading identity or contact information.
+
+MyLocalTrade may require verification or additional evidence before accepting or applying protected profile changes.”
+
+# 7. Terms — changes requiring review
+
+Please include:
+
+## Changes to protected profile details
+
+“Before initial submission, users may edit eligible account or profile information directly.
+
+After relevant information has been submitted, changes to protected identity, contact or trader-profile details may require review and approval by MyLocalTrade before they take effect.
+
+The current approved information will remain active while a proposed change is reviewed. Proposed changes will not appear publicly or replace approved information unless they are approved.
+
+MyLocalTrade may approve a request, reject it or request additional information. Reviews can take up to 48 hours. Users must not attempt to bypass the review process or provide false or misleading information.”
+
+# 8. Terms — phone verification
+
+Please include:
+
+## Phone verification
+
+“Where phone verification is required, the user must enter a mobile number that they are authorised to use and actively request a one-time verification code.
+
+Trader verification codes may be delivered by SMS or RCS through the configured verification service. Customer phone-change verification must not be described as RCS-enabled unless that use has been approved and configured.
+
+Completing OTP verification confirms access to the proposed phone number but does not automatically guarantee approval of a profile change. A proposed replacement number may remain pending until reviewed by MyLocalTrade.”
+
+# 9. Terms — communication before hire
+
+Please include:
+
+## Communication and contact details
+
+“Before a quote is accepted or a trader is hired, customers and traders should communicate through MyLocalTrade.
+
+Direct contact details are not made available through the normal enquiry flow before hire. Users must not attempt to bypass platform safeguards by sharing or requesting phone numbers, email addresses, external messaging handles or direct contact links before hire.
+
+After a customer accepts a quote or hires a trader, verified contact details may be made available to that customer and the hired trader for job coordination.
+
+Users should continue recording important agreements, scope changes and job details in the MyLocalTrade conversation where possible.”
+
+Please ensure this rule matches the actual chat contact-information protection.
+
+# 10. Terms — Structured Quotes
+
+Please include:
+
+## Structured Quotes
+
+“A trader may send a structured quote through a customer conversation. A quote may include a fixed price or an estimate, a description of the proposed work, notes and a validity date.
+
+An estimate may change where the actual condition, scope or requirements of the work differ from the information originally provided. Traders must clearly explain material changes to the customer.
+
+A customer may accept or decline a valid quote. A quote that has expired, been withdrawn or been declined cannot be accepted.
+
+When a customer accepts a quote, MyLocalTrade may record the trader as hired and create or associate the relevant job record and job reference.
+
+Accepted quotes and their version history may be retained as an audit record. Neither party should attempt to alter or misrepresent an accepted quote outside the supported revision process.”
+
+# 11. Terms — responsibility and job payments
+
+Please include:
+
+## Agreement and payment between customer and trader
+
+“Acceptance of a quote creates an agreement concerning the proposed work between the customer and trader. MyLocalTrade is not the provider of the trade service and does not become a party responsible for performing the work.
+
+MyLocalTrade does not process payment for the actual work. The customer and trader are responsible for agreeing the payment method, timing and any appropriate invoice or receipt separately.
+
+MyLocalTrade does not guarantee the quality, completion or payment of work, subject to any responsibilities that cannot lawfully be excluded.”
+
+Please preserve any stronger existing consumer-rights wording and do not remove statutory UK consumer rights.
+
+# 12. Update the in-app “How MyLocalTrade Works” content
+
+Please audit and update any in-app explanation that still says:
+
+- customers automatically “Post a job” to a reverse marketplace;
+- MyLocalTrade automatically distributes the job to nearby traders;
+- the trader’s latest chat message is treated as an offer;
+- direct contact details are visible before hire;
+- job payments remain or are processed inside MyLocalTrade.
+
+The in-app customer flow should accurately describe:
+
+1. Find traders and request quotes.
+2. Chat and receive Structured Quotes.
+3. Compare and accept a quote.
+4. Contact details become available after hire.
+5. Complete the job and leave a review.
+
+The in-app trader flow should accurately describe:
+
+1. Create and verify a trader profile.
+2. Receive customer enquiries.
+3. Chat and send Structured Quotes.
+4. Get hired when a quote is accepted.
+5. Complete jobs and build reputation.
+
+# 13. Legal-document versioning and acceptance
+
+These are material updates concerning personal data, contact disclosure, quotes and account-review rules.
+
+Please:
+
+- increment the in-app legal-document version;
+- update the effective/last-updated date accurately;
+- use the existing legal re-acceptance system;
+- require existing users to accept the updated Terms/Privacy wording where the current implementation supports this;
+- do not create a login loop;
+- store the accepted document version and timestamp;
+- provide links to the full updated Privacy Policy and Terms before acceptance.
+
+Show a short summary such as:
+
+“We’ve updated our Privacy Policy and Terms to explain profile-change reviews, phone verification, structured quotes and when verified contact details become available after hire.”
+
+# 14. Preserve existing requirements
+
+Please preserve:
+
+- the removal of `support@mylocaltrade.co.uk`;
+- Apple App Store/RevenueCat subscription wording;
+- existing UK cancellation/cooling-off and consumer-rights wording;
+- existing report, moderation and safety functionality;
+- existing RCS trader-verification wording submitted to Twilio;
+- links to the live Privacy Policy and Terms;
+- existing accessibility and app design.
+
+Do not:
+
+- add a new support email;
+- add Stripe;
+- say MyLocalTrade processes job payments;
+- describe RCS as marketing;
+- expand the pending trader-only RCS registration to customers;
+- expose contact information before hire;
+- publish, deploy or start an EAS build yet.
+
+# 15. Final verification
+
+After implementation, please confirm:
+
+1. In-app Privacy Policy sections updated.
+2. In-app Terms sections updated.
+3. Other explanatory/help screens updated.
+4. Exact legal-document version and effective date.
+5. Whether existing users will be required to re-accept.
+6. How re-acceptance is stored.
+7. Confirmation that trader RCS wording still matches the submitted compliance materials.
+8. Confirmation that customer phone verification is not incorrectly described as RCS-enabled.
+9. Confirmation that direct contact disclosure wording matches backend behaviour.
+10. Confirmation that Structured Quote wording matches the actual implementation.
+11. Confirmation that Apple/RevenueCat wording remains correct.
+12. Confirmation that no Stripe or removed support-email references were introduced.
+13. Typecheck/test results.
+14. Manual TestFlight tests required.
+15. Confirmation that a new TestFlight build is required.
+
+Do not start the build yet. I want to review the implementation and group it with the remaining mobile changes.

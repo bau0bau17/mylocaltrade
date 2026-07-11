@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ProfileChangeRequestSummary } from "./profileChangeRequestSummary";
 import type { TraderProfileBusinessRole } from "./traderProfileBusinessRole";
 import type { TraderProfileBusinessType } from "./traderProfileBusinessType";
 import type { TraderProfilePlan } from "./traderProfilePlan";
@@ -15,8 +16,10 @@ export interface TraderProfile {
   userId: number;
   businessName: string;
   contactName: string;
-  email: string;
-  phone: string;
+  /** Null on public trader responses; contact details are only revealed in hired conversations. */
+  email: string | null;
+  /** Null on public trader responses; contact details are only revealed in hired conversations. */
+  phone: string | null;
   mainCategory: string;
   additionalServices?: string[];
   businessAddress?: string | null;
@@ -60,4 +63,13 @@ businessType is LIMITED_COMPANY.
   revalidationRemindedAt?: Date | null;
   revalidationOverdue?: boolean;
   createdAt?: Date;
+  /** True once the profile is under change control (submitted for
+review): edits to protected fields become change requests that
+need admin approval instead of applying immediately.
+ */
+  changeControlActive?: boolean;
+  /** Present on PUT /profile responses when protected fields were routed to admin review. */
+  reviewMessage?: string | null;
+  /** Change requests created by this update (PUT /profile responses only). */
+  changeRequests?: ProfileChangeRequestSummary[];
 }
