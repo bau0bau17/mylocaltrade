@@ -344,7 +344,7 @@ router.post("/auth/register/trader", async (req, res) => {
               error:
                 `This business cannot create a trader account because Companies House lists it as "${ch.company_status}". ` +
                 `Only companies with status "active" can be onboarded. ` +
-                `If you believe this is incorrect, please update your status with Companies House first, or contact support@mylocaltrade.co.uk.`,
+                `If you believe this is incorrect, please update your status with Companies House first.`,
               code: "COMPANY_NOT_ACTIVE",
               companyStatus: ch.company_status,
               companyName: ch.company_name,

@@ -122,7 +122,6 @@ Utility scripts. Run via `pnpm --filter @workspace/scripts run <script>`.
 ## Business Details (Placeholder)
 
 - Company: Service Provider LTD
-- Email: support@mylocaltrade.co.uk
 - Company No: 12345678
 - Address: 123 Business Street, London, EC1A 1BB
 

@@ -908,9 +908,7 @@ export async function sendTraderApprovedEmail(opts: {
         <li>Make sure your subscription is active so customers can contact you.</li>
         <li>Reply quickly to new leads — most customers go with the first trader who replies.</li>
       </ul>
-      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
-        If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
-      </p>`,
+      `,
   });
   await dispatchEmail({
     category: "verification",
@@ -950,9 +948,7 @@ export async function sendTraderRevalidationDueEmail(opts: {
         <li>Re-confirm your details, or upload a fresh document if anything has expired.</li>
         <li>If you do not re-confirm within ${opts.graceDays} days, your profile will be temporarily hidden from search until you do.</li>
       </ul>
-      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
-        If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
-      </p>`,
+      `,
   });
   await dispatchEmail({
     category: "notifications",
@@ -984,9 +980,7 @@ export async function sendTraderRevalidationOverdueEmail(opts: {
           Open the app, re-confirm your key documents are still valid, and your profile will be visible to customers again straight away.
         </p>
       </div>
-      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
-        If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
-      </p>`,
+      `,
   });
   await dispatchEmail({
     category: "notifications",
@@ -1125,7 +1119,7 @@ export async function sendTraderRejectedEmail(opts: {
         <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
       </div>
       <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0 0 12px;">
-        If you believe this decision is incorrect, or if you would like to update your information and re-apply, please reply to this email or contact us at support@mylocaltrade.co.uk.
+        You can update your information and re-apply at any time.
       </p>
       <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
         Your account remains active so you can update your details and apply again in the future.
@@ -1165,9 +1159,7 @@ export async function sendTraderMoreInfoRequestedEmail(opts: {
         <li>Update or upload the requested information</li>
         <li>Once submitted, our team will review your application again</li>
       </ul>
-      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
-        If you have any questions, reply to this email or contact us at support@mylocaltrade.co.uk.
-      </p>`,
+      `,
   });
   await dispatchEmail({
     category: "verification",
@@ -1197,9 +1189,7 @@ export async function sendTraderSuspendedEmail(opts: {
         <p style="color: #EF4444; font-size: 13px; font-weight: 600; margin: 0 0 6px;">Reason</p>
         <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
       </div>
-      <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0 0 12px;">
-        If you believe this was done in error, or you would like to discuss reinstatement, please reply to this email or contact us at support@mylocaltrade.co.uk.
-      </p>`,
+      `,
   });
   await dispatchEmail({
     category: "verification",
