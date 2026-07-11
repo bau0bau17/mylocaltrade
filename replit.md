@@ -134,7 +134,7 @@ Utility scripts. Run via `pnpm --filter @workspace/scripts run <script>`.
 ## Pre-launch checklist (recorded, NOT yet implemented)
 
 1. **Separate Twilio Verify Services before enabling trader RCS.** Before enabling the approved trader-only RCS sender on Twilio, create a second, SMS-only Twilio Verify Service for customer phone-change OTPs and route trader vs customer verification through separate service SIDs (backend change: second service SID secret + routing in the shared verification helper). Reason: both flows currently share one Verify Service with `channel: "sms"`, and enabling RCS at service level would upgrade customer OTPs to RCS too.
-2. **Customer legal-version acceptance tracking — only if existing customer accounts remain active at public launch.** Keep it minimal: accepted Terms version, Privacy version and acceptance timestamp on the `users` table (which currently has no legal-version fields), plus a customer-facing re-acceptance notice. Today, only traders have acceptance storage (`trader_profiles`) and a re-acceptance banner.
+2. **Customer legal re-acceptance — DROPPED (11 July 2026, user decision).** The app has not launched publicly; current TestFlight customer accounts are test accounts only, so there are no live customers who need to re-accept updated documents. New customers accept the current Privacy Policy and Terms through the normal registration/account flow. Do NOT add a customer re-acceptance banner, blocking logic, or users-table legal-version fields unless the user explicitly asks again.
 
 Do not change the pending Twilio RCS registration, publish, migrate or start a build until the user asks.
 
