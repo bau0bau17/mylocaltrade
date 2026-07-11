@@ -1410,6 +1410,89 @@ router.post("/admin/traders/:userId/reset-verification", authMiddleware, adminOn
   }
 });
 
+// GET /api/admin/attention-counts — per-section counts of items awaiting admin
+// action, used for the sidebar badges. Each predicate deliberately counts only
+// items an admin can act on right now, which may be a subset of what the
+// section page lists by default (e.g. the account-deletions page also shows
+// ANONYMISED/COMPLETED history, but only REQUESTED and elapsed-retention
+// accounts are actionable).
+router.get("/admin/attention-counts", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const [
+      traders,
+      expiringDocs,
+      reviews,
+      conversationReports,
+      userReports,
+      cancellations,
+      accountDeletions,
+    ] = await Promise.all([
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(traderProfilesTable)
+        .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
+        .where(
+          and(
+            eq(usersTable.role, "trader"),
+            eq(traderProfilesTable.verificationStatus, TRADER_STATUS.UNDER_REVIEW),
+          ),
+        ),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(traderDocumentsTable)
+        .where(
+          and(
+            isNotNull(traderDocumentsTable.expiresAt),
+            lte(traderDocumentsTable.expiresAt, sql`now() + interval '30 days'`),
+            inArray(traderDocumentsTable.status, ["APPROVED", "PENDING_REVIEW", "EXPIRED"]),
+          ),
+        ),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(reviewsTable)
+        .where(inArray(reviewsTable.status, ["PENDING", "FLAGGED"])),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(conversationReportsTable)
+        .where(eq(conversationReportsTable.status, "OPEN")),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(userReportsTable)
+        .where(eq(userReportsTable.status, "OPEN")),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(cancellationRequestsTable)
+        .where(inArray(cancellationRequestsTable.status, ["OPEN", "IN_PROGRESS"])),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(usersTable)
+        .where(
+          or(
+            eq(usersTable.deletionStatus, "REQUESTED"),
+            and(
+              eq(usersTable.deletionStatus, "DISABLED_PENDING_RETENTION"),
+              isNotNull(usersTable.retentionUntil),
+              lte(usersTable.retentionUntil, sql`now()`),
+            ),
+          ),
+        ),
+    ]);
+
+    res.json({
+      traders: traders[0]?.count ?? 0,
+      expiringDocuments: expiringDocs[0]?.count ?? 0,
+      reviews: reviews[0]?.count ?? 0,
+      conversationReports: conversationReports[0]?.count ?? 0,
+      userReports: userReports[0]?.count ?? 0,
+      cancellationRequests: cancellations[0]?.count ?? 0,
+      accountDeletions: accountDeletions[0]?.count ?? 0,
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin attention counts failed");
+    res.status(500).json({ error: "Failed to load attention counts" });
+  }
+});
+
 // GET /api/admin/dashboard — high-level operational summary
 router.get("/admin/dashboard", authMiddleware, adminOnly, async (req, res) => {
   try {

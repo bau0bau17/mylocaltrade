@@ -25,21 +25,33 @@ interface NavItem {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
+  /** Key into the attention-counts response; sections without one never show a badge. */
+  countKey?: keyof AttentionCounts;
+}
+
+interface AttentionCounts {
+  traders: number;
+  expiringDocuments: number;
+  reviews: number;
+  conversationReports: number;
+  userReports: number;
+  cancellationRequests: number;
+  accountDeletions: number;
 }
 
 const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/traders", label: "Traders", icon: Users },
-  { href: "/expiring-documents", label: "Expiring docs", icon: FileWarning },
+  { href: "/traders", label: "Traders", icon: Users, countKey: "traders" },
+  { href: "/expiring-documents", label: "Expiring docs", icon: FileWarning, countKey: "expiringDocuments" },
   { href: "/audit-report", label: "Audit report", icon: ClipboardList },
   { href: "/enquiries", label: "Enquiries", icon: Mail },
-  { href: "/reviews", label: "Reviews", icon: Star },
-  { href: "/conversation-reports", label: "Conversation reports", icon: ShieldAlert },
-  { href: "/user-reports", label: "User reports", icon: Flag },
-  { href: "/cancellation-requests", label: "Cancellations", icon: Ban },
+  { href: "/reviews", label: "Reviews", icon: Star, countKey: "reviews" },
+  { href: "/conversation-reports", label: "Conversation reports", icon: ShieldAlert, countKey: "conversationReports" },
+  { href: "/user-reports", label: "User reports", icon: Flag, countKey: "userReports" },
+  { href: "/cancellation-requests", label: "Cancellations", icon: Ban, countKey: "cancellationRequests" },
   { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
   { href: "/promo-codes", label: "Promo codes", icon: Tag },
-  { href: "/account-deletions", label: "Account deletions", icon: Trash2 },
+  { href: "/account-deletions", label: "Account deletions", icon: Trash2, countKey: "accountDeletions" },
 ];
 
 function isActive(itemHref: string, location: string): boolean {
@@ -51,16 +63,15 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
 
-  const { data: pendingReviews } = useQuery({
-    queryKey: ["admin", "reviews", "pending-count"],
-    queryFn: () =>
-      api<{ reviews: Array<{ id: number }> }>("/api/admin/reviews", {
-        query: { status: "PENDING" },
-      }),
-    refetchInterval: 60_000,
+  const { data: counts } = useQuery({
+    queryKey: ["admin", "attention-counts"],
+    queryFn: () => api<AttentionCounts>("/api/admin/attention-counts"),
+    refetchInterval: 30_000,
     enabled: !!user,
   });
-  const pendingCount = pendingReviews?.reviews.length ?? 0;
+
+  const badgeFor = (item: NavItem): number =>
+    item.countKey && counts ? counts[item.countKey] ?? 0 : 0;
 
   return (
     <div className="flex min-h-screen w-full bg-secondary/30">
@@ -91,12 +102,12 @@ export function AdminLayout({ children }: { children: ReactNode }) {
               >
                 <Icon className="w-4 h-4" />
                 <span className="flex-1">{item.label}</span>
-                {item.href === "/reviews" && pendingCount > 0 && (
+                {badgeFor(item) > 0 && (
                   <span
                     className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground"
-                    data-testid="badge-pending-reviews"
+                    data-testid={`badge-attention${item.href.replace(/\//g, "-")}`}
                   >
-                    {pendingCount}
+                    {badgeFor(item) > 99 ? "99+" : badgeFor(item)}
                   </span>
                 )}
               </Link>
@@ -142,6 +153,15 @@ export function AdminLayout({ children }: { children: ReactNode }) {
               >
                 <Icon className="w-3.5 h-3.5" />
                 {item.label}
+                {badgeFor(item) > 0 && (
+                  <span
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                      active ? "bg-primary-foreground text-primary" : "bg-primary text-primary-foreground"
+                    }`}
+                  >
+                    {badgeFor(item) > 99 ? "99+" : badgeFor(item)}
+                  </span>
+                )}
               </Link>
             );
           })}
