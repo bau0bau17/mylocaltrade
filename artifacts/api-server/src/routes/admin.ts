@@ -2781,7 +2781,11 @@ router.post(
       }
       const { userId: adminId } = req as AuthenticatedRequest;
       const [user] = await db
-        .select({ deletionStatus: usersTable.deletionStatus })
+        .select({
+          deletionStatus: usersTable.deletionStatus,
+          email: usersTable.email,
+          role: usersTable.role,
+        })
         .from(usersTable)
         .where(eq(usersTable.id, userId))
         .limit(1);
@@ -2790,29 +2794,47 @@ router.post(
         return;
       }
       const now = new Date();
-      // Atomic transition guard: COMPLETED is terminal — block re-completing.
-      const [updated] = await db
-        .update(usersTable)
-        .set({
-          deletionStatus: "COMPLETED",
-          deletionProcessedAt: now,
-          deletedAt: now,
-          isActive: false,
-          processedByAdminId: adminId,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(usersTable.id, userId),
-            inArray(usersTable.deletionStatus, [
-              "REQUESTED",
-              "DISABLED_PENDING_RETENTION",
-              "ANONYMISED",
-            ]),
-          ),
-        )
-        .returning({ id: usersTable.id });
-      if (!updated) {
+      // Completion permanently removes the personal email from the row so
+      // the address can be re-used for a fresh registration. Audit rows,
+      // reviews and conversations keep their user-id references intact.
+      // Anonymised accounts already carry a placeholder — leave it stable.
+      const alreadyPlaceholder = user.email.endsWith(".invalid");
+      const releasedEmail = `deleted-user-${userId}@deleted.mylocaltrade.invalid`;
+      let completed = false;
+      await db.transaction(async (tx) => {
+        // Atomic transition guard: COMPLETED is terminal — block re-completing.
+        const [updated] = await tx
+          .update(usersTable)
+          .set({
+            deletionStatus: "COMPLETED",
+            deletionProcessedAt: now,
+            deletedAt: now,
+            isActive: false,
+            processedByAdminId: adminId,
+            updatedAt: now,
+            ...(alreadyPlaceholder ? {} : { email: releasedEmail }),
+          })
+          .where(
+            and(
+              eq(usersTable.id, userId),
+              inArray(usersTable.deletionStatus, [
+                "REQUESTED",
+                "DISABLED_PENDING_RETENTION",
+                "ANONYMISED",
+              ]),
+            ),
+          )
+          .returning({ id: usersTable.id });
+        if (!updated) return;
+        completed = true;
+        if (!alreadyPlaceholder && user.role === "trader") {
+          await tx
+            .update(traderProfilesTable)
+            .set({ email: releasedEmail, updatedAt: now })
+            .where(eq(traderProfilesTable.userId, userId));
+        }
+      });
+      if (!completed) {
         res.status(409).json({
           error: "Account is no longer in a state where it can be completed.",
           code: "INVALID_TRANSITION",
@@ -2823,7 +2845,7 @@ router.post(
       void logAudit({
         userId,
         action: "ACCOUNT_DELETION_COMPLETED",
-        details: { adminId },
+        details: { adminId, emailReleased: !alreadyPlaceholder },
       });
       res.json({ ok: true, deletionStatus: "COMPLETED" });
     } catch (error) {

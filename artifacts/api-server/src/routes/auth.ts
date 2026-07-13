@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import bcryptjs from "bcryptjs";
 import { db } from "@workspace/db";
 import { usersTable, traderProfilesTable, subscriptionsTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import {
   RegisterCustomerBody,
   RegisterTraderBody,
@@ -152,10 +152,49 @@ function pickReopenContext(
 }
 
 /**
+ * Decide whether an email can be (re)used for a fresh registration, looking
+ * at EVERY case-variant row that matches (legacy data may hold the same email
+ * more than once with different casing). The email is blocked if ANY matching
+ * row is a normal in-use account; otherwise every prior deletion-lifecycle
+ * row is reopened (its email released) so the new registration can claim it.
+ */
+function planEmailReuse(existingRows: User[]):
+  | { blocked: true }
+  | {
+      blocked: false;
+      reopens: { priorUserId: number; priorRole: string; priorStatus: string | null }[];
+    } {
+  const reopens: { priorUserId: number; priorRole: string; priorStatus: string | null }[] = [];
+  for (const row of existingRows) {
+    const ctx = pickReopenContext(row);
+    if (!ctx) return { blocked: true };
+    reopens.push(ctx);
+  }
+  return { blocked: false, reopens };
+}
+
+/**
+ * Thrown when a prior account that was reopenable at check time is no longer
+ * in the deletion lifecycle at write time (e.g. the deletion was cancelled
+ * concurrently). Registration must abort and report the email as taken.
+ */
+class EmailReuseConflictError extends Error {
+  constructor() {
+    super("Prior account left the deletion lifecycle during registration");
+    this.name = "EmailReuseConflictError";
+  }
+}
+
+/**
  * Frees up the email on a prior deletion-lifecycle user so that a new
  * registration can claim it. The prior row is preserved (audit, reviews,
  * conversations and FK references stay intact) — only the unique email
  * column and the trader_profiles mirror are rewritten to a placeholder.
+ *
+ * The lifecycle state is re-validated in the UPDATE itself so a concurrent
+ * deletion-cancel between the eligibility check and this write can never
+ * strip the email from a re-activated account (TOCTOU guard). If the row no
+ * longer qualifies, EmailReuseConflictError aborts the whole transaction.
  */
 async function releasePriorEmail(
   // The drizzle tx type is intentionally inferred from db.transaction; using
@@ -166,16 +205,37 @@ async function releasePriorEmail(
   priorRole: string,
 ): Promise<void> {
   const released = `released-${priorUserId}-${Date.now()}@released.mylocaltrade.invalid`;
-  await tx
+  const updated = await tx
     .update(usersTable)
     .set({ email: released, updatedAt: new Date() })
-    .where(eq(usersTable.id, priorUserId));
+    .where(
+      and(
+        eq(usersTable.id, priorUserId),
+        or(
+          isNotNull(usersTable.deletionStatus),
+          isNotNull(usersTable.deletedAt),
+        ),
+      ),
+    )
+    .returning({ id: usersTable.id });
+  if (updated.length === 0) {
+    throw new EmailReuseConflictError();
+  }
   if (priorRole === "trader") {
     await tx
       .update(traderProfilesTable)
       .set({ email: released, updatedAt: new Date() })
       .where(eq(traderProfilesTable.userId, priorUserId));
   }
+}
+
+/** Postgres unique-violation (e.g. two concurrent registrations racing on the
+ * same email). Drizzle surfaces the pg error directly or as `cause`. */
+function isUniqueViolation(error: unknown): boolean {
+  const code =
+    (error as { code?: string } | null)?.code ??
+    ((error as { cause?: { code?: string } } | null)?.cause?.code);
+  return code === "23505";
 }
 
 const router: IRouter = Router();
@@ -213,13 +273,12 @@ router.post("/auth/register/customer", async (req, res) => {
   try {
     const body = RegisterCustomerBody.parse(req.body);
 
-    const [existing] = await db
+    const existingRows = await db
       .select()
       .from(usersTable)
-      .where(emailEquals(body.email))
-      .limit(1);
-    const reopen = pickReopenContext(existing);
-    if (existing && !reopen) {
+      .where(emailEquals(body.email));
+    const reuse = planEmailReuse(existingRows);
+    if (reuse.blocked) {
       // Active (non-deleted) account already owns this email.
       res.status(409).json({ error: "An account with this email already exists" });
       return;
@@ -230,7 +289,9 @@ router.post("/auth/register/customer", async (req, res) => {
     const emailOtp = await createEmailOtp();
 
     const user = await db.transaction(async (tx) => {
-      if (reopen) await releasePriorEmail(tx, reopen.priorUserId, reopen.priorRole);
+      for (const reopen of reuse.reopens) {
+        await releasePriorEmail(tx, reopen.priorUserId, reopen.priorRole);
+      }
       const [created] = await tx.insert(usersTable).values({
         // Stored lowercased so new accounts are already canonical; lookups
         // remain case-insensitive (emailEquals) for legacy mixed-case rows.
@@ -250,7 +311,7 @@ router.post("/auth/register/customer", async (req, res) => {
       return created;
     });
 
-    if (reopen) {
+    for (const reopen of reuse.reopens) {
       void logAudit({
         userId: reopen.priorUserId,
         action: "ACCOUNT_REOPENED",
@@ -278,6 +339,10 @@ router.post("/auth/register/customer", async (req, res) => {
       res.status(400).json({ error: "Invalid input" });
       return;
     }
+    if (error instanceof EmailReuseConflictError || isUniqueViolation(error)) {
+      res.status(409).json({ error: "An account with this email already exists" });
+      return;
+    }
     req.log.error({ err: error }, "Customer registration failed");
     res.status(500).json({ error: "Registration failed" });
   }
@@ -300,13 +365,12 @@ router.post("/auth/register/trader", async (req, res) => {
       return;
     }
 
-    const [existing] = await db
+    const existingRows = await db
       .select()
       .from(usersTable)
-      .where(emailEquals(body.email))
-      .limit(1);
-    const reopen = pickReopenContext(existing);
-    if (existing && !reopen) {
+      .where(emailEquals(body.email));
+    const reuse = planEmailReuse(existingRows);
+    if (reuse.blocked) {
       res.status(409).json({ error: "An account with this email already exists" });
       return;
     }
@@ -395,7 +459,9 @@ router.post("/auth/register/trader", async (req, res) => {
     }
 
     const result = await db.transaction(async (tx) => {
-      if (reopen) await releasePriorEmail(tx, reopen.priorUserId, reopen.priorRole);
+      for (const reopen of reuse.reopens) {
+        await releasePriorEmail(tx, reopen.priorUserId, reopen.priorRole);
+      }
       const [user] = await tx.insert(usersTable).values({
         // Stored lowercased so new accounts are already canonical; lookups
         // remain case-insensitive (emailEquals) for legacy mixed-case rows.
@@ -451,7 +517,7 @@ router.post("/auth/register/trader", async (req, res) => {
       },
     });
 
-    if (reopen) {
+    for (const reopen of reuse.reopens) {
       void logAudit({
         userId: reopen.priorUserId,
         action: "ACCOUNT_REOPENED",
@@ -477,6 +543,10 @@ router.post("/auth/register/trader", async (req, res) => {
   } catch (error: unknown) {
     if (error instanceof Error && error.name === "ZodError") {
       res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    if (error instanceof EmailReuseConflictError || isUniqueViolation(error)) {
+      res.status(409).json({ error: "An account with this email already exists" });
       return;
     }
     req.log.error({ err: error }, "Trader registration failed");

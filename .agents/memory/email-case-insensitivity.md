@@ -31,3 +31,9 @@ nondeterministically — login/password-reset could land on the wrong account.
 **How to apply:** any new email lookup (new routes, admin tools, scripts) must
 use the helper or replicate its ordering; duplicate checks at registration are
 case-insensitive so no new duplicates can appear.
+
+**Registration reuse check must scan ALL case-variant rows**, not `limit(1)`:
+block only if any matching row is a normal in-use account; otherwise reopen
+(release the email on) every prior deletion-lifecycle row. A `limit(1)` pick is
+nondeterministic with the legacy duplicate pair and produced a false
+"account already exists" 409 after deletion in prod.
