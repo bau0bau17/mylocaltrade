@@ -20,15 +20,21 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-// Normalize legacy email casing before accepting traffic so registrations
-// can never race the backfill. Errors are logged and swallowed inside, so a
-// failed normalization never blocks startup.
-await normalizeLegacyEmails();
+// No top-level await here: the production bundle is CJS (esbuild), which
+// does not support it. Startup is wrapped in an async function instead.
+async function start(): Promise<void> {
+  // Normalize legacy email casing before accepting traffic so registrations
+  // can never race the backfill. Errors are logged and swallowed inside, so
+  // a failed normalization never blocks startup.
+  await normalizeLegacyEmails();
 
-app.listen(port, () => {
-  logger.info({ port }, "Server listening");
-  startScheduler();
-  void bootstrapAdminFromEnv();
-  void backfillJobReferences();
-  void backfillRequestGroups();
-});
+  app.listen(port, () => {
+    logger.info({ port }, "Server listening");
+    startScheduler();
+    void bootstrapAdminFromEnv();
+    void backfillJobReferences();
+    void backfillRequestGroups();
+  });
+}
+
+void start();
