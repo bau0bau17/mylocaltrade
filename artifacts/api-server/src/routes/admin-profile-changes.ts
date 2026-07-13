@@ -309,7 +309,12 @@ router.post(
             updatedAt: now,
           };
           if (row.field === "phone" && row.proposedValue) {
+            // Same rule as the trader branch: the proposed number passed an
+            // OTP check before submission, so it becomes the customer's
+            // verified number on approval.
             update.phone = toUkE164(row.proposedValue) ?? row.proposedValue;
+            update.phoneVerified = true;
+            update.phoneVerifiedAt = row.phoneOtpVerifiedAt ?? now;
           }
           await tx
             .update(usersTable)

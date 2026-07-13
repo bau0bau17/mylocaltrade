@@ -12,6 +12,7 @@ import {
   useGetCustomerUploadUrl,
 } from '@workspace/api-client-react';
 import { detectContactInfo, contactViolationMessage } from '@/lib/content-filter';
+import { isPhoneVerificationRequired, promptPhoneVerification } from '@/lib/phone-gate';
 import { useAuth } from '@/contexts/AuthContext';
 import { isTopRated, isFastResponder, formatResponseTime } from '@/components/TraderCard';
 import {
@@ -177,6 +178,10 @@ export default function EnquiryScreen() {
         ],
       );
     } catch (error: unknown) {
+      if (isPhoneVerificationRequired(error)) {
+        promptPhoneVerification();
+        return;
+      }
       const message = error instanceof Error ? error.message : 'Could not send enquiry';
       Alert.alert('Error', message);
     }

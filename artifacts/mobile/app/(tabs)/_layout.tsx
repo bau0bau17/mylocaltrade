@@ -52,6 +52,7 @@ const INNER_ROUTES: {
   { name: "trader-dashboard/documents", title: "Documents", parent: "/account" },
   { name: "trader-dashboard/reviews", title: "Reviews", parent: "/account" },
   { name: "trader-dashboard/verify-phone", title: "Verify Phone", parent: "/account" },
+  { name: "verify-phone", title: "Verify Mobile Number", parent: "/account" },
   { name: "change-phone", title: "Change Phone Number", parent: "/account" },
   { name: "personal-details", title: "Personal Details", parent: "/account" },
   { name: "saved-traders", title: "Saved Traders", parent: "/account" },

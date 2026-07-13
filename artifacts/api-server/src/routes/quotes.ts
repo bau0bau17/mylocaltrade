@@ -14,6 +14,7 @@ import { sendPushToUser } from "../lib/push-notifications";
 import { postSystemMessage } from "../lib/system-messages";
 import { ensureHired } from "../lib/hire";
 import { serializeQuote, quoteSummaryLine, formatPence, priceTypeLabel } from "../lib/quotes";
+import { customerPhoneVerified, sendPhoneVerificationRequired } from "../lib/customer-phone-gate";
 
 const router: IRouter = Router();
 
@@ -347,6 +348,13 @@ router.post("/quotes/:id/accept", authMiddleware, async (req, res) => {
     const closedReason = conversationClosedReason(row.conv);
     if (closedReason) {
       res.status(409).json({ error: closedReason });
+      return;
+    }
+
+    // Contact gate: accepting a quote (hiring) requires an SMS-verified
+    // mobile, same as sending an enquiry.
+    if (!(await customerPhoneVerified(userId))) {
+      sendPhoneVerificationRequired(res);
       return;
     }
 

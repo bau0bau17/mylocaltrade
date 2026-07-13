@@ -1060,6 +1060,11 @@ router.get("/auth/me", authMiddlewareAllowDeletion, async (req, res) => {
       fullName: user.fullName,
       role: user.role,
       isActive: user.isActive,
+      phone: user.phone ?? null,
+      // Customer phone verification status — drives the "verify your mobile"
+      // gate in the app before contacting traders. Traders' phone
+      // verification lives on trader_profiles, not here.
+      phoneVerified: user.phoneVerified,
       plan: user.plan,
       pushNotificationsEnabled: user.pushNotificationsEnabled,
       createdAt: user.createdAt.toISOString(),

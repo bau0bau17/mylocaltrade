@@ -16,7 +16,24 @@ import twilio from "twilio";
 // these must be real account credentials (a trial account is fine for testing;
 // SMS can only be sent to verified numbers on a trial).
 
-export function twilioCreds(): {
+// Which Verify Service a flow belongs to. Pre-launch plan: traders use a
+// Verify Service that may enable RCS; customers use a *separate, SMS-only*
+// Verify Service. Until TWILIO_VERIFY_SERVICE_SID_CUSTOMER is set, the
+// customer flow falls back to the shared service — but always over the SMS
+// channel (RCS is never requested for customers).
+export type VerifyServiceKind = "trader" | "customer";
+
+function serviceSidFor(kind: VerifyServiceKind): string | undefined {
+  if (kind === "customer") {
+    return (
+      process.env.TWILIO_VERIFY_SERVICE_SID_CUSTOMER ||
+      process.env.TWILIO_VERIFY_SERVICE_SID
+    );
+  }
+  return process.env.TWILIO_VERIFY_SERVICE_SID;
+}
+
+export function twilioCreds(kind: VerifyServiceKind = "trader"): {
   accountSid?: string;
   authToken?: string;
   serviceSid?: string;
@@ -24,12 +41,12 @@ export function twilioCreds(): {
   return {
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,
-    serviceSid: process.env.TWILIO_VERIFY_SERVICE_SID,
+    serviceSid: serviceSidFor(kind),
   };
 }
 
-export function isTwilioVerifyConfigured(): boolean {
-  const { accountSid, authToken, serviceSid } = twilioCreds();
+export function isTwilioVerifyConfigured(kind: VerifyServiceKind = "trader"): boolean {
+  const { accountSid, authToken, serviceSid } = twilioCreds(kind);
   return Boolean(accountSid && authToken && serviceSid);
 }
 
@@ -66,10 +83,14 @@ export interface StartVerificationResult {
 
 export async function startPhoneVerification(
   phoneE164: string,
+  kind: VerifyServiceKind = "trader",
 ): Promise<StartVerificationResult> {
   const client = getClient();
   if (!client) return { ok: false };
-  const serviceSid = twilioCreds().serviceSid as string;
+  const serviceSid = twilioCreds(kind).serviceSid as string;
+  // Channel is always "sms" here. If the trader service later enables RCS,
+  // that is a service-level Twilio setting — the customer service must stay
+  // SMS-only, which the split service SIDs above preserve.
   const verification = await client.verify.v2
     .services(serviceSid)
     .verifications.create({ to: phoneE164, channel: "sms" });
@@ -84,10 +105,11 @@ export interface CheckVerificationResult {
 export async function checkPhoneVerification(
   phoneE164: string,
   code: string,
+  kind: VerifyServiceKind = "trader",
 ): Promise<CheckVerificationResult> {
   const client = getClient();
   if (!client) return { approved: false };
-  const serviceSid = twilioCreds().serviceSid as string;
+  const serviceSid = twilioCreds(kind).serviceSid as string;
   try {
     const check = await client.verify.v2
       .services(serviceSid)

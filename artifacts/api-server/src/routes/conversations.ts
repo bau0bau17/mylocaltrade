@@ -24,6 +24,7 @@ import { postSystemMessage } from "../lib/system-messages";
 import { deriveStage } from "../lib/conversation-stage";
 import { ensureHired } from "../lib/hire";
 import { serializeQuote } from "../lib/quotes";
+import { customerPhoneVerified, sendPhoneVerificationRequired } from "../lib/customer-phone-gate";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -730,6 +731,13 @@ router.post("/conversations/:id/accept", authMiddleware, async (req, res) => {
     }
     if (conv.customerCompletedAt) {
       res.status(409).json({ error: "This job has already been completed." });
+      return;
+    }
+
+    // Contact gate: accepting an offer (hiring) requires an SMS-verified
+    // mobile, same as sending an enquiry or accepting a structured quote.
+    if (!(await customerPhoneVerified(userId))) {
+      sendPhoneVerificationRequired(res);
       return;
     }
 

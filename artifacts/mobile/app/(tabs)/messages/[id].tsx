@@ -23,6 +23,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import { confirmAction } from "@/lib/confirm";
+import { isPhoneVerificationRequired, promptPhoneVerification } from "@/lib/phone-gate";
 import {
   useGetConversation,
   useSendConversationMessage,
@@ -367,7 +368,15 @@ export default function ConversationThreadScreen() {
       onConfirm: () =>
         acceptMutation.mutate(
           { id: conversationId },
-          { onError: () => Alert.alert("Error", "Could not accept the offer.") },
+          {
+            onError: (err: unknown) => {
+              if (isPhoneVerificationRequired(err)) {
+                promptPhoneVerification();
+                return;
+              }
+              Alert.alert("Error", "Could not accept the offer.");
+            },
+          },
         ),
     });
   };
@@ -460,6 +469,10 @@ export default function ConversationThreadScreen() {
           { id: currentQuote.id },
           {
             onError: (err: unknown) => {
+              if (isPhoneVerificationRequired(err)) {
+                promptPhoneVerification();
+                return;
+              }
               const msg =
                 err instanceof Error ? err.message : "Could not accept the quote.";
               Alert.alert("Error", msg);

@@ -53,6 +53,18 @@ export const usersTable = pgTable("users", {
   passwordResetOtpExpiresAt: timestamp("password_reset_otp_expires_at"),
   passwordResetOtpAttempts: integer("password_reset_otp_attempts").notNull().default(0),
   passwordResetSentAt: timestamp("password_reset_sent_at"),
+  // Customer phone verification (SMS OTP). Mirrors the trader phone OTP
+  // fields on trader_profiles; traders keep using those. Policy: a customer
+  // must verify a UK mobile by SMS before first contacting a trader
+  // (enquiry / accepting a quote or offer). phoneOtpHash null while a Twilio
+  // Verify check is pending means Twilio owns the code (same convention as
+  // the trader flow).
+  phoneVerified: boolean("phone_verified").notNull().default(false),
+  phoneVerifiedAt: timestamp("phone_verified_at"),
+  phoneOtpHash: text("phone_otp_hash"),
+  phoneOtpExpiresAt: timestamp("phone_otp_expires_at"),
+  phoneOtpAttempts: integer("phone_otp_attempts").notNull().default(0),
+  phoneOtpLastSentAt: timestamp("phone_otp_last_sent_at"),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   plan: varchar("plan", { length: 20 }),

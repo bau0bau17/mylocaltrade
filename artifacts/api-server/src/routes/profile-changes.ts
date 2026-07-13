@@ -96,6 +96,9 @@ router.get("/profile/change-requests", authMiddleware, async (req, res) => {
       currentValues: {
         fullName: user.fullName,
         phone: user.phone ?? null,
+        // Customer phone-verification status (users table). For traders the
+        // authoritative flag lives on trader_profiles instead.
+        phoneVerified: user.role === "customer" ? user.phoneVerified : undefined,
       },
       requests: rows.map(serializeOwnRequest),
     });

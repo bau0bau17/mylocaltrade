@@ -15,6 +15,7 @@ import { scheduleLeadReminderForEnquiry } from "../lib/lead-reminders";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { sendPhoneVerificationRequired } from "../lib/customer-phone-gate";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -101,6 +102,13 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       .from(usersTable)
       .where(eq(usersTable.id, userId))
       .limit(1);
+
+    // Contact gate: a customer must have SMS-verified a UK mobile before
+    // their first enquiry. The app reads `code` and routes to verify-phone.
+    if (!customer?.phoneVerified) {
+      sendPhoneVerificationRequired(res);
+      return;
+    }
 
     // Phase 17: every enquiry from a logged-in customer also opens a
     // conversation thread, atomically. The original enquiry message becomes

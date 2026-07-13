@@ -181,6 +181,7 @@ app.use("/api/auth/forgot-password", resendLimiter);
 app.use("/api/auth/reset-password", authLimiter);
 app.use("/api/trader/phone/send-otp", phoneOtpIpLimiter);
 app.use("/api/profile/phone-change/send-otp", phoneOtpIpLimiter);
+app.use("/api/customer/phone/send-otp", phoneOtpIpLimiter);
 app.use("/api/contact", contactLimiter);
 app.use("/api/enquiries", enquiriesLimiter);
 app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);

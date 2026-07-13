@@ -57,6 +57,7 @@ export default function PersonalDetailsScreen() {
 
   const [fullName, setFullName] = useState(user?.fullName ?? '');
   const [currentPhone, setCurrentPhone] = useState<string | null>(null);
+  const [phoneVerified, setPhoneVerified] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [changeControlActive, setChangeControlActive] = useState(false);
@@ -74,6 +75,11 @@ export default function PersonalDetailsScreen() {
         setRequests(Array.isArray(json.requests) ? json.requests : []);
         if (json.currentValues) {
           setCurrentPhone(json.currentValues.phone ?? null);
+          setPhoneVerified(
+            typeof json.currentValues.phoneVerified === 'boolean'
+              ? json.currentValues.phoneVerified
+              : null,
+          );
           if (typeof json.currentValues.fullName === 'string') {
             setFullName((prev) => (prev ? prev : json.currentValues.fullName));
           }
@@ -191,6 +197,22 @@ export default function PersonalDetailsScreen() {
               </Pressable>
             </View>
             <FieldStatus request={phoneRequest} />
+            {phoneVerified === true ? (
+              <View style={styles.verifiedRow}>
+                <Feather name="check-circle" size={13} color={Colors.light.success} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+            ) : phoneVerified === false ? (
+              <View style={styles.verifiedRow}>
+                <Feather name="alert-circle" size={13} color="#B45309" />
+                <Text style={styles.unverifiedText}>
+                  Not verified — required before contacting traders.
+                </Text>
+                <Pressable onPress={() => router.push('/verify-phone')} hitSlop={8}>
+                  <Text style={styles.changeLink}>Verify now</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
 
           <Text style={styles.noticeText}>
@@ -286,6 +308,9 @@ const styles = StyleSheet.create({
   },
   staticText: { fontSize: 15, color: Colors.light.text },
   changeLink: { fontSize: 14, fontWeight: '700', color: Colors.light.primary },
+  verifiedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginLeft: 4, flexWrap: 'wrap' },
+  verifiedText: { fontSize: 12, fontWeight: '600', color: Colors.light.success },
+  unverifiedText: { fontSize: 12, color: '#B45309', flexShrink: 1 },
   noticeText: { fontSize: 12, color: Colors.light.textMuted, lineHeight: 17, marginTop: 4 },
   bannerBox: {
     flexDirection: 'row',
