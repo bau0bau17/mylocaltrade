@@ -32,6 +32,15 @@ nondeterministically — login/password-reset could land on the wrong account.
 use the helper or replicate its ordering; duplicate checks at registration are
 case-insensitive so no new duplicates can appear.
 
+**Legacy normalization backfill:** a pre-listen startup backfill (api-server)
+now releases emails on terminally-deleted rows, lowercases mixed-case live
+emails (skipping + WARN-logging live-live collisions for manual resolution),
+and lowercases trader_profiles mirrors. It runs before `app.listen` so
+registrations can't race it, retries transient 23505/40001, and is idempotent.
+After it runs in prod the legacy duplicate pair may be resolved — re-check
+duplicates before assuming the "no unique lower(email) index" rule still
+binds (a remaining live-live collision still blocks it).
+
 **Registration reuse check must scan ALL case-variant rows**, not `limit(1)`:
 block only if any matching row is a normal in-use account; otherwise reopen
 (release the email on) every prior deletion-lifecycle row. A `limit(1)` pick is
