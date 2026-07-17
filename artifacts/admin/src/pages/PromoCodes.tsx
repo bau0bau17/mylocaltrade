@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatDate } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { Tag, ChevronDown, ChevronRight, Plus } from "lucide-react";
 
 interface PromoCode {
@@ -217,7 +217,7 @@ function PromoRow({ code, expanded, onToggle }: { code: PromoCode; expanded: boo
                           <span className="line-through text-muted-foreground">£{r.originalPriceGbp}</span>{" "}
                           <span className="font-semibold">£{r.discountedPriceGbp}</span>
                         </td>
-                        <td className="px-3 py-2">{formatDate(r.redeemedAt)}</td>
+                        <td className="px-3 py-2">{formatDateTime(r.redeemedAt)}</td>
                         <td className="px-3 py-2">
                           <Badge variant="outline" className={remain.expired ? "bg-muted text-muted-foreground border-transparent" : "bg-amber-100 text-amber-900 border-transparent"}>
                             {remain.text}

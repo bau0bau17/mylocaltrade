@@ -421,7 +421,7 @@ export default function TraderDetail({ userId }: Props) {
               </Badge>
             )}
             <span className="text-xs text-muted-foreground">
-              Joined {formatDate(profile.createdAt)}
+              Joined {formatDateTime(profile.createdAt)}
             </span>
           </div>
         </div>
@@ -522,7 +522,7 @@ export default function TraderDetail({ userId }: Props) {
                             : ""
                         }${
                           profile.businessEmailVerifiedAt
-                            ? ` · ${new Date(profile.businessEmailVerifiedAt).toLocaleDateString("en-GB")}`
+                            ? ` · ${formatDateTime(profile.businessEmailVerifiedAt)}`
                             : ""
                         }`
                       : profile.businessEmailVerificationTarget
@@ -786,7 +786,7 @@ export default function TraderDetail({ userId }: Props) {
                             )}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                            {doc.originalFilename} · uploaded {formatDate(doc.createdAt)}
+                            {doc.originalFilename} · uploaded {formatDateTime(doc.createdAt)}
                             {doc.expiresAt && ` · expires ${formatDate(doc.expiresAt)}`}
                           </div>
                           {doc.rejectionReason && (

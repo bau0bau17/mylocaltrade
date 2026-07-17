@@ -23,7 +23,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AiVerdictBadge, RegisterOverallBadge } from "@/components/CheckBadges";
-import { formatDate } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { Search, ArrowRight } from "lucide-react";
 
 function rowRisk(t: TraderListResponse["traders"][number]): "high" | "medium" | null {
@@ -300,7 +300,7 @@ export default function Traders() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
-                        {formatDate(t.submittedForReviewAt)}
+                        {formatDateTime(t.submittedForReviewAt)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link href={`/traders/${t.userId}`}>

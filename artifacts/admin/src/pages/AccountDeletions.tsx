@@ -20,7 +20,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { formatDate } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { Trash2, ChevronDown, ChevronRight, Search } from "lucide-react";
 
 interface DeletionRow {
@@ -181,7 +181,7 @@ function DeletionRowItem({
           <div className="text-xs text-muted-foreground truncate">{row.email}</div>
         </div>
         <div className="text-xs text-muted-foreground hidden sm:block">
-          {row.deletionRequestedAt ? formatDate(row.deletionRequestedAt) : "—"}
+          {row.deletionRequestedAt ? formatDateTime(row.deletionRequestedAt) : "—"}
         </div>
       </button>
       {expanded && (
@@ -310,12 +310,12 @@ function DeletionDetail({
       <div className="grid sm:grid-cols-2 gap-4">
         <DetailField label="Status" value={u.deletionStatus} />
         <DetailField label="Role" value={u.role} />
-        <DetailField label="Requested at" value={u.deletionRequestedAt ? formatDate(u.deletionRequestedAt) : "—"} />
-        <DetailField label="Disabled at" value={u.accountDisabledAt ? formatDate(u.accountDisabledAt) : "—"} />
-        <DetailField label="Anonymised at" value={u.anonymisedAt ? formatDate(u.anonymisedAt) : "—"} />
-        <DetailField label="Completed at" value={u.deletionProcessedAt ? formatDate(u.deletionProcessedAt) : "—"} />
+        <DetailField label="Requested at" value={u.deletionRequestedAt ? formatDateTime(u.deletionRequestedAt) : "—"} />
+        <DetailField label="Disabled at" value={u.accountDisabledAt ? formatDateTime(u.accountDisabledAt) : "—"} />
+        <DetailField label="Anonymised at" value={u.anonymisedAt ? formatDateTime(u.anonymisedAt) : "—"} />
+        <DetailField label="Completed at" value={u.deletionProcessedAt ? formatDateTime(u.deletionProcessedAt) : "—"} />
         {u.retentionUntil && (
-          <DetailField label="Retention until" value={formatDate(u.retentionUntil)} />
+          <DetailField label="Retention until" value={formatDateTime(u.retentionUntil)} />
         )}
       </div>
 
@@ -469,7 +469,7 @@ function DeletionDetail({
             {data.recentAudit.map((a) => (
               <div key={a.id} className="px-3 py-2 flex items-start gap-2">
                 <span className="font-mono text-[10px] text-muted-foreground shrink-0">
-                  {formatDate(a.createdAt)}
+                  {formatDateTime(a.createdAt)}
                 </span>
                 <span className="font-medium">{a.action}</span>
                 {a.notes ? <span className="text-muted-foreground">— {a.notes}</span> : null}
