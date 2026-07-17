@@ -62,7 +62,12 @@ const server = http.createServer((req, res) => {
   if (pathname === "/open") {
     const raw = url.searchParams.get("c");
     const id = raw && /^[0-9]+$/.test(raw) ? raw : null;
-    const deepLink = id ? `mylocaltrade://messages/${id}` : "mylocaltrade://";
+    // Named in-app targets (allowlisted): /open?t=support → contact form.
+    const target = url.searchParams.get("t");
+    const NAMED_TARGETS = { support: "mylocaltrade://contact-support" };
+    const deepLink = id
+      ? `mylocaltrade://messages/${id}`
+      : (target && NAMED_TARGETS[target]) || "mylocaltrade://";
     const html = openRedirectTemplate.replace(
       /DEEP_LINK_PLACEHOLDER/g,
       deepLink,

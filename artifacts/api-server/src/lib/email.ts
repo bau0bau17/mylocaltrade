@@ -1307,7 +1307,7 @@ export async function sendAccountDeletionReceivedEmail(opts: {
         <strong style="color: #F9FAFB;">Changed your mind?</strong> You can cancel this request from the app's "Delete account" screen for as long as the account is still in the deactivated state.
       </p>
       <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 16px 0 0;">
-        If you did not request this, please contact <a href="mailto:lucian.sabau@serviceproviderltd.co.uk" style="color: #00B4D8;">lucian.sabau@serviceproviderltd.co.uk</a> immediately.
+        If you did not request this, please <a href="${getApiBaseUrl().replace(/\/api$/, "")}/open?t=support" style="color: #00B4D8;">contact us through the app's support form</a> immediately.
       </p>`,
   });
   await dispatchEmail({
