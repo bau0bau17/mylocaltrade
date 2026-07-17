@@ -508,7 +508,7 @@ export async function sendContactEmail(opts: {
   subject: string;
   message: string;
 }): Promise<void> {
-  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
+  const SUPPORT_EMAIL = "contact@serviceproviderltd.co.uk";
   const CONTACT_FROM_EMAIL = "noreply@mylocaltrade.co.uk";
   const replyByDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toUTCString();
   const safeFromName = escapeHtml(opts.fromName);
@@ -998,7 +998,7 @@ export async function sendAdminRevalidationAlertEmail(opts: {
   /** "due" when first prompted, "overdue" when the grace period lapsed. */
   stage: "due" | "overdue";
 }): Promise<void> {
-  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
+  const SUPPORT_EMAIL = "contact@serviceproviderltd.co.uk";
   const safeEmail = escapeHtml(opts.traderEmail);
   const safeName = escapeHtml(opts.traderName);
   const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : "(none)";
@@ -1046,7 +1046,7 @@ export async function sendAdminCancellationRequestEmail(opts: {
   withinCoolingOff: boolean;
   note?: string | null;
 }): Promise<void> {
-  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
+  const SUPPORT_EMAIL = "contact@serviceproviderltd.co.uk";
   const safeEmail = escapeHtml(opts.traderEmail);
   const safeName = escapeHtml(opts.traderName);
   const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : "(none)";
@@ -1351,7 +1351,7 @@ export async function sendAdminAccountDeletionAlertEmail(opts: {
   userRole: string;
   reason?: string | null;
 }): Promise<void> {
-  const SUPPORT_EMAIL = "lucian.sabau@serviceproviderltd.co.uk";
+  const SUPPORT_EMAIL = "contact@serviceproviderltd.co.uk";
   const safeEmail = escapeHtml(opts.userEmail);
   const safeName = escapeHtml(opts.userFullName);
   const safeRole = escapeHtml(opts.userRole);
