@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
@@ -21,7 +21,9 @@ export default function ResetPasswordScreen() {
   const [email, setEmail] = useState(emailParam ?? '');
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [resendIn, setResendIn] = useState(0);
@@ -29,6 +31,18 @@ export default function ResetPasswordScreen() {
   const [info, setInfo] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      setEmail(emailParam ?? '');
+      setCode('');
+      setPassword('');
+      setConfirmPassword('');
+      setError(null);
+      setInfo(null);
+    }, [emailParam])
+  );
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -54,6 +68,10 @@ export default function ResetPasswordScreen() {
     }
     if (password.length < MIN_PASSWORD) {
       setError(`Your new password must be at least ${MIN_PASSWORD} characters.`);
+      return;
+    }
+    if (confirmPassword !== password) {
+      setError('The passwords do not match. Please check and try again.');
       return;
     }
     setSubmitting(true);
@@ -174,11 +192,32 @@ export default function ResetPasswordScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
+              returnKeyType="next"
+              onSubmitEditing={() => confirmPasswordRef.current?.focus()}
             />
             <Pressable onPress={() => setShowPassword((s) => !s)} hitSlop={8}>
               <Feather name={showPassword ? 'eye-off' : 'eye'} size={16} color={Colors.light.textMuted} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Confirm new password</Text>
+          <View style={styles.inputWrap}>
+            <Feather name="lock" size={16} color={Colors.light.textMuted} />
+            <TextInput
+              ref={confirmPasswordRef}
+              style={styles.input}
+              placeholder="Re-enter your new password"
+              placeholderTextColor={Colors.light.textMuted}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showConfirmPassword}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+            />
+            <Pressable onPress={() => setShowConfirmPassword((s) => !s)} hitSlop={8}>
+              <Feather name={showConfirmPassword ? 'eye-off' : 'eye'} size={16} color={Colors.light.textMuted} />
             </Pressable>
           </View>
         </View>
