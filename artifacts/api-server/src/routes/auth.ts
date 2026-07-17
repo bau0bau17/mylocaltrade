@@ -609,6 +609,7 @@ router.post("/auth/login", async (req, res) => {
         email: user.email,
         fullName: user.fullName,
         role: user.role,
+        isSuperAdmin: user.isSuperAdmin,
         isActive: user.isActive,
         plan: user.plan,
         pushNotificationsEnabled: user.pushNotificationsEnabled,
@@ -1059,6 +1060,7 @@ router.get("/auth/me", authMiddlewareAllowDeletion, async (req, res) => {
       email: user.email,
       fullName: user.fullName,
       role: user.role,
+      isSuperAdmin: user.isSuperAdmin,
       isActive: user.isActive,
       phone: user.phone ?? null,
       // Customer phone verification status — drives the "verify your mobile"

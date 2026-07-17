@@ -100,11 +100,13 @@ async function loadActiveUser(
 ): Promise<{
   id: number;
   role: "customer" | "trader" | "admin";
+  isSuperAdmin: boolean;
 } | null> {
   const [user] = await db
     .select({
       id: usersTable.id,
       role: usersTable.role,
+      isSuperAdmin: usersTable.isSuperAdmin,
       isActive: usersTable.isActive,
       tokenVersion: usersTable.tokenVersion,
       deletedAt: usersTable.deletedAt,
@@ -123,7 +125,11 @@ async function loadActiveUser(
   if (user.role === "admin" && !user.isActive) return null;
   if (user.tokenVersion !== tokenVersion) return null;
 
-  return { id: user.id, role: user.role as "customer" | "trader" | "admin" };
+  return {
+    id: user.id,
+    role: user.role as "customer" | "trader" | "admin",
+    isSuperAdmin: user.isSuperAdmin,
+  };
 }
 
 export async function authMiddleware(
@@ -154,6 +160,7 @@ export async function authMiddleware(
     }
     (req as AuthenticatedRequest).userId = user.id;
     (req as AuthenticatedRequest).userRole = user.role;
+    (req as AuthenticatedRequest).isSuperAdmin = user.isSuperAdmin;
     next();
   } catch (err) {
     req.log?.error({ err }, "authMiddleware account lookup failed");
@@ -193,6 +200,7 @@ export async function authMiddlewareAllowDeletion(
       .select({
         id: usersTable.id,
         role: usersTable.role,
+        isSuperAdmin: usersTable.isSuperAdmin,
         isActive: usersTable.isActive,
         tokenVersion: usersTable.tokenVersion,
         deletedAt: usersTable.deletedAt,
@@ -227,6 +235,7 @@ export async function authMiddlewareAllowDeletion(
       | "customer"
       | "trader"
       | "admin";
+    (req as AuthenticatedRequest).isSuperAdmin = user.isSuperAdmin;
     next();
   } catch (err) {
     req.log?.error({ err }, "authMiddlewareAllowDeletion lookup failed");
@@ -237,6 +246,20 @@ export async function authMiddlewareAllowDeletion(
 export function adminOnly(req: Request, res: Response, next: NextFunction): void {
   if ((req as AuthenticatedRequest).userRole !== "admin") {
     res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  next();
+}
+
+/**
+ * Restricts a route to super admins. Must be used AFTER authMiddleware
+ * (which sets isSuperAdmin from the database on every request, so a
+ * revoked super admin loses access immediately).
+ */
+export function superAdminOnly(req: Request, res: Response, next: NextFunction): void {
+  const r = req as AuthenticatedRequest;
+  if (r.userRole !== "admin" || r.isSuperAdmin !== true) {
+    res.status(403).json({ error: "Super admin access required" });
     return;
   }
   next();
@@ -275,6 +298,29 @@ export async function revokeUserSessions(
     .update(usersTable)
     .set({ tokenVersion: sql`${usersTable.tokenVersion} + 1` })
     .where(eq(usersTable.id, userId));
+}
+
+// Resolve a single user by email, tolerating legacy rows where the same email
+// exists more than once with different casing (created before duplicate checks
+// became case-insensitive). Deterministic preference order:
+//   1. exact casing as typed,
+//   2. the canonical all-lowercase row,
+//   3. oldest account.
+// Any privilege-changing flow (admin promote, bootstrap) MUST use this rather
+// than a bare lower(email) lookup, or it can target the wrong account.
+export async function findUserByEmail(email: string) {
+  const typed = email.trim();
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(sql`lower(${usersTable.email}) = ${typed.toLowerCase()}`)
+    .orderBy(
+      sql`(${usersTable.email} = ${typed}) DESC`,
+      sql`(${usersTable.email} = lower(${usersTable.email})) DESC`,
+      usersTable.id,
+    )
+    .limit(1);
+  return user;
 }
 
 export async function optionalAuth(

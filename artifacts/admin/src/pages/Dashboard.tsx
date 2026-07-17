@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/StatusBadge";
 import { relativeTime } from "@/lib/format";
+import { useAuth } from "@/lib/auth";
 import { Users, FileWarning, Mail, ClipboardList, ShieldAlert } from "lucide-react";
 
 // Mirror the Traders page filter list exactly so every status a reviewer can
@@ -15,6 +16,7 @@ import { Users, FileWarning, Mail, ClipboardList, ShieldAlert } from "lucide-rea
 const HIGHLIGHT_STATUSES = REVIEW_FILTER_STATUSES;
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "dashboard"],
     queryFn: () => api<DashboardSummary>("/api/admin/dashboard"),
@@ -123,6 +125,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
+        {user?.isSuperAdmin && (
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-base">Recent activity</CardTitle>
@@ -149,6 +152,7 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );

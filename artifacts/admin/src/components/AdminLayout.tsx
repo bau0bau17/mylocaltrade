@@ -20,6 +20,7 @@ import {
   Trash2,
   Ban,
   UserCog,
+  UsersRound,
 } from "lucide-react";
 
 interface NavItem {
@@ -28,6 +29,8 @@ interface NavItem {
   icon: typeof LayoutDashboard;
   /** Key into the attention-counts response; sections without one never show a badge. */
   countKey?: keyof AttentionCounts;
+  /** Only shown to super admins. */
+  superAdminOnly?: boolean;
 }
 
 interface AttentionCounts {
@@ -45,7 +48,7 @@ const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/traders", label: "Traders", icon: Users, countKey: "traders" },
   { href: "/expiring-documents", label: "Expiring docs", icon: FileWarning, countKey: "expiringDocuments" },
-  { href: "/audit-report", label: "Audit report", icon: ClipboardList },
+  { href: "/audit-report", label: "Audit report", icon: ClipboardList, superAdminOnly: true },
   { href: "/enquiries", label: "Enquiries", icon: Mail },
   { href: "/reviews", label: "Reviews", icon: Star, countKey: "reviews" },
   { href: "/conversation-reports", label: "Conversation reports", icon: ShieldAlert, countKey: "conversationReports" },
@@ -55,6 +58,7 @@ const NAV: NavItem[] = [
   { href: "/promo-codes", label: "Promo codes", icon: Tag },
   { href: "/account-deletions", label: "Account deletions", icon: Trash2, countKey: "accountDeletions" },
   { href: "/profile-change-requests", label: "Profile changes", icon: UserCog, countKey: "profileChangeRequests" },
+  { href: "/team", label: "Admin team", icon: UsersRound, superAdminOnly: true },
 ];
 
 function isActive(itemHref: string, location: string): boolean {
@@ -76,6 +80,8 @@ export function AdminLayout({ children }: { children: ReactNode }) {
   const badgeFor = (item: NavItem): number =>
     item.countKey && counts ? counts[item.countKey] ?? 0 : 0;
 
+  const visibleNav = NAV.filter((item) => !item.superAdminOnly || user?.isSuperAdmin);
+
   return (
     <div className="flex min-h-screen w-full bg-secondary/30">
       <aside className="hidden md:flex md:flex-col w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
@@ -89,7 +95,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav className="flex-1 px-2 py-2 space-y-1">
-          {NAV.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href, location);
             return (
@@ -143,7 +149,7 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           </Button>
         </header>
         <nav className="md:hidden flex overflow-x-auto gap-1 px-2 py-2 bg-card border-b">
-          {NAV.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href, location);
             return (

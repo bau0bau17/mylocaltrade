@@ -21,7 +21,7 @@ import { pushTokensTable } from "@workspace/db/schema";
 import { alias } from "drizzle-orm/pg-core";
 import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, isNull, asc } from "drizzle-orm";
 import { z } from "zod";
-import { authMiddleware, adminOnly, revokeUserSessions } from "../lib/auth";
+import { authMiddleware, adminOnly, superAdminOnly, revokeUserSessions, findUserByEmail } from "../lib/auth";
 import { sendPushToUser } from "../lib/push-notifications";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
@@ -489,7 +489,8 @@ router.get("/admin/traders/:userId", authMiddleware, adminOnly, async (req, res)
       // Effective (read-time) visibility: what the public actually sees now,
       // which can differ from the stored verificationStatus until reconciliation.
       visibility: evaluateProfileVisibility(row.user, row.profile, documents),
-      auditLog,
+      // Audit trails are super-admin only; regular admins get an empty list.
+      auditLog: (req as AuthenticatedRequest).isSuperAdmin ? auditLog : [],
     });
   } catch (error) {
     req.log.error({ err: error }, "Admin get trader failed");
@@ -1152,7 +1153,7 @@ router.post("/admin/traders/:userId/request-info", authMiddleware, adminOnly, as
 });
 
 // Phase 8: GET /api/admin/audit-report?from=&to=&action=&format=json|csv
-router.get("/admin/audit-report", authMiddleware, adminOnly, async (req, res) => {
+router.get("/admin/audit-report", authMiddleware, superAdminOnly, async (req, res) => {
   try {
     const fromRaw = typeof req.query.from === "string" ? req.query.from : undefined;
     const toRaw = typeof req.query.to === "string" ? req.query.to : undefined;
@@ -1673,10 +1674,13 @@ router.get("/admin/dashboard", authMiddleware, adminOnly, async (req, res) => {
       expiringSoonCount: expiringDocs[0]?.count ?? 0,
       enquiriesLast7d: recentEnquiries[0]?.count ?? 0,
       openConversationReports: openReports[0]?.count ?? 0,
-      recentActivity: recentAudit.map((r) => ({
-        ...r,
-        createdAt: r.createdAt.toISOString(),
-      })),
+      // Audit trails are super-admin only; regular admins get an empty list.
+      recentActivity: (req as AuthenticatedRequest).isSuperAdmin
+        ? recentAudit.map((r) => ({
+            ...r,
+            createdAt: r.createdAt.toISOString(),
+          }))
+        : [],
     });
   } catch (error) {
     req.log.error({ err: error }, "Admin dashboard failed");
@@ -2570,10 +2574,13 @@ router.get(
               verificationStatus: profile.verificationStatus,
             }
           : null,
-        recentAudit: audit.map((a) => ({
-          ...a,
-          createdAt: a.createdAt.toISOString(),
-        })),
+        // Audit trails are super-admin only; regular admins get an empty list.
+        recentAudit: (req as AuthenticatedRequest).isSuperAdmin
+          ? audit.map((a) => ({
+              ...a,
+              createdAt: a.createdAt.toISOString(),
+            }))
+          : [],
       });
     } catch (error) {
       req.log.error({ err: error }, "Get account deletion detail failed");
@@ -2893,5 +2900,179 @@ router.post(
     }
   },
 );
+
+// ---------------------------------------------------------------------------
+// Admin team management (super admin only)
+// ---------------------------------------------------------------------------
+
+// GET /api/admin/team — list all admin accounts
+router.get("/admin/team", authMiddleware, superAdminOnly, async (req, res) => {
+  try {
+    const admins = await db
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        fullName: usersTable.fullName,
+        isSuperAdmin: usersTable.isSuperAdmin,
+        isActive: usersTable.isActive,
+        createdAt: usersTable.createdAt,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.role, "admin"))
+      .orderBy(desc(usersTable.isSuperAdmin), asc(usersTable.fullName));
+    res.json({
+      admins: admins.map((a) => ({ ...a, createdAt: a.createdAt.toISOString() })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin team list failed");
+    res.status(500).json({ error: "Failed to load admin team" });
+  }
+});
+
+const PromoteAdminBody = z.object({ email: z.string().email() });
+
+// POST /api/admin/team/promote — promote an existing user to (regular) admin
+router.post("/admin/team/promote", authMiddleware, superAdminOnly, async (req, res) => {
+  try {
+    const body = PromoteAdminBody.parse(req.body);
+    // Deterministic resolver: legacy data contains case-variant duplicate
+    // emails, so a bare lower(email) lookup could grant admin to the wrong row.
+    const user = await findUserByEmail(body.email);
+    if (!user || user.deletedAt || user.deletionStatus !== null) {
+      res.status(404).json({ error: "No active account found with that email address" });
+      return;
+    }
+    if (user.role === "admin") {
+      res.status(409).json({ error: "That account is already an admin" });
+      return;
+    }
+    if (user.role === "trader") {
+      // Traders have a public marketplace profile; converting one to staff
+      // would orphan their listing. Keep staff and trader accounts separate.
+      res.status(409).json({
+        error: "Trader accounts cannot be made admins. Ask them to register a separate account.",
+      });
+      return;
+    }
+    if (!user.emailVerified || !user.isActive) {
+      res.status(409).json({ error: "The account must be active and email-verified first" });
+      return;
+    }
+    await db
+      .update(usersTable)
+      .set({ role: "admin", isSuperAdmin: false, updatedAt: new Date() })
+      .where(eq(usersTable.id, user.id));
+    // Their existing customer token still carries role "customer"; revoke so
+    // they sign in again and receive an admin token.
+    await revokeUserSessions(user.id);
+    req.log.info(
+      { event: "admin_team", by: (req as AuthenticatedRequest).userId, target: user.id, action: "promoted" },
+      "Admin team: user promoted to admin",
+    );
+    res.json({ ok: true });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Enter a valid email address" });
+      return;
+    }
+    req.log.error({ err: error }, "Admin promote failed");
+    res.status(500).json({ error: "Failed to promote user" });
+  }
+});
+
+const TeamActionParams = z.object({ userId: z.coerce.number().int().positive() });
+
+async function loadTargetAdmin(userId: number) {
+  const [target] = await db
+    .select({
+      id: usersTable.id,
+      role: usersTable.role,
+      isSuperAdmin: usersTable.isSuperAdmin,
+      isActive: usersTable.isActive,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  return target ?? null;
+}
+
+// POST /api/admin/team/:userId/demote — remove admin access (back to customer)
+router.post("/admin/team/:userId/demote", authMiddleware, superAdminOnly, async (req, res) => {
+  try {
+    const { userId } = TeamActionParams.parse(req.params);
+    const requesterId = (req as AuthenticatedRequest).userId;
+    if (userId === requesterId) {
+      res.status(400).json({ error: "You cannot remove your own admin access" });
+      return;
+    }
+    const target = await loadTargetAdmin(userId);
+    if (!target || target.role !== "admin") {
+      res.status(404).json({ error: "Admin account not found" });
+      return;
+    }
+    if (target.isSuperAdmin) {
+      res.status(403).json({ error: "Super admin accounts cannot be demoted from the console" });
+      return;
+    }
+    await db
+      .update(usersTable)
+      .set({ role: "customer", isSuperAdmin: false, updatedAt: new Date() })
+      .where(eq(usersTable.id, userId));
+    await revokeUserSessions(userId);
+    req.log.info(
+      { event: "admin_team", by: requesterId, target: userId, action: "demoted" },
+      "Admin team: admin demoted to customer",
+    );
+    res.json({ ok: true });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid request" });
+      return;
+    }
+    req.log.error({ err: error }, "Admin demote failed");
+    res.status(500).json({ error: "Failed to remove admin access" });
+  }
+});
+
+const TeamActiveBody = z.object({ isActive: z.boolean() });
+
+// POST /api/admin/team/:userId/active — suspend or reactivate an admin account
+router.post("/admin/team/:userId/active", authMiddleware, superAdminOnly, async (req, res) => {
+  try {
+    const { userId } = TeamActionParams.parse(req.params);
+    const { isActive } = TeamActiveBody.parse(req.body);
+    const requesterId = (req as AuthenticatedRequest).userId;
+    if (userId === requesterId) {
+      res.status(400).json({ error: "You cannot suspend your own account" });
+      return;
+    }
+    const target = await loadTargetAdmin(userId);
+    if (!target || target.role !== "admin") {
+      res.status(404).json({ error: "Admin account not found" });
+      return;
+    }
+    if (target.isSuperAdmin) {
+      res.status(403).json({ error: "Super admin accounts cannot be suspended from the console" });
+      return;
+    }
+    await db
+      .update(usersTable)
+      .set({ isActive, updatedAt: new Date() })
+      .where(eq(usersTable.id, userId));
+    if (!isActive) await revokeUserSessions(userId);
+    req.log.info(
+      { event: "admin_team", by: requesterId, target: userId, action: isActive ? "reactivated" : "suspended" },
+      "Admin team: admin active flag changed",
+    );
+    res.json({ ok: true });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid request" });
+      return;
+    }
+    req.log.error({ err: error }, "Admin active toggle failed");
+    res.status(500).json({ error: "Failed to update admin account" });
+  }
+});
 
 export default router;

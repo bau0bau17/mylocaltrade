@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatDateTime } from "@/lib/format";
 import { Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 import {
   Select,
   SelectContent,
@@ -69,6 +70,7 @@ function isoDateOnly(value: string): string {
 
 export default function AuditReportPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const today = new Date();
   const monthAgo = new Date(Date.now() - 30 * 86400000);
   const [from, setFrom] = useState(monthAgo.toISOString().slice(0, 10));
@@ -86,10 +88,23 @@ export default function AuditReportPage() {
     [from, to, action],
   );
 
+  const isSuperAdmin = !!user?.isSuperAdmin;
+
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ["admin", "audit-report", queryParams],
     queryFn: () => api<AuditReport>("/api/admin/audit-report", { query: queryParams }),
+    enabled: isSuperAdmin,
   });
+
+  if (!isSuperAdmin) {
+    return (
+      <Alert>
+        <AlertDescription>
+          The audit report is only available to super admin accounts.
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   async function handleExportCsv() {
     try {

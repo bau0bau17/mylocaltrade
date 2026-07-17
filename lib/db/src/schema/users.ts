@@ -36,6 +36,10 @@ export const usersTable = pgTable("users", {
   fullName: varchar("full_name", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 50 }),
   role: varchar("role", { length: 20 }).notNull().default("customer"),
+  // Admin tier: super admins see audit logs and manage the admin team.
+  // Regular admins ("normal users" in the console) handle day-to-day
+  // verification/moderation but cannot view audit trails or manage staff.
+  isSuperAdmin: boolean("is_super_admin").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   emailVerified: boolean("email_verified").notNull().default(false),
   emailVerificationToken: text("email_verification_token"),

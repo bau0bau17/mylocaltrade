@@ -21,6 +21,7 @@ import Subscriptions from "@/pages/Subscriptions";
 import PromoCodes from "@/pages/PromoCodes";
 import AccountDeletions from "@/pages/AccountDeletions";
 import ProfileChangeRequestsPage from "@/pages/ProfileChangeRequests";
+import TeamPage from "@/pages/Team";
 import NotFound from "@/pages/not-found";
 
 const BASE_PATH = (import.meta.env.BASE_URL || "/").replace(/\/$/, "") || "/";
@@ -46,6 +47,7 @@ function ProtectedRoutes() {
           <Route path="/promo-codes" component={PromoCodes} />
           <Route path="/account-deletions" component={AccountDeletions} />
           <Route path="/profile-change-requests" component={ProfileChangeRequestsPage} />
+          <Route path="/team" component={TeamPage} />
           <Route component={NotFound} />
         </Switch>
       </AdminLayout>

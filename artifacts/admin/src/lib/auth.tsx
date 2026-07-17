@@ -6,6 +6,7 @@ export interface AdminUser {
   email: string;
   fullName: string;
   role: "customer" | "trader" | "admin";
+  isSuperAdmin: boolean;
   isActive: boolean;
   createdAt: string;
 }

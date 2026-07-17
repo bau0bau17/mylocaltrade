@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate, formatDateTime, daysUntil } from "@/lib/format";
+import { useAuth } from "@/lib/auth";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import {
   ArrowLeft,
@@ -121,6 +122,7 @@ const ACTION_LABELS: Record<ActionType, { title: string; description: string; ne
 
 export default function TraderDetail({ userId }: Props) {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const detailKey = ["admin", "trader", userId];
 
@@ -486,9 +488,11 @@ export default function TraderDetail({ userId }: Props) {
           <TabsTrigger value="documents" data-testid="tab-documents">
             Documents ({documents.length})
           </TabsTrigger>
-          <TabsTrigger value="audit" data-testid="tab-audit">
-            Audit log ({auditLog.length})
-          </TabsTrigger>
+          {currentUser?.isSuperAdmin && (
+            <TabsTrigger value="audit" data-testid="tab-audit">
+              Audit log ({auditLog.length})
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
@@ -913,6 +917,7 @@ export default function TraderDetail({ userId }: Props) {
           </Card>
         </TabsContent>
 
+        {currentUser?.isSuperAdmin && (
         <TabsContent value="audit" className="mt-4">
           <Card>
             <CardHeader>
@@ -957,6 +962,7 @@ export default function TraderDetail({ userId }: Props) {
             </CardContent>
           </Card>
         </TabsContent>
+        )}
       </Tabs>
 
       <Dialog open={!!actionDialog?.open} onOpenChange={(o) => !o && setActionDialog(null)}>

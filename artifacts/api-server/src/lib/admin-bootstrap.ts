@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { logger } from "./logger";
+import { findUserByEmail } from "./auth";
 
 /**
  * One-time, secret-driven admin bootstrap.
@@ -27,11 +28,9 @@ export async function bootstrapAdminFromEnv(): Promise<void> {
   if (!email) return; // Disabled: secret not set.
 
   try {
-    const [user] = await db
-      .select()
-      .from(usersTable)
-      .where(sql`lower(${usersTable.email}) = ${email}`)
-      .limit(1);
+    // Deterministic resolver: legacy data contains case-variant duplicate
+    // emails; a bare lower(email) lookup could super-admin the wrong row.
+    const user = await findUserByEmail(email);
 
     if (!user) {
       logger.warn(
@@ -42,9 +41,22 @@ export async function bootstrapAdminFromEnv(): Promise<void> {
     }
 
     if (user.role === "admin") {
+      // The bootstrap account is the platform owner: make sure it is always
+      // a super admin (covers accounts promoted before the tier existed).
+      if (!user.isSuperAdmin) {
+        await db
+          .update(usersTable)
+          .set({ isSuperAdmin: true, updatedAt: new Date() })
+          .where(eq(usersTable.id, user.id));
+        logger.info(
+          { event: "admin_bootstrap", userId: user.id, outcome: "upgraded_to_super_admin" },
+          "Admin bootstrap: existing admin upgraded to super admin",
+        );
+        return;
+      }
       logger.info(
         { event: "admin_bootstrap", userId: user.id, outcome: "already_admin" },
-        "Admin bootstrap no-op: target user is already an admin",
+        "Admin bootstrap no-op: target user is already a super admin",
       );
       return;
     }
@@ -74,7 +86,7 @@ export async function bootstrapAdminFromEnv(): Promise<void> {
     // that was deliberately deactivated.
     await db
       .update(usersTable)
-      .set({ role: "admin", updatedAt: new Date() })
+      .set({ role: "admin", isSuperAdmin: true, updatedAt: new Date() })
       .where(eq(usersTable.id, user.id));
 
     logger.info(

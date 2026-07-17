@@ -26,3 +26,20 @@ on isActive rather than force-setting it), single-email, no HTTP surface,
 idempotent, and fully disabled when the secret is unset. Remove the secret after
 the admin exists. Flow: sign up in prod → verify email → set secret → redeploy →
 promoted → log into admin web.
+
+## Two-tier roles (super admin vs standard admin)
+`users.isSuperAdmin` splits staff: super admin = owner (audit report, audit
+logs, team management via /api/admin/team*); standard admin = day-to-day work
+with NO audit visibility. Audit endpoints either 403 (`superAdminOnly`) or
+return `[]` for non-super so shared pages degrade gracefully. Bootstrap email
+is always upgraded to super admin. Team routes: promote by email (customers
+only, never traders), demote/suspend block self + super targets, all revoke
+sessions (tokenVersion bump).
+
+**Why:** owner wanted staff to help with verification/moderation without
+seeing who-did-what audit trails or managing the team.
+
+**How to apply:** any new audit-ish endpoint or admin-metadata surface must be
+gated superAdminOnly (or return empty for non-super) on the server, not just
+hidden in the UI. Privilege-changing email lookups MUST use the deterministic
+findUserByEmail in api-server lib/auth (case-variant duplicate rows exist).
