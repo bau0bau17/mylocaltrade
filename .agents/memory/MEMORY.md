@@ -41,3 +41,4 @@
 - [Profile change requests](profile-change-requests.md) — protected-field edits post-establishment create admin-reviewed requests; field lists live in lib/db schema; phone needs OTP before request; event types are fixed strings.
 - [Quote lifecycle invariants](quotes-one-pending-invariant.md) — one PENDING quote per conversation is a partial unique index (23505→409), expiry is lazy (no cron); digit-heavy test strings trip the contact filter.
 - [Tab-bar-aware bottom padding](tab-bar-aware-bottom-padding.md) — tab bar is absolute; scroll content needs tabBarHeight+insets.bottom padding; exceptions & multi-component hook pitfall inside.
+- [Mobile dead-session logout](mobile-dead-session-logout.md) — 401 with app session token attached ⇒ forceLogout; getMe check on start/foreground; applyToken sets 10s suppression for rotation races.

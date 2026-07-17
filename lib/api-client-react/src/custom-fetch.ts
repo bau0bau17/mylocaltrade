@@ -17,6 +17,7 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _unauthorizedHandler: (() => void) | null = null;
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -39,6 +40,34 @@ export function setBaseUrl(url: string | null): void {
  */
 export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
+}
+
+/**
+ * Register a handler invoked whenever a request that carried a bearer token
+ * (attached via the auth token getter) comes back 401 Unauthorized. This is
+ * the server saying the session is dead — token revoked, account disabled or
+ * deleted — so apps should use it to clear local auth state and sign out.
+ *
+ * The handler fires at most once per second (debounced) so a burst of
+ * parallel 401s does not stack repeated sign-out work. Requests that supply
+ * their own Authorization header (e.g. one-off poll tokens) do NOT trigger it.
+ * Pass `null` to clear the handler.
+ */
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  _unauthorizedHandler = handler;
+}
+
+let _lastUnauthorizedAt = 0;
+function notifyUnauthorized(): void {
+  if (!_unauthorizedHandler) return;
+  const now = Date.now();
+  if (now - _lastUnauthorizedAt < 1000) return;
+  _lastUnauthorizedAt = now;
+  try {
+    _unauthorizedHandler();
+  } catch {
+    // A sign-out handler failure must never mask the original ApiError.
+  }
 }
 
 function isRequest(input: RequestInfo | URL): input is Request {
@@ -348,10 +377,12 @@ export async function customFetch<T = unknown>(
 
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
+  let sessionTokenAttached = false;
   if (_authTokenGetter && !headers.has("authorization")) {
     const token = await _authTokenGetter();
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
+      sessionTokenAttached = true;
     }
   }
 
@@ -361,6 +392,12 @@ export async function customFetch<T = unknown>(
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
+    // Only a 401 on a request that carried the app's own session token means
+    // the session is dead. Requests with explicit Authorization headers
+    // (poll tokens etc.) and unauthenticated requests are excluded.
+    if (response.status === 401 && sessionTokenAttached) {
+      notifyUnauthorized();
+    }
     throw new ApiError(response, errorData, requestInfo);
   }
 

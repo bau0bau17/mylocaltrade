@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   UserProfile,
@@ -7,6 +8,9 @@ import type {
   RegisterTraderRequest,
 } from '@workspace/api-client-react';
 import {
+  setUnauthorizedHandler,
+  getMe as apiGetMe,
+  ApiError,
   login as apiLogin,
   registerCustomer as apiRegisterCustomer,
   registerTrader as apiRegisterTrader,
@@ -92,9 +96,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Mirror of `token` readable from long-lived listeners registered once.
+  const tokenRef = useRef<string | null>(null);
+  tokenRef.current = token;
+  // Token-rotation guard: while a rotation (applyToken) is committing, an
+  // in-flight request that left with the OLD token can come back 401. That
+  // 401 is expected and must not sign this device out.
+  const suppressUnauthorizedUntilRef = useRef(0);
+
+  // Clear local auth state without the server round-trips of a normal
+  // logout. Used when the server has already killed the session (401):
+  // the push-token unregister call would itself 401, so skip it.
+  const forceLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('auth_token');
+      await AsyncStorage.removeItem('auth_user');
+    } catch {
+      // Storage failures must not stop the in-memory sign-out.
+    }
+    setToken(null);
+    setUser(null);
+  };
 
   useEffect(() => {
+    // Any API call that carries our session token and comes back 401 means
+    // the session is dead server-side (account deleted/anonymised by an
+    // admin, sessions revoked, token expired). Sign this device out
+    // immediately instead of leaving a ghost session on screen.
+    setUnauthorizedHandler(() => {
+      if (Date.now() < suppressUnauthorizedUntilRef.current) return;
+      void forceLogout();
+    });
     loadStoredAuth();
+    // Re-validate the session whenever the app comes back to the foreground,
+    // so a device left open on a deleted account signs out without needing
+    // the user to tap anything that fires an API call.
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || !tokenRef.current) return;
+      void (async () => {
+        try {
+          const fresh = await apiGetMe();
+          await AsyncStorage.setItem('auth_user', JSON.stringify(fresh));
+          setUser(fresh);
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 401) {
+            await forceLogout();
+          }
+          // Ignore network/server errors — keep the cached session.
+        }
+      })();
+    });
+    return () => {
+      setUnauthorizedHandler(null);
+      sub.remove();
+    };
   }, []);
 
   const loadStoredAuth = async () => {
@@ -106,6 +161,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(JSON.parse(storedUser));
         // Refresh the push token in the background so server has the latest.
         void registerForPushNotificationsAsync();
+        // Validate the stored session against the server in the background.
+        // If the account was deleted or the session revoked while the app
+        // was closed, this is what signs the device out on next open.
+        void (async () => {
+          try {
+            const fresh = await apiGetMe();
+            await AsyncStorage.setItem('auth_user', JSON.stringify(fresh));
+            setUser(fresh);
+          } catch (err) {
+            if (err instanceof ApiError && err.status === 401) {
+              await forceLogout();
+            }
+            // Network errors / 5xx: keep the cached session; the global
+            // 401 handler will catch a genuinely dead session later.
+          }
+        })();
       }
     } catch (e) {
       console.error('Failed to load auth state', e);
@@ -204,6 +275,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const applyToken = async (newToken: string, newUser?: UserProfile) => {
+    // Requests already in flight with the old (now-revoked) token may 401
+    // while we persist the new one; ignore those for a short window.
+    suppressUnauthorizedUntilRef.current = Date.now() + 10_000;
     await AsyncStorage.setItem('auth_token', newToken);
     setToken(newToken);
     if (newUser) {
