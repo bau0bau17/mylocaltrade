@@ -312,13 +312,14 @@ export default function TraderDetail({ userId }: Props) {
   }
 
   async function openPreview(doc: TraderDocument) {
-    // Re-review gate (mirrors the server). Once a document is APPROVED,
-    // the admin must enter a written reason before re-opening it.
-    if (doc.status === "APPROVED" && accessReason.trim().length < 3) {
+    // Re-review gate (mirrors the server). Once a document has been reviewed
+    // (approved or rejected), the admin must enter a written reason before
+    // re-opening it.
+    if (doc.status !== "PENDING_REVIEW" && accessReason.trim().length < 3) {
       toast({
         title: "Reason required",
         description:
-          'This document is already approved. Type a short reason in the "Reason for access" box (e.g. an ICO request reference) before re-opening.',
+          'This document has already been reviewed. Type a short reason in the "Reason for access" box (e.g. an ICO request reference) before re-opening.',
         variant: "destructive",
       });
       return;
@@ -377,14 +378,14 @@ export default function TraderDetail({ userId }: Props) {
   async function handleDownloadDocument(doc: TraderDocument, reasonOverride?: string) {
     try {
       const reasonText = (reasonOverride ?? accessReason).trim();
-      // Re-review gate: same rule as preview — approved docs require a
-      // reason. Server enforces it too with HTTP 403, but failing fast in
-      // the client gives a better message.
-      if (doc.status === "APPROVED" && reasonText.length < 3) {
+      // Re-review gate: same rule as preview — reviewed docs (approved or
+      // rejected) require a reason. Server enforces it too with HTTP 403,
+      // but failing fast in the client gives a better message.
+      if (doc.status !== "PENDING_REVIEW" && reasonText.length < 3) {
         toast({
           title: "Reason required",
           description:
-            'This document is already approved. Type a short reason in the "Reason for access" box before downloading it.',
+            'This document has already been reviewed. Type a short reason in the "Reason for access" box before downloading it.',
           variant: "destructive",
         });
         return;
@@ -751,7 +752,7 @@ export default function TraderDetail({ userId }: Props) {
               </Alert>
               <div className="space-y-1.5">
                 <Label htmlFor="access-reason" className="text-xs">
-                  Reason for access — required to re-open or download approved documents (e.g. "ICO subject access request ref. 123")
+                  Reason for access — required to re-open or download reviewed documents (approved or rejected) (e.g. "ICO subject access request ref. 123")
                 </Label>
                 <Textarea
                   id="access-reason"
@@ -771,7 +772,7 @@ export default function TraderDetail({ userId }: Props) {
                     const expSoon = days != null && days >= 0 && days <= 30;
                     const expired = doc.status === "EXPIRED" || (days != null && days < 0);
                     const isLocked =
-                      doc.status === "APPROVED" && accessReason.trim().length < 3;
+                      doc.status !== "PENDING_REVIEW" && accessReason.trim().length < 3;
                     return (
                       <div
                         key={doc.id}
@@ -798,7 +799,7 @@ export default function TraderDetail({ userId }: Props) {
                           )}
                           {isLocked && (
                             <div className="text-xs text-muted-foreground mt-1 italic">
-                              Approved — enter a reason above to re-open or download.
+                              Reviewed — enter a reason above to re-open or download.
                             </div>
                           )}
                           {expiryEdit?.docId === doc.id && (

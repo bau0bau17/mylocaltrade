@@ -525,17 +525,17 @@ router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (re
     const rawReason = typeof req.query.reason === "string" ? req.query.reason.trim() : "";
     const reason = rawReason.slice(0, 500) || null;
 
-    // Re-review gate: once a document is APPROVED, every subsequent open
-    // must include a written justification in the ICO/audit reason field.
-    // This enforces UK GDPR data-minimisation + ICO accountability — the
-    // verification job is done, so any further look at the personal data
-    // requires a documented purpose. PENDING_REVIEW / REJECTED / EXPIRED
-    // docs are still part of the active verification flow and don't need
-    // a reason.
-    if (doc.status === "APPROVED" && (!reason || reason.length < 3)) {
+    // Re-review gate: once a document has been REVIEWED (approved OR
+    // rejected), every subsequent open must include a written justification
+    // in the ICO/audit reason field. This enforces UK GDPR data-minimisation
+    // + ICO accountability — the review decision has been made, so any
+    // further look at the personal data requires a documented purpose.
+    // Only PENDING_REVIEW docs (still part of the active verification flow)
+    // can be opened without a reason.
+    if (doc.status !== "PENDING_REVIEW" && (!reason || reason.length < 3)) {
       res.status(403).json({
         error:
-          "This document is already approved. To re-open it, type a short reason " +
+          "This document has already been reviewed. To re-open it, type a short reason " +
           "(e.g. an ICO subject-access request reference) in the audit reason field.",
         code: "REVIEW_REASON_REQUIRED",
       });
@@ -607,12 +607,12 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
     const rawReason = typeof req.query.reason === "string" ? req.query.reason.trim() : "";
     const reason = rawReason.slice(0, 500) || null;
 
-    // Re-review gate (mirror of /view-url): once APPROVED, a written reason
-    // is required to re-open. See /view-url for the rationale.
-    if (doc.status === "APPROVED" && (!reason || reason.length < 3)) {
+    // Re-review gate (mirror of /view-url): once reviewed (approved or
+    // rejected), a written reason is required to re-open. See /view-url.
+    if (doc.status !== "PENDING_REVIEW" && (!reason || reason.length < 3)) {
       res.status(403).json({
         error:
-          "This document is already approved. To re-open it, type a short reason " +
+          "This document has already been reviewed. To re-open it, type a short reason " +
           "(e.g. an ICO subject-access request reference) in the audit reason field.",
         code: "REVIEW_REASON_REQUIRED",
       });
