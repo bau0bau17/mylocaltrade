@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import bcryptjs from "bcryptjs";
 import { db } from "@workspace/db";
 import {
   usersTable,
@@ -2929,54 +2930,55 @@ router.get("/admin/team", authMiddleware, superAdminOnly, async (req, res) => {
   }
 });
 
-const PromoteAdminBody = z.object({ email: z.string().email() });
+const CreateAdminBody = z.object({
+  email: z.string().email(),
+  fullName: z.string().trim().min(2).max(100),
+  password: z.string().min(8).max(200),
+});
 
-// POST /api/admin/team/promote — promote an existing user to (regular) admin
+// POST /api/admin/team/promote — create a new admin-portal account.
+// Admin-portal accounts are a separate identity space from app accounts:
+// they live in the same users table (role "admin") but never appear in the
+// app, and the same email may also exist as a customer or trader account.
+// This route therefore CREATES a dedicated admin row instead of converting
+// an existing app account.
 router.post("/admin/team/promote", authMiddleware, superAdminOnly, async (req, res) => {
   try {
-    const body = PromoteAdminBody.parse(req.body);
-    // Deterministic resolver: legacy data contains case-variant duplicate
-    // emails, so a bare lower(email) lookup could grant admin to the wrong row.
-    const user = await findUserByEmail(body.email);
-    if (!user || user.deletedAt || user.deletionStatus !== null) {
-      res.status(404).json({ error: "No active account found with that email address" });
+    const body = CreateAdminBody.parse(req.body);
+    const existingAdmin = await findUserByEmail(body.email, "admin");
+    if (existingAdmin) {
+      res.status(409).json({ error: "An admin account with that email already exists" });
       return;
     }
-    if (user.role === "admin") {
-      res.status(409).json({ error: "That account is already an admin" });
-      return;
-    }
-    if (user.role === "trader") {
-      // Traders have a public marketplace profile; converting one to staff
-      // would orphan their listing. Keep staff and trader accounts separate.
-      res.status(409).json({
-        error: "Trader accounts cannot be made admins. Ask them to register a separate account.",
-      });
-      return;
-    }
-    if (!user.emailVerified || !user.isActive) {
-      res.status(409).json({ error: "The account must be active and email-verified first" });
-      return;
-    }
-    await db
-      .update(usersTable)
-      .set({ role: "admin", isSuperAdmin: false, updatedAt: new Date() })
-      .where(eq(usersTable.id, user.id));
-    // Their existing customer token still carries role "customer"; revoke so
-    // they sign in again and receive an admin token.
-    await revokeUserSessions(user.id);
+    const passwordHash = await bcryptjs.hash(body.password, 12);
+    const [created] = await db
+      .insert(usersTable)
+      .values({
+        email: body.email.trim().toLowerCase(),
+        passwordHash,
+        fullName: body.fullName.trim(),
+        role: "admin",
+        isSuperAdmin: false,
+        isActive: true,
+        // The super admin vouches for the address; the portal has no
+        // verification flow of its own.
+        emailVerified: true,
+      })
+      .returning({ id: usersTable.id });
     req.log.info(
-      { event: "admin_team", by: (req as AuthenticatedRequest).userId, target: user.id, action: "promoted" },
-      "Admin team: user promoted to admin",
+      { event: "admin_team", by: (req as AuthenticatedRequest).userId, target: created.id, action: "created" },
+      "Admin team: admin-portal account created",
     );
     res.json({ ok: true });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: "Enter a valid email address" });
+      res.status(400).json({
+        error: "Enter a valid email address, a name, and a password of at least 8 characters",
+      });
       return;
     }
-    req.log.error({ err: error }, "Admin promote failed");
-    res.status(500).json({ error: "Failed to promote user" });
+    req.log.error({ err: error }, "Admin create failed");
+    res.status(500).json({ error: "Failed to create admin account" });
   }
 });
 
@@ -2996,7 +2998,12 @@ async function loadTargetAdmin(userId: number) {
   return target ?? null;
 }
 
-// POST /api/admin/team/:userId/demote — remove admin access (back to customer)
+// POST /api/admin/team/:userId/demote — remove admin access.
+// Admin rows are portal-only identities, so removal deactivates the row
+// (isActive=false) and revokes sessions. It must NOT convert the row to a
+// customer — that would inject a phantom account into the app's identity
+// space, possibly colliding with a real app account on the same email. The
+// row is kept (not deleted) because audit-log entries reference its id.
 router.post("/admin/team/:userId/demote", authMiddleware, superAdminOnly, async (req, res) => {
   try {
     const { userId } = TeamActionParams.parse(req.params);
@@ -3016,12 +3023,12 @@ router.post("/admin/team/:userId/demote", authMiddleware, superAdminOnly, async 
     }
     await db
       .update(usersTable)
-      .set({ role: "customer", isSuperAdmin: false, updatedAt: new Date() })
+      .set({ isActive: false, isSuperAdmin: false, updatedAt: new Date() })
       .where(eq(usersTable.id, userId));
     await revokeUserSessions(userId);
     req.log.info(
-      { event: "admin_team", by: requesterId, target: userId, action: "demoted" },
-      "Admin team: admin demoted to customer",
+      { event: "admin_team", by: requesterId, target: userId, action: "removed" },
+      "Admin team: admin access removed (account deactivated)",
     );
     res.json({ ok: true });
   } catch (error: unknown) {

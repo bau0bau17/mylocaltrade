@@ -23,7 +23,9 @@ export default function TeamPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [promoteEmail, setPromoteEmail] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
   const isSuperAdmin = !!user?.isSuperAdmin;
 
@@ -35,12 +37,17 @@ export default function TeamPage() {
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["admin", "team"] });
 
-  const promote = useMutation({
-    mutationFn: (email: string) =>
-      api<{ ok: boolean }>("/api/admin/team/promote", { method: "POST", body: { email } }),
+  const createAdmin = useMutation({
+    mutationFn: (body: { email: string; fullName: string; password: string }) =>
+      api<{ ok: boolean }>("/api/admin/team/promote", { method: "POST", body }),
     onSuccess: () => {
-      toast({ title: "Admin added", description: "They now have standard admin access and must sign in again." });
-      setPromoteEmail("");
+      toast({
+        title: "Admin account created",
+        description: "Share the email and password with them securely. This account only works on the admin console, not in the app.",
+      });
+      setNewEmail("");
+      setNewName("");
+      setNewPassword("");
       refresh();
     },
     onError: (e: unknown) =>
@@ -109,25 +116,47 @@ export default function TeamPage() {
           <UserPlus className="w-3.5 h-3.5" /> Add a standard admin
         </Label>
         <p className="text-xs text-muted-foreground">
-          The person must already have a registered, email-verified customer account.
+          This creates a console-only account. It is completely separate from any customer or
+          trader account in the app — even if the same email address is used there.
         </p>
-        <div className="flex gap-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           <Input
             type="email"
             placeholder="colleague@example.com"
-            value={promoteEmail}
-            onChange={(e) => setPromoteEmail(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && promoteEmail.trim()) promote.mutate(promoteEmail.trim());
-            }}
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
             data-testid="input-promote-email"
           />
+          <Input
+            placeholder="Full name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            data-testid="input-admin-name"
+          />
+          <Input
+            type="password"
+            placeholder="Temporary password (min 8 characters)"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            data-testid="input-admin-password"
+          />
           <Button
-            onClick={() => promote.mutate(promoteEmail.trim())}
-            disabled={!promoteEmail.trim() || promote.isPending}
+            onClick={() =>
+              createAdmin.mutate({
+                email: newEmail.trim(),
+                fullName: newName.trim(),
+                password: newPassword,
+              })
+            }
+            disabled={
+              !newEmail.trim() ||
+              newName.trim().length < 2 ||
+              newPassword.length < 8 ||
+              createAdmin.isPending
+            }
             data-testid="button-promote-admin"
           >
-            {promote.isPending ? "Adding…" : "Add admin"}
+            {createAdmin.isPending ? "Creating…" : "Create admin account"}
           </Button>
         </div>
       </div>
@@ -171,7 +200,7 @@ export default function TeamPage() {
                     size="sm"
                     variant="destructive"
                     onClick={() => {
-                      if (window.confirm(`Remove admin access for ${a.fullName}? Their account goes back to a normal customer account.`)) {
+                      if (window.confirm(`Remove admin access for ${a.fullName}? Their console account will be deactivated. Any app account they have is not affected.`)) {
                         demote.mutate(a.id);
                       }
                     }}

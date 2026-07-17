@@ -30,7 +30,12 @@ export async function bootstrapAdminFromEnv(): Promise<void> {
   try {
     // Deterministic resolver: legacy data contains case-variant duplicate
     // emails; a bare lower(email) lookup could super-admin the wrong row.
-    const user = await findUserByEmail(email);
+    // Prefer an existing admin-portal row (admin accounts are a separate
+    // identity space from app accounts); fall back to an app row only for
+    // first-ever bootstrap, where the owner's app account is promoted.
+    const user =
+      (await findUserByEmail(email, "admin")) ??
+      (await findUserByEmail(email, "app"));
 
     if (!user) {
       logger.warn(

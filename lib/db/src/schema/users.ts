@@ -1,4 +1,5 @@
-import { pgTable, serial, text, boolean, timestamp, varchar, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, varchar, integer, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -29,9 +30,16 @@ export const ACCOUNT_DELETION_STATUSES = [
 ] as const;
 export type AccountDeletionStatus = (typeof ACCOUNT_DELETION_STATUSES)[number];
 
-export const usersTable = pgTable("users", {
+export const usersTable = pgTable(
+  "users",
+  {
   id: serial("id").primaryKey(),
-  email: varchar("email", { length: 255 }).notNull().unique(),
+  // NOT globally unique: admin-portal accounts (role "admin") are a separate
+  // identity space from app accounts, so the same email may exist once in
+  // each space. Uniqueness is enforced per-space by the two partial unique
+  // indexes below (exact-case, matching the historical constraint — legacy
+  // data contains case-variant duplicates, so no lower(email) index).
+  email: varchar("email", { length: 255 }).notNull(),
   passwordHash: text("password_hash").notNull(),
   fullName: varchar("full_name", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 50 }),
@@ -92,7 +100,19 @@ export const usersTable = pgTable("users", {
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+  },
+  (t) => ({
+    // Per-identity-space email uniqueness (replaces the old global
+    // users_email_unique constraint): one app account (customer/trader)
+    // and one admin-portal account may share an email.
+    appEmailUnique: uniqueIndex("users_email_app_unique")
+      .on(t.email)
+      .where(sql`role <> 'admin'`),
+    adminEmailUnique: uniqueIndex("users_email_admin_unique")
+      .on(t.email)
+      .where(sql`role = 'admin'`),
+  }),
+);
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertUser = z.infer<typeof insertUserSchema>;

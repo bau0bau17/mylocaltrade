@@ -69,7 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     const result = await api<{ token: string; user: AdminUser }>("/api/auth/login", {
       method: "POST",
-      body: { email, password },
+      // portal: "admin" scopes login to admin-console accounts — the same
+      // email may also exist as a separate app (customer/trader) account.
+      body: { email, password, portal: "admin" },
     });
     if (result.user.role !== "admin") {
       throw new Error("This account does not have admin access.");

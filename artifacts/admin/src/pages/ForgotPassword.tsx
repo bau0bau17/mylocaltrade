@@ -31,7 +31,7 @@ export default function ForgotPassword() {
     try {
       await api("/api/auth/forgot-password", {
         method: "POST",
-        body: { email: email.trim() },
+        body: { email: email.trim(), portal: "admin" },
       });
       // The server always responds generically, so move forward regardless.
       setInfo("If an account exists for that email, a 6-digit code has been sent.");
@@ -63,7 +63,7 @@ export default function ForgotPassword() {
     try {
       await api("/api/auth/reset-password", {
         method: "POST",
-        body: { email: email.trim(), code: code.trim(), newPassword: password },
+        body: { email: email.trim(), code: code.trim(), newPassword: password, portal: "admin" },
       });
       // Force a fresh sign-in with the new password.
       navigate("/login", { replace: true });

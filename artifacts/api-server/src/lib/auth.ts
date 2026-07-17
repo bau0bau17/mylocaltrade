@@ -308,12 +308,27 @@ export async function revokeUserSessions(
 //   3. oldest account.
 // Any privilege-changing flow (admin promote, bootstrap) MUST use this rather
 // than a bare lower(email) lookup, or it can target the wrong account.
-export async function findUserByEmail(email: string) {
+//
+// `kind` scopes the lookup: admin-portal accounts (role "admin") live in the
+// same table as app accounts but are a separate identity space — the same
+// email may exist once as an app account (customer/trader) and once as an
+// admin-portal account. "app" excludes admin rows, "admin" matches only
+// admin rows; omit for a legacy unscoped lookup.
+export async function findUserByEmail(
+  email: string,
+  kind?: "app" | "admin",
+) {
   const typed = email.trim();
+  const kindFilter =
+    kind === "admin"
+      ? sql` AND ${usersTable.role} = 'admin'`
+      : kind === "app"
+        ? sql` AND ${usersTable.role} <> 'admin'`
+        : sql``;
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(sql`lower(${usersTable.email}) = ${typed.toLowerCase()}`)
+    .where(sql`lower(${usersTable.email}) = ${typed.toLowerCase()}${kindFilter}`)
     .orderBy(
       sql`(${usersTable.email} = ${typed}) DESC`,
       sql`(${usersTable.email} = lower(${usersTable.email})) DESC`,

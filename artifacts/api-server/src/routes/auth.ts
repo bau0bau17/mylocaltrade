@@ -253,12 +253,21 @@ const emailEquals = (email: string) =>
 //   1. exact casing as typed (legacy accounts keep working exactly as before),
 //   2. the canonical all-lowercase row,
 //   3. oldest account.
-async function findUserByEmail(email: string) {
+// `kind` scopes the lookup: admin-portal accounts (role "admin") are a
+// separate identity space from app accounts (customer/trader) even though
+// they share the users table — the same email may exist once in each space.
+// App flows must pass "app" so they can never touch an admin-portal row;
+// the admin portal passes "admin".
+async function findUserByEmail(email: string, kind: "app" | "admin") {
   const typed = email.trim();
+  const kindFilter =
+    kind === "admin"
+      ? sql`${usersTable.role} = 'admin'`
+      : sql`${usersTable.role} <> 'admin'`;
   const [user] = await db
     .select()
     .from(usersTable)
-    .where(emailEquals(typed))
+    .where(and(emailEquals(typed), kindFilter))
     .orderBy(
       sql`(${usersTable.email} = ${typed}) DESC`,
       sql`(${usersTable.email} = lower(${usersTable.email})) DESC`,
@@ -273,10 +282,12 @@ router.post("/auth/register/customer", async (req, res) => {
   try {
     const body = RegisterCustomerBody.parse(req.body);
 
+    // Admin-portal rows (role "admin") are a separate identity space and
+    // never block an app registration with the same email.
     const existingRows = await db
       .select()
       .from(usersTable)
-      .where(emailEquals(body.email));
+      .where(and(emailEquals(body.email), sql`${usersTable.role} <> 'admin'`));
     const reuse = planEmailReuse(existingRows);
     if (reuse.blocked) {
       // Active (non-deleted) account already owns this email.
@@ -365,10 +376,12 @@ router.post("/auth/register/trader", async (req, res) => {
       return;
     }
 
+    // Admin-portal rows (role "admin") are a separate identity space and
+    // never block an app registration with the same email.
     const existingRows = await db
       .select()
       .from(usersTable)
-      .where(emailEquals(body.email));
+      .where(and(emailEquals(body.email), sql`${usersTable.role} <> 'admin'`));
     const reuse = planEmailReuse(existingRows);
     if (reuse.blocked) {
       res.status(409).json({ error: "An account with this email already exists" });
@@ -558,7 +571,13 @@ router.post("/auth/login", async (req, res) => {
   try {
     const body = LoginBody.parse(req.body);
 
-    const user = await findUserByEmail(body.email);
+    // The admin portal sends { portal: "admin" } so login matches only
+    // admin-portal accounts; the mobile app (no flag) matches only app
+    // accounts. This is a row-selection scope, not a privilege: whichever
+    // row is matched still requires its own password, and the issued token
+    // carries that row's role.
+    const portal = (req.body as { portal?: unknown })?.portal === "admin";
+    const user = await findUserByEmail(body.email, portal ? "admin" : "app");
     if (!user) {
       res.status(401).json({ error: "Invalid email or password" });
       return;
@@ -588,6 +607,16 @@ router.post("/auth/login", async (req, res) => {
     const valid = await bcryptjs.compare(body.password, user.passwordHash);
     if (!valid) {
       res.status(401).json({ error: "Invalid email or password" });
+      return;
+    }
+
+    // Deactivated STAFF accounts (admin whose access was removed or who is
+    // suspended) must be rejected at the login boundary, not merely by
+    // downstream route middleware — this mirrors loadActiveUser. For
+    // non-admin roles isActive reflects subscription/onboarding state and
+    // login is intentionally allowed.
+    if (user.role === "admin" && !user.isActive) {
+      res.status(403).json({ error: "This account has been deactivated." });
       return;
     }
 
@@ -670,7 +699,7 @@ router.post("/auth/resend-verification", async (req, res) => {
 
     const GENERIC_RESPONSE = { message: "If an account exists with that email, a verification email has been sent." };
 
-    const user = await findUserByEmail(email);
+    const user = await findUserByEmail(email, "app");
     if (!user) {
       res.json(GENERIC_RESPONSE);
       return;
@@ -739,7 +768,7 @@ router.post("/auth/verify-email-code", async (req, res) => {
       return;
     }
 
-    const user = await findUserByEmail(email);
+    const user = await findUserByEmail(email, "app");
 
     // Uniform failure response. We deliberately do NOT distinguish between an
     // unknown email, an already-verified account, a missing/expired code, or a
@@ -836,8 +865,10 @@ router.post("/auth/forgot-password", async (req, res) => {
     };
 
     // Pass the email as typed (trim only) so the helper's exact-casing
-    // precedence still applies for legacy duplicate accounts.
-    const user = await findUserByEmail(email);
+    // precedence still applies for legacy duplicate accounts. The admin
+    // portal sends { portal: "admin" } so its reset targets the admin row.
+    const portal = (req.body as { portal?: unknown })?.portal === "admin";
+    const user = await findUserByEmail(email, portal ? "admin" : "app");
 
     // Unknown email or an irreversibly deleted/anonymised account: respond
     // generically without sending anything.
@@ -912,8 +943,10 @@ router.post("/auth/reset-password", async (req, res) => {
     const normalisedCode = code.trim();
 
     // Pass the email as typed (trim only) so the helper's exact-casing
-    // precedence still applies for legacy duplicate accounts.
-    const user = await findUserByEmail(email);
+    // precedence still applies for legacy duplicate accounts. Same portal
+    // scoping as /auth/forgot-password.
+    const portal = (req.body as { portal?: unknown })?.portal === "admin";
+    const user = await findUserByEmail(email, portal ? "admin" : "app");
 
     const hasActiveOtp =
       !!user &&
