@@ -109,6 +109,15 @@ export const usersTable = pgTable(
   suspendedReason: text("suspended_reason"),
   suspendedByAdminId: integer("suspended_by_admin_id"),
 
+  // --- Login lockout (per-account, DB-backed so it works across instances) ---
+  // Counts consecutive failed password attempts since the last successful
+  // login or lockout expiry. Reset to 0 on any successful login.
+  loginFailedAttempts: integer("login_failed_attempts").notNull().default(0),
+  // When non-null the account is locked out until this timestamp. The login
+  // handler checks this before running bcrypt so locked accounts incur no
+  // extra CPU cost regardless of which instance handles the request.
+  loginLockedUntil: timestamp("login_locked_until"),
+
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

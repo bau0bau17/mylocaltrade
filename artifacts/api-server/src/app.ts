@@ -7,6 +7,7 @@ import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { createPgStore } from "./lib/pg-rate-limit-store";
 
 const app: Express = express();
 
@@ -78,6 +79,10 @@ app.use(
   }),
 );
 
+// All rate limiters use a PostgreSQL-backed shared store so that counters are
+// enforced globally across every instance in an autoscaled deployment.  Each
+// limiter gets a unique prefix so that keys from different limiters (same IP,
+// different routes) never collide in the rate_limit_hits table.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -85,6 +90,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
+  store: createPgStore("auth"),
 });
 
 const resendLimiter = rateLimit({
@@ -93,6 +99,7 @@ const resendLimiter = rateLimit({
   message: { error: "Too many resend requests. Please try again in an hour." },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createPgStore("resend"),
 });
 
 const apiLimiter = rateLimit({
@@ -102,6 +109,7 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.path.startsWith("/api/webhooks"),
+  store: createPgStore("api"),
 });
 
 // Phase 8: extra per-endpoint limits on top of the global limiter.
@@ -111,6 +119,7 @@ const contactLimiter = rateLimit({
   message: { error: "Too many contact messages. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createPgStore("contact"),
 });
 
 const enquiriesLimiter = rateLimit({
@@ -119,6 +128,7 @@ const enquiriesLimiter = rateLimit({
   message: { error: "Too many enquiries. Please try again in an hour." },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createPgStore("enquiries"),
 });
 
 const messagesLimiter = rateLimit({
@@ -127,6 +137,7 @@ const messagesLimiter = rateLimit({
   message: { error: "Too many messages. Please try again in an hour." },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createPgStore("messages"),
 });
 
 const reportsLimiter = rateLimit({
@@ -135,6 +146,7 @@ const reportsLimiter = rateLimit({
   message: { error: "Too many reports. Please try again tomorrow." },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createPgStore("reports"),
 });
 
 const documentUploadLimiter = rateLimit({
@@ -143,6 +155,7 @@ const documentUploadLimiter = rateLimit({
   message: { error: "Too many document upload requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createPgStore("doc-upload"),
 });
 
 const cancellationRequestLimiter = rateLimit({
@@ -151,6 +164,7 @@ const cancellationRequestLimiter = rateLimit({
   message: { error: "Too many cancellation requests. Please contact support." },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createPgStore("cancellation"),
 });
 
 // Phone OTP: per-device (IP) hourly cap so a single device cannot burn through
@@ -164,6 +178,7 @@ const phoneOtpIpLimiter = rateLimit({
   message: { error: "Too many verification requests from this device. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createPgStore("phone-otp-ip"),
 });
 
 app.use(

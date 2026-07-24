@@ -567,6 +567,13 @@ router.post("/auth/register/trader", async (req, res) => {
   }
 });
 
+// Per-account login lockout thresholds. These are enforced in the database so
+// they hold across all instances in an autoscaled deployment, closing the
+// credential-stuffing gap that exists when relying solely on per-instance
+// IP-based rate limiting.
+const LOGIN_MAX_FAILED_ATTEMPTS = 10;
+const LOGIN_LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
 router.post("/auth/login", async (req, res) => {
   try {
     const body = LoginBody.parse(req.body);
@@ -579,6 +586,7 @@ router.post("/auth/login", async (req, res) => {
     const portal = (req.body as { portal?: unknown })?.portal === "admin";
     const user = await findUserByEmail(body.email, portal ? "admin" : "app");
     if (!user) {
+      // Return the same response as a bad password to avoid account enumeration.
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
@@ -604,8 +612,72 @@ router.post("/auth/login", async (req, res) => {
     // mobile client routes them to the deletion-status screen instead of
     // the normal app shell based on the deletionStatus field below.
 
+    // Per-account lockout check — DB-backed so it is enforced globally across
+    // all instances, not just the one handling this request. Check this before
+    // bcrypt.compare() so locked-out requests incur no extra CPU cost.
+    if (
+      user.loginLockedUntil !== null &&
+      user.loginLockedUntil !== undefined &&
+      user.loginLockedUntil > new Date()
+    ) {
+      res.status(429).json({
+        error: "Too many failed login attempts. Please try again in 15 minutes.",
+        code: "ACCOUNT_LOCKED",
+      });
+      return;
+    }
+
     const valid = await bcryptjs.compare(body.password, user.passwordHash);
     if (!valid) {
+      // Atomically increment the per-account failed-attempt counter using a
+      // SELECT FOR UPDATE transaction so that concurrent bad-password bursts
+      // from distributed requests cannot race past the lockout threshold.
+      // Each concurrent request serialises on the row lock: the second reader
+      // sees the counter already incremented by the first, so the real cap is
+      // always honoured regardless of how many instances handle the requests.
+      //
+      // Lockout expiry is also handled here: if a previous lockout has since
+      // expired, reset the counter to 1 (this is the first bad guess in the
+      // new window) rather than adding to a stale total, which would cause an
+      // immediate re-lock on the very first post-expiry failure.
+      await db.transaction(async (tx) => {
+        const [row] = await tx
+          .select({
+            loginFailedAttempts: usersTable.loginFailedAttempts,
+            loginLockedUntil: usersTable.loginLockedUntil,
+          })
+          .from(usersTable)
+          .where(eq(usersTable.id, user.id))
+          .for("update");
+
+        if (!row) return;
+
+        const now = new Date();
+        const lockoutExpired =
+          row.loginLockedUntil !== null &&
+          row.loginLockedUntil !== undefined &&
+          row.loginLockedUntil <= now;
+
+        // If a prior lockout has expired, treat this as the first failure in
+        // a fresh window rather than adding to the stale counter.
+        const baseAttempts = lockoutExpired ? 0 : (row.loginFailedAttempts ?? 0);
+        const newAttempts = baseAttempts + 1;
+        const shouldLock = newAttempts >= LOGIN_MAX_FAILED_ATTEMPTS;
+
+        await tx
+          .update(usersTable)
+          .set({
+            loginFailedAttempts: newAttempts,
+            loginLockedUntil: shouldLock
+              ? new Date(now.getTime() + LOGIN_LOCKOUT_DURATION_MS)
+              : lockoutExpired
+              ? null
+              : row.loginLockedUntil,
+            updatedAt: now,
+          })
+          .where(eq(usersTable.id, user.id));
+      });
+
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
@@ -627,6 +699,15 @@ router.post("/auth/login", async (req, res) => {
         email: user.email,
       });
       return;
+    }
+
+    // Successful authentication — reset the failed-attempt counter so the
+    // account is not unfairly locked after previous bad guesses.
+    if ((user.loginFailedAttempts ?? 0) > 0 || user.loginLockedUntil !== null) {
+      await db
+        .update(usersTable)
+        .set({ loginFailedAttempts: 0, loginLockedUntil: null, updatedAt: new Date() })
+        .where(eq(usersTable.id, user.id));
     }
 
     const token = generateToken(user.id, user.role, user.tokenVersion);
