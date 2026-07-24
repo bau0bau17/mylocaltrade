@@ -523,7 +523,12 @@ router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (re
       return;
     }
 
-    const mode = String(req.query.mode ?? "view").toLowerCase() === "download" ? "download" : "view";
+    // Downloading verification documents is not permitted — admins may only
+    // view them in-app. Any legacy `?mode=download` request is refused.
+    if (String(req.query.mode ?? "").toLowerCase() === "download") {
+      res.status(403).json({ error: "Downloading documents is not permitted. Documents can only be viewed in-app." });
+      return;
+    }
     const rawReason = typeof req.query.reason === "string" ? req.query.reason.trim() : "";
     const reason = rawReason.slice(0, 500) || null;
 
@@ -552,14 +557,14 @@ router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (re
 
     await logAudit({
       userId: doc.userId,
-      action: mode === "download" ? "ADMIN_DOWNLOADED_DOCUMENT" : "ADMIN_VIEWED_DOCUMENT",
+      action: "ADMIN_VIEWED_DOCUMENT",
       performedBy: adminId,
       notes: reason ?? undefined,
       details: {
         documentId: doc.id,
         documentType: doc.type,
         filename: doc.originalFilename,
-        mode,
+        mode: "view",
         ip,
         userAgent,
         via: "view-url",
@@ -585,8 +590,8 @@ router.get("/admin/documents/:id/view-url", authMiddleware, adminOnly, async (re
 // GET /api/admin/documents/:id/file — admin-scoped proxy stream
 // Every access is recorded in the trader_audit_log table to satisfy the UK
 // GDPR / ICO accountability principle (Article 5(2)). The admin can supply an
-// optional `?reason=` (e.g. for an ICO/DSAR request) and `?mode=view|download`
-// is recorded so we can distinguish in-app preview from a saved copy.
+// optional `?reason=` (e.g. for an ICO/DSAR request). Only in-app viewing is
+// supported — `?mode=download` is refused with 403 (compliance).
 router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, res) => {
   try {
     const { userId: adminId } = req as AuthenticatedRequest;
@@ -605,7 +610,12 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
       return;
     }
 
-    const mode = String(req.query.mode ?? "view").toLowerCase() === "download" ? "download" : "view";
+    // Downloading verification documents is not permitted — admins may only
+    // view them in-app. Any legacy `?mode=download` request is refused.
+    if (String(req.query.mode ?? "").toLowerCase() === "download") {
+      res.status(403).json({ error: "Downloading documents is not permitted. Documents can only be viewed in-app." });
+      return;
+    }
     const rawReason = typeof req.query.reason === "string" ? req.query.reason.trim() : "";
     const reason = rawReason.slice(0, 500) || null;
 
@@ -631,14 +641,14 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
     // later fails. Failure of logAudit itself is swallowed by the helper.
     await logAudit({
       userId: doc.userId,
-      action: mode === "download" ? "ADMIN_DOWNLOADED_DOCUMENT" : "ADMIN_VIEWED_DOCUMENT",
+      action: "ADMIN_VIEWED_DOCUMENT",
       performedBy: adminId,
       notes: reason ?? undefined,
       details: {
         documentId: doc.id,
         documentType: doc.type,
         filename: doc.originalFilename,
-        mode,
+        mode: "view",
         ip,
         userAgent,
         via: "file",
@@ -658,11 +668,8 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
       // For the in-app preview the admin UI fetches the file as a blob and renders
       // it inside a sandboxed <img>/<iframe>, so `inline` is safe here — the
       // MIME type is already constrained to the upload allowlist (image/* or PDF).
-      // The download button explicitly requests mode=download and we honour that
-      // with an attachment disposition so the browser saves the file instead of
-      // rendering it.
-      const disposition = mode === "download" ? "attachment" : "inline";
-      res.setHeader("Content-Disposition", `${disposition}; filename="${safeFilename}"`);
+      // Downloading is not permitted, so the disposition is always inline.
+      res.setHeader("Content-Disposition", `inline; filename="${safeFilename}"`);
       if (meta.size) res.setHeader("Content-Length", String(meta.size));
       await new Promise<void>((resolve, reject) => {
         file.createReadStream().on("error", reject).on("end", resolve).pipe(res);
@@ -675,8 +682,8 @@ router.get("/admin/documents/:id/file", authMiddleware, adminOnly, async (req, r
       throw e;
     }
   } catch (error) {
-    req.log.error({ err: error }, "Admin download document failed");
-    if (!res.headersSent) res.status(500).json({ error: "Failed to download document" });
+    req.log.error({ err: error }, "Admin document view failed");
+    if (!res.headersSent) res.status(500).json({ error: "Failed to load document" });
   }
 });
 

@@ -261,17 +261,18 @@ export default function AdminTraderDetail() {
   useEffect(() => { load(); }, [load]);
 
   // Build URLs for the authenticated /file and /view-url endpoints. Both
-  // produce a server-side audit entry (ADMIN_VIEWED_DOCUMENT or
-  // ADMIN_DOWNLOADED_DOCUMENT) tagged with the optional reason. Each open
-  // uses exactly one of the two endpoints to guarantee a single log entry.
-  const buildUrl = (path: string, mode: 'view' | 'download') => {
+  // produce a server-side audit entry (ADMIN_VIEWED_DOCUMENT) tagged with the
+  // optional reason. Each open uses exactly one of the two endpoints to
+  // guarantee a single log entry. Downloading documents is not permitted —
+  // viewing in-app is the only supported mode.
+  const buildUrl = (path: string, mode: 'view') => {
     const u = new URL(`${apiUrl}${path}`);
     u.searchParams.set('mode', mode);
     const trimmed = accessReason.trim();
     if (trimmed) u.searchParams.set('reason', trimmed.slice(0, 500));
     return u.toString();
   };
-  const fileUrl = (docId: number, mode: 'view' | 'download') =>
+  const fileUrl = (docId: number, mode: 'view') =>
     buildUrl(`/api/admin/documents/${docId}/file`, mode);
   const viewUrlUrl = (docId: number) =>
     buildUrl(`/api/admin/documents/${docId}/view-url`, 'view');
@@ -867,7 +868,7 @@ export default function AdminTraderDetail() {
             <View style={{ flex: 1 }}>
               <Text style={styles.icoTitle}>UK GDPR / ICO notice</Text>
               <Text style={styles.icoText}>
-                Documents contain personal data. Each open and download is recorded in the audit
+                Documents contain personal data. Each open is recorded in the audit
                 log with your admin ID, time, IP and (if provided) the reason below. Only access
                 what you need for this verification.
               </Text>
@@ -1039,7 +1040,7 @@ export default function AdminTraderDetail() {
               // Surface WHICH document section was opened (e.g. "Public
               // liability insurance") instead of just the filename. The
               // backend stores doc.type in details.documentType for every
-              // ADMIN_VIEWED_DOCUMENT / ADMIN_DOWNLOADED_DOCUMENT entry.
+              // ADMIN_VIEWED_DOCUMENT entry.
               const docType =
                 typeof entry.details?.documentType === 'string'
                   ? (entry.details.documentType as string)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, downloadAuthed, fetchAuthedBlob, ApiError } from "@/lib/api";
+import { api, fetchAuthedBlob } from "@/lib/api";
 import { queryClient as qc } from "@/lib/queryClient";
 import { BUSINESS_ROLE_LABELS, VISIBILITY_REASON_LABELS, type TraderDetailResponse, type TraderDocument } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +33,6 @@ import {
   Pause,
   Play,
   MessageSquare,
-  Download,
   ExternalLink,
   Eye,
   Loader2,
@@ -375,37 +374,6 @@ export default function TraderDetail({ userId }: Props) {
     window.open(preview.url, "_blank", "noopener,noreferrer");
   }
 
-  async function handleDownloadDocument(doc: TraderDocument, reasonOverride?: string) {
-    try {
-      const reasonText = (reasonOverride ?? accessReason).trim();
-      // Re-review gate: same rule as preview — reviewed docs (approved or
-      // rejected) require a reason. Server enforces it too with HTTP 403,
-      // but failing fast in the client gives a better message.
-      if (doc.status !== "PENDING_REVIEW" && reasonText.length < 3) {
-        toast({
-          title: "Reason required",
-          description:
-            'This document has already been reviewed. Type a short reason in the "Reason for access" box before downloading it.',
-          variant: "destructive",
-        });
-        return;
-      }
-      await downloadAuthed(
-        `/api/admin/documents/${doc.id}/file`,
-        doc.originalFilename,
-        { reason: reasonText || undefined },
-      );
-      queryClient.invalidateQueries({ queryKey: detailKey });
-    } catch (err) {
-      const status = err instanceof ApiError ? err.status : undefined;
-      toast({
-        title: "Download failed",
-        description: status ? `HTTP ${status}` : (err instanceof Error ? err.message : "Unknown"),
-        variant: "destructive",
-      });
-    }
-  }
-
   return (
     <div className="space-y-5">
       <BackLink />
@@ -744,15 +712,16 @@ export default function TraderDetail({ userId }: Props) {
               <Alert className="border-amber-300 bg-amber-50 text-amber-900">
                 <ShieldAlert className="w-4 h-4" />
                 <AlertDescription className="text-xs leading-relaxed">
-                  These files contain personal data. Every preview and download is recorded in
-                  the audit log under UK GDPR (Article 5(2) — accountability). Only access them
-                  when necessary for verification or to respond to an ICO / data-protection
-                  request. Optionally record the reason below so it is attached to the audit entry.
+                  These files contain personal data. Every preview is recorded in the audit log
+                  under UK GDPR (Article 5(2) — accountability). Documents can only be viewed
+                  in-app — downloading is not permitted. Only access them when necessary for
+                  verification or to respond to an ICO / data-protection request. Optionally
+                  record the reason below so it is attached to the audit entry.
                 </AlertDescription>
               </Alert>
               <div className="space-y-1.5">
                 <Label htmlFor="access-reason" className="text-xs">
-                  Reason for access — required to re-open or download reviewed documents (approved or rejected) (e.g. "ICO subject access request ref. 123")
+                  Reason for access — required to re-open reviewed documents (approved or rejected) (e.g. "ICO subject access request ref. 123")
                 </Label>
                 <Textarea
                   id="access-reason"
@@ -799,7 +768,7 @@ export default function TraderDetail({ userId }: Props) {
                           )}
                           {isLocked && (
                             <div className="text-xs text-muted-foreground mt-1 italic">
-                              Reviewed — enter a reason above to re-open or download.
+                              Reviewed — enter a reason above to re-open.
                             </div>
                           )}
                           {expiryEdit?.docId === doc.id && (
@@ -856,15 +825,6 @@ export default function TraderDetail({ userId }: Props) {
                             data-testid={`button-view-${doc.id}`}
                           >
                             <Eye className="w-4 h-4 mr-1" /> View
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDownloadDocument(doc)}
-                            disabled={isLocked}
-                            data-testid={`button-download-${doc.id}`}
-                          >
-                            <Download className="w-4 h-4 mr-1" /> Download
                           </Button>
                           <Button
                             size="sm"
@@ -1101,14 +1061,6 @@ export default function TraderDetail({ userId }: Props) {
                     >
                       <ExternalLink className="w-4 h-4 mr-1" /> Open in new tab
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleDownloadDocument(preview.doc)}
-                      data-testid="button-preview-download"
-                    >
-                      <Download className="w-4 h-4 mr-1" /> Download
-                    </Button>
                   </div>
                 </div>
               </DialogHeader>
@@ -1130,7 +1082,7 @@ export default function TraderDetail({ userId }: Props) {
                 {preview.status === "unsupported" && (
                   <div className="text-sm text-muted-foreground p-6 text-center">
                     This file type ({preview.mimeType ?? "unknown"}) cannot be previewed in the
-                    browser. Use Download to inspect it locally.
+                    browser.
                   </div>
                 )}
                 {preview.status === "ready" && preview.url && preview.mimeType?.startsWith("image/") && (
