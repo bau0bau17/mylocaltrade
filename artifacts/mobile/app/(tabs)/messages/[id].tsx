@@ -24,6 +24,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import { confirmAction } from "@/lib/confirm";
 import { isPhoneVerificationRequired, promptPhoneVerification } from "@/lib/phone-gate";
+
+// Server returns 409 with this machine-readable code when the customer tries
+// to accept an offer before the trader has replied or sent a quote.
+function isNoOfferYet(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const data = (err as { data?: unknown }).data;
+  if (!data || typeof data !== "object") return false;
+  return (data as { code?: unknown }).code === "NO_OFFER_YET";
+}
 import {
   useGetConversation,
   useSendConversationMessage,
@@ -272,6 +281,12 @@ export default function ConversationThreadScreen() {
   const currentQuoteStatus = currentQuote ? effectiveStatus(currentQuote) : null;
   const hasLivePendingQuote = currentQuoteStatus === "PENDING";
   const hasAcceptedQuote = currentQuoteStatus === "ACCEPTED";
+  // There is only an "offer" to accept once the trader has actually engaged —
+  // replied in the conversation or sent a quote (any status). Without this the
+  // customer could hire a trader who has never responded. The server enforces
+  // the same rule (409 NO_OFFER_YET).
+  const traderHasEngaged =
+    messages.some((m) => m.senderRole === "trader") || quotes.length > 0;
   const quoteBusy =
     createQuoteMutation.isPending ||
     reviseQuoteMutation.isPending ||
@@ -382,6 +397,13 @@ export default function ConversationThreadScreen() {
             onError: (err: unknown) => {
               if (isPhoneVerificationRequired(err)) {
                 promptPhoneVerification();
+                return;
+              }
+              if (isNoOfferYet(err)) {
+                Alert.alert(
+                  "No offer yet",
+                  `${otherName} hasn't replied or sent a quote yet, so there's no offer to accept.`,
+                );
                 return;
               }
               Alert.alert("Error", "Could not accept the offer.");
@@ -1146,6 +1168,13 @@ export default function ConversationThreadScreen() {
                 <Feather name="file-text" size={14} color={Colors.light.textSecondary} />
                 <Text style={styles.lifecycleDoneText}>
                   Review the quote above to hire {otherName}.
+                </Text>
+              </View>
+            ) : !traderHasEngaged ? (
+              <View style={styles.lifecycleDone}>
+                <Feather name="clock" size={14} color={Colors.light.textSecondary} />
+                <Text style={styles.lifecycleDoneText}>
+                  Waiting for {otherName} to reply. You can accept an offer once they respond.
                 </Text>
               </View>
             ) : (

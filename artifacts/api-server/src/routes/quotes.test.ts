@@ -451,6 +451,46 @@ describe("POST /api/quotes/:id/accept", () => {
   });
 });
 
+describe("POST /api/conversations/:id/accept (freeform hire)", () => {
+  it("refuses with 409 NO_OFFER_YET when the trader has never replied or quoted", async () => {
+    const convId = await createConversation();
+    const res = await asCustomer(request(app).post(`/api/conversations/${convId}/accept`)).send();
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("NO_OFFER_YET");
+
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, convId));
+    expect(conv.customerAcceptedAt).toBeNull();
+  });
+
+  it("allows accepting once the trader has replied in the conversation", async () => {
+    const convId = await createConversation();
+    await db.insert(messagesTable).values({
+      conversationId: convId,
+      senderUserId: ctx.traderUserId,
+      senderRole: "trader",
+      body: "I can do this job for around £450.",
+    });
+    const res = await asCustomer(request(app).post(`/api/conversations/${convId}/accept`)).send();
+    expect(res.status).toBe(200);
+
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, convId));
+    expect(conv.customerAcceptedAt).toBeTruthy();
+  });
+
+  it("allows accepting when a quote exists even without a trader chat message", async () => {
+    const convId = await createConversation();
+    await asTrader(request(app).post(`/api/conversations/${convId}/quotes`)).send(validQuote);
+    const res = await asCustomer(request(app).post(`/api/conversations/${convId}/accept`)).send();
+    expect(res.status).toBe(200);
+  });
+});
+
 describe("POST /api/quotes/:id/decline", () => {
   it("declines a pending quote", async () => {
     const convId = await createConversation();

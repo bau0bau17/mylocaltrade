@@ -750,6 +750,36 @@ router.post("/conversations/:id/accept", authMiddleware, async (req, res) => {
       return;
     }
 
+    // There must actually BE an offer to accept: the trader has to have
+    // engaged with the enquiry — either by replying in the conversation or by
+    // sending a structured quote. Without this, a customer could "hire" a
+    // trader who has never responded (phantom offer).
+    const [traderReply] = await db
+      .select({ id: messagesTable.id })
+      .from(messagesTable)
+      .where(
+        and(
+          eq(messagesTable.conversationId, id),
+          eq(messagesTable.senderRole, "trader"),
+        ),
+      )
+      .limit(1);
+    if (!traderReply) {
+      const [anyQuote] = await db
+        .select({ id: quotesTable.id })
+        .from(quotesTable)
+        .where(eq(quotesTable.conversationId, id))
+        .limit(1);
+      if (!anyQuote) {
+        res.status(409).json({
+          error:
+            "The trader hasn't replied or sent a quote yet, so there is no offer to accept.",
+          code: "NO_OFFER_YET",
+        });
+        return;
+      }
+    }
+
     // Contact gate: accepting an offer (hiring) requires an SMS-verified
     // mobile, same as sending an enquiry or accepting a structured quote.
     if (!(await customerPhoneVerified(userId))) {
