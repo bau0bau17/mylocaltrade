@@ -28,7 +28,11 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SubscriptionProvider } from "@/lib/revenuecat";
-import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
+import {
+  setBaseUrl,
+  setAuthTokenGetter,
+  getGetConversationsUnreadCountQueryKey,
+} from "@workspace/api-client-react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "@/lib/api-url";
 
@@ -97,6 +101,36 @@ function useNotificationDeepLinks() {
   }, [router, isAdmin]);
 }
 
+// Keeps the unread-messages badges live: when a message push notification
+// arrives while the app is foregrounded, invalidate the unread-count query so
+// the tab-bar badge and the Account screen's Messages row update immediately,
+// without waiting for navigation or an app refocus.
+function useLiveUnreadBadge() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const isAuthenticated = !!user;
+
+  useEffect(() => {
+    // expo-notifications has no native module on web, and admins have no
+    // customer/trader chats — same gating as the deep-link wiring above.
+    if (Platform.OS === "web") return;
+    if (!isAuthenticated || isAdmin) return;
+
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      const data = notification.request.content.data as
+        | { type?: string }
+        | null
+        | undefined;
+      if (data?.type === "new_message") {
+        void queryClient.invalidateQueries({
+          queryKey: getGetConversationsUnreadCountQueryKey(),
+        });
+      }
+    });
+    return () => sub.remove();
+  }, [isAuthenticated, isAdmin]);
+}
+
 // App-wide "tap anywhere outside an input to close the keyboard".
 //
 // Deliberately NOT a Touchable/Pressable wrapper: a root-level touchable
@@ -152,6 +186,7 @@ function useTapOutsideKeyboardDismiss() {
 
 function RootLayoutNav() {
   useNotificationDeepLinks();
+  useLiveUnreadBadge();
   const tapDismiss = useTapOutsideKeyboardDismiss();
 
   return (
