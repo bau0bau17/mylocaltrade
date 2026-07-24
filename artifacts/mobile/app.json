@@ -16,6 +16,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.mylocaltrade.app",
+      "associatedDomains": [
+        "applinks:mylocaltrade.co.uk",
+        "applinks:www.mylocaltrade.co.uk"
+      ],
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "MyLocalTrade uses your location to show tradespeople near you.",
         "NSPhotoLibraryUsageDescription": "MyLocalTrade needs access to your photos so you can add images to your enquiries and trader gallery.",

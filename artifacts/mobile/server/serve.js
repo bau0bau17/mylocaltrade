@@ -55,6 +55,33 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // iOS Universal Links: Apple fetches this file to verify the domain is
+  // associated with the app (associatedDomains in app.json). Once verified,
+  // tapping an https://mylocaltrade.co.uk/open... link opens the installed
+  // app directly — no Safari hop. Must be served as JSON with no redirect.
+  if (
+    pathname === "/.well-known/apple-app-site-association" ||
+    pathname === "/apple-app-site-association"
+  ) {
+    res.writeHead(200, {
+      "content-type": "application/json",
+      "cache-control": "public, max-age=3600",
+    });
+    res.end(
+      JSON.stringify({
+        applinks: {
+          details: [
+            {
+              appIDs: ["WNLMR5HM4J.com.mylocaltrade.app"],
+              components: [{ "/": "/open" }],
+            },
+          ],
+        },
+      }),
+    );
+    return;
+  }
+
   // Deep-link redirect: email "Open conversation" buttons point here. We bounce
   // the visitor into the installed native app via its custom scheme
   // (mylocaltrade://messages/<id>), with the landing page as a visible fallback
