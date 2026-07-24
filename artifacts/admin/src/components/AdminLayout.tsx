@@ -21,6 +21,7 @@ import {
   Ban,
   UserCog,
   UsersRound,
+  BellOff,
 } from "lucide-react";
 
 interface NavItem {
@@ -58,6 +59,7 @@ const NAV: NavItem[] = [
   { href: "/promo-codes", label: "Promo codes", icon: Tag },
   { href: "/account-deletions", label: "Account deletions", icon: Trash2, countKey: "accountDeletions" },
   { href: "/profile-change-requests", label: "Profile changes", icon: UserCog, countKey: "profileChangeRequests" },
+  { href: "/notification-health", label: "Notification health", icon: BellOff },
   { href: "/team", label: "Admin team", icon: UsersRound, superAdminOnly: true },
 ];
 

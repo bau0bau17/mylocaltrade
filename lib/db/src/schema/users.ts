@@ -81,6 +81,10 @@ export const usersTable = pgTable(
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   plan: varchar("plan", { length: 20 }),
   pushNotificationsEnabled: boolean("push_notifications_enabled").notNull().default(true),
+  // Stamped whenever at least one Expo push ticket comes back "ok" for this
+  // user. Powers the admin notification-health view ("why didn't this user
+  // get notified?"). Null = no successful delivery recorded yet.
+  lastPushDeliveredAt: timestamp("last_push_delivered_at"),
   tokenVersion: integer("token_version").notNull().default(1),
 
   // --- GDPR / account deletion (Phase: account-deletion) ---

@@ -3248,4 +3248,209 @@ router.post("/admin/team/:userId/active", authMiddleware, superAdminOnly, async 
   }
 });
 
+// ---------------------------------------------------------------------------
+// Notification health: lets support answer "why didn't this user get notified?"
+// without poking the database. Surfaces per-conversation mute state (indefinite
+// vs timed), each participant's global push toggle, registered device count,
+// and last successful push delivery.
+// ---------------------------------------------------------------------------
+
+// An "active mute" = mutedAt set AND (mutedUntil null → indefinite, or
+// mutedUntil in the future → timed). Expired timed mutes are not active.
+const customerMuteActive = sql`${conversationsTable.customerMutedAt} IS NOT NULL AND (${conversationsTable.customerMutedUntil} IS NULL OR ${conversationsTable.customerMutedUntil} > NOW())`;
+const traderMuteActive = sql`${conversationsTable.traderMutedAt} IS NOT NULL AND (${conversationsTable.traderMutedUntil} IS NULL OR ${conversationsTable.traderMutedUntil} > NOW())`;
+
+function serializeMute(mutedAt: Date | null, mutedUntil: Date | null) {
+  const active = !!mutedAt && (!mutedUntil || mutedUntil.getTime() > Date.now());
+  return {
+    active,
+    kind: active ? (mutedUntil ? ("TIMED" as const) : ("INDEFINITE" as const)) : null,
+    mutedAt: mutedAt?.toISOString() ?? null,
+    mutedUntil: mutedUntil?.toISOString() ?? null,
+  };
+}
+
+router.get("/admin/notification-health", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const side = typeof req.query.side === "string" ? req.query.side : "all";
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+    const muteFilter =
+      side === "customer"
+        ? customerMuteActive
+        : side === "trader"
+          ? traderMuteActive
+          : or(customerMuteActive, traderMuteActive)!;
+
+    const traderUsers = alias(usersTable, "trader_users");
+    const searchFilter = search
+      ? or(
+          ilike(usersTable.fullName, `%${search}%`),
+          ilike(usersTable.email, `%${search}%`),
+          ilike(traderUsers.fullName, `%${search}%`),
+          ilike(traderUsers.email, `%${search}%`),
+          ilike(traderProfilesTable.businessName, `%${search}%`),
+        )
+      : undefined;
+    const where = searchFilter ? and(muteFilter, searchFilter) : muteFilter;
+
+    const [totalRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(conversationsTable)
+      .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
+      .innerJoin(traderUsers, eq(conversationsTable.traderUserId, traderUsers.id))
+      .innerJoin(traderProfilesTable, eq(conversationsTable.traderProfileId, traderProfilesTable.id))
+      .where(where);
+
+    const rows = await db
+      .select({
+        conv: conversationsTable,
+        customerName: usersTable.fullName,
+        customerEmail: usersTable.email,
+        customerPushEnabled: usersTable.pushNotificationsEnabled,
+        customerLastPushAt: usersTable.lastPushDeliveredAt,
+        traderName: traderUsers.fullName,
+        traderEmail: traderUsers.email,
+        traderPushEnabled: traderUsers.pushNotificationsEnabled,
+        traderLastPushAt: traderUsers.lastPushDeliveredAt,
+        traderBusinessName: traderProfilesTable.businessName,
+      })
+      .from(conversationsTable)
+      .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
+      .innerJoin(traderUsers, eq(conversationsTable.traderUserId, traderUsers.id))
+      .innerJoin(traderProfilesTable, eq(conversationsTable.traderProfileId, traderProfilesTable.id))
+      .where(where)
+      .orderBy(desc(conversationsTable.lastMessageAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Registered-device counts for everyone on this page, in one query.
+    const userIds = Array.from(
+      new Set(rows.flatMap((r) => [r.conv.customerId, r.conv.traderUserId])),
+    );
+    const tokenCounts = new Map<number, number>();
+    if (userIds.length > 0) {
+      const counts = await db
+        .select({ userId: pushTokensTable.userId, count: sql<number>`count(*)::int` })
+        .from(pushTokensTable)
+        .where(inArray(pushTokensTable.userId, userIds))
+        .groupBy(pushTokensTable.userId);
+      for (const c of counts) tokenCounts.set(c.userId, c.count);
+    }
+
+    res.json({
+      total: totalRow?.count ?? 0,
+      limit,
+      offset,
+      conversations: rows.map((r) => ({
+        conversationId: r.conv.id,
+        serviceRequired: r.conv.serviceRequired,
+        status: r.conv.status,
+        lastMessageAt: r.conv.lastMessageAt.toISOString(),
+        customer: {
+          userId: r.conv.customerId,
+          name: r.customerName,
+          email: r.customerEmail,
+          pushEnabled: r.customerPushEnabled,
+          deviceCount: tokenCounts.get(r.conv.customerId) ?? 0,
+          lastPushDeliveredAt: r.customerLastPushAt?.toISOString() ?? null,
+          mute: serializeMute(r.conv.customerMutedAt, r.conv.customerMutedUntil),
+        },
+        trader: {
+          userId: r.conv.traderUserId,
+          name: r.traderName,
+          email: r.traderEmail,
+          businessName: r.traderBusinessName,
+          pushEnabled: r.traderPushEnabled,
+          deviceCount: tokenCounts.get(r.conv.traderUserId) ?? 0,
+          lastPushDeliveredAt: r.traderLastPushAt?.toISOString() ?? null,
+          mute: serializeMute(r.conv.traderMutedAt, r.conv.traderMutedUntil),
+        },
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin notification health list failed");
+    res.status(500).json({ error: "Failed to load notification health" });
+  }
+});
+
+// User lookup: search any app user by name/email and see their full
+// notification picture — global toggle, devices, last delivery, and every
+// conversation they currently have muted.
+router.get("/admin/notification-health/users", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    if (search.length < 2) {
+      res.json({ users: [] });
+      return;
+    }
+    const users = await db
+      .select({
+        id: usersTable.id,
+        fullName: usersTable.fullName,
+        email: usersTable.email,
+        role: usersTable.role,
+        pushEnabled: usersTable.pushNotificationsEnabled,
+        lastPushDeliveredAt: usersTable.lastPushDeliveredAt,
+        suspendedAt: usersTable.suspendedAt,
+      })
+      .from(usersTable)
+      .where(
+        and(
+          sql`${usersTable.role} <> 'admin'`,
+          isNull(usersTable.deletedAt),
+          or(ilike(usersTable.fullName, `%${search}%`), ilike(usersTable.email, `%${search}%`)),
+        ),
+      )
+      .orderBy(asc(usersTable.fullName))
+      .limit(20);
+
+    const ids = users.map((u) => u.id);
+    const tokenCounts = new Map<number, number>();
+    const mutedCounts = new Map<number, number>();
+    if (ids.length > 0) {
+      const counts = await db
+        .select({ userId: pushTokensTable.userId, count: sql<number>`count(*)::int` })
+        .from(pushTokensTable)
+        .where(inArray(pushTokensTable.userId, ids))
+        .groupBy(pushTokensTable.userId);
+      for (const c of counts) tokenCounts.set(c.userId, c.count);
+
+      // Conversations each user currently has muted (on their own side).
+      const customerMutes = await db
+        .select({ userId: conversationsTable.customerId, count: sql<number>`count(*)::int` })
+        .from(conversationsTable)
+        .where(and(inArray(conversationsTable.customerId, ids), customerMuteActive))
+        .groupBy(conversationsTable.customerId);
+      const traderMutes = await db
+        .select({ userId: conversationsTable.traderUserId, count: sql<number>`count(*)::int` })
+        .from(conversationsTable)
+        .where(and(inArray(conversationsTable.traderUserId, ids), traderMuteActive))
+        .groupBy(conversationsTable.traderUserId);
+      for (const c of [...customerMutes, ...traderMutes]) {
+        mutedCounts.set(c.userId, (mutedCounts.get(c.userId) ?? 0) + c.count);
+      }
+    }
+
+    res.json({
+      users: users.map((u) => ({
+        userId: u.id,
+        name: u.fullName,
+        email: u.email,
+        role: u.role,
+        pushEnabled: u.pushEnabled,
+        deviceCount: tokenCounts.get(u.id) ?? 0,
+        lastPushDeliveredAt: u.lastPushDeliveredAt?.toISOString() ?? null,
+        mutedConversationCount: mutedCounts.get(u.id) ?? 0,
+        suspendedAt: u.suspendedAt?.toISOString() ?? null,
+      })),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Admin notification health user lookup failed");
+    res.status(500).json({ error: "Failed to look up users" });
+  }
+});
+
 export default router;

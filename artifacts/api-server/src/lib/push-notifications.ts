@@ -115,6 +115,17 @@ export async function sendPushToUser(
       console.warn("[push] failed to delete invalid tokens:", err);
     }
   }
+  if (okCount > 0) {
+    // Best-effort delivery stamp for the admin notification-health view.
+    try {
+      await db
+        .update(usersTable)
+        .set({ lastPushDeliveredAt: sql`NOW()` })
+        .where(eq(usersTable.id, userId));
+    } catch (err) {
+      console.warn("[push] failed to stamp lastPushDeliveredAt:", err);
+    }
+  }
   return okCount > 0;
 }
 
