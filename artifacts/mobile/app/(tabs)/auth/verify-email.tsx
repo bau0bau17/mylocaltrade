@@ -26,6 +26,11 @@ export default function VerifyEmailScreen() {
   const [verified, setVerified] = useState(false);
   const codeRef = useRef<TextInput>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Set the moment in-app code verification succeeds. The browser-link
+  // fallback poll below must stand down at that point: the code path has
+  // already signed the user in, so the poll's redirect to the login screen
+  // would otherwise race it and strand an authenticated user on /auth/login.
+  const codeVerifiedRef = useRef(false);
 
   // Resend cooldown countdown.
   useEffect(() => {
@@ -51,12 +56,19 @@ export default function VerifyEmailScreen() {
         const res = await fetch(
           `${getApiUrl()}/api/auth/verification-status?token=${encodeURIComponent(pollToken)}`,
         );
+        // The in-app code path may have completed while this request was in
+        // flight — it already signed the user in and scheduled its own
+        // redirect, so this fallback must not hijack navigation to /auth/login.
+        if (codeVerifiedRef.current) return;
         if (!res.ok) return;
         const json = await res.json();
         if (json?.verified) {
           setVerified(true);
           if (intervalRef.current) clearInterval(intervalRef.current);
-          setTimeout(() => router.replace('/auth/login'), 2000);
+          setTimeout(() => {
+            if (codeVerifiedRef.current) return;
+            router.replace('/auth/login');
+          }, 2000);
         }
       } catch {
         // silent retry
@@ -83,6 +95,7 @@ export default function VerifyEmailScreen() {
     setError(null);
     try {
       const profile = await verifyEmailCode(email, code);
+      codeVerifiedRef.current = true;
       if (intervalRef.current) clearInterval(intervalRef.current);
       setVerified(true);
       setTimeout(() => {
