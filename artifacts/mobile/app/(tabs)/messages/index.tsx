@@ -78,6 +78,16 @@ function stagePillLabel(stage: string | null | undefined, status: string): strin
   return STATUS_LABEL[status] ?? status;
 }
 
+// Traffic-light colours for the trader's own lead-status pill:
+// red = not yet responded, blue = contacted (in progress), amber = quoted,
+// green = completed.
+const TRADER_STATUS_COLORS: Record<string, { text: string; bg: string }> = {
+  NEW: { text: Colors.light.error, bg: Colors.light.errorMuted },
+  CONTACTED: { text: Colors.light.primary, bg: Colors.light.primaryMuted },
+  QUOTED: { text: Colors.light.warning, bg: Colors.light.warningMuted },
+  COMPLETED: { text: Colors.light.success, bg: "rgba(6, 214, 160, 0.12)" },
+};
+
 export default function MessagesIndexScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -283,8 +293,28 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
                     <Text style={styles.statusText}>{stageLabel}</Text>
                   </View>
                   {isTrader && item.stage !== "CANCELLED" ? (
-                    <View style={[styles.statusPill, styles.tStatusPill]}>
-                      <Text style={[styles.statusText, styles.tStatusText]}>
+                    <View
+                      style={[
+                        styles.statusPill,
+                        styles.tStatusPill,
+                        {
+                          backgroundColor:
+                            TRADER_STATUS_COLORS[String(item.traderStatus)]?.bg ??
+                            Colors.light.featuredMuted,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusText,
+                          styles.tStatusText,
+                          {
+                            color:
+                              TRADER_STATUS_COLORS[String(item.traderStatus)]?.text ??
+                              Colors.light.featured,
+                          },
+                        ]}
+                      >
                         {item.traderStatus}
                       </Text>
                     </View>

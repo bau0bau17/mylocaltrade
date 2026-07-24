@@ -50,6 +50,16 @@ import {
 const TRADER_STATUSES = ["NEW", "CONTACTED", "QUOTED", "COMPLETED"] as const;
 type TraderStatus = (typeof TRADER_STATUSES)[number];
 
+// Traffic-light colours for the trader's lead-status pill (kept in sync with
+// the conversations list): red = not yet responded, blue = contacted,
+// amber = quoted, green = completed.
+const TRADER_STATUS_COLORS: Record<string, { text: string; bg: string }> = {
+  NEW: { text: Colors.light.error, bg: Colors.light.errorMuted },
+  CONTACTED: { text: Colors.light.primary, bg: Colors.light.primaryMuted },
+  QUOTED: { text: Colors.light.warning, bg: Colors.light.warningMuted },
+  COMPLETED: { text: Colors.light.success, bg: "rgba(6, 214, 160, 0.12)" },
+};
+
 function fmtTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
@@ -733,10 +743,28 @@ export default function ConversationThreadScreen() {
             </View>
             {isTrader && conv.stage !== "CANCELLED" ? (
               <Pressable
-                style={[styles.statusPill, styles.tStatusPill]}
+                style={[
+                  styles.statusPill,
+                  styles.tStatusPill,
+                  {
+                    backgroundColor:
+                      TRADER_STATUS_COLORS[String(conv.traderStatus)]?.bg ??
+                      Colors.light.featuredMuted,
+                  },
+                ]}
                 onPress={() => !closed && setShowStatus((s) => !s)}
               >
-                <Text style={[styles.statusPillText, styles.tStatusText]}>
+                <Text
+                  style={[
+                    styles.statusPillText,
+                    styles.tStatusText,
+                    {
+                      color:
+                        TRADER_STATUS_COLORS[String(conv.traderStatus)]?.text ??
+                        Colors.light.featured,
+                    },
+                  ]}
+                >
                   {conv.traderStatus} {!closed ? "▾" : ""}
                 </Text>
               </Pressable>
