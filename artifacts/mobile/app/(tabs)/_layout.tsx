@@ -5,11 +5,16 @@ import { router, Tabs, usePathname, useGlobalSearchParams } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import React, { useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  useGetConversationsUnreadCount,
+  getGetConversationsUnreadCountQueryKey,
+} from "@workspace/api-client-react";
 
 import Colors from "@/constants/colors";
+import { useAuth } from "@/contexts/AuthContext";
 import { ScreenHeader } from "@/components/ScreenHeader";
 
 // Inner routes that live inside the (tabs) group so they inherit the same
@@ -190,10 +195,32 @@ function NativeTabLayout() {
   );
 }
 
+// Unread-conversations count for the tab bar badge. Reuses the same endpoint
+// and hook as the Account screen's "Messages" row badge. Refetches whenever
+// the route changes (e.g. the user reads a thread and navigates away), since
+// refetchOnWindowFocus does not fire on in-app navigation in React Native.
+function useUnreadBadgeCount(): number {
+  const { isAuthenticated, isAdmin } = useAuth();
+  const pathname = usePathname();
+  const enabled = isAuthenticated && !isAdmin;
+  const { data, refetch } = useGetConversationsUnreadCount({
+    query: {
+      queryKey: getGetConversationsUnreadCountQueryKey(),
+      enabled,
+      refetchOnWindowFocus: true,
+    },
+  });
+  useEffect(() => {
+    if (enabled) void refetch();
+  }, [pathname, enabled, refetch]);
+  return enabled ? (data?.unreadCount ?? 0) : 0;
+}
+
 function ClassicTabLayout() {
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
   const theme = Colors.light;
+  const unreadCount = useUnreadBadgeCount();
 
   return (
     <EdgeSwipeBack>
@@ -271,6 +298,17 @@ function ClassicTabLayout() {
         options={{
           title: "Account",
           headerShown: false,
+          ...(unreadCount > 0
+            ? {
+                tabBarBadge: unreadCount > 99 ? "99+" : unreadCount,
+                tabBarBadgeStyle: {
+                  backgroundColor: theme.error,
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: "700" as const,
+                },
+              }
+            : {}),
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person" tintColor={color} size={24} />
