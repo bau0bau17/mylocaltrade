@@ -7,11 +7,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import {
   useGetSubscriptionStatus,
+  useGetSubscriptionPlans,
   useCancelSubscription,
   useResumeSubscription,
   useCreateSubscriptionCancellationRequest,
 } from '@workspace/api-client-react';
 import { useSubscription } from '@/lib/revenuecat';
+import { getYearlySavings } from '@/lib/pricing';
 
 export default function BillingScreen() {
   const insets = useSafeAreaInsets();
@@ -21,6 +23,7 @@ export default function BillingScreen() {
   const { data: status, isLoading, refetch, isRefetching } = useGetSubscriptionStatus({
     query: { queryKey: ['/api/subscriptions/status'] },
   });
+  const { data: plansData } = useGetSubscriptionPlans();
   const { mutateAsync: cancelSub, isPending: cancelling } = useCancelSubscription();
   const { mutateAsync: resumeSub, isPending: resuming } = useResumeSubscription();
   const { mutateAsync: fileCancellation, isPending: filing } = useCreateSubscriptionCancellationRequest();
@@ -156,6 +159,19 @@ export default function BillingScreen() {
   // store is the in-app (RevenueCat) one. Apple owns cancellation + refunds.
   const isAppleOwned = coolingOffProvider === 'apple' || (coolingOffProvider == null && subscription.isSupported);
   const coolingOffDaysLeft = Math.max(0, coolingOff?.daysRemaining ?? 0);
+  // "Switch to yearly" nudge: only for traders actively paying monthly.
+  // Prices come from the RevenueCat packages when available (native), falling
+  // back to the backend plan list (same source the pricing screen uses).
+  const monthlyPrice =
+    subscription.monthlyPackage?.product.price ??
+    plansData?.plans.find(p => p.interval === 'month' && p.price > 0)?.price;
+  const yearlyPrice =
+    subscription.annualPackage?.product.price ??
+    plansData?.plans.find(p => p.interval === 'year' && p.price > 0)?.price;
+  const yearlySavings =
+    isActive && !status?.cancelAtPeriodEnd && cadence === 'monthly'
+      ? getYearlySavings(monthlyPrice, yearlyPrice)
+      : null;
   const periodEnd = status?.currentPeriodEnd ? new Date(status.currentPeriodEnd) : null;
   const periodEndLabel = periodEnd
     ? periodEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -255,6 +271,19 @@ export default function BillingScreen() {
               Cancellation scheduled. Your Premium perks end at the end of the current period — your free Basic listing stays live.
             </Text>
           </View>
+        ) : null}
+
+        {yearlySavings ? (
+          <Pressable style={s.savingsBanner} onPress={() => router.push('/pricing')}>
+            <Feather name="trending-down" size={16} color={Colors.light.secondary} />
+            <Text style={s.savingsText}>
+              Switch to yearly and save ~{yearlySavings.percent}%
+              {yearlySavings.monthsFree > 0
+                ? ` — that's ${yearlySavings.monthsFree} month${yearlySavings.monthsFree === 1 ? '' : 's'} free vs paying monthly.`
+                : '.'}
+            </Text>
+            <Feather name="chevron-right" size={16} color={Colors.light.secondary} />
+          </Pressable>
         ) : null}
 
         <View style={s.divider} />
@@ -422,6 +451,8 @@ const s = StyleSheet.create({
   meta: { fontSize: 13, color: Colors.light.textSecondary, marginBottom: 12 },
   cancelBanner: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#FEF3C7', borderRadius: 10, padding: 10, marginBottom: 12 },
   cancelText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 },
+  savingsBanner: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: Colors.light.secondaryMuted, borderRadius: 10, padding: 10, marginBottom: 12 },
+  savingsText: { flex: 1, fontSize: 12, color: Colors.light.secondary, fontWeight: '600', lineHeight: 18 },
   coolingCard: { backgroundColor: Colors.light.primaryMuted, borderRadius: 18, padding: 20, borderWidth: 1, borderColor: Colors.light.primary, marginBottom: 24, gap: 12 },
   coolingHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   coolingTitle: { fontSize: 16, fontWeight: '700', color: Colors.light.text },
