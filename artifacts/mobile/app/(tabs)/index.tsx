@@ -16,6 +16,7 @@ import { TraderCard } from '@/components/TraderCard';
 import { HomeFooter } from '@/components/HomeFooter';
 import { useLocation } from '@/hooks/useLocation';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { usePremiumMonthlyPriceLabel } from '@/hooks/usePremiumMonthlyPriceLabel';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/lib/revenuecat';
 import type { FeatherIconName } from '@/types/feather-icons';
@@ -61,6 +62,7 @@ export default function HomeScreen() {
   // pricing) are only shown to logged-out visitors and trader accounts —
   // never to logged-in customers (or any other signed-in non-trader role).
   const showTraderPromos = !isAuthenticated || isTrader;
+  const premiumMonthlyPrice = usePremiumMonthlyPriceLabel(showTraderPromos);
 
   const { data: featuredData, isLoading: isLoadingFeatured, refetch: refetchFeatured } = useGetFeaturedTraders({ limit: 5 });
   const featuredTraders = featuredData?.traders ?? [];
@@ -299,7 +301,9 @@ export default function HomeScreen() {
                     : 'Be the first to get featured in your area'}
                 </Text>
                 <Pressable style={styles.emptyCtaBtn} onPress={() => router.push('/pricing')}>
-                  <Text style={styles.emptyCtaText}>Get featured · from £9.99/month</Text>
+                  <Text style={styles.emptyCtaText}>
+                    {premiumMonthlyPrice ? `Get featured · from ${premiumMonthlyPrice}/month` : 'Get featured'}
+                  </Text>
                 </Pressable>
               </View>
             )}
@@ -316,7 +320,9 @@ export default function HomeScreen() {
                 <Text style={styles.traderCtaBadgeText}>FOR TRADERS</Text>
               </View>
               <Text style={styles.traderCtaTitle}>List your business</Text>
-              <Text style={styles.traderCtaSub}>Go Premium from £9.99/month</Text>
+              <Text style={styles.traderCtaSub}>
+                {premiumMonthlyPrice ? `Go Premium from ${premiumMonthlyPrice}/month` : 'Go Premium'}
+              </Text>
             </View>
             <View style={styles.traderCtaArrow}>
               <Feather name="arrow-right" size={18} color={Colors.light.primary} />
