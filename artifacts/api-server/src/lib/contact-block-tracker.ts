@@ -162,6 +162,32 @@ export async function getAttemptCountsByConversation(
 }
 
 /**
+ * Returns per-user attempt counts ACROSS ALL conversations (and enquiries)
+ * for a set of user ids. Used by the admin moderation queue to spot repeat
+ * offenders who bypass the contact filter in many conversations.
+ */
+export async function getAttemptCountsByUser(
+  userIds: number[],
+): Promise<Map<number, { total: number; recent: number }>> {
+  const result = new Map<number, { total: number; recent: number }>();
+  if (userIds.length === 0) return result;
+  const since = new Date(Date.now() - CONTACT_BYPASS_WINDOW_MS);
+  const rows = await db
+    .select({
+      userId: contactBlockAttemptsTable.userId,
+      total: sql<number>`count(*)::int`,
+      recent: sql<number>`count(*) FILTER (WHERE ${contactBlockAttemptsTable.createdAt} >= ${since})::int`,
+    })
+    .from(contactBlockAttemptsTable)
+    .where(inArray(contactBlockAttemptsTable.userId, userIds))
+    .groupBy(contactBlockAttemptsTable.userId);
+  for (const r of rows) {
+    result.set(r.userId, { total: r.total ?? 0, recent: r.recent ?? 0 });
+  }
+  return result;
+}
+
+/**
  * Recent attempts for a conversation, for admin detail view.
  */
 export async function listRecentAttemptsForConversation(

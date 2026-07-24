@@ -7,13 +7,20 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { ShieldAlert, MessageSquare, Eye, Check, X, Ban, AlertTriangle } from "lucide-react";
+import { ShieldAlert, MessageSquare, Eye, Check, X, Ban, AlertTriangle, UserX, UserCheck } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 function formatPounds(amountPence: number): string {
   return gbp.format(amountPence / 100);
+}
+
+interface ReportParticipantSummary {
+  userId: number;
+  bypassTotal: number;
+  bypassRecent: number;
+  suspendedAt: string | null;
 }
 
 interface AdminConversationReport {
@@ -31,6 +38,8 @@ interface AdminConversationReport {
   conversationStatus: string;
   contactBypassAttempts: number;
   contactBypassAttemptsRecent: number;
+  customer: ReportParticipantSummary;
+  trader: ReportParticipantSummary;
 }
 
 interface ContactBypassAttempt {
@@ -63,7 +72,18 @@ interface AdminConvQuote {
   createdAt: string;
 }
 
+interface ConvParticipant {
+  userId: number;
+  role: "customer" | "trader";
+  name: string;
+  bypassTotal: number;
+  bypassRecent: number;
+  suspendedAt: string | null;
+  suspendedReason: string | null;
+}
+
 interface AdminConvResponse {
+  participants: ConvParticipant[];
   conversation: {
     id: number;
     customerName: string;
@@ -218,6 +238,46 @@ function ReportCard({
                 {report.contactBypassAttempts === 1 ? " attempt" : " attempts"}
               </Badge>
             ) : null}
+            {report.customer?.bypassTotal > 0 ? (
+              <Badge
+                variant="outline"
+                className="bg-red-500/10 text-red-600 border-red-500/30 flex items-center gap-1"
+                data-testid={`badge-user-bypass-customer-${report.id}`}
+                title={`${report.customer.bypassRecent} in the last 24h, across all their conversations`}
+              >
+                <UserX className="w-3 h-3" />
+                Customer: {report.customer.bypassTotal} total
+              </Badge>
+            ) : null}
+            {report.trader?.bypassTotal > 0 ? (
+              <Badge
+                variant="outline"
+                className="bg-red-500/10 text-red-600 border-red-500/30 flex items-center gap-1"
+                data-testid={`badge-user-bypass-trader-${report.id}`}
+                title={`${report.trader.bypassRecent} in the last 24h, across all their conversations`}
+              >
+                <UserX className="w-3 h-3" />
+                Trader: {report.trader.bypassTotal} total
+              </Badge>
+            ) : null}
+            {report.customer?.suspendedAt ? (
+              <Badge
+                variant="outline"
+                className="bg-red-500/10 text-red-600 border-red-500/30"
+                data-testid={`badge-suspended-customer-${report.id}`}
+              >
+                Customer suspended
+              </Badge>
+            ) : null}
+            {report.trader?.suspendedAt ? (
+              <Badge
+                variant="outline"
+                className="bg-red-500/10 text-red-600 border-red-500/30"
+                data-testid={`badge-suspended-trader-${report.id}`}
+              >
+                Trader suspended
+              </Badge>
+            ) : null}
             <Badge variant="outline" className={STATUS_TONE[report.status]}>
               {report.status}
             </Badge>
@@ -270,6 +330,21 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
     );
   }
   if (!data) return null;
+  const participantsPanel =
+    data.participants && data.participants.length > 0 ? (
+      <div
+        className="border rounded-md bg-muted/30 p-3 space-y-3"
+        data-testid={`participants-panel-${conversationId}`}
+      >
+        <div className="flex items-center gap-2 font-semibold text-sm">
+          <ShieldAlert className="w-4 h-4 text-muted-foreground" />
+          Participants
+        </div>
+        {data.participants.map((p) => (
+          <ParticipantRow key={p.userId} participant={p} conversationId={conversationId} />
+        ))}
+      </div>
+    ) : null;
   const bypass = data.contactBypass;
   const bypassPanel =
     bypass && bypass.total > 0 ? (
@@ -300,6 +375,7 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
   if (!data.messagesAccessible) {
     return (
       <div className="space-y-3">
+        {participantsPanel}
         {bypassPanel}
         <Alert>
           <AlertDescription>
@@ -312,6 +388,7 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
   const quotes = data.quotes ?? [];
   return (
     <div className="space-y-3">
+      {participantsPanel}
       {bypassPanel}
       {quotes.length > 0 ? (
         <div
@@ -369,6 +446,145 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
         ))
       )}
       </div>
+    </div>
+  );
+}
+
+function ParticipantRow({
+  participant,
+  conversationId,
+}: {
+  participant: ConvParticipant;
+  conversationId: number;
+}) {
+  const qc = useQueryClient();
+  const [showReason, setShowReason] = useState(false);
+  const [reason, setReason] = useState("");
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["admin", "conversation", conversationId] });
+    qc.invalidateQueries({ queryKey: ["admin", "conversation-reports"] });
+  };
+
+  const suspend = useMutation({
+    mutationFn: () =>
+      api<{ ok: boolean }>(`/api/admin/users/${participant.userId}/suspend`, {
+        method: "POST",
+        body: { reason: reason.trim() },
+      }),
+    onSuccess: () => {
+      setShowReason(false);
+      setReason("");
+      invalidate();
+    },
+  });
+
+  const unsuspend = useMutation({
+    mutationFn: () =>
+      api<{ ok: boolean }>(`/api/admin/users/${participant.userId}/unsuspend`, {
+        method: "POST",
+      }),
+    onSuccess: invalidate,
+  });
+
+  const suspended = !!participant.suspendedAt;
+
+  return (
+    <div
+      className="border-b border-border/50 last:border-0 pb-2 last:pb-0 space-y-2"
+      data-testid={`participant-${participant.userId}`}
+    >
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="text-sm">
+          <span className="font-semibold">{participant.name}</span>
+          <span className="text-xs uppercase tracking-wide text-muted-foreground ml-2">
+            {participant.role}
+          </span>
+          <span
+            className={`ml-2 text-xs ${participant.bypassTotal > 0 ? "text-red-600 font-semibold" : "text-muted-foreground"}`}
+            data-testid={`participant-bypass-${participant.userId}`}
+          >
+            {participant.bypassTotal} contact-bypass attempt{participant.bypassTotal === 1 ? "" : "s"} across all
+            conversations ({participant.bypassRecent} in the last 24h)
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {suspended ? (
+            <>
+              <Badge
+                variant="outline"
+                className="bg-red-500/10 text-red-600 border-red-500/30"
+                title={participant.suspendedReason ?? undefined}
+              >
+                Suspended {formatDateTime(participant.suspendedAt!)}
+              </Badge>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => unsuspend.mutate()}
+                disabled={unsuspend.isPending}
+                data-testid={`btn-unsuspend-${participant.userId}`}
+              >
+                <UserCheck className="w-4 h-4 mr-1" /> Unsuspend
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setShowReason((s) => !s)}
+              data-testid={`btn-suspend-${participant.userId}`}
+            >
+              <UserX className="w-4 h-4 mr-1" /> Suspend user
+            </Button>
+          )}
+        </div>
+      </div>
+      {suspended && participant.suspendedReason ? (
+        <p className="text-xs text-muted-foreground">Reason: {participant.suspendedReason}</p>
+      ) : null}
+      {!suspended && showReason ? (
+        <div className="space-y-2">
+          <Textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason for suspension (required, min 5 characters)"
+            rows={2}
+            data-testid={`suspend-reason-${participant.userId}`}
+          />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => suspend.mutate()}
+              disabled={reason.trim().length < 5 || suspend.isPending}
+              data-testid={`btn-confirm-suspend-${participant.userId}`}
+            >
+              Confirm suspension
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowReason(false)}>
+              Cancel
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Suspended users can no longer send messages or create enquiries.
+          </p>
+        </div>
+      ) : null}
+      {suspend.error ? (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {suspend.error instanceof ApiError ? suspend.error.message : "Suspension failed."}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {unsuspend.error ? (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {unsuspend.error instanceof ApiError ? unsuspend.error.message : "Unsuspend failed."}
+          </AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   );
 }

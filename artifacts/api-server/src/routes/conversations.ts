@@ -451,6 +451,22 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
       return;
     }
 
+    // Account-level suspension (admin moderation): suspended users cannot
+    // send messages. Checked after participant authorization so outsiders
+    // learn nothing about the account state.
+    const [sender] = await db
+      .select({ suspendedAt: usersTable.suspendedAt })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+    if (sender?.suspendedAt) {
+      res.status(403).json({
+        error: "Your account has been suspended. You cannot send messages.",
+        code: "ACCOUNT_SUSPENDED",
+      });
+      return;
+    }
+
     // Attempt logging happens AFTER existence + participant authorization, so
     // a non-participant cannot pollute the moderation queue by hitting random
     // conversation ids with blocked content.

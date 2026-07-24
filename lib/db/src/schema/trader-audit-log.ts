@@ -21,6 +21,11 @@ export const TRADER_AUDIT_ACTIONS = [
   "TRADER_REJECTED",
   "TRADER_SUSPENDED",
   "TRADER_UNSUSPENDED",
+  // Account-level suspension of an app user (customer or trader) from the
+  // moderation queue — blocks messaging + enquiries; distinct from trader
+  // verification suspension above.
+  "USER_SUSPENDED",
+  "USER_UNSUSPENDED",
   "TRADER_VERIFICATION_RESET",
   "SUBSCRIPTION_ACTIVATED",
   "SUBSCRIPTION_CANCELLED",

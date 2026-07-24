@@ -103,6 +103,16 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       .where(eq(usersTable.id, userId))
       .limit(1);
 
+    // Account-level suspension (admin moderation): suspended users cannot
+    // create enquiries.
+    if (customer?.suspendedAt) {
+      res.status(403).json({
+        error: "Your account has been suspended. You cannot send new enquiries.",
+        code: "ACCOUNT_SUSPENDED",
+      });
+      return;
+    }
+
     // Contact gate: a customer must have SMS-verified a UK mobile before
     // their first enquiry. The app reads `code` and routes to verify-phone.
     if (!customer?.phoneVerified) {

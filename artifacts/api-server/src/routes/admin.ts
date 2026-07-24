@@ -36,6 +36,7 @@ import {
 } from "../lib/trader-status";
 import {
   getAttemptCountsByConversation,
+  getAttemptCountsByUser,
   getConversationAttemptStats,
   listRecentAttemptsForConversation,
   CONTACT_BYPASS_THRESHOLD,
@@ -1839,26 +1840,37 @@ router.get("/admin/conversation-reports", authMiddleware, adminOnly, async (req,
     const where = status
       ? eq(conversationReportsTable.status, status)
       : isNotNull(conversationReportsTable.id);
+    const traderUsers = alias(usersTable, "trader_users");
     const rows = await db
       .select({
         report: conversationReportsTable,
         conv: conversationsTable,
         traderBusinessName: traderProfilesTable.businessName,
         customerFullName: usersTable.fullName,
+        customerSuspendedAt: usersTable.suspendedAt,
+        traderSuspendedAt: traderUsers.suspendedAt,
       })
       .from(conversationReportsTable)
       .innerJoin(conversationsTable, eq(conversationReportsTable.conversationId, conversationsTable.id))
       .innerJoin(traderProfilesTable, eq(conversationsTable.traderProfileId, traderProfilesTable.id))
       .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
+      .innerJoin(traderUsers, eq(conversationsTable.traderUserId, traderUsers.id))
       .where(where)
       .orderBy(desc(conversationReportsTable.createdAt));
     const attemptCounts = await getAttemptCountsByConversation(
       Array.from(new Set(rows.map((r) => r.conv.id))),
     );
+    // Account-level totals across ALL conversations, so admins can spot
+    // repeat offenders straight from the queue.
+    const userAttemptCounts = await getAttemptCountsByUser(
+      Array.from(new Set(rows.flatMap((r) => [r.conv.customerId, r.conv.traderUserId]))),
+    );
     res.json({
       contactBypassThreshold: CONTACT_BYPASS_THRESHOLD,
-      reports: rows.map(({ report, conv, traderBusinessName, customerFullName }) => {
+      reports: rows.map(({ report, conv, traderBusinessName, customerFullName, customerSuspendedAt, traderSuspendedAt }) => {
         const counts = attemptCounts.get(conv.id) ?? { total: 0, recent: 0 };
+        const customerCounts = userAttemptCounts.get(conv.customerId) ?? { total: 0, recent: 0 };
+        const traderCounts = userAttemptCounts.get(conv.traderUserId) ?? { total: 0, recent: 0 };
         return {
           id: report.id,
           conversationId: report.conversationId,
@@ -1874,6 +1886,18 @@ router.get("/admin/conversation-reports", authMiddleware, adminOnly, async (req,
           conversationStatus: conv.status,
           contactBypassAttempts: counts.total,
           contactBypassAttemptsRecent: counts.recent,
+          customer: {
+            userId: conv.customerId,
+            bypassTotal: customerCounts.total,
+            bypassRecent: customerCounts.recent,
+            suspendedAt: customerSuspendedAt?.toISOString() ?? null,
+          },
+          trader: {
+            userId: conv.traderUserId,
+            bypassTotal: traderCounts.total,
+            bypassRecent: traderCounts.recent,
+            suspendedAt: traderSuspendedAt?.toISOString() ?? null,
+          },
         };
       }),
     });
@@ -1949,7 +1973,40 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
       ? await listRecentAttemptsForConversation(id, 20)
       : [];
 
+    // Account-level bypass totals + suspension state for both participants,
+    // so admins can suspend repeat offenders straight from the report view.
+    const participantIds = Array.from(new Set([row.conv.customerId, row.conv.traderUserId]));
+    const [userCounts, participantRows] = await Promise.all([
+      getAttemptCountsByUser(participantIds),
+      db
+        .select({
+          id: usersTable.id,
+          fullName: usersTable.fullName,
+          suspendedAt: usersTable.suspendedAt,
+          suspendedReason: usersTable.suspendedReason,
+        })
+        .from(usersTable)
+        .where(inArray(usersTable.id, participantIds)),
+    ]);
+    const participants = participantIds.map((uid) => {
+      const u = participantRows.find((p) => p.id === uid);
+      const counts = userCounts.get(uid) ?? { total: 0, recent: 0 };
+      return {
+        userId: uid,
+        role: uid === row.conv.customerId ? ("customer" as const) : ("trader" as const),
+        name:
+          uid === row.conv.customerId
+            ? row.customerName
+            : row.traderBusinessName ?? u?.fullName ?? "Trader",
+        bypassTotal: counts.total,
+        bypassRecent: counts.recent,
+        suspendedAt: u?.suspendedAt?.toISOString() ?? null,
+        suspendedReason: u?.suspendedReason ?? null,
+      };
+    });
+
     res.json({
+      participants,
       conversation: {
         id: row.conv.id,
         customerId: row.conv.customerId,
@@ -2095,6 +2152,115 @@ router.post("/admin/conversation-reports/:id/resolve", authMiddleware, adminOnly
     }
     req.log.error({ err: error }, "Resolve conversation report failed");
     res.status(500).json({ error: "Failed to resolve report" });
+  }
+});
+
+// === Account-level suspension (moderation queue) ===
+// Suspends an app user (customer or trader) so they can no longer send
+// messages or create enquiries. Distinct from trader verification
+// suspension (/admin/traders/:userId/suspend), which controls public
+// listing — this is a messaging/enquiry block for repeat offenders (e.g.
+// contact-filter bypass across many conversations).
+
+const SuspendUserBody = z.object({ reason: z.string().trim().min(5).max(500) });
+
+router.post("/admin/users/:userId/suspend", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const userId = Number.parseInt(String(req.params.userId), 10);
+    if (!Number.isFinite(userId)) {
+      res.status(400).json({ error: "Invalid user id" });
+      return;
+    }
+    const body = SuspendUserBody.parse(req.body);
+    const adminId = (req as AuthenticatedRequest).userId;
+
+    const [user] = await db
+      .select({ id: usersTable.id, role: usersTable.role, suspendedAt: usersTable.suspendedAt })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+    if (!user || user.role === "admin") {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    if (user.suspendedAt) {
+      res.status(400).json({ error: "User is already suspended" });
+      return;
+    }
+
+    const suspendedAt = new Date();
+    await db
+      .update(usersTable)
+      .set({
+        suspendedAt,
+        suspendedReason: body.reason,
+        suspendedByAdminId: adminId,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, userId));
+
+    await logAudit({
+      userId,
+      action: "USER_SUSPENDED",
+      performedBy: adminId,
+      details: { reason: body.reason },
+    });
+
+    res.json({ ok: true, suspendedAt: suspendedAt.toISOString() });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "A reason of at least 5 characters is required", details: error.issues });
+      return;
+    }
+    req.log.error({ err: error }, "Suspend user failed");
+    res.status(500).json({ error: "Failed to suspend user" });
+  }
+});
+
+router.post("/admin/users/:userId/unsuspend", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const userId = Number.parseInt(String(req.params.userId), 10);
+    if (!Number.isFinite(userId)) {
+      res.status(400).json({ error: "Invalid user id" });
+      return;
+    }
+    const adminId = (req as AuthenticatedRequest).userId;
+
+    const [user] = await db
+      .select({ id: usersTable.id, role: usersTable.role, suspendedAt: usersTable.suspendedAt })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .limit(1);
+    if (!user || user.role === "admin") {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    if (!user.suspendedAt) {
+      res.status(400).json({ error: "User is not suspended" });
+      return;
+    }
+
+    await db
+      .update(usersTable)
+      .set({
+        suspendedAt: null,
+        suspendedReason: null,
+        suspendedByAdminId: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, userId));
+
+    await logAudit({
+      userId,
+      action: "USER_UNSUSPENDED",
+      performedBy: adminId,
+      details: {},
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    req.log.error({ err: error }, "Unsuspend user failed");
+    res.status(500).json({ error: "Failed to unsuspend user" });
   }
 });
 

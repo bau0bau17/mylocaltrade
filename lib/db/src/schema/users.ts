@@ -97,6 +97,14 @@ export const usersTable = pgTable(
   adminDeletionNotes: text("admin_deletion_notes"),
   processedByAdminId: integer("processed_by_admin_id"),
 
+  // --- Admin moderation: account-level suspension ---
+  // Set when an admin suspends the account from the moderation queue (e.g.
+  // repeat contact-bypass offenders). While suspendedAt is non-null the user
+  // cannot send messages or create enquiries. Cleared on unsuspend.
+  suspendedAt: timestamp("suspended_at"),
+  suspendedReason: text("suspended_reason"),
+  suspendedByAdminId: integer("suspended_by_admin_id"),
+
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
