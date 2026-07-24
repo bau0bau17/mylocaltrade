@@ -5,8 +5,8 @@ import { router, Tabs, usePathname, useGlobalSearchParams } from "expo-router";
 import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useRef } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { AppState, Platform, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
   useGetConversationsUnreadCount,
@@ -203,11 +203,24 @@ function useUnreadBadgeCount(): number {
   const { isAuthenticated, isAdmin } = useAuth();
   const pathname = usePathname();
   const enabled = isAuthenticated && !isAdmin;
+  // Poll every 60s, but only while the app is actually in the foreground.
+  // Users who denied push permission get no live badge updates from the
+  // notification listener, so this keeps the badge honest for everyone.
+  // React Query's own "background" detection relies on focusManager, which
+  // is not wired to AppState in this app, so we gate the interval manually.
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      setAppActive(state === "active");
+    });
+    return () => sub.remove();
+  }, []);
   const { data, refetch } = useGetConversationsUnreadCount({
     query: {
       queryKey: getGetConversationsUnreadCountQueryKey(),
       enabled,
       refetchOnWindowFocus: true,
+      refetchInterval: enabled && appActive ? 60_000 : false,
     },
   });
   useEffect(() => {
