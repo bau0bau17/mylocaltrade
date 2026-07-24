@@ -6,6 +6,7 @@ import {
   promoRedemptionsTable,
   usersTable,
   traderProfilesTable,
+  PLAN_PRICING_GBP,
 } from "@workspace/db/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import { authMiddleware, traderOnly, adminOnly } from "../lib/auth";
@@ -27,9 +28,11 @@ function rejectIfNotDemo(res: import("express").Response): boolean {
   return true;
 }
 
+// Monthly prices per plan id, sourced from the shared PLAN_PRICING_GBP
+// constant so promo discount maths can never drift from the plans endpoint.
 export const PLAN_PRICES_GBP: Record<string, number> = {
-  basic: 0,
-  premium: 9.99,
+  basic: PLAN_PRICING_GBP.basic.monthly,
+  premium: PLAN_PRICING_GBP.premium.monthly,
 };
 
 export type ClaimPromoResult =

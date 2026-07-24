@@ -9,6 +9,8 @@ import {
   cancellationRequestsTable,
   promoCodesTable,
   promoRedemptionsTable,
+  PLAN_PRICING_GBP,
+  PLAN_CURRENCY,
 } from "@workspace/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
@@ -32,8 +34,10 @@ const IS_DEMO_MODE = !process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== 
 // Subscription model: Basic (free, limited) + a single paid Premium tier,
 // billed either Monthly or Yearly. Both premium cards map to the same stored
 // plan id ("premium"); only the billing interval/price differ. Real prices on
-// the native iOS app come from the App Store via RevenueCat — the values below
-// drive the informational fallback pricing cards on web / Expo Go only.
+// the native iOS app come from the App Store via RevenueCat — the fallback
+// prices below come from the shared PLAN_PRICING_GBP constant in
+// @workspace/db/schema (single source of truth; must mirror App Store
+// Connect) and drive the informational pricing cards on web / Expo Go only.
 // Genuine Premium differentiators only. Free capabilities (receiving customer
 // enquiries, website/social links) belong to the Basic plan below, so the
 // plan comparison stays truthful and never implies those are paid features.
@@ -47,8 +51,8 @@ const PLANS = [
   {
     id: "basic",
     name: "Basic",
-    price: 0,
-    currency: "GBP",
+    price: PLAN_PRICING_GBP.basic.monthly,
+    currency: PLAN_CURRENCY,
     interval: "month",
     features: [
       "Free verified public listing",
@@ -62,8 +66,8 @@ const PLANS = [
   {
     id: "premium",
     name: "Premium Monthly",
-    price: 9.99,
-    currency: "GBP",
+    price: PLAN_PRICING_GBP.premium.monthly,
+    currency: PLAN_CURRENCY,
     interval: "month",
     features: PREMIUM_FEATURES,
     isPopular: true,
@@ -71,8 +75,8 @@ const PLANS = [
   {
     id: "premium",
     name: "Premium Yearly",
-    price: 99.99,
-    currency: "GBP",
+    price: PLAN_PRICING_GBP.premium.yearly,
+    currency: PLAN_CURRENCY,
     interval: "year",
     features: PREMIUM_FEATURES,
     isPopular: false,

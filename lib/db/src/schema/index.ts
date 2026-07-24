@@ -18,3 +18,4 @@ export * from "./promo-codes";
 export * from "./quotes";
 export * from "./promo-redemptions";
 export * from "./profile-change-requests";
+export * from "./plan-pricing";
