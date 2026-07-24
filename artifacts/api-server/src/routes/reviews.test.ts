@@ -380,6 +380,40 @@ describe("Hidden traders never leak reviews via GET /api/traders/:id/reviews", (
   });
 });
 
+describe("Contact-info blocking in POST /api/trader/reviews/:id/reply", () => {
+  it.each([
+    ["plain email address", "Email me at alice@example.com for a quote"],
+    ["(at) obfuscation", "reach me at alice(at)example.com"],
+    ["[at] obfuscation", "alice[at]example.com"],
+    ["( at ) spaced brackets", "alice ( at ) example.com"],
+    ["[ at ] spaced brackets", "alice [ at ] example [ dot ] com"],
+    ["multi-space at+dot", "alice   at   example   dot   com"],
+    ["plain phone number", "Call me on 07911123456"],
+    ["slash-separated phone", "07/1234/56789"],
+    ["plain URL", "See https://mysite.com"],
+    ["www URL", "Check www.mysite.com"],
+    ["[dot] domain obfuscation", "mysite[dot]com"],
+    ["(dot) domain obfuscation", "mysite(dot)com"],
+    ["[ dot ] spaced brackets", "mysite [ dot ] com"],
+  ])("returns 422 for %s in reply text", async (_label, replyText) => {
+    const res = await request(app)
+      .post(`/api/trader/reviews/${ctx.approvedReviewId}/reply`)
+      .set("Authorization", `Bearer ${ctx.traderToken}`)
+      .send({ reply: replyText });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBeTruthy();
+
+    // Verify nothing was written to the DB.
+    const [row] = await db
+      .select({ traderReply: reviewsTable.traderReply })
+      .from(reviewsTable)
+      .where(eq(reviewsTable.id, ctx.approvedReviewId));
+    // The previous successful reply tests may have set a value; it must not
+    // have been overwritten with the contact-info payload.
+    expect(row.traderReply).not.toBe(replyText);
+  });
+});
+
 describe("Admin moderation cannot be bypassed by reply endpoint", () => {
   it("trader reply does not change moderation status", async () => {
     // The reply endpoint above ran on an already-APPROVED review. Make sure

@@ -13,6 +13,7 @@ import { z } from "zod";
 import { authMiddleware, adminOnly, customerOnly, traderOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, isTraderPubliclyListed } from "../lib/trader-status";
+import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 import { sendReviewApprovedEmail, sendReviewReplyEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -348,6 +349,12 @@ router.post("/trader/reviews/:id/reply", authMiddleware, traderOnly, async (req,
     }
     if (review.status !== "APPROVED") {
       res.status(409).json({ error: "You can only reply to reviews that have been approved" });
+      return;
+    }
+
+    const contactViolation = detectContactInfo(body.reply);
+    if (contactViolation) {
+      res.status(422).json({ error: contactViolationMessage(contactViolation) });
       return;
     }
 
