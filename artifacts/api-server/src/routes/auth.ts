@@ -1360,7 +1360,7 @@ function verifyPage(title: string, message: string, success: boolean): string {
     <div style="font-size: 48px; margin-bottom: 16px;">${icon}</div>
     <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 12px;">${title}</h1>
     <p style="color: #9CA3AF; font-size: 16px; line-height: 1.6; margin: 0 0 32px;">${message}</p>
-    ${success ? `<p style="color: ${color}; font-size: 15px; font-weight: 600; margin: 0;">Open the MyLocalTrade app and log in.</p>` : `<p style="color: #6B7280; font-size: 14px; margin: 0;">Please request a new verification email from the app.</p>`}
+    ${success ? `<a href="/open" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 13px 30px; border-radius: 12px; text-decoration: none;">Open the MyLocalTrade app</a>` : `<p style="color: #6B7280; font-size: 14px; margin: 0;">Please request a new verification email from the app.</p>`}
     <hr style="border: none; border-top: 1px solid #1F2937; margin: 32px 0 16px;">
     <p style="color: #374151; font-size: 12px; margin: 0;">MyLocalTrade · Service Provider LTD</p>
   </div>

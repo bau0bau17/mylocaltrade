@@ -64,7 +64,12 @@ const server = http.createServer((req, res) => {
     const id = raw && /^[0-9]+$/.test(raw) ? raw : null;
     // Named in-app targets (allowlisted): /open?t=support → contact form.
     const target = url.searchParams.get("t");
-    const NAMED_TARGETS = { support: "mylocaltrade://contact-support" };
+    const NAMED_TARGETS = {
+      support: "mylocaltrade://contact-support",
+      // Trader lead inbox: email "Open my leads" buttons (new enquiry +
+      // unanswered-lead reminder) land here.
+      leads: "mylocaltrade://trader-dashboard/leads",
+    };
     const deepLink = id
       ? `mylocaltrade://messages/${id}`
       : (target && NAMED_TARGETS[target]) || "mylocaltrade://";

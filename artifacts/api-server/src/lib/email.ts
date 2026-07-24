@@ -596,7 +596,9 @@ export async function sendNewEnquiryEmail(opts: {
     urgency?: string | null;
   } | null;
 }): Promise<void> {
-  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
+  // Deep-link bounce: opens the installed app at the trader's leads screen,
+  // with an install fallback for users without the app.
+  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/open?t=leads`;
   const safeName = escapeHtml(opts.toName);
   const safeCustomer = escapeHtml(opts.customerName);
   const safeService = escapeHtml(opts.serviceRequired);
@@ -709,7 +711,9 @@ export async function sendLeadReminderEmail(opts: {
    * customer marked the job as ASAP. */
   urgency?: "routine" | "soon" | "urgent" | string | null;
 }): Promise<boolean> {
-  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/`;
+  // Deep-link bounce: opens the installed app at the trader's leads screen,
+  // with an install fallback for users without the app.
+  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/open?t=leads`;
   const safeName = escapeHtml(opts.toName);
   const safeCustomer = escapeHtml(opts.customerName);
   const safeService = escapeHtml(opts.serviceRequired);

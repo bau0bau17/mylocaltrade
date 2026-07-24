@@ -40,7 +40,8 @@ function businessEmailResultPage(title: string, message: string, success: boolea
   <div style="max-width:480px;margin:0 auto;background:#111827;border-radius:16px;padding:40px;border:1px solid #1F2937;text-align:center;">
     <div style="width:56px;height:56px;border-radius:50%;background:${accent}22;color:${accent};font-size:30px;line-height:56px;margin:0 auto 20px;">${success ? "&#10003;" : "&#10005;"}</div>
     <h1 style="color:#F9FAFB;font-size:22px;font-weight:700;margin:0 0 10px;">${title}</h1>
-    <p style="color:#9CA3AF;font-size:15px;line-height:1.6;margin:0;">${message}</p>
+    <p style="color:#9CA3AF;font-size:15px;line-height:1.6;margin:0${success ? ";margin-bottom:28px" : ""};">${message}</p>
+    ${success ? `<a href="/open" style="display:inline-block;background:#00B4D8;color:#0B1120;font-weight:700;font-size:15px;padding:13px 30px;border-radius:12px;text-decoration:none;">Open the MyLocalTrade app</a>` : ""}
   </div>
 </body></html>`;
 }
