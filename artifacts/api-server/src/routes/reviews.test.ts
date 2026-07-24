@@ -301,6 +301,85 @@ describe("Public profile review visibility", () => {
   });
 });
 
+describe("Hidden traders never leak reviews via GET /api/traders/:id/reviews", () => {
+  async function createHiddenTraderWithApprovedReview(
+    label: string,
+    opts: {
+      profileOverrides?: Partial<{
+        isActive: boolean;
+        revalidationOverdue: boolean;
+        verificationStatus: string;
+      }>;
+      userOverrides?: Partial<{ deletionStatus: string; deletedAt: Date }>;
+    },
+  ): Promise<number> {
+    const traderUserId = await createUser("trader", label);
+    const profileId = await createTraderProfile(traderUserId, label);
+    if (opts.profileOverrides) {
+      await db
+        .update(traderProfilesTable)
+        .set(opts.profileOverrides)
+        .where(eq(traderProfilesTable.id, profileId));
+    }
+    if (opts.userOverrides) {
+      await db.update(usersTable).set(opts.userOverrides).where(eq(usersTable.id, traderUserId));
+    }
+    const enquiryId = await createEnquiry(profileId, ctx.customerId);
+    await createReview(profileId, ctx.customerId, enquiryId, "APPROVED", 5);
+    return profileId;
+  }
+
+  async function expectReviewsHidden(profileId: number) {
+    const res = await request(app).get(`/api/traders/${profileId}/reviews`);
+    expect(res.status).toBe(404);
+    expect(res.body.reviews).toBeUndefined();
+  }
+
+  it("returns 404 when the trader profile is inactive (isActive=false)", async () => {
+    const profileId = await createHiddenTraderWithApprovedReview("inactive", {
+      profileOverrides: { isActive: false },
+    });
+    await expectReviewsHidden(profileId);
+  });
+
+  it("returns 404 when the trader's re-validation is overdue", async () => {
+    const profileId = await createHiddenTraderWithApprovedReview("overdue", {
+      profileOverrides: { revalidationOverdue: true },
+    });
+    await expectReviewsHidden(profileId);
+  });
+
+  it("returns 404 when the trader's account has a deletionStatus set", async () => {
+    const profileId = await createHiddenTraderWithApprovedReview("deleting", {
+      userOverrides: { deletionStatus: "PENDING_DELETION" },
+    });
+    await expectReviewsHidden(profileId);
+  });
+
+  it("returns 404 when the trader's account is soft-deleted (deletedAt set)", async () => {
+    const profileId = await createHiddenTraderWithApprovedReview("deleted", {
+      userOverrides: { deletedAt: new Date() },
+    });
+    await expectReviewsHidden(profileId);
+  });
+
+  it.each(["REJECTED", "SUSPENDED"])(
+    "returns 404 when verificationStatus is %s (not publicly visible)",
+    async (status) => {
+      const profileId = await createHiddenTraderWithApprovedReview(
+        `status-${status.toLowerCase()}`,
+        { profileOverrides: { verificationStatus: status } },
+      );
+      await expectReviewsHidden(profileId);
+    },
+  );
+
+  it("returns 404 for a trader id that does not exist", async () => {
+    const res = await request(app).get("/api/traders/999999999/reviews");
+    expect(res.status).toBe(404);
+  });
+});
+
 describe("Admin moderation cannot be bypassed by reply endpoint", () => {
   it("trader reply does not change moderation status", async () => {
     // The reply endpoint above ran on an already-APPROVED review. Make sure
