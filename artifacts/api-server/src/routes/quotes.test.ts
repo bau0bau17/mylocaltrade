@@ -53,6 +53,9 @@ async function createUser(role: "customer" | "trader", label: string): Promise<n
       role,
       isActive: true,
       emailVerified: true,
+      phone: "+447000000001",
+      phoneVerified: true,
+      phoneVerifiedAt: new Date(),
     })
     .returning({ id: usersTable.id });
   createdUserIds.push(u.id);

@@ -19,6 +19,28 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+vi.mock("@/lib/auth", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth")>();
+  return {
+    ...actual,
+    useAuth: () => ({
+      user: {
+        id: 1,
+        email: "admin@test.local",
+        fullName: "Test Admin",
+        role: "admin" as const,
+        isSuperAdmin: true,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+      loading: false,
+      error: null,
+      login: vi.fn(),
+      logout: vi.fn(),
+    }),
+  };
+});
+
 import TraderDetail from "./TraderDetail";
 
 const USER_ID = 42;
