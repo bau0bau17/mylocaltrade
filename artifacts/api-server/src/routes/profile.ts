@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { traderProfilesTable, usersTable } from "@workspace/db/schema";
+import { traderProfilesTable, usersTable, subscriptionsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { UpdateTraderProfileBody } from "@workspace/api-zod";
@@ -250,8 +250,24 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       const newUrls = updateData.galleryUrls as unknown[];
       // Gallery size is plan-gated: Basic (free, verified) traders may keep up
       // to 3 photos; Premium unlocks effectively unlimited images.
+      //
+      // For non-Stripe subscriptions the stored plan can lag reality: if the
+      // paid period has already ended we must treat the trader as Basic even
+      // if the DB row still says "premium". Stripe-owned rows are left to the
+      // Stripe webhook flow (same reasoning as the /status read path).
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, userId))
+        .limit(1);
+      const isStripeOwned = !!sub && (!!sub.stripeSubscriptionId || !!sub.stripeCustomerId);
+      const periodLapsed =
+        !!sub &&
+        !isStripeOwned &&
+        sub.currentPeriodEnd != null &&
+        sub.currentPeriodEnd.getTime() <= Date.now();
       const premiumPlanIds = new Set(["premium", "trader"]);
-      const isPremium = !!prior?.plan && premiumPlanIds.has(prior.plan);
+      const isPremium = !!prior?.plan && premiumPlanIds.has(prior.plan) && !periodLapsed;
       const galleryCap = isPremium ? 999 : 3;
       if (newUrls.length > galleryCap) {
         res.status(400).json({

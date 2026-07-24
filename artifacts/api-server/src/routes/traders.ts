@@ -6,6 +6,7 @@ import {
   enquiriesTable,
   conversationsTable,
   messagesTable,
+  subscriptionsTable,
 } from "@workspace/db/schema";
 import type { TraderProfile } from "@workspace/db/schema";
 import { eq, and, ilike, or, desc, sql, inArray, type SQL } from "drizzle-orm";
@@ -68,7 +69,20 @@ router.get("/traders", async (req, res) => {
       // Any non-basic plan counts as Premium. `inArray` also covers legacy
       // "trader" rows that predate the unified "premium" plan id, so existing
       // paid traders remain discoverable until their plan is re-synced.
-      conditions.push(inArray(traderProfilesTable.plan, ["premium", "trader"]));
+      // Additionally exclude traders whose non-Stripe subscription period has
+      // already lapsed — the stored plan field can lag reality between the
+      // expiry and the next revenuecat-sync/webhook downgrade.
+      conditions.push(
+        and(
+          inArray(traderProfilesTable.plan, ["premium", "trader"]),
+          sql`NOT (
+            ${subscriptionsTable.stripeSubscriptionId} IS NULL
+            AND ${subscriptionsTable.stripeCustomerId} IS NULL
+            AND ${subscriptionsTable.currentPeriodEnd} IS NOT NULL
+            AND ${subscriptionsTable.currentPeriodEnd} <= NOW()
+          )`,
+        )!,
+      );
     }
 
     // Specialism filter: a free-text keyword (e.g. "solar", "heat pump") that
@@ -130,7 +144,15 @@ router.get("/traders", async (req, res) => {
         default:
           return [
             sql`case when ${traderProfilesTable.verificationStatus} = 'VERIFIED' then 0 else 1 end`,
-            desc(traderProfilesTable.isFeatured),
+            // Use effective isFeatured: treat as false when the non-Stripe
+            // subscription period has lapsed but the downgrade webhook hasn't
+            // arrived yet (same logic as the premium plan filter above).
+            sql`case when ${traderProfilesTable.isFeatured} = true AND NOT (
+              ${subscriptionsTable.stripeSubscriptionId} IS NULL
+              AND ${subscriptionsTable.stripeCustomerId} IS NULL
+              AND ${subscriptionsTable.currentPeriodEnd} IS NOT NULL
+              AND ${subscriptionsTable.currentPeriodEnd} <= NOW()
+            ) then 1 else 0 end DESC`,
             desc(traderProfilesTable.createdAt),
           ];
       }
@@ -143,6 +165,7 @@ router.get("/traders", async (req, res) => {
       })
       .from(traderProfilesTable)
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
+      .leftJoin(subscriptionsTable, eq(subscriptionsTable.userId, traderProfilesTable.userId))
       .where(where)
       .orderBy(...orderBy)
       .limit(limitNum)
@@ -152,6 +175,7 @@ router.get("/traders", async (req, res) => {
       .select({ count: sql<number>`count(*)::int` })
       .from(traderProfilesTable)
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
+      .leftJoin(subscriptionsTable, eq(subscriptionsTable.userId, traderProfilesTable.userId))
       .where(where);
 
     const total = countResult?.count || 0;
@@ -183,9 +207,18 @@ router.get("/traders/featured", async (req, res) => {
       })
       .from(traderProfilesTable)
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
+      .leftJoin(subscriptionsTable, eq(subscriptionsTable.userId, traderProfilesTable.userId))
       .where(and(
         ...publicTraderSqlConditions({ verifiedOnly: true }),
         eq(traderProfilesTable.isFeatured, true),
+        // Exclude traders whose non-Stripe subscription has lapsed but whose
+        // isFeatured flag hasn't been cleared by a downgrade event yet.
+        sql`NOT (
+          ${subscriptionsTable.stripeSubscriptionId} IS NULL
+          AND ${subscriptionsTable.stripeCustomerId} IS NULL
+          AND ${subscriptionsTable.currentPeriodEnd} IS NOT NULL
+          AND ${subscriptionsTable.currentPeriodEnd} <= NOW()
+        )`,
       ))
       .orderBy(desc(traderProfilesTable.createdAt))
       .limit(limit);
