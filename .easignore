@@ -1,0 +1,16 @@
+
+# Exclude unnecessary assets from EAS mobile build
+attached_assets/*.png
+attached_assets/*.jpg
+attached_assets/*.jpeg
+attached_assets/IMG_*
+attached_assets/Pasted-*
+
+# Screenshots and temporary uploaded assets not needed for iOS builds
+attached_assets/IMG_*
+attached_assets/Pasted-*
+attached_assets/*.jpeg
+attached_assets/*.jpg
+
+# Keep required shared logo
+!attached_assets/mylocaltrade-logo.png
