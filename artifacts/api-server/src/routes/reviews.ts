@@ -12,7 +12,7 @@ import { and, eq, ne, sql, desc, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { authMiddleware, adminOnly, customerOnly, traderOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
-import { logAudit } from "../lib/trader-status";
+import { logAudit, isTraderPubliclyListed } from "../lib/trader-status";
 import { sendReviewApprovedEmail, sendReviewReplyEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -20,14 +20,6 @@ import { jobReferenceOf } from "../lib/job-reference";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
-
-// Statuses considered publicly discoverable for review retrieval. Mirrors the
-// visibility used by the public trader detail endpoint.
-const PUBLIC_TRADER_STATUSES: readonly string[] = [
-  "VERIFIED",
-  "UNDER_REVIEW",
-  "PENDING_DOCUMENTS",
-];
 
 const CreateReviewBody = z.object({
   traderId: z.number().int().positive(),
@@ -258,14 +250,7 @@ router.get("/traders/:id/reviews", async (req, res) => {
     // Hide reviews for any trader not publicly discoverable — including those
     // whose periodic re-validation lapsed (revalidationOverdue) — so the
     // reviews endpoint can't be used to retrieve hidden profiles by ID.
-    if (
-      !trader ||
-      !trader.isActive ||
-      trader.revalidationOverdue ||
-      trader.deletionStatus ||
-      trader.deletedAt ||
-      !PUBLIC_TRADER_STATUSES.includes(trader.verificationStatus)
-    ) {
+    if (!trader || !isTraderPubliclyListed(trader)) {
       res.status(404).json({ error: "Trader not found" });
       return;
     }

@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
-import { traderAuditLogTable, type TraderAuditAction, type TraderProfile, type User, type TraderDocument, type TraderDocumentType } from "@workspace/db/schema";
+import { traderAuditLogTable, traderProfilesTable, usersTable, type TraderAuditAction, type TraderProfile, type User, type TraderDocument, type TraderDocumentType } from "@workspace/db/schema";
+import { eq, inArray, isNull, type SQL } from "drizzle-orm";
 
 // Baseline documents required of every trader regardless of role.
 export const REQUIRED_DOCUMENT_TYPES: TraderDocumentType[] = ["ID_DOCUMENT", "INSURANCE"];
@@ -169,6 +170,72 @@ export const TRADER_STATUS = {
 } as const;
 
 export type TraderStatus = (typeof TRADER_STATUS)[keyof typeof TRADER_STATUS];
+
+// --- Public discoverability (single source of truth) ---
+// Statuses that may appear in customer-facing search/detail/review surfaces.
+// VERIFIED traders are fully approved; UNDER_REVIEW and PENDING_DOCUMENTS are
+// visible but flagged so customers can see where they are in the process.
+export const PUBLIC_TRADER_STATUSES: readonly string[] = [
+  TRADER_STATUS.VERIFIED,
+  TRADER_STATUS.UNDER_REVIEW,
+  TRADER_STATUS.PENDING_DOCUMENTS,
+];
+
+export interface PublicListingOptions {
+  /**
+   * Restrict to fully VERIFIED traders only (used by featured placement and
+   * saved-trader lists) instead of the broader in-progress allow-list.
+   */
+  verifiedOnly?: boolean;
+}
+
+/**
+ * Row shape needed to decide public discoverability after the data has been
+ * fetched. deletionStatus / deletedAt come from the joined users row — GDPR:
+ * any account in the deletion lifecycle must never be publicly discoverable.
+ */
+export interface PublicListingRow {
+  isActive: boolean;
+  verificationStatus: string;
+  revalidationOverdue: boolean;
+  deletionStatus: string | null;
+  deletedAt: Date | null;
+}
+
+/**
+ * Single source of truth (row form) for whether a trader may appear on public
+ * surfaces: search results, detail pages, reviews, saved-trader lists. Any new
+ * "hide" rule belongs HERE (and in publicTraderSqlConditions below), never
+ * inline in a route.
+ */
+export function isTraderPubliclyListed(
+  row: PublicListingRow,
+  opts?: PublicListingOptions,
+): boolean {
+  if (!row.isActive) return false;
+  if (row.revalidationOverdue) return false;
+  if (row.deletionStatus || row.deletedAt) return false;
+  if (opts?.verifiedOnly) return row.verificationStatus === TRADER_STATUS.VERIFIED;
+  return PUBLIC_TRADER_STATUSES.includes(row.verificationStatus);
+}
+
+/**
+ * The same rule as isTraderPubliclyListed, expressed as Drizzle WHERE
+ * conditions for queries that join traderProfilesTable with usersTable.
+ * Callers append their route-specific filters (category, featured, etc).
+ */
+export function publicTraderSqlConditions(opts?: PublicListingOptions): SQL[] {
+  return [
+    eq(traderProfilesTable.isActive, true),
+    opts?.verifiedOnly
+      ? eq(traderProfilesTable.verificationStatus, TRADER_STATUS.VERIFIED)
+      : inArray(traderProfilesTable.verificationStatus, [...PUBLIC_TRADER_STATUSES]),
+    eq(traderProfilesTable.revalidationOverdue, false),
+    // GDPR: hide any trader account in the deletion lifecycle.
+    isNull(usersTable.deletionStatus),
+    isNull(usersTable.deletedAt),
+  ];
+}
 
 /**
  * Machine-readable reasons a trader profile is NOT publicly visible. Each maps

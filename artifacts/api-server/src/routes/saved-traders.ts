@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { savedTradersTable, traderProfilesTable } from "@workspace/db/schema";
+import { savedTradersTable, traderProfilesTable, usersTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { authMiddleware, customerOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
+import { isTraderPubliclyListed } from "../lib/trader-status";
 
 const router: IRouter = Router();
 
@@ -14,13 +15,27 @@ router.get("/saved-traders", authMiddleware, customerOnly, async (req, res) => {
     const saved = await db
       .select({
         trader: traderProfilesTable,
+        deletionStatus: usersTable.deletionStatus,
+        deletedAt: usersTable.deletedAt,
       })
       .from(savedTradersTable)
       .innerJoin(traderProfilesTable, eq(savedTradersTable.traderId, traderProfilesTable.id))
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(eq(savedTradersTable.userId, userId));
 
     const traders = saved
-      .filter(({ trader: t }) => t.isActive && t.verificationStatus === "VERIFIED" && !t.revalidationOverdue)
+      .filter(({ trader: t, deletionStatus, deletedAt }) =>
+        isTraderPubliclyListed(
+          {
+            isActive: t.isActive,
+            verificationStatus: t.verificationStatus,
+            revalidationOverdue: t.revalidationOverdue,
+            deletionStatus,
+            deletedAt,
+          },
+          { verifiedOnly: true },
+        ),
+      )
       .map(({ trader: t }) => ({
       id: t.id,
       userId: t.userId,

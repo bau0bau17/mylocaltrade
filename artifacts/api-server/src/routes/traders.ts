@@ -8,15 +8,11 @@ import {
   messagesTable,
 } from "@workspace/db/schema";
 import type { TraderProfile } from "@workspace/db/schema";
-import { eq, and, ilike, or, desc, asc, sql, inArray, isNull, gte } from "drizzle-orm";
+import { eq, and, ilike, or, desc, sql, inArray, type SQL } from "drizzle-orm";
 import { computeResponseTimes } from "../lib/response-times";
+import { isTraderPubliclyListed, publicTraderSqlConditions } from "../lib/trader-status";
 
 const router: IRouter = Router();
-
-// Statuses that should appear in customer-facing search results.
-// VERIFIED traders are fully approved; UNDER_REVIEW and PENDING_DOCUMENTS
-// are visible but flagged so customers can see where they are in the process.
-const VISIBLE_STATUSES = ["VERIFIED", "UNDER_REVIEW", "PENDING_DOCUMENTS"] as const;
 
 router.get("/traders", async (req, res) => {
   try {
@@ -36,14 +32,9 @@ router.get("/traders", async (req, res) => {
     const limitNum = Math.min(50, Math.max(1, parseInt(String(limit)) || 20));
     const offset = (pageNum - 1) * limitNum;
 
-    const conditions = [
-      eq(traderProfilesTable.isActive, true),
-      inArray(traderProfilesTable.verificationStatus, VISIBLE_STATUSES as unknown as string[]),
-      eq(traderProfilesTable.revalidationOverdue, false),
+    const conditions: SQL[] = [
+      ...publicTraderSqlConditions(),
       eq(traderProfilesTable.businessProfileCompleted, true),
-      // GDPR: hide any trader account in the deletion lifecycle.
-      isNull(usersTable.deletionStatus),
-      isNull(usersTable.deletedAt),
     ];
 
     if (category && typeof category === "string") {
@@ -193,12 +184,8 @@ router.get("/traders/featured", async (req, res) => {
       .from(traderProfilesTable)
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(and(
-        eq(traderProfilesTable.isActive, true),
-        eq(traderProfilesTable.verificationStatus, "VERIFIED"),
-        eq(traderProfilesTable.revalidationOverdue, false),
+        ...publicTraderSqlConditions({ verifiedOnly: true }),
         eq(traderProfilesTable.isFeatured, true),
-        isNull(usersTable.deletionStatus),
-        isNull(usersTable.deletedAt),
       ))
       .orderBy(desc(traderProfilesTable.createdAt))
       .limit(limit);
@@ -242,11 +229,13 @@ router.get("/traders/:id", async (req, res) => {
 
     if (
       !row ||
-      !row.profile.isActive ||
-      row.profile.revalidationOverdue ||
-      row.deletionStatus ||
-      row.deletedAt ||
-      !(VISIBLE_STATUSES as readonly string[]).includes(row.profile.verificationStatus)
+      !isTraderPubliclyListed({
+        isActive: row.profile.isActive,
+        verificationStatus: row.profile.verificationStatus,
+        revalidationOverdue: row.profile.revalidationOverdue,
+        deletionStatus: row.deletionStatus,
+        deletedAt: row.deletedAt,
+      })
     ) {
       res.status(404).json({ error: "Trader not found" });
       return;
