@@ -158,6 +158,19 @@ const documentUploadLimiter = rateLimit({
   store: createPgStore("doc-upload"),
 });
 
+// Customer upload-URL requests share the same abuse surface as trader
+// document uploads: each request mints a presigned PUT URL into the private
+// bucket, so an unthrottled endpoint lets one account mass-mint URLs for
+// storage exhaustion. Same budget as documentUploadLimiter.
+const customerUploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  message: { error: "Too many upload requests. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createPgStore("customer-upload"),
+});
+
 const cancellationRequestLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: 10,
@@ -203,6 +216,7 @@ app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);
 app.use(/^\/api\/conversations\/\d+\/report$/, reportsLimiter);
 app.use("/api/reports", reportsLimiter);
 app.use("/api/trader/documents/upload-url", documentUploadLimiter);
+app.use("/api/customer/uploads/upload-url", customerUploadLimiter);
 app.use("/api/subscriptions/cancellation-request", cancellationRequestLimiter);
 app.use("/api", apiLimiter);
 

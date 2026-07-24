@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { traderProfilesTable } from "@workspace/db/schema";
+import { traderProfilesTable, usersTable } from "@workspace/db/schema";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { publicTraderSqlConditions } from "../lib/trader-status";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -87,16 +88,24 @@ router.get("/customer/uploads/gallery-file", async (req, res) => {
       return;
     }
 
-    // Only serve images published in a trader's gallery. gallery_urls is a JSON
-    // array of these paths; cast to jsonb so the containment operator can check
-    // membership across all profiles.
+    // Only serve images published in the gallery of a trader who is CURRENTLY
+    // publicly listed. gallery_urls is a JSON array of these paths; cast to
+    // jsonb so the containment operator can check membership. Joining users
+    // and applying publicTraderSqlConditions (the same single-source rule as
+    // public trader pages) means images stop being served the moment the
+    // owning trader is hidden, suspended, reset, deleted or unapproved —
+    // path membership alone is NOT enough.
     const referenced = await db
       .select({ id: traderProfilesTable.id })
       .from(traderProfilesTable)
+      .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(
-        sql`${traderProfilesTable.galleryUrls}::jsonb @> ${JSON.stringify([
-          normalized,
-        ])}::jsonb`,
+        and(
+          sql`${traderProfilesTable.galleryUrls}::jsonb @> ${JSON.stringify([
+            normalized,
+          ])}::jsonb`,
+          ...publicTraderSqlConditions(),
+        ),
       )
       .limit(1);
     if (referenced.length === 0) {
@@ -110,7 +119,10 @@ router.get("/customer/uploads/gallery-file", async (req, res) => {
       "Content-Type",
       (meta.contentType as string) || "application/octet-stream",
     );
-    res.setHeader("Cache-Control", "public, max-age=86400");
+    // Short public cache: gallery images must stop being served promptly once
+    // the owning trader is hidden, so don't let intermediaries hold them for
+    // a day like before.
+    res.setHeader("Cache-Control", "public, max-age=3600");
     if (meta.size) res.setHeader("Content-Length", String(meta.size));
     await new Promise<void>((resolve, reject) => {
       file

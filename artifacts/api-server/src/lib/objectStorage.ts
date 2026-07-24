@@ -294,6 +294,28 @@ export class ObjectStorageService {
     return `/objects/${finalisedEntityId}`;
   }
 
+  // List every stored object whose entity id starts with the given prefix
+  // (e.g. "customer-uploads/"). Returns the GCS File plus the entity id
+  // relative to the private object dir, so callers can reason about paths in
+  // the same "/objects/<entityId>" form used everywhere else.
+  async listEntityFiles(
+    entityIdPrefix: string,
+  ): Promise<Array<{ file: File; entityId: string }>> {
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith("/")) entityDir = `${entityDir}/`;
+    const fullPrefix = `${entityDir}${entityIdPrefix}`;
+    const { bucketName, objectName } = parseObjectPath(fullPrefix);
+    // The part of objectName that precedes the entity id (e.g. "private/").
+    const baseLen = objectName.length - entityIdPrefix.length;
+    const [files] = await objectStorageClient
+      .bucket(bucketName)
+      .getFiles({ prefix: objectName });
+    return files.map((file) => ({
+      file,
+      entityId: file.name.slice(baseLen),
+    }));
+  }
+
   async canAccessObjectEntity({
     userId,
     objectFile,

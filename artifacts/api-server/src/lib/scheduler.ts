@@ -14,6 +14,7 @@ import {
 } from "./trader-status";
 import { sweepLeadReminders } from "./lead-reminders";
 import { sweepExpiredMutes } from "./mute-sweep";
+import { sweepOrphanUploads } from "./upload-sweep";
 import { sendPushToUser } from "./push-notifications";
 import {
   sendTraderRevalidationDueEmail,
@@ -25,6 +26,7 @@ const HOUR_MS = 60 * 60 * 1000;
 const LEAD_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const MUTE_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 const REVALIDATION_SWEEP_INTERVAL_MS = 6 * HOUR_MS;
+const ORPHAN_UPLOAD_SWEEP_INTERVAL_MS = 6 * HOUR_MS;
 const REVALIDATION_GRACE_DAYS = Math.round(REVALIDATION_GRACE_MS / (24 * 60 * 60 * 1000));
 
 /**
@@ -240,6 +242,7 @@ let scheduledTimer: NodeJS.Timeout | null = null;
 let leadReminderTimer: NodeJS.Timeout | null = null;
 let muteSweepTimer: NodeJS.Timeout | null = null;
 let revalidationTimer: NodeJS.Timeout | null = null;
+let orphanUploadTimer: NodeJS.Timeout | null = null;
 
 export function startScheduler(): void {
   if (scheduledTimer) return;
@@ -318,6 +321,21 @@ export function startScheduler(): void {
     }
   }, REVALIDATION_SWEEP_INTERVAL_MS);
   revalidationTimer.unref?.();
+
+  // Orphan-upload sweep (storage-exhaustion defence): delete abandoned
+  // presigned-PUT objects that were never finalised/registered, so an
+  // attacker cannot fill the private bucket by skipping the finalise step.
+  orphanUploadTimer = setInterval(async () => {
+    try {
+      const result = await sweepOrphanUploads();
+      if (result.deleted > 0) {
+        logger.info({ ...result }, "Orphan-upload sweep");
+      }
+    } catch (err) {
+      logger.error({ err }, "Orphan-upload sweep failed");
+    }
+  }, ORPHAN_UPLOAD_SWEEP_INTERVAL_MS);
+  orphanUploadTimer.unref?.();
 }
 
 export function stopScheduler(): void {
@@ -336,5 +354,9 @@ export function stopScheduler(): void {
   if (revalidationTimer) {
     clearInterval(revalidationTimer);
     revalidationTimer = null;
+  }
+  if (orphanUploadTimer) {
+    clearInterval(orphanUploadTimer);
+    orphanUploadTimer = null;
   }
 }
