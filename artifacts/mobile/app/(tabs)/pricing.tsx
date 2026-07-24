@@ -16,6 +16,15 @@ import { useSubscription, isUserCancelledError } from '@/lib/revenuecat';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import type { PurchasesPackage } from 'react-native-purchases';
 
+function getYearlySavings(monthlyPrice: number | undefined, yearlyPrice: number | undefined): { percent: number; monthsFree: number } | null {
+  if (!monthlyPrice || !yearlyPrice || monthlyPrice <= 0) return null;
+  const fullYear = monthlyPrice * 12;
+  if (yearlyPrice >= fullYear) return null;
+  const percent = Math.round(((fullYear - yearlyPrice) / fullYear) * 100);
+  const monthsFree = Math.round((fullYear - yearlyPrice) / monthlyPrice);
+  return { percent, monthsFree };
+}
+
 interface PromoPreview {
   code: string;
   discountGbp: number;
@@ -393,12 +402,19 @@ export default function PricingScreen() {
                 </View>
               )}
 
-              {subscription.annualPackage && (
+              {subscription.annualPackage && (() => {
+                const savings = getYearlySavings(
+                  subscription.monthlyPackage?.product.price,
+                  subscription.annualPackage.product.price,
+                );
+                return (
                 <View style={[styles.planOption, styles.planOptionPremium]}>
                   <View style={styles.planOptionHead}>
                     <Text style={styles.planOptionName}>Premium Yearly</Text>
                     <View style={styles.saveTag}>
-                      <Text style={styles.saveTagText}>Best value</Text>
+                      <Text style={styles.saveTagText}>
+                        {savings ? `Save ${savings.percent}%` : 'Best value'}
+                      </Text>
                     </View>
                   </View>
                   <Text style={styles.planOptionPrice}>
@@ -406,7 +422,9 @@ export default function PricingScreen() {
                     <Text style={styles.planOptionCadence}> / year</Text>
                   </Text>
                   <Text style={styles.planOptionDesc}>
-                    Full premium access, billed yearly. Cancel anytime.
+                    {savings && savings.monthsFree > 0
+                      ? `Full premium access, billed yearly — that's ${savings.monthsFree} month${savings.monthsFree === 1 ? '' : 's'} free vs paying monthly. Cancel anytime.`
+                      : 'Full premium access, billed yearly. Cancel anytime.'}
                   </Text>
                   <Pressable
                     style={[styles.subscribeBtn, !!purchasing && { opacity: 0.6 }]}
@@ -420,7 +438,8 @@ export default function PricingScreen() {
                     )}
                   </Pressable>
                 </View>
-              )}
+                );
+              })()}
 
               <Pressable style={styles.restoreBtn} onPress={handleRestore} disabled={!!purchasing}>
                 <Text style={styles.restoreBtnText}>Restore purchases</Text>
@@ -430,10 +449,25 @@ export default function PricingScreen() {
         </View>
       ) : (
         <View style={styles.plansContainer}>
-          {plansData?.plans.map(plan => (
+          {plansData?.plans.map(plan => {
+            const monthlyPlan = plansData.plans.find(
+              p => p.id === plan.id && p.interval === 'month',
+            );
+            const savings =
+              plan.interval === 'year'
+                ? getYearlySavings(monthlyPlan?.price, plan.price)
+                : null;
+            return (
             <PlanCard
               key={`${plan.id}-${plan.interval}-${plan.price}`}
               plan={plan}
+              savingsLabel={
+                savings
+                  ? savings.monthsFree > 0
+                    ? `Save ${savings.percent}% — ${savings.monthsFree} month${savings.monthsFree === 1 ? '' : 's'} free`
+                    : `Save ${savings.percent}%`
+                  : undefined
+              }
               onSelect={(planId) => {
                 if (!isTrader) {
                   Alert.alert('Trade account needed', 'Register as a tradesperson to subscribe to a plan.');
@@ -446,7 +480,8 @@ export default function PricingScreen() {
                 handleSelectPlan(planId);
               }}
             />
-          ))}
+            );
+          })}
         </View>
       )}
 

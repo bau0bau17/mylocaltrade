@@ -8,6 +8,7 @@ interface PlanCardProps {
   plan: SubscriptionPlan;
   onSelect: (planId: string) => void;
   isLoading?: boolean;
+  savingsLabel?: string;
 }
 
 const PLAN_ACCENTS: Record<string, { border: string; bg: string; accent: string }> = {
@@ -15,17 +16,22 @@ const PLAN_ACCENTS: Record<string, { border: string; bg: string; accent: string 
   premium: { border: Colors.light.primary, bg: Colors.light.primaryMuted, accent: Colors.light.primary },
 };
 
-export function PlanCard({ plan, onSelect, isLoading }: PlanCardProps) {
+export function PlanCard({ plan, onSelect, isLoading, savingsLabel }: PlanCardProps) {
   const accent = PLAN_ACCENTS[plan.id] || PLAN_ACCENTS.basic;
 
   return (
     <View style={[styles.card, { borderColor: accent.border }]}>
-      {plan.isPopular && (
+      {savingsLabel ? (
+        <View style={[styles.popularBadge, { backgroundColor: accent.accent }]}>
+          <Feather name="tag" size={10} color={Colors.light.white} />
+          <Text style={styles.popularText}>{savingsLabel}</Text>
+        </View>
+      ) : plan.isPopular ? (
         <View style={[styles.popularBadge, { backgroundColor: accent.accent }]}>
           <Feather name="trending-up" size={10} color={Colors.light.white} />
           <Text style={styles.popularText}>Popular</Text>
         </View>
-      )}
+      ) : null}
       <Text style={styles.name}>{plan.name}</Text>
       <View style={styles.priceContainer}>
         <Text style={styles.currency}>{plan.currency?.toUpperCase() === 'GBP' ? '£' : '$'}</Text>
