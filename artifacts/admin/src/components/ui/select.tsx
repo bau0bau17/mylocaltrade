@@ -86,9 +86,13 @@ const SelectContent = React.forwardRef<
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport
         className={cn(
-          "p-1",
+          // Cap the list height and force a visible scrollbar. Radix injects a
+          // stylesheet that hides the viewport scrollbar entirely, which left
+          // long lists (e.g. the audit "Action" filter) unscrollable-looking
+          // and cut off at the page edge — hence the !important overrides.
+          "p-1 max-h-[min(24rem,var(--radix-select-content-available-height))] overflow-y-auto ![scrollbar-width:thin] [&::-webkit-scrollbar]:![display:block] [&::-webkit-scrollbar]:!w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30",
           position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+            "w-full min-w-[var(--radix-select-trigger-width)]"
         )}
       >
         {children}
