@@ -1,0 +1,122 @@
+Hi,
+
+Please add one more small booking enhancement to the existing appointment flow.
+
+After an appointment is CONFIRMED, ask the user whether they would like to add it to their personal iPhone calendar.
+
+IMPORTANT:
+- This must be optional.
+- Do not add anything to the calendar automatically.
+- Ask for permission only when needed.
+- Keep the implementation lightweight.
+- Do not add external calendar integrations.
+- Do not build a separate calendar system.
+- Reuse native iOS calendar capabilities where possible.
+- Do not start an EAS build yet.
+- Do not deploy/publish.
+
+--------------------------------------------------
+ADD TO CALENDAR AFTER APPOINTMENT CONFIRMATION
+--------------------------------------------------
+
+Expected flow:
+
+Appointment proposed
+→ other party confirms
+→ booking becomes CONFIRMED
+→ show a small prompt/sheet:
+
+“Appointment confirmed”
+
+“Would you like to add this appointment to your calendar?”
+
+Actions:
+
+- Add to Calendar
+- Not now
+
+If the user selects “Add to Calendar”:
+
+- request iOS calendar permission if it has not already been granted
+- create a calendar event using the confirmed booking details
+- do not create duplicates if the same appointment has already been added from the app
+
+Suggested calendar event:
+
+Title:
+MyLocalTrade appointment — [service / trader or customer name where appropriate]
+
+Date/time:
+Use the confirmed appointment start date/time.
+
+Location:
+Only include a location if there is already an appropriate job/service address available to that user under the existing privacy rules.
+
+Notes:
+Keep this minimal, for example:
+“MyLocalTrade job reference: MLT-XXXXXX”
+
+Do not include private information that the user should not see.
+
+--------------------------------------------------
+RESCHEDULE / CANCEL
+--------------------------------------------------
+
+Please consider the existing appointment lifecycle.
+
+If a confirmed appointment is later rescheduled or cancelled:
+
+Do NOT silently modify a user’s personal calendar without permission unless there is a reliable existing event identifier and the platform is explicitly designed to manage that calendar event.
+
+For this first version, keep it simple.
+
+Preferred behaviour:
+
+If appointment is rescheduled and confirmed:
+→ offer “Update calendar event” if technically straightforward and if the original event was created by MyLocalTrade.
+
+If that adds unnecessary complexity:
+→ simply offer “Add updated appointment to calendar” and avoid building complex calendar-sync logic.
+
+If appointment is cancelled:
+→ do not automatically delete calendar events unless the app can safely identify the exact event it created.
+
+Please choose the smallest production-safe implementation.
+
+--------------------------------------------------
+UX
+--------------------------------------------------
+
+The prompt should appear only after a booking reaches CONFIRMED status.
+
+Do not repeatedly show it every time the user reopens the conversation.
+
+If possible, remember locally/server-side that the user has already:
+- added it
+- dismissed it
+
+so the prompt does not become annoying.
+
+The booking card can optionally include a small action:
+
+“Add to Calendar”
+
+for users who dismissed the initial prompt and later want to add it.
+
+--------------------------------------------------
+FINAL REPORT
+--------------------------------------------------
+
+Please confirm:
+
+1. Files changed.
+2. Which native library/API is used for iOS calendar access.
+3. When calendar permission is requested.
+4. Exact calendar event fields created.
+5. How duplicate events are avoided.
+6. What happens after reschedule.
+7. What happens after cancellation.
+8. Whether Android behaviour is unchanged or also supported.
+9. Whether any backend/schema change is required.
+10. Minimum checks run.
+11. Confirm no EAS build, deployment or publish was started.

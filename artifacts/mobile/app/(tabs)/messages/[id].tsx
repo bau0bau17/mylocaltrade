@@ -59,6 +59,12 @@ import {
   type Quote,
   type Booking,
 } from "@workspace/api-client-react";
+import {
+  addBookingToCalendar,
+  hasPromptedForBooking,
+  isBookingInCalendar,
+  markPromptedForBooking,
+} from "@/lib/booking-calendar";
 
 // ---- Booking (appointment) helpers ----------------------------------------
 
@@ -342,6 +348,66 @@ export default function ConversationThreadScreen() {
     proposeBookingMutation.isPending ||
     confirmBookingMutation.isPending ||
     cancelBookingMutation.isPending;
+
+  const otherName = useMemo(() => {
+    if (!conv) return "";
+    return isTrader ? conv.customerName : conv.traderBusinessName;
+  }, [conv, isTrader]);
+
+  // "Add to calendar" prompt: shown once per confirmed booking+time (both the
+  // confirmer and the proposer see it when they first observe the CONFIRMED
+  // state). Dismissal ("Not now") is remembered locally; the booking card
+  // keeps a small "Add to calendar" action for later. A reschedule creates a
+  // new booking id server-side, so it gets its own single prompt.
+  const calendarPromptShownRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!booking || booking.status !== "CONFIRMED") return;
+    const key = `${booking.id}_${booking.startAt}`;
+    if (calendarPromptShownRef.current === key) return;
+    let stale = false;
+    (async () => {
+      if (
+        (await hasPromptedForBooking(booking.id, booking.startAt)) ||
+        (await isBookingInCalendar(booking.id, booking.startAt))
+      ) {
+        calendarPromptShownRef.current = key;
+        return;
+      }
+      if (stale || calendarPromptShownRef.current === key) return;
+      calendarPromptShownRef.current = key;
+      void markPromptedForBooking(booking.id, booking.startAt);
+      Alert.alert(
+        "Appointment confirmed",
+        "Would you like to add this appointment to your calendar?",
+        [
+          { text: "Not now", style: "cancel" },
+          {
+            text: "Add to Calendar",
+            onPress: () =>
+              void addBookingToCalendar({
+                bookingId: booking.id,
+                startAtIso: booking.startAt,
+                contextLabel: conv?.serviceRequired || otherName || null,
+                jobRef: conversationId,
+              }),
+          },
+        ],
+      );
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [booking, conv?.serviceRequired, otherName, conversationId]);
+
+  const onAddBookingToCalendar = () => {
+    if (!booking) return;
+    void addBookingToCalendar({
+      bookingId: booking.id,
+      startAtIso: booking.startAt,
+      contextLabel: conv?.serviceRequired || otherName || null,
+      jobRef: conversationId,
+    });
+  };
   const currentQuote = quotes[0] ?? null;
   const currentQuoteStatus = currentQuote ? effectiveStatus(currentQuote) : null;
   const hasLivePendingQuote = currentQuoteStatus === "PENDING";
@@ -358,11 +424,6 @@ export default function ConversationThreadScreen() {
     withdrawQuoteMutation.isPending ||
     acceptQuoteMutation.isPending ||
     declineQuoteMutation.isPending;
-
-  const otherName = useMemo(() => {
-    if (!conv) return "";
-    return isTrader ? conv.customerName : conv.traderBusinessName;
-  }, [conv, isTrader]);
 
   const stageDisplay = useMemo(() => {
     switch (conv?.stage) {
@@ -1263,6 +1324,16 @@ export default function ConversationThreadScreen() {
                         <Text style={styles.quoteBtnPrimaryText}>Confirm</Text>
                       </>
                     )}
+                  </Pressable>
+                ) : null}
+                {booking.status === "CONFIRMED" ? (
+                  <Pressable
+                    style={[styles.quoteBtn, styles.quoteBtnGhost, bookingBusy && styles.quoteBtnDisabled]}
+                    disabled={bookingBusy}
+                    onPress={onAddBookingToCalendar}
+                  >
+                    <Feather name="calendar" size={14} color={Colors.light.primary} />
+                    <Text style={styles.quoteBtnGhostText}>Add to Calendar</Text>
                   </Pressable>
                 ) : null}
                 <Pressable

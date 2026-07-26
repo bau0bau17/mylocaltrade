@@ -1,0 +1,228 @@
+Hi,
+
+I need a small but important Universal Links update on the MyLocalTrade landing site.
+
+The mobile app and email deep-link logic are already correct.
+
+The current problem is that mylocaltrade.co.uk does not yet serve:
+1. the Apple App Site Association file
+2. the /open fallback route
+
+Because of that, iOS does not recognise the email links as Universal Links and Safari falls through to a 404 page.
+
+Please implement ONLY the following on the landing-page project.
+
+IMPORTANT:
+- Keep the existing marketing site and domain unchanged.
+- Do not point mylocaltrade.co.uk to the Replit app deployment.
+- Do not modify unrelated pages.
+- Do not touch RCS assets/pages.
+- Do not modify Privacy Policy or Terms.
+- Do not Publish until the implementation is ready and checked.
+- Run only the minimum relevant build/check.
+
+--------------------------------------------------
+1. APPLE APP SITE ASSOCIATION FILE
+--------------------------------------------------
+
+Please serve the following file publicly at:
+
+https://mylocaltrade.co.uk/.well-known/apple-app-site-association
+
+Ideally also serve the same response at:
+
+https://mylocaltrade.co.uk/apple-app-site-association
+
+The response must:
+
+- return HTTP 200
+- not redirect
+- have Content-Type: application/json
+- have NO .json file extension in the public URL
+
+Exact content:
+
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["WNLMR5HM4J.com.mylocaltrade.app"],
+        "components": [
+          {
+            "/": "/open"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+Please also serve the same AASA configuration on:
+
+www.mylocaltrade.co.uk
+
+because the iOS app currently includes both:
+
+applinks:mylocaltrade.co.uk
+applinks:www.mylocaltrade.co.uk
+
+--------------------------------------------------
+2. ADD /open ROUTE
+--------------------------------------------------
+
+Please add a valid public route:
+
+/open
+
+It must support these query parameters:
+
+c=<conversationId>
+t=leads
+t=support
+
+Examples:
+
+https://mylocaltrade.co.uk/open?t=leads
+
+https://mylocaltrade.co.uk/open?c=123
+
+https://mylocaltrade.co.uk/open?t=support
+
+This route must return HTTP 200 and must NOT show the current Angular 404 page.
+
+--------------------------------------------------
+3. FALLBACK BEHAVIOUR
+--------------------------------------------------
+
+The /open page is primarily a fallback.
+
+When Universal Links are working correctly and MyLocalTrade is installed, iOS should intercept the HTTPS link and open the app directly before this page is displayed.
+
+However, when the page is actually opened in a browser, please implement the following lightweight behaviour:
+
+If:
+
+c=<conversationId>
+
+attempt:
+
+mylocaltrade://messages/<conversationId>
+
+If:
+
+t=leads
+
+attempt:
+
+mylocaltrade://trader-dashboard/leads
+
+If:
+
+t=support
+
+attempt:
+
+mylocaltrade://contact-support
+
+Otherwise:
+
+mylocaltrade://
+
+The page can attempt the custom scheme automatically on load.
+
+Please also show a clean visible fallback such as:
+
+Title:
+Open in MyLocalTrade
+
+Text:
+Open this link in the MyLocalTrade app to continue.
+
+Button:
+Open MyLocalTrade
+
+The button should retry the appropriate custom scheme.
+
+Do not expose any conversation or lead content on this page.
+
+The conversation ID is only an opaque identifier and the mobile/backend authentication already controls access to the actual conversation.
+
+--------------------------------------------------
+4. IMPORTANT — DO NOT USE A WEB REDIRECT CHAIN
+--------------------------------------------------
+
+Please do NOT implement:
+
+mylocaltrade.co.uk
+→ Replit
+→ Expo
+→ app
+
+and do not redirect /open to mylocaltrade.replit.app.
+
+The purpose of this work is to make:
+
+mylocaltrade.co.uk/open...
+
+the actual Apple Universal Link.
+
+--------------------------------------------------
+5. EXISTING EMAIL URLS
+--------------------------------------------------
+
+The app already generates these URLs:
+
+Lead inbox:
+https://mylocaltrade.co.uk/open?t=leads
+
+Conversation:
+https://mylocaltrade.co.uk/open?c=<conversationId>
+
+Support:
+https://mylocaltrade.co.uk/open?t=support
+
+Please support these exact formats.
+
+Do not change the email URL structure.
+
+--------------------------------------------------
+6. EXPECTED RESULT
+--------------------------------------------------
+
+After the site is deployed and Apple recognises the AASA file:
+
+App installed + logged in:
+email link
+→ MyLocalTrade app opens directly
+→ relevant lead inbox/conversation opens
+
+App installed + logged out:
+→ MyLocalTrade opens
+→ login
+→ intended destination is preserved by the app
+
+App not installed:
+→ browser opens /open
+→ clean MyLocalTrade fallback page
+
+--------------------------------------------------
+7. AFTER IMPLEMENTATION
+--------------------------------------------------
+
+Please confirm:
+
+1. Files/components changed.
+2. Exact public AASA URLs created.
+3. HTTP status returned by each AASA URL.
+4. Content-Type returned.
+5. Confirm there is no redirect on the AASA response.
+6. Confirm /open returns HTTP 200.
+7. Confirm /open supports:
+   - ?t=leads
+   - ?c=<id>
+   - ?t=support
+8. Confirm no private data is displayed on the fallback page.
+9. Confirm no Replit/Expo redirect is used.
+10. Confirm no unrelated pages or RCS assets were changed.
+11. Confirm the relevant website build/check passes.
+12. Do not Publish until I approve the final result.

@@ -48,6 +48,12 @@
       ],
       "expo-font",
       "expo-web-browser",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "MyLocalTrade uses your calendar to add confirmed appointments when you choose Add to Calendar."
+        }
+      ],
       "expo-location",
       [
         "expo-notifications",
