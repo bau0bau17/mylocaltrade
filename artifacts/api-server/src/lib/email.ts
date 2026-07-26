@@ -184,6 +184,11 @@ async function sendViaBrevo(opts: DispatchOpts, apiKey: string): Promise<void> {
     ],
     subject: opts.subject,
     htmlContent: opts.html,
+    // Disable Brevo's click-tracking: it rewrites every href to a tracking
+    // host (e.g. clicks.brevo.com/...) which defeats iOS Universal Links —
+    // the rewritten host is not in associatedDomains, so iOS opens Safari
+    // instead of the installed app.
+    trackClicks: false,
   };
   if (opts.text) payload.textContent = opts.text;
   if (opts.replyTo) payload.replyTo = opts.replyTo;
