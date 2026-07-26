@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { ShieldAlert, MessageSquare, Eye, Check, X, Ban, AlertTriangle, UserX, UserCheck } from "lucide-react";
+import { ShieldAlert, MessageSquare, Eye, Check, X, Ban, AlertTriangle, UserX, UserCheck, Calendar } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 
@@ -72,6 +72,19 @@ interface AdminConvQuote {
   createdAt: string;
 }
 
+interface AdminConvBooking {
+  id: number;
+  conversationId: number;
+  startAt: string;
+  note: string | null;
+  status: "PROPOSED" | "CONFIRMED";
+  proposedByRole: "customer" | "trader";
+  confirmedAt: string | null;
+  cancelledAt: string | null;
+  cancelledByRole: string | null;
+  createdAt: string;
+}
+
 interface ConvParticipant {
   userId: number;
   role: "customer" | "trader";
@@ -97,6 +110,7 @@ interface AdminConvResponse {
   messagesAccessible: boolean;
   messages: AdminConvMessage[];
   quotes?: AdminConvQuote[];
+  booking?: AdminConvBooking | null;
   contactBypass: {
     threshold: number;
     total: number;
@@ -372,10 +386,44 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
         ) : null}
       </div>
     ) : null;
+  const bookingPanel = data.booking ? (
+    <div
+      className="border rounded-md bg-muted/30 p-3 space-y-1"
+      data-testid={`booking-panel-${conversationId}`}
+    >
+      <div className="flex items-center gap-2 font-semibold text-sm">
+        <Calendar className="w-4 h-4 text-muted-foreground" />
+        Appointment
+        <Badge
+          variant="outline"
+          className={
+            data.booking.status === "CONFIRMED"
+              ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+              : "bg-amber-500/10 text-amber-700 border-amber-500/30"
+          }
+        >
+          {data.booking.status === "CONFIRMED" ? "Confirmed" : "Proposed"}
+        </Badge>
+      </div>
+      <p className="text-sm">{formatDateTime(data.booking.startAt)}</p>
+      <p className="text-xs text-muted-foreground">
+        Proposed by {data.booking.proposedByRole}
+        {data.booking.confirmedAt
+          ? ` · confirmed ${formatDateTime(data.booking.confirmedAt)}`
+          : ""}
+      </p>
+      {data.booking.note ? (
+        <p className="text-xs text-muted-foreground italic whitespace-pre-wrap break-words">
+          {data.booking.note}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
   if (!data.messagesAccessible) {
     return (
       <div className="space-y-3">
         {participantsPanel}
+        {bookingPanel}
         {bypassPanel}
         <Alert>
           <AlertDescription>
@@ -389,6 +437,7 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
   return (
     <div className="space-y-3">
       {participantsPanel}
+      {bookingPanel}
       {bypassPanel}
       {quotes.length > 0 ? (
         <div

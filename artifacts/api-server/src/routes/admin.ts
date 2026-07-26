@@ -16,6 +16,7 @@ import {
   REPORT_CATEGORIES,
   reviewsTable,
   quotesTable,
+  bookingsTable,
   profileChangeRequestsTable,
 } from "@workspace/db/schema";
 import { pushTokensTable } from "@workspace/db/schema";
@@ -27,6 +28,7 @@ import { sendPushToUser } from "../lib/push-notifications";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { serializeQuote } from "../lib/quotes";
+import { serializeBooking } from "../lib/bookings";
 import {
   TRADER_STATUS,
   evaluateDocumentsComplete,
@@ -1968,6 +1970,21 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
           .orderBy(desc(quotesTable.createdAt))
       : [];
 
+    // Live appointment (PROPOSED or CONFIRMED), if any — read-only admin
+    // parity with the participant view. Scheduling facts (status/time/
+    // proposer) are not moderation-gated, but the free-text note follows the
+    // same active-moderation gate as message bodies.
+    const [liveBooking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(
+        and(
+          eq(bookingsTable.conversationId, id),
+          inArray(bookingsTable.status, ["PROPOSED", "CONFIRMED"]),
+        ),
+      )
+      .limit(1);
+
     await logAudit({
       userId: row.conv.customerId,
       action: "ADMIN_VIEWED_CONVERSATION",
@@ -2028,6 +2045,12 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
       },
       messagesAccessible: canReadMessages,
       quotes: quotes.map((q) => serializeQuote(q)),
+      booking: liveBooking
+        ? {
+            ...serializeBooking(liveBooking),
+            note: canReadMessages ? liveBooking.note : null,
+          }
+        : null,
       contactBypass: {
         threshold: CONTACT_BYPASS_THRESHOLD,
         total: attemptStats.total,

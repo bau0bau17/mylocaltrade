@@ -441,6 +441,58 @@ describe("bookingClosedReason gate — cancelled/completed/closed jobs", () => {
   });
 });
 
+describe("GET /api/admin/conversations/:id includes the live booking", () => {
+  let adminSeq = 0;
+  async function createAdmin(): Promise<string> {
+    const [u] = await db
+      .insert(usersTable)
+      .values({
+        email: emailFor(`admin-mod-${adminSeq++}`),
+        passwordHash: "$2a$10$test.hash.not.used.for.login",
+        fullName: "Test Admin",
+        role: "admin",
+        isActive: true,
+        emailVerified: true,
+      })
+      .returning({ id: usersTable.id });
+    createdUserIds.push(u.id);
+    return generateToken(u.id, "admin", 1);
+  }
+
+  it("returns the live booking with the note gated by moderation access", async () => {
+    const adminToken = await createAdmin();
+    const convId = await createHiredConversation();
+    const proposed = await propose(convId, "trader");
+    expect(proposed.status).toBe(201);
+    await db
+      .update(bookingsTable)
+      .set({ note: "Gate code 1234" })
+      .where(eq(bookingsTable.id, proposed.body.booking.id));
+
+    // No active report: scheduling facts visible, free-text note withheld.
+    const res = await request(app)
+      .get(`/api/admin/conversations/${convId}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.booking).toBeTruthy();
+    expect(res.body.booking.id).toBe(proposed.body.booking.id);
+    expect(res.body.booking.status).toBe("PROPOSED");
+    expect(res.body.booking.proposedByRole).toBe("trader");
+    expect(res.body.booking.startAt).toBe(proposed.body.booking.startAt);
+    expect(res.body.booking.note).toBeNull();
+  });
+
+  it("returns booking: null when the conversation has no live booking", async () => {
+    const adminToken = await createAdmin();
+    const convId = await createHiredConversation();
+    const res = await request(app)
+      .get(`/api/admin/conversations/${convId}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.booking).toBeNull();
+  });
+});
+
 describe("reschedule (new proposal supersedes the live booking)", () => {
   it("a new proposal supersedes a CONFIRMED booking and needs fresh confirmation", async () => {
     const convId = await createHiredConversation();
