@@ -73,10 +73,11 @@ export default function AboutScreen() {
         <Text style={styles.heading}>How MyLocalTrade Works — For Customers</Text>
         <View style={styles.promiseCard}>
           <StepRow n={1} text="Find traders and request quotes." />
-          <StepRow n={2} text="Chat and receive Structured Quotes." />
+          <StepRow n={2} text="Chat and receive structured quotes." />
           <StepRow n={3} text="Compare and accept a quote." />
           <StepRow n={4} text="Contact details become available after hire." />
-          <StepRow n={5} text="Complete the job and leave a review." />
+          <StepRow n={5} text="Arrange and confirm the appointment." />
+          <StepRow n={6} text="Complete the job and leave a review." />
         </View>
       </View>
 
@@ -85,9 +86,10 @@ export default function AboutScreen() {
         <View style={styles.promiseCard}>
           <StepRow n={1} text="Create and verify a trader profile." />
           <StepRow n={2} text="Receive customer enquiries." />
-          <StepRow n={3} text="Chat and send Structured Quotes." />
+          <StepRow n={3} text="Chat and send structured quotes." />
           <StepRow n={4} text="Get hired when a quote is accepted." />
-          <StepRow n={5} text="Complete jobs and build reputation." />
+          <StepRow n={5} text="Arrange and confirm the appointment." />
+          <StepRow n={6} text="Complete jobs and build reputation." />
         </View>
       </View>
 

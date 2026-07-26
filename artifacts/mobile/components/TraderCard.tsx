@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { Feather, FontAwesome } from '@expo/vector-icons';
+import { Feather, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import type { TraderProfile } from '@workspace/api-client-react';
@@ -107,7 +107,23 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
           <Text style={styles.avatarLetter}>{trader.businessName.charAt(0)}</Text>
         </View>
         <View style={styles.headerInfo}>
-          <Text style={styles.businessName} numberOfLines={1}>{trader.businessName}</Text>
+          <View style={styles.nameRow}>
+            <Text style={[styles.businessName, styles.nameShrink]} numberOfLines={1}>{trader.businessName}</Text>
+            {/* Verification shield: driven by the real verified status
+                (trader.isVerified, i.e. verificationStatus === 'VERIFIED' on
+                the server) — never shown for unverified traders. Green, to
+                match the app's verification visual language (same
+                shield-check mark as the verified dashboard state), and
+                deliberately NOT the blue trust-strip shield styling. */}
+            {trader.isVerified && (
+              <MaterialCommunityIcons
+                name="shield-check"
+                size={16}
+                color={Colors.light.success}
+                accessibilityLabel="Verified trader"
+              />
+            )}
+          </View>
           <View style={styles.badgeRow}>
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{trader.mainCategory}</Text>
@@ -228,6 +244,14 @@ const styles = StyleSheet.create({
   headerInfo: {
     flex: 1,
     justifyContent: 'center',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  nameShrink: {
+    flexShrink: 1,
   },
   businessName: {
     fontSize: 15,

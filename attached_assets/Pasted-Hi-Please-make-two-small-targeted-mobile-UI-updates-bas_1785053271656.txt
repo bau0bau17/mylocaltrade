@@ -1,0 +1,115 @@
+Hi,
+
+Please make two small targeted mobile UI updates based on the attached screenshots.
+
+IMPORTANT:
+- Keep all existing functionality.
+- Do not redesign the screens.
+- Do not perform a broad audit.
+- Do not start an EAS build.
+- Do not deploy/publish.
+- Run only the minimum relevant checks.
+
+--------------------------------------------------
+1. UPDATE “ABOUT US” FLOW TO INCLUDE BOOKING
+--------------------------------------------------
+
+The current “About Us” screen still shows the old customer/trader journey.
+
+Please update the flow so it reflects the current MyLocalTrade product, including booking/appointment scheduling after hire.
+
+Keep the same visual design and numbered-list style.
+
+CUSTOMER FLOW
+
+Please update to:
+
+1. Find traders and request quotes.
+2. Chat and receive structured quotes.
+3. Compare and accept a quote.
+4. Contact details become available after hire.
+5. Arrange and confirm the appointment.
+6. Complete the job and leave a review.
+
+The booking step should reflect that, after hire, the customer and trader can agree a date/time in the conversation.
+
+TRADER FLOW
+
+Please update to:
+
+1. Create and verify a trader profile.
+2. Receive customer enquiries.
+3. Chat and send structured quotes.
+4. Get hired when a quote is accepted.
+5. Arrange and confirm the appointment.
+6. Complete jobs and build reputation.
+
+Please keep the wording concise.
+
+Do not mention:
+- deposits
+- MyLocalTrade processing job payments
+- external calendars
+- recurring bookings
+- payment collection
+
+--------------------------------------------------
+2. VERIFIED TRADER SHIELD — GREEN AND VISIBLE ON TRADER CARD
+--------------------------------------------------
+
+In the attached screenshots:
+
+- The trader onboarding screen shows a shield/check icon in the top-right area.
+- The Home screen trader card currently shows “Verified” as a badge, but the verification shield icon is not clearly visible on the trader card.
+- The Home trust strip also uses a shield icon for “UK Wide”, so please avoid confusing those two concepts.
+
+For a verified trader, I want a clear green verification shield/check icon visible directly on the trader card.
+
+Expected behaviour:
+
+If trader is verified:
+- show a green shield-with-check icon
+- keep the existing “Verified” badge/text if already present
+- the icon should be visually associated with verification, not with location
+- use the same verification visual language as the verified state in onboarding where appropriate
+
+If trader is NOT verified:
+- do not show the green verified shield/check icon
+
+Please do not use the same blue shield styling as the “UK Wide” trust card.
+
+The verification icon should use the existing MyLocalTrade green verification colour/style.
+
+Please apply this consistently on trader cards where verification status is shown, especially the Home Featured Trader card shown in the screenshot.
+
+Do not make the trader card significantly larger.
+
+--------------------------------------------------
+3. CONSISTENCY CHECK
+--------------------------------------------------
+
+Please also make sure the following remain consistent:
+
+- “Verified” status in trader onboarding
+- “Verified” badge on trader profile/card
+- green verification shield/check icon
+- no false verified icon for unverified traders
+
+The verification icon should be driven by the real verified status, not hard-coded.
+
+--------------------------------------------------
+4. FINAL REPORT
+--------------------------------------------------
+
+After completion, please confirm:
+
+1. Files changed.
+2. Exact updated customer flow.
+3. Exact updated trader flow.
+4. Where the booking step was added.
+5. Which trader cards now show the green verification shield/check.
+6. What real verification field/status controls the icon.
+7. Confirm unverified traders do not receive the icon.
+8. Confirm no unrelated screens were redesigned.
+9. Minimum checks run and results.
+10. Confirm no EAS build, deployment or publish was started.
