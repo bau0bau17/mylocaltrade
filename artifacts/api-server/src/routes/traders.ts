@@ -11,6 +11,7 @@ import {
 import type { TraderProfile } from "@workspace/db/schema";
 import { eq, and, ilike, or, desc, sql, inArray, type SQL } from "drizzle-orm";
 import { computeResponseTimes } from "../lib/response-times";
+import { expandServiceTerms } from "../lib/service-categories";
 import { isTraderPubliclyListed, publicTraderSqlConditions } from "../lib/trader-status";
 
 const router: IRouter = Router();
@@ -38,8 +39,34 @@ router.get("/traders", async (req, res) => {
       eq(traderProfilesTable.businessProfileCompleted, true),
     ];
 
+    // Canonical category matching: a customer-facing label like "Electrical"
+    // must find traders whose service is stored as "Electrician" (etc.). The
+    // synonym expansion lives in ONE place (lib/service-categories.ts) and is
+    // matched against BOTH mainCategory and the additionalServices array.
+    // Unknown values keep the previous plain substring behaviour.
+    const categoryTermsCondition = (value: string): SQL | null => {
+      const terms = expandServiceTerms(value);
+      if (!terms) return null;
+      const perTerm = terms.map((term) => {
+        const like = `%${term}%`;
+        return or(
+          ilike(traderProfilesTable.mainCategory, like),
+          sql`EXISTS (
+            SELECT 1 FROM json_array_elements_text(
+              COALESCE(${traderProfilesTable.additionalServices}, '[]'::json)
+            ) AS svc
+            WHERE svc ILIKE ${like}
+          )`,
+        )!;
+      });
+      return or(...perTerm)!;
+    };
+
     if (category && typeof category === "string") {
-      conditions.push(ilike(traderProfilesTable.mainCategory, `%${category}%`));
+      conditions.push(
+        categoryTermsCondition(category) ??
+          ilike(traderProfilesTable.mainCategory, `%${category}%`),
+      );
     }
 
     if (location && typeof location === "string") {
@@ -106,11 +133,16 @@ router.get("/traders", async (req, res) => {
 
     if (search && typeof search === "string") {
       const searchLike = `%${search}%`;
+      // When the search text is a known category/synonym (Home "Popular
+      // categories" passes its display label here), widen the match with the
+      // same canonical term expansion used for the category filter.
+      const canonical = categoryTermsCondition(search);
       conditions.push(
         or(
           ilike(traderProfilesTable.businessName, `%${search}%`),
           ilike(traderProfilesTable.mainCategory, `%${search}%`),
           ilike(traderProfilesTable.businessDescription, `%${search}%`),
+          ...(canonical ? [canonical] : []),
           sql`EXISTS (
             SELECT 1 FROM json_array_elements_text(
               COALESCE(${traderProfilesTable.serviceAreas}, '[]'::json)

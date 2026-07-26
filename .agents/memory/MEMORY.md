@@ -46,4 +46,5 @@
 - [API test 429 flakiness](test-rate-limit-429-flakiness.md) — rate limits live in shared Postgres; repeated test runs hit 429; test-setup clears rate_limit_hits before each run.
 - [Mobile dead-session logout](mobile-dead-session-logout.md) — 401 with app session token attached ⇒ forceLogout; getMe check on start/foreground; applyToken sets 10s suppression for rotation races.
 - [Booking lifecycle invariants](booking-lifecycle-invariants.md) — one live booking per conversation (partial unique index); EVERY mutation incl. cancel passes the live-job gate; notify direction rules.
+- [Canonical service/category matching](service-category-matching.md) — one server-side synonym map (expandServiceTerms) for category+search; no per-screen rules, no generic cross-category terms.
 - [Universal Links in email CTAs](universal-links-email.md) — /open email links must use the associated-domain host via getOpenLinkBase(); Brevo click-tracking can also break direct app open.
