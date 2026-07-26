@@ -5,6 +5,7 @@ import { bootstrapAdminFromEnv } from "./lib/admin-bootstrap";
 import { backfillJobReferences } from "./lib/job-reference-backfill";
 import { backfillRequestGroups } from "./lib/request-group-backfill";
 import { normalizeLegacyEmails } from "./lib/email-normalization-backfill";
+import { assertOpenLinkBaseAtStartup } from "./lib/email";
 
 const rawPort = process.env["PORT"];
 
@@ -30,6 +31,9 @@ async function start(): Promise<void> {
 
   app.listen(port, () => {
     logger.info({ port }, "Server listening");
+    // Loudly assert at boot that email /open links resolve to an associated
+    // domain (Universal Links); errors in production, warns in dev.
+    assertOpenLinkBaseAtStartup();
     startScheduler();
     void bootstrapAdminFromEnv();
     void backfillJobReferences();

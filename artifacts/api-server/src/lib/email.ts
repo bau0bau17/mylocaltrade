@@ -78,20 +78,27 @@ function getApiBaseUrl(): string {
  * scheme bounce page still works there — just via the browser hop).
  */
 const ASSOCIATED_LINK_HOSTS = ["mylocaltrade.co.uk", "www.mylocaltrade.co.uk"];
-function getOpenLinkBase(): string {
+
+export interface OpenLinkStatus {
+  /** The base URL email `/open?...` links will actually use. */
+  base: string;
+  /** True when the base host is one of the app's associated domains. */
+  universalLinks: boolean;
+  /** Where the base came from. */
+  source: "env-override" | "replit-domains" | "api-base-fallback";
+}
+
+/** Resolve the open-link base without logging (used by health + startup check). */
+export function getOpenLinkStatus(): OpenLinkStatus {
   const explicit = process.env.UNIVERSAL_LINK_BASE_URL?.trim().replace(/\/$/, "");
   if (explicit) {
-    // Only honour the override when it actually points at an associated
-    // domain — otherwise a misconfigured env would silently break Universal
-    // Links (browser hop) for every email CTA.
     try {
       const host = new URL(explicit).hostname.toLowerCase();
-      if (ASSOCIATED_LINK_HOSTS.includes(host)) return explicit;
-      console.warn(
-        `[email] UNIVERSAL_LINK_BASE_URL host "${host}" is not an associated domain; ignoring override`,
-      );
+      if (ASSOCIATED_LINK_HOSTS.includes(host)) {
+        return { base: explicit, universalLinks: true, source: "env-override" };
+      }
     } catch {
-      console.warn("[email] UNIVERSAL_LINK_BASE_URL is not a valid URL; ignoring override");
+      /* invalid URL — fall through to the fallbacks */
     }
   }
   const domains = (process.env.REPLIT_DOMAINS ?? "")
@@ -99,8 +106,57 @@ function getOpenLinkBase(): string {
     .map((d) => d.trim())
     .filter(Boolean);
   const associated = domains.find((d) => ASSOCIATED_LINK_HOSTS.includes(d.toLowerCase()));
-  if (associated) return `https://${associated}`;
-  return getApiBaseUrl().replace(/\/api$/, "");
+  if (associated) {
+    return { base: `https://${associated}`, universalLinks: true, source: "replit-domains" };
+  }
+  return {
+    base: getApiBaseUrl().replace(/\/api$/, ""),
+    universalLinks: false,
+    source: "api-base-fallback",
+  };
+}
+
+function logOpenLinkFallback(context: string): void {
+  // In production a non-associated host means every email CTA opens Safari
+  // instead of the app — that's a misconfiguration, so shout (error), don't
+  // whisper (warn). In dev it's expected, keep it at warn level.
+  const message =
+    `[email] ${context}: /open links are using a non-associated host — ` +
+    `iOS Universal Links will NOT open the app directly. ` +
+    `Set UNIVERSAL_LINK_BASE_URL to https://mylocaltrade.co.uk (or www).`;
+  if (process.env.NODE_ENV === "production") console.error(message);
+  else console.warn(message);
+}
+
+/**
+ * Perform the startup assertion: resolves the open-link base once at boot and
+ * surfaces a loud error in production when it isn't an associated domain.
+ * Called from server startup; also reused indirectly via the health route.
+ */
+export function assertOpenLinkBaseAtStartup(): OpenLinkStatus {
+  const status = getOpenLinkStatus();
+  const explicit = process.env.UNIVERSAL_LINK_BASE_URL?.trim();
+  if (explicit && status.source !== "env-override") {
+    // An override was provided but rejected (invalid URL or wrong host).
+    logOpenLinkFallback("UNIVERSAL_LINK_BASE_URL is set but invalid/non-associated; ignored");
+  } else if (!status.universalLinks) {
+    logOpenLinkFallback("UNIVERSAL_LINK_BASE_URL is missing and no associated domain found");
+  } else {
+    console.log(
+      `[email] /open link base resolved to ${status.base} (${status.source}, universal links OK)`,
+    );
+  }
+  return status;
+}
+
+function getOpenLinkBase(): string {
+  const status = getOpenLinkStatus();
+  if (!status.universalLinks) {
+    // Per-send visibility: keep the (unchanged) fallback behaviour, but make
+    // sure a misconfigured deployment is impossible to miss in the logs.
+    logOpenLinkFallback("open-link fallback in use");
+  }
+  return status.base;
 }
 
 /** Hosted logo URL used in email HTML. Served by the API at /api/public/logo.png. */
