@@ -1,0 +1,146 @@
+Hi,
+
+I found an important search/category matching bug that needs to be fixed as part of the category/search work.
+
+On the Home screen, the Popular Categories / quick-search labels are not correctly matching equivalent trader services.
+
+Current examples:
+
+- Selecting “Electrical” does NOT find a trader whose service is saved as “Electrician”.
+- Selecting “Building” does NOT find a trader whose service is saved as “Builder”.
+
+This is incorrect.
+
+Please inspect and fix the underlying category/service mapping rather than patching only these two examples.
+
+The same issue may affect other categories such as:
+
+- Plumbing ↔ Plumber
+- Electrical ↔ Electrician / Electrical installation / Electrical repairs
+- Roofing ↔ Roofer / Roofing
+- Building ↔ Builder / Building
+- Painting ↔ Painter / Painter & Decorator / Painting
+- Cleaning ↔ Cleaner / Cleaning
+- Gardening & landscaping ↔ Gardener / Landscaping / Gardening
+- Heating ↔ Heating engineer / Heating
+- Gas engineers ↔ Gas engineer / Gas services
+- Locksmiths ↔ Locksmith
+- EV chargers ↔ EV charger installation
+- Solar panels ↔ Solar panel installation
+- Heat pumps ↔ Heat pump installation / Heat pump engineer
+
+Please do NOT solve this with broad fuzzy string matching.
+
+Instead, introduce or reuse a deliberate canonical category/service mapping.
+
+Conceptually, for example:
+
+canonical category:
+electrical
+
+display label:
+Electrical
+
+matching trader services:
+- Electrician
+- Electrical installation
+- Electrical repairs
+- Emergency electrician
+- Rewiring
+etc.
+
+Likewise:
+
+canonical category:
+building
+
+display label:
+Building
+
+matching services:
+- Builder
+- Building
+- General building
+etc.
+
+The exact implementation should reuse the existing shared category/service configuration wherever possible.
+
+IMPORTANT:
+
+The same canonical matching should be used consistently by:
+
+- Home Popular Categories quick search
+- Traders screen category chips
+- normal customer search
+- Service Offered autocomplete/mapping
+- enquiry/service matching where relevant
+
+I do not want each screen to have separate hard-coded matching rules.
+
+Existing trader data must remain compatible.
+
+Do NOT rewrite existing trader service values such as:
+“Electrician”
+“Builder”
+“Plumber”
+
+Instead, map those existing values to the appropriate canonical category during search/filtering.
+
+Expected examples after the fix:
+
+Trader service:
+Electrician
+
+Customer selects:
+Electrical
+
+→ trader IS returned.
+
+Trader service:
+Builder
+
+Customer selects:
+Building
+
+→ trader IS returned.
+
+Trader service:
+Painter & Decorator
+
+Customer selects:
+Painting
+
+→ trader IS returned.
+
+Trader service:
+Roofer
+
+Customer selects:
+Roofing
+
+→ trader IS returned.
+
+But:
+
+Trader service:
+Electrician
+
+Customer selects:
+Roofing
+
+→ trader is NOT returned.
+
+Please also check whether the current Home quick-search action passes the display label directly to the backend, which may be the root cause.
+
+After fixing, please report:
+
+1. Root cause of the mismatch.
+2. Files changed.
+3. What canonical category mapping is now used.
+4. Full category → service mapping currently supported.
+5. Whether Home, Traders and normal Search now use the same matching logic.
+6. Confirm existing trader service data was not destructively rewritten.
+7. Minimum checks/tests run.
+8. Confirm no EAS build, deployment or publish was started.
+
+Please keep this targeted and do not perform a broad repository audit.

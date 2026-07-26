@@ -17,7 +17,9 @@ import { conversationsTable } from "./conversations";
 // At most ONE live booking (PROPOSED or CONFIRMED) per conversation, enforced
 // by a partial unique index (mirrors quotes_one_pending_per_conversation).
 // startAt is a proper UTC timestamp; rendering in UK local time is the
-// client's job. No cron/reminders — status changes are user-driven only.
+// client's job. Status changes are user-driven; the only automated touch is
+// the reminder sweep (see api-server lib/booking-reminders.ts), which sends
+// pushes ahead of confirmed appointments and stamps reminder_*_sent_at.
 export const bookingsTable = pgTable(
   "bookings",
   {
@@ -38,6 +40,12 @@ export const bookingsTable = pgTable(
     confirmedByUserId: integer("confirmed_by_user_id").references(() => usersTable.id),
     cancelledAt: timestamp("cancelled_at"),
     cancelledByRole: varchar("cancelled_by_role", { length: 16 }),
+    // Reminder stamps (set once by the reminder sweep; NULL = not yet sent).
+    // Two windows: ~24h before startAt and ~1h before. The stamp doubles as
+    // the dedupe claim — a conditional UPDATE ... WHERE ... IS NULL means two
+    // overlapping sweeps can never double-send.
+    reminder24SentAt: timestamp("reminder_24_sent_at"),
+    reminder1hSentAt: timestamp("reminder_1h_sent_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

@@ -15,6 +15,7 @@ import {
 import { sweepLeadReminders } from "./lead-reminders";
 import { sweepExpiredMutes } from "./mute-sweep";
 import { sweepOrphanUploads } from "./upload-sweep";
+import { sweepBookingReminders } from "./booking-reminders";
 import { sendPushToUser } from "./push-notifications";
 import {
   sendTraderRevalidationDueEmail,
@@ -25,6 +26,7 @@ import {
 const HOUR_MS = 60 * 60 * 1000;
 const LEAD_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const MUTE_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
+const BOOKING_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const REVALIDATION_SWEEP_INTERVAL_MS = 6 * HOUR_MS;
 const ORPHAN_UPLOAD_SWEEP_INTERVAL_MS = 6 * HOUR_MS;
 const REVALIDATION_GRACE_DAYS = Math.round(REVALIDATION_GRACE_MS / (24 * 60 * 60 * 1000));
@@ -243,6 +245,7 @@ let leadReminderTimer: NodeJS.Timeout | null = null;
 let muteSweepTimer: NodeJS.Timeout | null = null;
 let revalidationTimer: NodeJS.Timeout | null = null;
 let orphanUploadTimer: NodeJS.Timeout | null = null;
+let bookingReminderTimer: NodeJS.Timeout | null = null;
 
 export function startScheduler(): void {
   if (scheduledTimer) return;
@@ -322,6 +325,21 @@ export function startScheduler(): void {
   }, REVALIDATION_SWEEP_INTERVAL_MS);
   revalidationTimer.unref?.();
 
+  // Booking-reminder sweep: push a reminder to both parties ~24h and ~1h
+  // before a CONFIRMED appointment. Frequent + cheap; the reminder stamps on
+  // the booking row make it idempotent across overlapping runs.
+  bookingReminderTimer = setInterval(async () => {
+    try {
+      const result = await sweepBookingReminders();
+      if (result.sent > 0) {
+        logger.info({ ...result }, "Booking-reminder sweep");
+      }
+    } catch (err) {
+      logger.error({ err }, "Booking-reminder sweep failed");
+    }
+  }, BOOKING_REMINDER_INTERVAL_MS);
+  bookingReminderTimer.unref?.();
+
   // Orphan-upload sweep (storage-exhaustion defence): delete abandoned
   // presigned-PUT objects that were never finalised/registered, so an
   // attacker cannot fill the private bucket by skipping the finalise step.
@@ -358,5 +376,9 @@ export function stopScheduler(): void {
   if (orphanUploadTimer) {
     clearInterval(orphanUploadTimer);
     orphanUploadTimer = null;
+  }
+  if (bookingReminderTimer) {
+    clearInterval(bookingReminderTimer);
+    bookingReminderTimer = null;
   }
 }
