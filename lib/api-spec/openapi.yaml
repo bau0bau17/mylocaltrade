@@ -1831,6 +1831,135 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /conversations/{id}/bookings:
+    post:
+      operationId: proposeBooking
+      tags: [bookings]
+      summary: Propose an appointment (either party, hired conversations only). A new proposal supersedes any existing live booking.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "201":
+          description: Booking proposed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingResponse"
+        "400":
+          description: Invalid date/time (must be in the future)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only participants of this conversation can propose a booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conversation is not in a hired state, or is cancelled/completed/closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookings/{id}/confirm:
+    post:
+      operationId: confirmBooking
+      tags: [bookings]
+      summary: Confirm a proposed appointment (only the party who did NOT propose it)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only the other party can confirm a proposed booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Booking is no longer proposed (confirmed, cancelled or superseded)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookings/{id}/cancel:
+    post:
+      operationId: cancelBooking
+      tags: [bookings]
+      summary: Cancel a proposed or confirmed appointment (either party)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Booking cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only participants of this conversation can cancel the booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Booking is not live (already cancelled or superseded)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /conversations/{id}/complete:
     post:
       operationId: completeConversationJob
@@ -3586,6 +3715,14 @@ components:
             never included in pre-hire responses.
           allOf:
             - $ref: "#/components/schemas/ConversationContactDetails"
+        booking:
+          nullable: true
+          description: |
+            The live appointment for this conversation (PROPOSED or CONFIRMED),
+            if any. Cancelled/superseded bookings are history only and are not
+            returned here. Null before hire or when no booking exists.
+          allOf:
+            - $ref: "#/components/schemas/Booking"
       required: [conversation, messages]
 
     ConversationContactDetails:
@@ -3718,6 +3855,65 @@ components:
         quote:
           $ref: "#/components/schemas/Quote"
       required: [quote]
+
+    Booking:
+      type: object
+      description: |
+        A lightweight appointment inside a hired conversation. Times are UTC
+        instants; clients render them in the user's local timezone (UK).
+      properties:
+        id:
+          type: integer
+        conversationId:
+          type: integer
+        startAt:
+          type: string
+          format: date-time
+        note:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [PROPOSED, CONFIRMED, CANCELLED, SUPERSEDED]
+        proposedByRole:
+          type: string
+          enum: [customer, trader]
+        confirmedAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledByRole:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, conversationId, startAt, status, proposedByRole, createdAt]
+
+    CreateBookingRequest:
+      type: object
+      properties:
+        startAt:
+          type: string
+          format: date-time
+          description: Appointment start. Must be in the future.
+        note:
+          type: string
+          maxLength: 300
+          nullable: true
+          description: Optional short note (e.g. "Initial visit and inspection").
+      required: [startAt]
+
+    BookingResponse:
+      type: object
+      properties:
+        booking:
+          $ref: "#/components/schemas/Booking"
+      required: [booking]
 
     CompareOffer:
       type: object

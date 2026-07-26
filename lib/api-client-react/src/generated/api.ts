@@ -23,6 +23,7 @@ import type {
   AdminReviewsResponse,
   AdminUserReportListResponse,
   AuthResponse,
+  BookingResponse,
   CancelConversationRequest,
   CancellationRequestResult,
   CategoriesResponse,
@@ -32,6 +33,7 @@ import type {
   ConversationDetailResponse,
   ConversationListResponse,
   ConversationMessage,
+  CreateBookingRequest,
   CreateCancellationRequest,
   CreateCheckoutRequest,
   CreateEnquiryRequest,
@@ -5101,6 +5103,261 @@ export const useDeclineQuote = <
   TContext
 > => {
   return useMutation(getDeclineQuoteMutationOptions(options));
+};
+
+/**
+ * @summary Propose an appointment (either party, hired conversations only). A new proposal supersedes any existing live booking.
+ */
+export const getProposeBookingUrl = (id: number) => {
+  return `/api/conversations/${id}/bookings`;
+};
+
+export const proposeBooking = async (
+  id: number,
+  createBookingRequest: CreateBookingRequest,
+  options?: RequestInit,
+): Promise<BookingResponse> => {
+  return customFetch<BookingResponse>(getProposeBookingUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createBookingRequest),
+  });
+};
+
+export const getProposeBookingMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof proposeBooking>>,
+    TError,
+    { id: number; data: BodyType<CreateBookingRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof proposeBooking>>,
+  TError,
+  { id: number; data: BodyType<CreateBookingRequest> },
+  TContext
+> => {
+  const mutationKey = ["proposeBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof proposeBooking>>,
+    { id: number; data: BodyType<CreateBookingRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return proposeBooking(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ProposeBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof proposeBooking>>
+>;
+export type ProposeBookingMutationBody = BodyType<CreateBookingRequest>;
+export type ProposeBookingMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Propose an appointment (either party, hired conversations only). A new proposal supersedes any existing live booking.
+ */
+export const useProposeBooking = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof proposeBooking>>,
+    TError,
+    { id: number; data: BodyType<CreateBookingRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof proposeBooking>>,
+  TError,
+  { id: number; data: BodyType<CreateBookingRequest> },
+  TContext
+> => {
+  return useMutation(getProposeBookingMutationOptions(options));
+};
+
+/**
+ * @summary Confirm a proposed appointment (only the party who did NOT propose it)
+ */
+export const getConfirmBookingUrl = (id: number) => {
+  return `/api/bookings/${id}/confirm`;
+};
+
+export const confirmBooking = async (
+  id: number,
+  options?: RequestInit,
+): Promise<BookingResponse> => {
+  return customFetch<BookingResponse>(getConfirmBookingUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getConfirmBookingMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmBooking>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof confirmBooking>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["confirmBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof confirmBooking>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return confirmBooking(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ConfirmBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof confirmBooking>>
+>;
+
+export type ConfirmBookingMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Confirm a proposed appointment (only the party who did NOT propose it)
+ */
+export const useConfirmBooking = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof confirmBooking>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof confirmBooking>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getConfirmBookingMutationOptions(options));
+};
+
+/**
+ * @summary Cancel a proposed or confirmed appointment (either party)
+ */
+export const getCancelBookingUrl = (id: number) => {
+  return `/api/bookings/${id}/cancel`;
+};
+
+export const cancelBooking = async (
+  id: number,
+  options?: RequestInit,
+): Promise<BookingResponse> => {
+  return customFetch<BookingResponse>(getCancelBookingUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCancelBookingMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelBooking>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelBooking>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["cancelBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelBooking>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return cancelBooking(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelBooking>>
+>;
+
+export type CancelBookingMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Cancel a proposed or confirmed appointment (either party)
+ */
+export const useCancelBooking = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelBooking>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelBooking>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getCancelBookingMutationOptions(options));
 };
 
 /**

@@ -1,0 +1,232 @@
+Hi,
+
+Please make one targeted usability improvement to the Trader Business Profile screen shown in the attached screenshot.
+
+Screenshot attached: the highlighted fields are:
+- Service Offered
+- Service Areas
+
+The goal is to make profile setup much faster for busy traders and ensure Service Areas are actually used by customer search.
+
+IMPORTANT:
+- Keep the current UI/design/style.
+- Do not redesign the whole profile screen.
+- Do not perform a broad repo audit.
+- Limit changes to the relevant mobile profile fields, shared service/location data if needed, and the customer search logic that consumes these values.
+- Do not start an EAS build.
+- Do not publish/deploy/migrate anything unless a schema change is genuinely required.
+- Prefer using existing fields/schema and existing search logic where possible.
+- Run only the minimum relevant checks.
+
+--------------------------------------------------
+1. SERVICE OFFERED — AUTOCOMPLETE / SUGGESTIONS
+--------------------------------------------------
+
+The “Service Offered” field should no longer rely mainly on the trader typing the full service manually.
+
+Add autocomplete suggestions while the trader types.
+
+Examples:
+
+Typing:
+"ele"
+
+should suggest things such as:
+- Electrician
+- Electrical installation
+- Electrical repairs
+- Emergency electrician
+
+Typing:
+"air"
+
+could suggest:
+- Air conditioning
+- Air conditioning installation
+- Air conditioning repair
+
+Typing:
+"boil"
+
+could suggest:
+- Boiler installation
+- Boiler repair
+- Boiler servicing
+
+Requirements:
+
+- Suggestions should appear dynamically below the input as the trader types.
+- Matching should be case-insensitive.
+- Match from the beginning of words and sensible partial text.
+- Tapping a suggestion should immediately add it as a service chip/tag, using the existing chip UI.
+- Prevent duplicate services.
+- Keep the existing ability to add a custom service if the trader cannot find an appropriate suggestion.
+- Trim/normalise accidental spacing and casing where appropriate.
+
+Please use a sensible UK trades/services list rather than only a very small hard-coded list.
+
+Examples should cover common categories such as:
+Electrician, Plumber, Gas Engineer, Boiler Services, Heating Engineer, Air Conditioning, Builder, Carpenter, Joiner, Painter & Decorator, Roofer, Locksmith, Handyman, Cleaner, Gardener, Landscaper, Tiler, Plasterer, Bathroom Fitter, Kitchen Fitter, Drainage, Pest Control, Appliance Repair, CCTV/Security, etc.
+
+Where possible, reuse the same service/category vocabulary already used elsewhere in MyLocalTrade search and enquiries so we do not end up with inconsistent naming.
+
+--------------------------------------------------
+2. SERVICE AREAS — UK LOCATION AUTOCOMPLETE
+--------------------------------------------------
+
+The “Service Areas” field should also provide suggestions rather than requiring the trader to type the complete location manually.
+
+Example:
+
+Typing:
+"North"
+
+should offer relevant UK locations such as:
+- Northampton
+- Northamptonshire
+- North London
+etc., depending on the available location dataset/provider.
+
+Typing:
+"Milton"
+
+should suggest:
+- Milton Keynes
+
+Requirements:
+
+- Provide autocomplete while typing.
+- UK locations only.
+- At minimum support towns/cities and common searchable areas.
+- If the project already has a location/postcode autocomplete provider or UK location dataset, reuse it rather than introducing another provider.
+- Tapping a suggestion adds it as a Service Area chip using the existing UI.
+- Prevent duplicates.
+- Keep manual entry available as a fallback if appropriate.
+- Normalise location values consistently so search matching is reliable.
+
+--------------------------------------------------
+3. SERVICE AREAS MUST DRIVE CUSTOMER SEARCH
+--------------------------------------------------
+
+This is very important.
+
+The Service Areas saved on the trader profile must be used when customers search by location.
+
+Example:
+
+Trader profile:
+Service Areas:
+- Milton Keynes
+- Northampton
+
+Customer searches:
+Location = Northampton
+
+That trader should be eligible to appear in the results, assuming the requested service also matches the trader's services and all normal visibility/verification rules are satisfied.
+
+Likewise:
+
+Customer searches:
+Location = Milton Keynes
+
+The trader should also be found.
+
+Please inspect the existing customer trader-search implementation and make sure it uses the trader's Service Areas rather than relying only on the trader's business address.
+
+Expected logic should broadly be:
+
+requested service matches trader service
+AND
+searched customer location matches one of trader's service areas
+AND
+trader passes the existing visibility/status requirements
+
+Do NOT expose the trader's private/full business address as part of this change.
+
+--------------------------------------------------
+4. LOCATION MATCHING / NORMALISATION
+--------------------------------------------------
+
+Please avoid brittle exact-string-only matching where possible.
+
+For example, values should not fail simply because of casing:
+
+"northampton"
+"Northampton"
+"NORTHAMPTON"
+
+should be treated consistently.
+
+Also trim whitespace and normalise stored/search values where appropriate.
+
+If the current system already has postcode/location normalisation, reuse it.
+
+Do not implement an overly broad fuzzy match that could return unrelated locations.
+
+--------------------------------------------------
+5. EXISTING DATA
+--------------------------------------------------
+
+Existing trader profiles must continue to work.
+
+Examples already saved such as:
+
+- Electrician
+- Ac installation
+- Air conditioning
+
+and:
+
+- Milton Keynes
+- Northampton
+
+must remain intact.
+
+Do not delete or automatically rewrite existing trader data unless there is a clear safe reason.
+
+--------------------------------------------------
+6. UX
+--------------------------------------------------
+
+The interaction should feel quick:
+
+Trader taps Service Offered
+→ types a few letters
+→ suggestions immediately appear
+→ taps one
+→ service chip is added
+→ input clears ready for another service
+
+Same behaviour for Service Areas.
+
+The dropdown should:
+- work with the keyboard open
+- not be hidden behind the bottom navigation
+- not cover the Save & continue button unnecessarily
+- dismiss appropriately after selection or when tapping outside
+- work correctly in dark mode/current design
+
+--------------------------------------------------
+7. PLEASE CHECK BEFORE IMPLEMENTING
+--------------------------------------------------
+
+First inspect the existing implementation and tell me briefly:
+
+A. What data/source currently powers service categories/suggestions, if any.
+B. What currently powers location search/autocomplete, if anything.
+C. Whether trader customer-search currently uses `serviceAreas`, business address, postcode, or another field.
+D. Whether this can be implemented without a database schema change.
+
+Then implement the smallest clean solution.
+
+After completion, please confirm:
+
+1. Files changed.
+2. How Service Offered autocomplete works.
+3. What service suggestion source/list is used.
+4. How Service Areas autocomplete works and what location source/provider is used.
+5. How Service Areas are now connected to customer location search.
+6. Whether existing saved trader data remains compatible.
+7. Whether any database/schema migration is required.
+8. Minimum checks run and their result.
+9. Confirm that no EAS build, publish or deployment was started.

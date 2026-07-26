@@ -67,6 +67,42 @@ function getApiBaseUrl(): string {
   return "http://localhost:8080";
 }
 
+/**
+ * Base URL used for `/open?...` deep-link bounce pages in emails.
+ *
+ * iOS Universal Links only fire when the link's host matches one of the app's
+ * associated domains (mylocaltrade.co.uk / www.mylocaltrade.co.uk). If we link
+ * to a *.replit.app host instead, Mail always opens the browser first. So:
+ * prefer an explicit UNIVERSAL_LINK_BASE_URL, then any REPLIT_DOMAINS entry
+ * that matches the associated domain, then fall back to the API base (custom
+ * scheme bounce page still works there — just via the browser hop).
+ */
+const ASSOCIATED_LINK_HOSTS = ["mylocaltrade.co.uk", "www.mylocaltrade.co.uk"];
+function getOpenLinkBase(): string {
+  const explicit = process.env.UNIVERSAL_LINK_BASE_URL?.trim().replace(/\/$/, "");
+  if (explicit) {
+    // Only honour the override when it actually points at an associated
+    // domain — otherwise a misconfigured env would silently break Universal
+    // Links (browser hop) for every email CTA.
+    try {
+      const host = new URL(explicit).hostname.toLowerCase();
+      if (ASSOCIATED_LINK_HOSTS.includes(host)) return explicit;
+      console.warn(
+        `[email] UNIVERSAL_LINK_BASE_URL host "${host}" is not an associated domain; ignoring override`,
+      );
+    } catch {
+      console.warn("[email] UNIVERSAL_LINK_BASE_URL is not a valid URL; ignoring override");
+    }
+  }
+  const domains = (process.env.REPLIT_DOMAINS ?? "")
+    .split(",")
+    .map((d) => d.trim())
+    .filter(Boolean);
+  const associated = domains.find((d) => ASSOCIATED_LINK_HOSTS.includes(d.toLowerCase()));
+  if (associated) return `https://${associated}`;
+  return getApiBaseUrl().replace(/\/api$/, "");
+}
+
 /** Hosted logo URL used in email HTML. Served by the API at /api/public/logo.png. */
 function logoImgHtml(): string {
   const url = `${getApiBaseUrl()}/api/public/logo.png`;
@@ -598,7 +634,7 @@ export async function sendNewEnquiryEmail(opts: {
 }): Promise<void> {
   // Deep-link bounce: opens the installed app at the trader's leads screen,
   // with an install fallback for users without the app.
-  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/open?t=leads`;
+  const dashboardUrl = `${getOpenLinkBase()}/open?t=leads`;
   const safeName = escapeHtml(opts.toName);
   const safeCustomer = escapeHtml(opts.customerName);
   const safeService = escapeHtml(opts.serviceRequired);
@@ -713,7 +749,7 @@ export async function sendLeadReminderEmail(opts: {
 }): Promise<boolean> {
   // Deep-link bounce: opens the installed app at the trader's leads screen,
   // with an install fallback for users without the app.
-  const dashboardUrl = `${getApiBaseUrl().replace(/\/api$/, "")}/open?t=leads`;
+  const dashboardUrl = `${getOpenLinkBase()}/open?t=leads`;
   const safeName = escapeHtml(opts.toName);
   const safeCustomer = escapeHtml(opts.customerName);
   const safeService = escapeHtml(opts.serviceRequired);
@@ -1221,7 +1257,7 @@ export async function sendNewMessageEmail(opts: {
   // Truncate preview to a safe length so we never leak entire long messages.
   const trimmed = opts.preview.length > 140 ? opts.preview.slice(0, 140) + "…" : opts.preview;
   const safePreview = escapeHtml(trimmed);
-  const webBase = getApiBaseUrl().replace(/\/api$/, "");
+  const webBase = getOpenLinkBase();
   // Point the CTA at a deep-link redirect page that opens the installed app
   // straight to this conversation (mylocaltrade://messages/<id>), falling back
   // to the landing page if the app isn't installed. Avoids the old behaviour of
@@ -1311,7 +1347,7 @@ export async function sendAccountDeletionReceivedEmail(opts: {
         <strong style="color: #F9FAFB;">Changed your mind?</strong> You can cancel this request from the app's "Delete account" screen for as long as the account is still in the deactivated state.
       </p>
       <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 16px 0 0;">
-        If you did not request this, please <a href="${getApiBaseUrl().replace(/\/api$/, "")}/open?t=support" style="color: #00B4D8;">contact us through the app's support form</a> immediately.
+        If you did not request this, please <a href="${getOpenLinkBase()}/open?t=support" style="color: #00B4D8;">contact us through the app's support form</a> immediately.
       </p>`,
   });
   await dispatchEmail({

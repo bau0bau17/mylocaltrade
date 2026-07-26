@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Booking } from "./booking";
 import type { ConversationContactDetails } from "./conversationContactDetails";
 import type { ConversationMessage } from "./conversationMessage";
 import type { ConversationSummary } from "./conversationSummary";
@@ -28,4 +29,9 @@ The backend hire state is the source of truth — contact details are
 never included in pre-hire responses.
  */
   contactDetails?: ConversationContactDetails | null;
+  /** The live appointment for this conversation (PROPOSED or CONFIRMED),
+if any. Cancelled/superseded bookings are history only and are not
+returned here. Null before hire or when no booking exists.
+ */
+  booking?: Booking | null;
 }

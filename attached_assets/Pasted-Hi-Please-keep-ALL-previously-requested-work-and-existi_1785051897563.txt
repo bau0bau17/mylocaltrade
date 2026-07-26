@@ -1,0 +1,476 @@
+Hi,
+
+Please keep ALL previously requested work and existing functionality unchanged.
+
+I would like to add two additional targeted improvements to the same mobile/backend work.
+
+I have attached two additional screenshots:
+
+1. Email notification showing the “Open my leads” button.
+2. Hired conversation showing the accepted quote, contact details and “Mark work as completed” area.
+
+Please treat these as additional requirements, not replacements for anything already requested.
+
+IMPORTANT COST / SCOPE CONTROL:
+
+- Do not perform a broad repository audit.
+- Inspect only the existing deep-link/email implementation, conversation/job model and the minimum relevant mobile/backend files.
+- Reuse existing infrastructure wherever possible.
+- Do not add a large scheduling/calendar system.
+- Do not integrate payments.
+- Do not integrate external calendars at this stage.
+- Do not redesign the conversation screen.
+- Do not start an EAS build.
+- Do not deploy/publish.
+- Run only the minimum relevant checks.
+
+--------------------------------------------------
+14. EMAIL “OPEN MY LEADS” — OPEN INSTALLED APP DIRECTLY
+--------------------------------------------------
+
+The trader new-lead email currently contains an:
+
+“Open my leads”
+
+button.
+
+Current behaviour on iPhone:
+
+Email
+→ tap “Open my leads”
+→ browser/web page opens first
+→ user is asked to allow/open the app
+→ only then MyLocalTrade opens.
+
+I want the cleanest possible iOS deep-link experience.
+
+Expected behaviour when MyLocalTrade is installed:
+
+Email
+→ tap “Open my leads”
+→ iOS opens MyLocalTrade directly
+→ user lands on the relevant lead/conversation.
+
+Please inspect the existing implementation before changing it.
+
+We already recently enabled Associated Domains during the iOS provisioning/build process, so please check whether Universal Links are already partially configured.
+
+Please verify:
+
+A. What URL the email button currently generates.
+
+B. Whether it uses:
+- a custom app scheme
+- an HTTPS Universal Link
+- a web redirect
+- an Expo/Replit intermediate URL
+- another mechanism.
+
+C. Whether `com.apple.developer.associated-domains` / Expo associatedDomains is configured correctly.
+
+D. Whether the public `apple-app-site-association` file is present and valid for the MyLocalTrade domain.
+
+E. Whether the route maps directly to the relevant MyLocalTrade screen/conversation.
+
+Preferred implementation:
+
+Use a proper HTTPS Apple Universal Link on the MyLocalTrade public domain, where appropriate.
+
+For example conceptually:
+
+https://mylocaltrade.co.uk/app/leads/<lead-or-conversation-id>
+
+When the app is installed:
+→ open MyLocalTrade directly.
+
+When the app is NOT installed:
+→ fall back gracefully to a suitable public MyLocalTrade page.
+
+Please avoid:
+
+email
+→ Replit page
+→ Expo page
+→ browser redirect
+→ custom-scheme prompt
+
+if a proper Universal Link can handle this directly.
+
+VERY IMPORTANT:
+
+Do not claim that iOS/email clients can be forced to bypass every confirmation prompt in every possible circumstance.
+
+Implement the correct Apple Universal Link configuration and remove unnecessary browser/intermediate redirects so the normal supported iOS behaviour is as direct as possible.
+
+Please also ensure authentication is handled safely:
+
+If the user is already logged in:
+→ open the relevant lead/conversation.
+
+If the app is installed but the user is logged out:
+→ preserve the intended destination
+→ ask them to log in
+→ after successful login, continue to the intended lead/conversation where safe.
+
+Do not expose conversation data through the URL itself.
+
+--------------------------------------------------
+15. SIMPLE BOOKING SYSTEM INSIDE HIRED CONVERSATIONS
+--------------------------------------------------
+
+I also want a very simple booking/appointment system inside the messaging/job conversation.
+
+Please keep this lightweight.
+
+The purpose is NOT to create a full scheduling platform.
+
+The goal is simply:
+
+Customer and trader agree on the job
+→ quote is accepted / trader is hired
+→ trader or customer can propose a date/time
+→ the other party confirms it
+→ booking details remain clearly recorded inside the job conversation.
+
+The screenshot shows the area where we already have:
+
+- Accepted quote
+- Contact details available
+- Mark work as completed
+
+Please integrate the booking information naturally into this existing hired-job area without removing or replacing any existing functionality.
+
+--------------------------------------------------
+16. BOOKING — BASIC FLOW
+--------------------------------------------------
+
+Booking should only become available when appropriate for the job/conversation.
+
+Preferred behaviour:
+
+After the quote is accepted / job is hired:
+
+Show an action such as:
+
+“Book appointment”
+
+or:
+
+“Schedule visit”
+
+Please choose wording consistent with the rest of the app.
+
+Tapping it should open a small/simple booking sheet or modal.
+
+Minimum fields:
+
+- Date
+- Time
+- Optional short note
+
+Example:
+
+Date:
+28 July 2026
+
+Time:
+10:00
+
+Note:
+“Initial visit and inspection”
+
+Keep it simple.
+
+Do NOT add:
+
+- payment/deposit collection
+- recurring bookings
+- staff/resource management
+- complex availability calendars
+- external calendar integrations
+- travel calculations
+- booking fees
+
+at this stage.
+
+--------------------------------------------------
+17. BOOKING STATUS
+--------------------------------------------------
+
+A booking should have a very small status model.
+
+For example:
+
+PROPOSED
+CONFIRMED
+CANCELLED
+
+And, only if straightforward:
+
+RESCHEDULE PROPOSED
+
+A simple flow could be:
+
+Trader proposes:
+28 Jul · 10:00
+
+Customer sees:
+
+“Appointment proposed”
+
+[Confirm]
+[Suggest another time]
+
+After confirmation:
+
+“Appointment confirmed
+28 Jul 2026 · 10:00”
+
+Both sides should see the same confirmed booking.
+
+Please keep the state machine small and easy to maintain.
+
+--------------------------------------------------
+18. BOOKING SHOULD APPEAR IN THE CONVERSATION RECORD
+--------------------------------------------------
+
+Booking actions should leave an appropriate system event/message in the conversation timeline.
+
+Examples:
+
+“Trader proposed an appointment for 28 July at 10:00.”
+
+“Customer confirmed the appointment.”
+
+“Trader proposed a new appointment time: 29 July at 13:00.”
+
+“Appointment cancelled.”
+
+This is important because MyLocalTrade already keeps job agreements and important actions inside the conversation record.
+
+Do not allow users to silently change a confirmed booking without recording the change.
+
+--------------------------------------------------
+19. BOOKING CARD IN HIRED JOB AREA
+--------------------------------------------------
+
+After a booking exists, please show a compact booking card near the existing:
+
+- accepted quote
+- contact details
+- Mark work as completed
+
+section.
+
+Example:
+
+Appointment
+
+28 Jul 2026
+10:00
+
+CONFIRMED
+
+Optional note:
+Initial visit and inspection
+
+Possible contextual actions:
+
+- Change time
+- Cancel
+
+depending on role/status.
+
+Do not make this card excessively large.
+
+The conversation itself should remain the main focus.
+
+--------------------------------------------------
+20. WHO CAN CREATE / CHANGE A BOOKING
+--------------------------------------------------
+
+Please use a simple mutual workflow.
+
+Both customer and hired trader may propose a booking/date.
+
+The other party should confirm a proposed change.
+
+For example:
+
+Trader proposes 10:00
+→ customer confirms
+
+or
+
+Customer proposes 14:00
+→ trader confirms.
+
+Do not allow one side to overwrite an already confirmed appointment silently.
+
+Any change to a confirmed appointment should become a new proposal requiring confirmation by the other party.
+
+--------------------------------------------------
+21. BOOKING + JOB COMPLETION
+--------------------------------------------------
+
+Do NOT remove or change the existing:
+
+“Mark work as completed”
+
+flow.
+
+Booking is additional information.
+
+A confirmed appointment does NOT automatically complete the job.
+
+Likewise, completing a job should use the existing completion/review workflow.
+
+If a booking date has already passed, do not automatically mark the work completed.
+
+--------------------------------------------------
+22. NOTIFICATIONS
+--------------------------------------------------
+
+Please inspect the existing push/email notification infrastructure.
+
+If it can be reused cheaply and safely, send a normal app notification when:
+
+- an appointment is proposed
+- an appointment is confirmed
+- a change is proposed
+- an appointment is cancelled
+
+Do not build a new notification system specifically for bookings.
+
+Reuse existing push infrastructure.
+
+For this first implementation, appointment reminders such as “24 hours before” are NOT required unless an existing generic scheduler makes this trivial.
+
+Do not introduce background jobs/cron infrastructure only for reminders in this task.
+
+--------------------------------------------------
+23. TIMEZONE
+--------------------------------------------------
+
+MyLocalTrade currently serves the UK.
+
+Booking date/time should behave consistently in UK local time.
+
+Please store timestamps safely in the backend and render them in the user's appropriate local timezone.
+
+Avoid storing only ambiguous formatted strings such as:
+
+“28/07 at 10”
+
+Use proper date/time values internally.
+
+--------------------------------------------------
+24. DATA MODEL — KEEP IT SMALL
+--------------------------------------------------
+
+Before adding schema, inspect whether the existing job/conversation/enquiry model has an appropriate place for booking information.
+
+If a small schema addition is genuinely required, tell me exactly what is required.
+
+Preferred minimal information would be conceptually:
+
+- job/conversation reference
+- proposed date/time
+- optional note
+- status
+- proposed by user
+- confirmed by user / confirmation timestamp where needed
+- created/updated timestamps
+
+Do not build a complex calendar schema.
+
+Booking changes/history can also continue to be represented through existing conversation/system events where appropriate.
+
+Do not run production migrations yet.
+
+--------------------------------------------------
+25. PRIVACY / CONTACT RULES
+--------------------------------------------------
+
+Do not change existing contact visibility rules.
+
+The booking system should be available only in the appropriate hired/job context.
+
+Do not expose customer/trader private information publicly.
+
+Do not change the rule that contact details become available after hire.
+
+--------------------------------------------------
+26. EXISTING FUNCTIONALITY MUST REMAIN
+--------------------------------------------------
+
+Please preserve everything already implemented in the hired conversation:
+
+- messages
+- enquiry details/photos
+- quotes
+- withdrawn quotes/history
+- accepted quote
+- job reference
+- contact details after hire
+- safety messaging
+- completion flow
+- reviews
+- moderation/audit behaviour
+
+Booking must be additive and lightweight.
+
+--------------------------------------------------
+27. FINAL REPORT — ADD THESE ITEMS
+--------------------------------------------------
+
+In addition to the report requested in my previous message, please also confirm:
+
+21. What currently causes the email “Open my leads” link to open a browser before the app.
+
+22. What URL/deep-link mechanism is used after the fix.
+
+23. Whether Apple Universal Links and Associated Domains are correctly configured.
+
+24. Whether an `apple-app-site-association` file was changed/added and where it is hosted.
+
+25. What happens when:
+    - app installed + logged in
+    - app installed + logged out
+    - app not installed
+
+26. Files changed for the deep-link fix.
+
+27. How the lightweight booking flow works.
+
+28. Who can propose/confirm/reschedule/cancel.
+
+29. What booking statuses are used.
+
+30. How booking actions are recorded in conversation history.
+
+31. Whether existing push notifications were reused.
+
+32. Whether any new database fields/table are required.
+
+33. Exact migration required, if any — but DO NOT apply production migration yet.
+
+34. Files changed for booking.
+
+35. Minimum checks run and their results.
+
+36. Confirm again:
+    - no EAS build
+    - no production migration
+    - no deployment/publish
+
+37. List the manual TestFlight scenarios I should test for:
+    - email → direct app deep link
+    - logged-out deep-link recovery
+    - booking proposal
+    - booking confirmation
+    - reschedule
+    - cancellation
+    - existing quote/contact/completion flow regression.
+
+Please implement this as the smallest production-safe addition possible.

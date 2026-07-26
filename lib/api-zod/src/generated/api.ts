@@ -2312,6 +2312,26 @@ export const GetConversationResponse = zod.object({
     .describe(
       "Verified contact details for both parties. Only present after the\ncustomer has accepted a quote or hired the trader; null before hire.\nThe backend hire state is the source of truth — contact details are\nnever included in pre-hire responses.\n",
     ),
+  booking: zod
+    .object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      startAt: zod.date(),
+      note: zod.string().nullish(),
+      status: zod.enum(["PROPOSED", "CONFIRMED", "CANCELLED", "SUPERSEDED"]),
+      proposedByRole: zod.enum(["customer", "trader"]),
+      confirmedAt: zod.date().nullish(),
+      cancelledAt: zod.date().nullish(),
+      cancelledByRole: zod.string().nullish(),
+      createdAt: zod.date(),
+    })
+    .describe(
+      "A lightweight appointment inside a hired conversation. Times are UTC\ninstants; clients render them in the user's local timezone (UK).\n",
+    )
+    .nullish()
+    .describe(
+      "The live appointment for this conversation (PROPOSED or CONFIRMED),\nif any. Cancelled\/superseded bookings are history only and are not\nreturned here. Null before hire or when no booking exists.\n",
+    ),
 });
 
 /**
@@ -2566,6 +2586,76 @@ export const DeclineQuoteResponse = zod.object({
     })
     .describe(
       "A structured quote a trader sent within a conversation. Prices are\ninteger pence (minor units). Status is the effective status: quotes\nstored as PENDING whose validUntil has passed are reported as EXPIRED.\n",
+    ),
+});
+
+/**
+ * @summary Propose an appointment (either party, hired conversations only). A new proposal supersedes any existing live booking.
+ */
+export const ProposeBookingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const proposeBookingBodyNoteMax = 300;
+
+export const ProposeBookingBody = zod.object({
+  startAt: zod.date().describe("Appointment start. Must be in the future."),
+  note: zod
+    .string()
+    .max(proposeBookingBodyNoteMax)
+    .nullish()
+    .describe('Optional short note (e.g. \"Initial visit and inspection\").'),
+});
+
+/**
+ * @summary Confirm a proposed appointment (only the party who did NOT propose it)
+ */
+export const ConfirmBookingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ConfirmBookingResponse = zod.object({
+  booking: zod
+    .object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      startAt: zod.date(),
+      note: zod.string().nullish(),
+      status: zod.enum(["PROPOSED", "CONFIRMED", "CANCELLED", "SUPERSEDED"]),
+      proposedByRole: zod.enum(["customer", "trader"]),
+      confirmedAt: zod.date().nullish(),
+      cancelledAt: zod.date().nullish(),
+      cancelledByRole: zod.string().nullish(),
+      createdAt: zod.date(),
+    })
+    .describe(
+      "A lightweight appointment inside a hired conversation. Times are UTC\ninstants; clients render them in the user's local timezone (UK).\n",
+    ),
+});
+
+/**
+ * @summary Cancel a proposed or confirmed appointment (either party)
+ */
+export const CancelBookingParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CancelBookingResponse = zod.object({
+  booking: zod
+    .object({
+      id: zod.number(),
+      conversationId: zod.number(),
+      startAt: zod.date(),
+      note: zod.string().nullish(),
+      status: zod.enum(["PROPOSED", "CONFIRMED", "CANCELLED", "SUPERSEDED"]),
+      proposedByRole: zod.enum(["customer", "trader"]),
+      confirmedAt: zod.date().nullish(),
+      cancelledAt: zod.date().nullish(),
+      cancelledByRole: zod.string().nullish(),
+      createdAt: zod.date(),
+    })
+    .describe(
+      "A lightweight appointment inside a hired conversation. Times are UTC\ninstants; clients render them in the user's local timezone (UK).\n",
     ),
 });
 

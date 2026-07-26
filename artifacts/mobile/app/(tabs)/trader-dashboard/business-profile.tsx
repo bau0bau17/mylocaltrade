@@ -8,6 +8,35 @@ import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
+import { UK_SERVICES } from '@/constants/uk-services';
+import { UK_LOCATIONS } from '@/constants/uk-locations';
+
+// Normalise a chip value: trim + collapse internal whitespace. Keeps the
+// trader's own casing (existing saved data is never rewritten).
+function normalizeChip(raw: string): string {
+  return raw.replace(/\s+/g, ' ').trim();
+}
+
+// Case-insensitive suggestion match: prefix matches first (on any word),
+// then substring matches. Excludes values already added as chips.
+function suggestFrom(source: string[], query: string, existing: string[], limit = 6): string[] {
+  const q = normalizeChip(query).toLowerCase();
+  if (q.length < 2) return [];
+  const taken = new Set(existing.map(v => v.toLowerCase()));
+  const prefix: string[] = [];
+  const contains: string[] = [];
+  for (const item of source) {
+    const lower = item.toLowerCase();
+    if (taken.has(lower)) continue;
+    if (lower.startsWith(q) || lower.split(/[\s&-]+/).some(w => w.startsWith(q))) {
+      prefix.push(item);
+    } else if (lower.includes(q)) {
+      contains.push(item);
+    }
+    if (prefix.length >= limit) break;
+  }
+  return [...prefix, ...contains].slice(0, limit);
+}
 
 const MIN_DESCRIPTION_LEN = 80;
 
@@ -133,8 +162,8 @@ export default function BusinessProfileScreen() {
     })();
   }, [token]);
 
-  const addChip = (kind: 'services' | 'areas') => {
-    const value = (kind === 'services' ? serviceInput : areaInput).trim();
+  const addChip = (kind: 'services' | 'areas', suggested?: string) => {
+    const value = normalizeChip(suggested ?? (kind === 'services' ? serviceInput : areaInput));
     if (!value) return;
     setForm(prev => {
       const list = kind === 'services' ? prev.additionalServices : prev.serviceAreas;
@@ -554,6 +583,25 @@ export default function BusinessProfileScreen() {
               <Text style={styles.addChipText}>Add</Text>
             </Pressable>
           </View>
+          {(() => {
+            const suggestions = suggestFrom(UK_SERVICES, serviceInput, form.additionalServices);
+            return suggestions.length > 0 ? (
+              <View style={styles.suggestBox}>
+                {suggestions.map((s) => (
+                  <Pressable
+                    key={s}
+                    style={styles.suggestRow}
+                    onPress={() => addChip('services', s)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add service ${s}`}
+                  >
+                    <Feather name="plus-circle" size={14} color={Colors.light.primary} />
+                    <Text style={styles.suggestText}>{s}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null;
+          })()}
           <ChipList items={form.additionalServices} onRemove={(v) => removeChip('services', v)} />
           {fieldErr('additionalServices') && <Text style={styles.fieldError}>{fieldErr('additionalServices')}</Text>}
         </View>
@@ -577,6 +625,25 @@ export default function BusinessProfileScreen() {
               <Text style={styles.addChipText}>Add</Text>
             </Pressable>
           </View>
+          {(() => {
+            const suggestions = suggestFrom(UK_LOCATIONS, areaInput, form.serviceAreas);
+            return suggestions.length > 0 ? (
+              <View style={styles.suggestBox}>
+                {suggestions.map((s) => (
+                  <Pressable
+                    key={s}
+                    style={styles.suggestRow}
+                    onPress={() => addChip('areas', s)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add service area ${s}`}
+                  >
+                    <Feather name="map-pin" size={14} color={Colors.light.primary} />
+                    <Text style={styles.suggestText}>{s}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null;
+          })()}
           <ChipList items={form.serviceAreas} onRemove={(v) => removeChip('areas', v)} />
           {fieldErr('serviceAreas') && <Text style={styles.fieldError}>{fieldErr('serviceAreas')}</Text>}
         </View>
@@ -794,6 +861,9 @@ const styles = StyleSheet.create({
 
   chipInputRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   addChipBtn: { backgroundColor: Colors.light.secondary, height: 50, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  suggestBox: { marginTop: 6, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 12, backgroundColor: Colors.light.white, overflow: 'hidden' },
+  suggestRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.light.border },
+  suggestText: { fontSize: 14, color: Colors.light.text },
   addChipText: { color: Colors.light.white, fontSize: 13, fontWeight: '700' },
   chipScroll: { gap: 6, paddingVertical: 8, paddingHorizontal: 2 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border, borderRadius: 16 },

@@ -10,6 +10,7 @@ import {
   enquiriesTable,
   reviewsTable,
   quotesTable,
+  bookingsTable,
 } from "@workspace/db/schema";
 import { and, eq, desc, sql, inArray } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
@@ -24,6 +25,7 @@ import { postSystemMessage } from "../lib/system-messages";
 import { deriveStage } from "../lib/conversation-stage";
 import { ensureHired } from "../lib/hire";
 import { serializeQuote } from "../lib/quotes";
+import { serializeBooking } from "../lib/bookings";
 import { customerPhoneVerified, sendPhoneVerificationRequired } from "../lib/customer-phone-gate";
 
 const router: IRouter = Router();
@@ -372,6 +374,19 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
       .where(eq(quotesTable.conversationId, id))
       .orderBy(desc(quotesTable.createdAt));
 
+    // Live appointment (PROPOSED or CONFIRMED), if any. Cancelled/superseded
+    // bookings are history only — their story is told by system messages.
+    const [liveBooking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(
+        and(
+          eq(bookingsTable.conversationId, id),
+          inArray(bookingsTable.status, ["PROPOSED", "CONFIRMED"]),
+        ),
+      )
+      .limit(1);
+
     // Contact reveal (Part 7): only after the customer accepted a quote /
     // hired the trader (backend hire state is the source of truth), and only
     // to the two participants of THIS conversation — both already verified
@@ -410,6 +425,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
       enquiryAttachments,
       quotes: quoteRows.map((q) => serializeQuote(q)),
       contactDetails,
+      booking: liveBooking ? serializeBooking(liveBooking) : null,
     });
   } catch (error) {
     req.log.error({ err: error }, "Get conversation failed");

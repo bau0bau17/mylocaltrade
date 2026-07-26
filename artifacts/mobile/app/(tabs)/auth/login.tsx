@@ -7,6 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { useAuth, EmailNotVerifiedError } from '@/contexts/AuthContext';
+import { consumePendingDeepLink } from '@/lib/pending-deep-link';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -35,7 +36,11 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       await login({ email, password });
-      router.replace('/(tabs)/account');
+      // Deep-link recovery: if the user arrived via an email link while
+      // logged out, continue to the original destination instead of the
+      // account tab.
+      const pending = consumePendingDeepLink();
+      router.replace((pending ?? '/(tabs)/account') as Parameters<typeof router.replace>[0]);
     } catch (error: unknown) {
       if (error instanceof EmailNotVerifiedError) {
         setUnverifiedEmail(error.email);

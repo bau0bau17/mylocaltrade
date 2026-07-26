@@ -911,6 +911,41 @@ export interface ConversationContactDetails {
   customer?: ConversationContactDetailsCustomer;
 }
 
+export type BookingStatus = (typeof BookingStatus)[keyof typeof BookingStatus];
+
+export const BookingStatus = {
+  PROPOSED: "PROPOSED",
+  CONFIRMED: "CONFIRMED",
+  CANCELLED: "CANCELLED",
+  SUPERSEDED: "SUPERSEDED",
+} as const;
+
+export type BookingProposedByRole =
+  (typeof BookingProposedByRole)[keyof typeof BookingProposedByRole];
+
+export const BookingProposedByRole = {
+  customer: "customer",
+  trader: "trader",
+} as const;
+
+/**
+ * A lightweight appointment inside a hired conversation. Times are UTC
+instants; clients render them in the user's local timezone (UK).
+
+ */
+export interface Booking {
+  id: number;
+  conversationId: number;
+  startAt: string;
+  note?: string | null;
+  status: BookingStatus;
+  proposedByRole: BookingProposedByRole;
+  confirmedAt?: string | null;
+  cancelledAt?: string | null;
+  cancelledByRole?: string | null;
+  createdAt: string;
+}
+
 export interface ConversationDetailResponse {
   conversation: ConversationSummary;
   messages: ConversationMessage[];
@@ -929,6 +964,11 @@ The backend hire state is the source of truth — contact details are
 never included in pre-hire responses.
  */
   contactDetails?: ConversationContactDetails | null;
+  /** The live appointment for this conversation (PROPOSED or CONFIRMED),
+if any. Cancelled/superseded bookings are history only and are not
+returned here. Null before hire or when no booking exists.
+ */
+  booking?: Booking | null;
 }
 
 export type CreateQuoteRequestPriceType =
@@ -961,6 +1001,20 @@ export interface CreateQuoteRequest {
 
 export interface QuoteResponse {
   quote: Quote;
+}
+
+export interface CreateBookingRequest {
+  /** Appointment start. Must be in the future. */
+  startAt: string;
+  /**
+   * Optional short note (e.g. "Initial visit and inspection").
+   * @maxLength 300
+   */
+  note?: string | null;
+}
+
+export interface BookingResponse {
+  booking: Booking;
 }
 
 export interface CompareOffer {

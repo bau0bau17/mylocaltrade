@@ -49,12 +49,52 @@ import {
   useWithdrawQuote,
   useAcceptQuote,
   useDeclineQuote,
+  useProposeBooking,
+  useConfirmBooking,
+  useCancelBooking,
   getGetConversationQueryKey,
   getGetConversationsQueryKey,
   getGetConversationsUnreadCountQueryKey,
   getCompareEnquiriesQueryKey,
   type Quote,
+  type Booking,
 } from "@workspace/api-client-react";
+
+// ---- Booking (appointment) helpers ----------------------------------------
+
+/** "Tue 4 Aug at 09:30" in the device's locale timezone (UK users → UK time). */
+function fmtBookingWhen(iso: string) {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return `${date} at ${time}`;
+}
+
+/** Next N days as selectable options (starting tomorrow). */
+function bookingDayOptions(count = 14): { key: string; label: string; date: Date }[] {
+  const out: { key: string; label: string; date: Date }[] = [];
+  const base = new Date();
+  base.setHours(0, 0, 0, 0);
+  for (let i = 1; i <= count; i++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    out.push({
+      key: d.toDateString(),
+      label: d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }),
+      date: d,
+    });
+  }
+  return out;
+}
+
+const BOOKING_TIME_OPTIONS: string[] = (() => {
+  const out: string[] = [];
+  for (let h = 7; h <= 18; h++) {
+    out.push(`${String(h).padStart(2, "0")}:00`);
+    if (h < 18) out.push(`${String(h).padStart(2, "0")}:30`);
+  }
+  return out;
+})();
 
 const TRADER_STATUSES = ["NEW", "CONTACTED", "QUOTED", "COMPLETED"] as const;
 type TraderStatus = (typeof TRADER_STATUSES)[number];
@@ -226,6 +266,20 @@ export default function ConversationThreadScreen() {
     mutation: { onSuccess: invalidateQuoteRelated },
   });
 
+  const invalidateBookingRelated = () => {
+    qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+    qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+  };
+  const proposeBookingMutation = useProposeBooking({
+    mutation: { onSuccess: invalidateBookingRelated },
+  });
+  const confirmBookingMutation = useConfirmBooking({
+    mutation: { onSuccess: invalidateBookingRelated },
+  });
+  const cancelBookingMutation = useCancelBooking({
+    mutation: { onSuccess: invalidateBookingRelated },
+  });
+
   const reportMutation = useReportConversation();
 
   const muteMutation = useMuteConversation({
@@ -249,6 +303,10 @@ export default function ConversationThreadScreen() {
   const [quoteDescription, setQuoteDescription] = useState("");
   const [quoteNotes, setQuoteNotes] = useState("");
   const [quoteValidDays, setQuoteValidDays] = useState<number | null>(14);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingDayKey, setBookingDayKey] = useState<string | null>(null);
+  const [bookingTime, setBookingTime] = useState<string | null>(null);
+  const [bookingNote, setBookingNote] = useState("");
 
   if (isAdmin) {
     return (
@@ -277,6 +335,13 @@ export default function ConversationThreadScreen() {
   // accepted a quote / hired the trader (backend hire state is authoritative).
   const contactDetails = data?.contactDetails ?? null;
   const hired = Boolean(conv?.customerAcceptedAt);
+  // Live appointment (PROPOSED or CONFIRMED) — cancelled/superseded bookings
+  // never come back from the API; their history lives in system messages.
+  const booking: Booking | null = (data?.booking as Booking | null) ?? null;
+  const bookingBusy =
+    proposeBookingMutation.isPending ||
+    confirmBookingMutation.isPending ||
+    cancelBookingMutation.isPending;
   const currentQuote = quotes[0] ?? null;
   const currentQuoteStatus = currentQuote ? effectiveStatus(currentQuote) : null;
   const hasLivePendingQuote = currentQuoteStatus === "PENDING";
@@ -525,6 +590,71 @@ export default function ConversationThreadScreen() {
         declineQuoteMutation.mutate(
           { id: currentQuote.id },
           { onError: () => Alert.alert("Error", "Could not decline the quote.") },
+        ),
+    });
+  };
+
+  const openBookingModal = () => {
+    setBookingDayKey(null);
+    setBookingTime(null);
+    setBookingNote("");
+    setBookingOpen(true);
+  };
+
+  const submitBooking = () => {
+    const day = bookingDayOptions().find((d) => d.key === bookingDayKey);
+    if (!day || !bookingTime) {
+      Alert.alert("Pick a date and time", "Choose a day and a time for the appointment.");
+      return;
+    }
+    const [h, m] = bookingTime.split(":").map(Number);
+    const startAt = new Date(day.date);
+    startAt.setHours(h, m, 0, 0);
+    if (startAt.getTime() <= Date.now()) {
+      Alert.alert("Time has passed", "Please pick a time in the future.");
+      return;
+    }
+    proposeBookingMutation.mutate(
+      {
+        id: conversationId,
+        data: { startAt: startAt.toISOString(), note: bookingNote.trim() || null },
+      },
+      {
+        onSuccess: () => setBookingOpen(false),
+        onError: (err: unknown) => {
+          const msg =
+            err instanceof Error ? err.message : "Could not propose the appointment.";
+          Alert.alert("Error", msg);
+        },
+      },
+    );
+  };
+
+  const onConfirmBooking = () => {
+    if (!booking) return;
+    confirmAction({
+      title: "Confirm appointment",
+      message: `Confirm the appointment on ${fmtBookingWhen(booking.startAt)}?`,
+      confirmLabel: "Confirm",
+      onConfirm: () =>
+        confirmBookingMutation.mutate(
+          { id: booking.id },
+          { onError: () => Alert.alert("Error", "Could not confirm the appointment.") },
+        ),
+    });
+  };
+
+  const onCancelBooking = () => {
+    if (!booking) return;
+    confirmAction({
+      title: "Cancel appointment",
+      message: `Cancel the appointment on ${fmtBookingWhen(booking.startAt)}? The other party will be notified.`,
+      confirmLabel: "Cancel appointment",
+      destructive: true,
+      onConfirm: () =>
+        cancelBookingMutation.mutate(
+          { id: booking.id },
+          { onError: () => Alert.alert("Error", "Could not cancel the appointment.") },
         ),
     });
   };
@@ -1080,6 +1210,100 @@ export default function ConversationThreadScreen() {
         </View>
       ) : null}
 
+      {/* Appointment (booking) card: only inside hired, still-live jobs. A
+          PROPOSED booking shows Confirm to the non-proposer; both parties can
+          cancel or propose a new time (reschedule = new proposal, mutual
+          confirmation — never a silent overwrite). */}
+      {hired && conv.stage !== "CANCELLED" && conv.stage !== "JOB_DONE" && !closed ? (
+        <View style={styles.bookingBar}>
+          {booking ? (
+            <>
+              <View style={styles.bookingHeaderRow}>
+                <View style={styles.quoteTitleWrap}>
+                  <Feather name="calendar" size={14} color={Colors.light.primary} />
+                  <Text style={styles.quoteTitle}>Appointment</Text>
+                </View>
+                <View
+                  style={[
+                    styles.quoteStatusPill,
+                    booking.status === "CONFIRMED" && styles.quotePillAccepted,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.quoteStatusPillText,
+                      booking.status === "CONFIRMED" && styles.quotePillAcceptedText,
+                    ]}
+                  >
+                    {booking.status === "CONFIRMED"
+                      ? "Confirmed"
+                      : booking.proposedByRole === (isTrader ? "trader" : "customer")
+                        ? "Awaiting their confirmation"
+                        : "Awaiting your confirmation"}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.bookingWhen}>{fmtBookingWhen(booking.startAt)}</Text>
+              {booking.note ? (
+                <Text style={styles.quoteNotes} numberOfLines={2}>{booking.note}</Text>
+              ) : null}
+              <View style={styles.quoteActionsRow}>
+                {booking.status === "PROPOSED" &&
+                booking.proposedByRole !== (isTrader ? "trader" : "customer") ? (
+                  <Pressable
+                    style={[styles.quoteBtn, styles.quoteBtnPrimary, bookingBusy && styles.quoteBtnDisabled]}
+                    disabled={bookingBusy}
+                    onPress={onConfirmBooking}
+                  >
+                    {confirmBookingMutation.isPending ? (
+                      <ActivityIndicator size="small" color={Colors.light.white} />
+                    ) : (
+                      <>
+                        <Feather name="check-circle" size={14} color={Colors.light.white} />
+                        <Text style={styles.quoteBtnPrimaryText}>Confirm</Text>
+                      </>
+                    )}
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={[styles.quoteBtn, styles.quoteBtnGhost, bookingBusy && styles.quoteBtnDisabled]}
+                  disabled={bookingBusy}
+                  onPress={openBookingModal}
+                >
+                  <Text style={styles.quoteBtnGhostText}>Propose new time</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.quoteBtn, styles.quoteBtnGhost, bookingBusy && styles.quoteBtnDisabled]}
+                  disabled={bookingBusy}
+                  onPress={onCancelBooking}
+                >
+                  {cancelBookingMutation.isPending ? (
+                    <ActivityIndicator size="small" color={Colors.light.primary} />
+                  ) : (
+                    <Text style={styles.quoteBtnGhostText}>Cancel</Text>
+                  )}
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <View style={styles.bookingEmptyRow}>
+              <View style={styles.quoteTitleWrap}>
+                <Feather name="calendar" size={14} color={Colors.light.primary} />
+                <Text style={styles.quoteTitle}>No appointment booked yet</Text>
+              </View>
+              <Pressable
+                style={[styles.quoteBtn, styles.quoteBtnPrimary, bookingBusy && styles.quoteBtnDisabled]}
+                disabled={bookingBusy}
+                onPress={openBookingModal}
+              >
+                <Feather name="plus" size={14} color={Colors.light.white} />
+                <Text style={styles.quoteBtnPrimaryText}>Propose a time</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      ) : null}
+
       {/* Contact details (Part 7): the API only includes contactDetails after
           the customer accepted a quote / hired, so this section can never
           render pre-hire. Each viewer sees the OTHER party's details. */}
@@ -1562,6 +1786,106 @@ export default function ConversationThreadScreen() {
           ) : null}
         </View>
       </Modal>
+
+      <Modal
+        visible={bookingOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBookingOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {booking ? "Propose a new time" : "Propose an appointment"}
+            </Text>
+            <Text style={styles.bookingModalHint}>
+              {booking
+                ? "This replaces the current appointment once proposed — the other party will need to confirm the new time."
+                : "Pick a date and time. The other party will be asked to confirm."}
+            </Text>
+
+            <Text style={styles.quoteFieldLabel}>Date</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.bookingChipRow}
+            >
+              {bookingDayOptions().map((d) => (
+                <Pressable
+                  key={d.key}
+                  style={[styles.quoteChip, bookingDayKey === d.key && styles.quoteChipActive]}
+                  onPress={() => setBookingDayKey(d.key)}
+                >
+                  <Text
+                    style={[
+                      styles.quoteChipText,
+                      bookingDayKey === d.key && styles.quoteChipTextActive,
+                    ]}
+                  >
+                    {d.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.quoteFieldLabel}>Time</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.bookingChipRow}
+            >
+              {BOOKING_TIME_OPTIONS.map((t) => (
+                <Pressable
+                  key={t}
+                  style={[styles.quoteChip, bookingTime === t && styles.quoteChipActive]}
+                  onPress={() => setBookingTime(t)}
+                >
+                  <Text
+                    style={[styles.quoteChipText, bookingTime === t && styles.quoteChipTextActive]}
+                  >
+                    {t}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.quoteFieldLabel}>Note (optional)</Text>
+            <TextInput
+              style={styles.quoteInput}
+              value={bookingNote}
+              onChangeText={setBookingNote}
+              placeholder="e.g. Initial visit to look at the job"
+              placeholderTextColor={Colors.light.textMuted}
+              maxLength={300}
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.quoteBtn, styles.quoteBtnGhost]}
+                onPress={() => setBookingOpen(false)}
+              >
+                <Text style={styles.quoteBtnGhostText}>Back</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.quoteBtn,
+                  styles.quoteBtnPrimary,
+                  (proposeBookingMutation.isPending || !bookingDayKey || !bookingTime) &&
+                    styles.quoteBtnDisabled,
+                ]}
+                disabled={proposeBookingMutation.isPending || !bookingDayKey || !bookingTime}
+                onPress={submitBooking}
+              >
+                {proposeBookingMutation.isPending ? (
+                  <ActivityIndicator size="small" color={Colors.light.white} />
+                ) : (
+                  <Text style={styles.quoteBtnPrimaryText}>Propose</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -1759,6 +2083,31 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.surface,
     gap: 6,
   },
+  bookingBar: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.surface,
+    gap: 6,
+  },
+  bookingHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  bookingWhen: { fontSize: 17, fontWeight: "700", color: Colors.light.text },
+  bookingEmptyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  bookingChipRow: { flexDirection: "row", gap: 8, paddingVertical: 4 },
+  bookingModalHint: { fontSize: 13, color: Colors.light.textMuted, marginBottom: 8, lineHeight: 18 },
   quoteHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
