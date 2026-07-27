@@ -1475,6 +1475,35 @@ export async function sendAccountDeletionCancelledEmail(opts: {
   });
 }
 
+export async function sendAccountDeletionCompletedEmail(opts: {
+  toEmail: string;
+  toName: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const html = emailShell({
+    title: "Your account has been deleted",
+    preheader: "Your MyLocalTrade account has now been permanently deleted.",
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+        This is to confirm that your MyLocalTrade account has now been <strong>permanently deleted</strong>. Your personal details have been removed from our systems and your account can no longer be signed in to or restored.
+      </p>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+        Where the law requires it, we may retain a minimal record of certain data (for example, completed transactions) for the applicable retention period.
+      </p>
+      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
+        You're welcome back any time — you can create a new account with this email address whenever you like. Thank you for having been part of MyLocalTrade.
+      </p>`,
+  });
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: "Your MyLocalTrade account has been permanently deleted",
+    html,
+    tag: "account-deletion-completed",
+  });
+}
+
 export async function sendAdminAccountDeletionAlertEmail(opts: {
   userEmail: string;
   userFullName: string;

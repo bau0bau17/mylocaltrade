@@ -2953,6 +2953,18 @@ router.post(
         });
         return;
       }
+      // Confirmation email: the real address was captured before the wipe.
+      // Anonymisation is terminal for PII, so this is the last chance to
+      // close the loop with the user. Skip if the row already carried a
+      // placeholder (no real address left to write to).
+      if (!user.email.endsWith(".invalid")) {
+        sendAccountDeletionCompletedEmail({
+          toEmail: user.email,
+          toName: user.fullName || "there",
+        }).catch((err) => {
+          req.log.error({ err }, "Failed to send deletion completed email (anonymise)");
+        });
+      }
       void logAudit({
         userId,
         action: "CUSTOMER_DATA_ANONYMISED",
@@ -3059,6 +3071,18 @@ router.post(
         return;
       }
       await revokeUserSessions(userId);
+      // Confirmation email: address was captured before the row was rewritten
+      // to the released placeholder. If the account was anonymised first, the
+      // real address is already gone (the anonymise route sent the
+      // confirmation at that point), so skip.
+      if (!alreadyPlaceholder) {
+        sendAccountDeletionCompletedEmail({
+          toEmail: user.email,
+          toName: user.fullName || "there",
+        }).catch((err) => {
+          req.log.error({ err }, "Failed to send deletion completed email (complete)");
+        });
+      }
       void logAudit({
         userId,
         action: "ACCOUNT_DELETION_COMPLETED",

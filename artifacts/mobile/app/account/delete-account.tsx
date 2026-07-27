@@ -500,7 +500,8 @@ function RequestDeletionView({
             <Text style={styles.warnBody}>
               Deleting your account will sign you out of every other device, hide your trader profile (if any) from
               customers, and stop all email and push notifications. Our admin team will then finalise the deletion —
-              until then, you can still cancel your request from this screen.
+              until then, you can still cancel your request from this screen. You'll receive a confirmation email
+              when your account has been permanently deleted.
               Some records may be retained where the law requires us to do so.
             </Text>
           </View>
@@ -533,6 +534,7 @@ function RequestDeletionView({
           <Bullet text="Your trader profile is removed from search and listings." />
           <Bullet text="Push notifications and marketing emails stop." />
           <Bullet text="You can cancel from this screen until an admin finalises the deletion." />
+          <Bullet text="You'll receive a confirmation email once your account has been permanently deleted." />
         </View>
 
         <Text style={styles.sectionLabel}>Reason (optional)</Text>
