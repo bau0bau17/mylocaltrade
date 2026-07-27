@@ -1,0 +1,61 @@
+Thanks, this final polish pass looks good.
+
+I want to close only two remaining pre-launch items.
+
+Please keep this extremely targeted.
+
+1. ACCOUNT DELETION COMPLETION EMAIL
+
+Please implement proposed task #94.
+
+When an admin actually finalises/permanently completes an account deletion, send the user a confirmation email stating clearly that their MyLocalTrade account deletion has been completed.
+
+Please reuse the existing transactional email infrastructure.
+
+Do not create a new notification system.
+
+The email should:
+- confirm that the account deletion has been finalised
+- avoid exposing unnecessary retained/legal/audit data
+- not imply that Apple subscriptions were automatically cancelled
+- use the existing MyLocalTrade transactional sender
+
+If the user had an Apple subscription, the existing pre-deletion warning remains the mechanism for subscription management.
+
+2. SOCIAL MEDIA LINKS — APPLY POST-HIRE CONTACT RULE
+
+You noted that social-media links are currently visible on the public trader profile.
+
+Please treat trader social-media links consistently with the existing website/contact privacy rule.
+
+Before hire:
+- do NOT display social-media links to customers.
+
+After the customer accepts the trader's quote / the trader is hired:
+- social links may become available within the appropriate post-hire contact context if already supported.
+
+Do not delete or rewrite the trader's stored social links.
+This is visibility/gating only.
+
+Please reuse the same existing hire/contact-visibility logic already used for protected trader contact information rather than creating a separate permission system.
+
+IMPORTANT:
+- Do not change phone/email/website rules beyond keeping them consistent.
+- Do not change quote/hire logic.
+- Do not add new features.
+- No broad audit.
+- No EAS build.
+- No deployment/publish.
+- No database migration unless genuinely required.
+
+After completion please confirm:
+1. Files changed.
+2. When the deletion-completion email is triggered.
+3. Exact high-level email content.
+4. Whether existing email infrastructure was reused.
+5. Which social links were previously public.
+6. How they are now gated before/after hire.
+7. Confirm stored trader profile data is untouched.
+8. Any schema/migration requirement.
+9. Minimum checks run and results.
+10. Confirm no build/deploy/publish was started.

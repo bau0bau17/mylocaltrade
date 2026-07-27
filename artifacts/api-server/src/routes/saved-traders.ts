@@ -50,11 +50,14 @@ router.get("/saved-traders", authMiddleware, customerOnly, async (req, res) => {
       postcode: t.postcode,
       serviceAreas: t.serviceAreas || [],
       businessDescription: t.businessDescription,
-      website: t.website,
+      // Pre-hire contact gate: direct contact routes (website, social links)
+      // are never exposed on customer-facing listings — same rule as the
+      // public trader profile in routes/traders.ts.
+      website: null,
       openingHours: t.openingHours,
       logoUrl: t.logoUrl,
       galleryUrls: t.galleryUrls || [],
-      socialLinks: t.socialLinks,
+      socialLinks: null,
       plan: t.plan,
       isFeatured: t.isFeatured,
       isActive: t.isActive,

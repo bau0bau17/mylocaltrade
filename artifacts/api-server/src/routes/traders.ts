@@ -325,11 +325,11 @@ function formatTrader(
   // elsewhere (featured placement, higher search ranking and unlimited
   // gallery images), not these profile fields.
   //
-  // Contact integrity: direct contact routes (email, phone, website) are
-  // NEVER exposed on the public profile. They are only revealed inside a
-  // conversation once the customer has accepted a quote / hired the trader
-  // (see routes/conversations.ts). The values stay stored for verification
-  // and admin use.
+  // Contact integrity: direct contact routes (email, phone, website, social
+  // links) are NEVER exposed on the public profile. They are only revealed
+  // inside a conversation once the customer has accepted a quote / hired the
+  // trader (see routes/conversations.ts). The values stay stored for
+  // verification and admin use.
   return {
     id: t.id,
     userId: t.userId,
@@ -348,7 +348,7 @@ function formatTrader(
     openingHours: t.openingHours,
     logoUrl: t.logoUrl,
     galleryUrls: t.galleryUrls || [],
-    socialLinks: t.socialLinks,
+    socialLinks: null,
     plan: t.plan,
     isFeatured: t.isFeatured,
     isActive: t.isActive,
