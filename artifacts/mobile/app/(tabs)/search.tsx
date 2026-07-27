@@ -434,7 +434,7 @@ export default function SearchScreen() {
             <FlatList
               data={data.traders}
               keyExtractor={item => item.id.toString()}
-              renderItem={({ item }) => <TraderCard trader={item} />}
+              renderItem={({ item }) => <TraderCard trader={item} searchLocation={locationQuery} />}
               contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 84 + 20 }}
               showsVerticalScrollIndicator={false}
               refreshControl={

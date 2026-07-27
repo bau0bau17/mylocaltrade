@@ -55,8 +55,31 @@ export function formatTenureSince(createdAt: Date | string | null | undefined): 
   return `Since ${year}`;
 }
 
-export function TraderCard({ trader }: { trader: TraderProfile }) {
+// Mirrors the server's location filter (`area ILIKE %location%`): returns the
+// first service area containing the searched location, case-insensitively.
+// Never fabricates a value — no match means the caller falls back to town.
+export function findMatchingServiceArea(
+  serviceAreas: string[] | null | undefined,
+  searchLocation: string | null | undefined,
+): string | null {
+  const loc = searchLocation?.trim().toLowerCase();
+  if (!loc || !Array.isArray(serviceAreas)) return null;
+  return serviceAreas.find((a) => typeof a === 'string' && a.toLowerCase().includes(loc)) ?? null;
+}
+
+export function TraderCard({
+  trader,
+  searchLocation,
+}: {
+  trader: TraderProfile;
+  /** The customer/search location this card is being shown for (if any).
+      When it matches one of the trader's service areas, the card shows
+      "Serves {area}" instead of the trader's business town. */
+  searchLocation?: string | null;
+}) {
   const router = useRouter();
+  const matchingArea = findMatchingServiceArea(trader.serviceAreas, searchLocation);
+  const locationLabel = matchingArea ? `Serves ${matchingArea}` : trader.town;
   // Any non-basic, non-empty plan is Premium. This also normalises legacy
   // "trader" rows that predate the unified "premium" plan id.
   const isPremiumPlan = !!trader.plan && trader.plan !== 'basic';
@@ -87,7 +110,7 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
     planTierLabel,
     topRated ? 'top rated' : null,
     fastResponder ? 'replies fast' : null,
-    trader.town,
+    locationLabel,
     reviewsPhrase,
     tenureLabel ? `on MyLocalTrade ${tenureLabel.toLowerCase()}` : null,
   ]
@@ -172,7 +195,7 @@ export function TraderCard({ trader }: { trader: TraderProfile }) {
       <View style={styles.footer}>
         <View style={styles.footerItem}>
           <Feather name="map-pin" size={12} color={Colors.light.textMuted} />
-          <Text style={styles.footerText}>{trader.town}</Text>
+          <Text style={styles.footerText}>{locationLabel}</Text>
         </View>
         <View style={styles.footerItem}>
           <FontAwesome name="star" size={12} color={Colors.light.featured} />

@@ -1,0 +1,176 @@
+Hi,
+
+I found one important UX issue in trader search results that I want to fix before launch.
+
+I have attached screenshots showing the current behaviour.
+
+CURRENT ISSUE
+
+The customer is searching in:
+
+Milton Keynes
+
+The trader correctly appears because Milton Keynes is included in the trader’s Service Areas.
+
+However, the trader card displays:
+
+London
+
+which is the trader’s business location/address area.
+
+Technically the search result is correct, but from the customer’s perspective this is confusing.
+
+A customer searching in Milton Keynes may think:
+
+“Why am I seeing a trader from London?”
+
+--------------------------------------------------
+EXPECTED BEHAVIOUR
+--------------------------------------------------
+
+On trader cards shown in location-based customer results, please prioritise the relevant matching SERVICE AREA rather than the trader’s business address/location.
+
+Example:
+
+Customer search location:
+Milton Keynes
+
+Trader:
+Business address/location = London
+Service Areas = Milton Keynes, Northampton
+
+Expected trader card:
+
+📍 Serves Milton Keynes
+
+or:
+
+📍 Milton Keynes service area
+
+Preferred wording:
+
+“Serves Milton Keynes”
+
+This makes it immediately clear why the trader appears in the search results.
+
+--------------------------------------------------
+WHERE THIS SHOULD APPLY
+--------------------------------------------------
+
+Please inspect the trader cards used in:
+
+- Home → Featured Traders in [customer location]
+- Search results
+- Traders screen where results are location-aware
+- any other customer-facing trader list that is filtered based on Service Areas
+
+Where the card is being shown because of a specific customer/search location, show the matching service area.
+
+Example:
+
+Customer/search location:
+Northampton
+
+Trader service areas:
+Milton Keynes
+Northampton
+
+Card should show:
+
+📍 Serves Northampton
+
+not:
+
+📍 London
+
+--------------------------------------------------
+BUSINESS ADDRESS MUST REMAIN SEPARATE
+--------------------------------------------------
+
+Do NOT change the trader’s stored business address.
+
+Do NOT overwrite existing profile data.
+
+Do NOT expose the trader’s full/private business address.
+
+This is only a customer-facing display improvement on trader cards.
+
+The business address/location can remain available wherever the existing product rules intentionally show it, such as the appropriate trader profile/business-information context.
+
+--------------------------------------------------
+FALLBACK BEHAVIOUR
+--------------------------------------------------
+
+Please use sensible fallback logic.
+
+Preferred order:
+
+1. If the trader card is being displayed for a specific searched/customer location and that location matches one of the trader’s Service Areas:
+   → show “Serves [matching area]”
+
+2. If there is no specific search location but an appropriate Service Area can be shown:
+   → show a useful Service Area value if consistent with the current screen.
+
+3. Only fall back to the existing trader/business location where there is no meaningful Service Area context.
+
+Do not fabricate a matching area.
+
+Use the actual trader Service Areas and the same location-normalisation logic already used by search.
+
+--------------------------------------------------
+IMPORTANT
+--------------------------------------------------
+
+This must stay consistent with the Service Areas search work.
+
+For example:
+
+Trader:
+Business location = London
+Service Areas = Milton Keynes, Northampton
+
+Customer searches:
+Milton Keynes
+
+→ trader appears
+→ card says “Serves Milton Keynes”
+
+Customer searches:
+Northampton
+
+→ trader appears
+→ card says “Serves Northampton”
+
+The card should not misleadingly say London in these location-filtered results.
+
+--------------------------------------------------
+SCOPE / COST CONTROL
+--------------------------------------------------
+
+- Do not perform a broad repository audit.
+- Inspect only the relevant shared trader-card component(s), search-result data and Service Areas/location matching logic.
+- Reuse the existing location normalisation/matching.
+- Do not redesign trader cards.
+- Keep the existing icon, spacing, colours and card layout.
+- Do not change search ranking or verification rules.
+- Do not change the database schema unless genuinely necessary.
+- Do not start an EAS build.
+- Do not deploy/publish.
+- Run only the minimum relevant checks.
+
+--------------------------------------------------
+FINAL REPORT
+--------------------------------------------------
+
+After completion, please confirm:
+
+1. Root cause of why the card previously displayed London.
+2. Files changed.
+3. Which trader-card/list screens were updated.
+4. How the matching Service Area is selected.
+5. Exact fallback behaviour when there is no matching Service Area.
+6. Confirm business address/profile data was not modified.
+7. Confirm private/full business address is not exposed.
+8. Confirm search/filter logic itself was not negatively changed.
+9. Minimum checks run and results.
+10. Confirm no EAS build, deployment or publish was started.

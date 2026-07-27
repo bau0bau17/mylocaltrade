@@ -285,7 +285,10 @@ export default function HomeScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
                 {featuredTraders.map((trader) => (
                   <View key={trader.id} style={styles.featuredCardWrapper}>
-                    <TraderCard trader={trader} />
+                    {/* Section is headed "Featured Traders in {city}", so show
+                        the matching service area when the trader serves that
+                        city (falls back to their town when there's no match). */}
+                    <TraderCard trader={trader} searchLocation={location.city} />
                   </View>
                 ))}
               </ScrollView>
