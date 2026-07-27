@@ -2972,17 +2972,6 @@ router.post(
         notes: body.notes ?? undefined,
       });
       void logAudit({ userId, action: "ADMIN_APPROVED_DELETION_PROCESSING" });
-      // Final confirmation email — sent to the address captured BEFORE the
-      // row was anonymised (afterwards the row only holds a placeholder).
-      // Skip accounts that already carried a placeholder: no real address.
-      if (!user.email.endsWith(".invalid")) {
-        sendAccountDeletionCompletedEmail({
-          toEmail: user.email,
-          toName: user.fullName,
-        }).catch((err) =>
-          req.log.error({ err }, "Deletion-completed email failed"),
-        );
-      }
       res.json({ ok: true, deletionStatus: "ANONYMISED" });
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
@@ -3088,18 +3077,6 @@ router.post(
         action: "ACCOUNT_DELETION_COMPLETED",
         details: { adminId, emailReleased: !alreadyPlaceholder },
       });
-      // Final confirmation email — the real address was captured before this
-      // transaction replaced it with the released placeholder. Accounts that
-      // were anonymised first already received it on that step (their stored
-      // address is a placeholder by now, so alreadyPlaceholder is true).
-      if (!alreadyPlaceholder) {
-        sendAccountDeletionCompletedEmail({
-          toEmail: user.email,
-          toName: user.fullName,
-        }).catch((err) =>
-          req.log.error({ err }, "Deletion-completed email failed"),
-        );
-      }
       res.json({ ok: true, deletionStatus: "COMPLETED" });
     } catch (error) {
       req.log.error({ err: error }, "Complete account deletion failed");

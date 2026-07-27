@@ -1420,35 +1420,6 @@ export async function sendAccountDeletionReceivedEmail(opts: {
   });
 }
 
-export async function sendAccountDeletionCompletedEmail(opts: {
-  toEmail: string;
-  toName: string;
-}): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const html = emailShell({
-    title: "Account deletion completed",
-    preheader: "Your MyLocalTrade account deletion has been finalised.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        This is to confirm that the deletion of your MyLocalTrade account has now been <strong>completed</strong>. Your account is permanently deleted and can no longer be signed in to or restored.
-      </p>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
-        If you had a subscription billed through the App Store, it is managed separately by Apple and is not cancelled automatically — you can review it at any time in your App Store settings.
-      </p>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
-        Thank you for having used MyLocalTrade. You are welcome to create a new account at any time.
-      </p>`,
-  });
-  await dispatchEmail({
-    category: "notifications",
-    to: { email: opts.toEmail, name: opts.toName },
-    subject: "Your MyLocalTrade account deletion is complete",
-    html,
-    tag: "account-deletion-completed",
-  });
-}
-
 export async function sendAccountDeletionCancelledEmail(opts: {
   toEmail: string;
   toName: string;
