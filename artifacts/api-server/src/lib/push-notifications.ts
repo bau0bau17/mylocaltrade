@@ -26,6 +26,24 @@ interface ExpoPushResponse {
   errors?: { message: string }[];
 }
 
+/**
+ * True when the account is in a terminal deletion state: soft-deleted
+ * (`deletedAt`), anonymised (`anonymisedAt`), or its email has already been
+ * rewritten to a wiped `.invalid` placeholder. Such users must never be
+ * pushed to — this is the push equivalent of the `dispatchEmail` guard.
+ */
+export function isDeletedOrAnonymisedUser(user: {
+  deletedAt: Date | null;
+  anonymisedAt: Date | null;
+  email: string;
+}): boolean {
+  return (
+    user.deletedAt != null ||
+    user.anonymisedAt != null ||
+    user.email.trim().toLowerCase().endsWith(".invalid")
+  );
+}
+
 function looksLikeExpoToken(token: string): boolean {
   return token.startsWith("ExponentPushToken[") || token.startsWith("ExpoPushToken[");
 }
@@ -64,11 +82,23 @@ export async function sendPushToUser(
   payload: { title: string; body: string; data?: Record<string, unknown> },
 ): Promise<boolean> {
   const [user] = await db
-    .select({ enabled: usersTable.pushNotificationsEnabled })
+    .select({
+      enabled: usersTable.pushNotificationsEnabled,
+      deletedAt: usersTable.deletedAt,
+      anonymisedAt: usersTable.anonymisedAt,
+      email: usersTable.email,
+    })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
   if (!user || user.enabled === false) return false;
+  // Central safety net (mirrors the wiped-placeholder guard in dispatchEmail):
+  // deleted/anonymised accounts must never receive push, even if a late
+  // webhook or scheduled job fires after a deletion path missed a token.
+  if (isDeletedOrAnonymisedUser(user)) {
+    console.warn(`[push] skipped-deleted-account user=${userId}`);
+    return false;
+  }
 
   const rows = await db
     .select({ token: pushTokensTable.token })

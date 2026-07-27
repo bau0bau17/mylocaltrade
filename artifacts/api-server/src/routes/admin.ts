@@ -3045,6 +3045,9 @@ router.post(
           .returning({ id: usersTable.id });
         if (!updated) return;
         completed = true;
+        // Belt-and-braces: earlier lifecycle steps already purge push tokens,
+        // but the terminal transition must guarantee none survive.
+        await tx.delete(pushTokensTable).where(eq(pushTokensTable.userId, userId));
         if (!alreadyPlaceholder && user.role === "trader") {
           await tx
             .update(traderProfilesTable)
