@@ -295,7 +295,26 @@ async function sendViaSmtp(opts: DispatchOpts): Promise<boolean> {
  * lead-reminder retry logic in `lib/lead-reminders.ts` — can keep accurate
  * delivery state.
  */
-async function dispatchEmail(opts: DispatchOpts): Promise<"brevo" | "smtp" | "none"> {
+/**
+ * True for internal placeholder addresses that must never receive mail —
+ * anonymised/deleted accounts carry `deleted-user-<id>@deleted.mylocaltrade.invalid`.
+ * The reserved `.invalid` TLD can never belong to a real recipient (RFC 2606),
+ * so guarding on it cannot block a legitimate user.
+ */
+export function isPlaceholderEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith(".invalid");
+}
+
+async function dispatchEmail(opts: DispatchOpts): Promise<"brevo" | "smtp" | "none" | "skipped"> {
+  // Central safety net: no transactional email may ever be dispatched to a
+  // wiped placeholder address, regardless of which flow triggered the send
+  // (subscription webhooks, admin actions, etc. can fire after anonymisation).
+  if (isPlaceholderEmail(opts.to.email)) {
+    console.warn(
+      `[email] [skipped-placeholder:${opts.category}] ${opts.tag} suppressed for placeholder address ${opts.to.email}`,
+    );
+    return "skipped";
+  }
   const brevoKey = process.env[BREVO_KEY_ENV[opts.category]];
   if (brevoKey) {
     try {
@@ -469,7 +488,7 @@ export async function sendPhoneVerificationCodeEmail(
   toName: string,
   code: string,
   expiresInMinutes = 10,
-): Promise<"brevo" | "smtp" | "none"> {
+): Promise<"brevo" | "smtp" | "none" | "skipped"> {
   const safeName = escapeHtml(toName || "there");
   const safeCode = escapeHtml(code);
   const html = emailShell({
@@ -511,7 +530,7 @@ export async function sendPasswordResetEmail(
   toName: string,
   code: string,
   expiresInMinutes = 10,
-): Promise<"brevo" | "smtp" | "none"> {
+): Promise<"brevo" | "smtp" | "none" | "skipped"> {
   const safeName = escapeHtml(toName || "there");
   const safeCode = escapeHtml(code);
   const html = emailShell({
@@ -857,7 +876,10 @@ export async function sendLeadReminderEmail(opts: {
   // The reminder scheduler uses this boolean to decide whether to keep the
   // claim (so it isn't retried) or release it for another attempt. Only
   // report success when a real transport actually delivered the message.
-  return channel !== "none";
+  // Only a real transport counts as delivered — "skipped" (placeholder
+  // recipient) must not report success or the reminder is never retried
+  // nor flagged, silently.
+  return channel === "brevo" || channel === "smtp";
 }
 
 export async function sendDocumentRejectedEmail(opts: {

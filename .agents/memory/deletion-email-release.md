@@ -26,3 +26,5 @@ so a deleted user could never re-register — real prod incident.
   its email stripped (TOCTOU).
 - Never store the released real email in audit details (defeats erasure); the
   `ACCOUNT_REOPENED` / `ACCOUNT_DELETION_COMPLETED` audits link by user id.
+
+**Placeholder send guard:** the shared email dispatcher suppresses any recipient under the reserved `.invalid` TLD (returns "skipped"); callers must treat "skipped" as NOT delivered (OTP delivery, lead reminders already do). New send paths get this for free — do not add per-call-site checks.

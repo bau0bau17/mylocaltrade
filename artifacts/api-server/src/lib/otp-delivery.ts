@@ -49,5 +49,5 @@ export async function deliverTraderPhoneOtp(
     opts.code,
     opts.expiresInMinutes ?? 10,
   );
-  return { channel: "email", delivered: result !== "none" };
+  return { channel: "email", delivered: result !== "none" && result !== "skipped" };
 }
