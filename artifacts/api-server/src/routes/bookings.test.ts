@@ -8,6 +8,7 @@ import {
   conversationsTable,
   messagesTable,
   bookingsTable,
+  traderAuditLogTable,
 } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import app from "../app";
@@ -180,6 +181,11 @@ afterAll(async () => {
     await db.delete(traderProfilesTable).where(inArray(traderProfilesTable.id, createdProfileIds));
   }
   if (createdUserIds.length) {
+    // Booking mutations write trader audit rows (performed_by FK) — clear
+    // them first or the user cleanup hits a foreign-key violation.
+    await db
+      .delete(traderAuditLogTable)
+      .where(inArray(traderAuditLogTable.performedBy, createdUserIds));
     await db.delete(usersTable).where(inArray(usersTable.id, createdUserIds));
   }
 });

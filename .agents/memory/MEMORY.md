@@ -43,6 +43,7 @@
 - [Quote lifecycle invariants](quotes-one-pending-invariant.md) — one PENDING quote per conversation is a partial unique index (23505→409), expiry is lazy (no cron); digit-heavy test strings trip the contact filter.
 - [Tab-bar-aware bottom padding](tab-bar-aware-bottom-padding.md) — tab bar is absolute; scroll content needs tabBarHeight+insets.bottom padding; exceptions & multi-component hook pitfall inside.
 - [Two suspension mechanisms](account-suspension-two-kinds.md) — users.suspendedAt = account moderation block (messages/enquiries, 403 ACCOUNT_SUSPENDED) vs trader verification SUSPENDED = public listing; never conflate.
+- [Healthcheck must stay DB-free](healthcheck-db-free.md) — GET /api healthcheck must skip the Postgres-backed rate limiter; DB latency otherwise reads as instance-unhealthy "outages". req.originalUrl for /api prefixes.
 - [API test 429 flakiness](test-rate-limit-429-flakiness.md) — rate limits live in shared Postgres; repeated test runs hit 429; test-setup clears rate_limit_hits before each run.
 - [Mobile dead-session logout](mobile-dead-session-logout.md) — 401 with app session token attached ⇒ forceLogout; getMe check on start/foreground; applyToken sets 10s suppression for rotation races.
 - [Booking lifecycle invariants](booking-lifecycle-invariants.md) — one live booking per conversation (partial unique index); EVERY mutation incl. cancel passes the live-job gate; notify direction rules.

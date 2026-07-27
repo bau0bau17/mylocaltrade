@@ -108,7 +108,20 @@ const apiLimiter = rateLimit({
   message: { error: "Too many requests. Please slow down." },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path.startsWith("/api/webhooks"),
+  // Health endpoints MUST bypass this limiter: its store does a Postgres
+  // upsert per request, so the deployment healthcheck (GET /api) would
+  // inherit database latency — a slow/cold DB then reads as an unhealthy
+  // instance and shows up as an outage. Health stays DB-free.
+  skip: (req) => {
+    const p = (req.originalUrl || req.url || "").split("?")[0];
+    return (
+      p === "/api" ||
+      p === "/api/" ||
+      p === "/api/healthz" ||
+      p.startsWith("/api/webhooks") ||
+      req.path.startsWith("/api/webhooks")
+    );
+  },
   store: createPgStore("api"),
 });
 
