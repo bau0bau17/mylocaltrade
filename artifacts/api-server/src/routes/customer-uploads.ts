@@ -46,6 +46,7 @@ router.post(
       const { uploadURL, objectPath } = await storage.getObjectEntityUploadURL(
         `customer-uploads/${userId}`,
         body.mimeType,
+        MAX_UPLOAD_BYTES,
       );
       res.json({
         uploadURL,

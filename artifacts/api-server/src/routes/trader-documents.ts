@@ -217,9 +217,13 @@ router.post("/trader/documents/upload-url", authMiddleware, traderOnly, async (r
     // Scope uploads to the authenticated user so other traders cannot claim the upload.
     // Pass the declared mimeType so the presigned PUT URL is bound to that Content-Type —
     // GCS will reject any PUT request whose Content-Type header does not match.
+    // Pass MAX_UPLOAD_BYTES so the sidecar can embed a content-length ceiling in the
+    // signed URL when it supports that constraint, preventing oversize PUTs at the
+    // storage layer before any bytes are persisted.
     const { uploadURL, objectPath } = await storage.getObjectEntityUploadURL(
       `trader-documents/${userId}`,
-      body.mimeType
+      body.mimeType,
+      MAX_UPLOAD_BYTES,
     );
     res.json({ uploadURL, objectPath, method: "PUT", expectedHeaders: { "Content-Type": body.mimeType } });
   } catch (error: unknown) {

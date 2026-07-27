@@ -108,7 +108,8 @@ export class ObjectStorageService {
 
   async getObjectEntityUploadURL(
     prefix?: string,
-    contentType?: string
+    contentType?: string,
+    maxBytes?: number,
   ): Promise<{ uploadURL: string; objectPath: string }> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
@@ -124,12 +125,17 @@ export class ObjectStorageService {
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
 
+    // TTL is intentionally short (5 min) to minimise the window in which an
+    // attacker can use a minted URL to upload oversize objects.  maxBytes is
+    // forwarded to the sidecar so it can bind a Content-Length ceiling directly
+    // into the signed URL when the sidecar supports that constraint.
     const uploadURL = await signObjectURL({
       bucketName,
       objectName,
       method: "PUT",
-      ttlSec: 900,
+      ttlSec: 300,
       contentType,
+      maxBytes,
     });
 
     // Compute the canonical object path (/objects/<entityId>) the client should later register.
@@ -360,14 +366,16 @@ async function signObjectURL({
   method,
   ttlSec,
   contentType,
+  maxBytes,
 }: {
   bucketName: string;
   objectName: string;
   method: "GET" | "PUT" | "DELETE" | "HEAD";
   ttlSec: number;
   contentType?: string;
+  maxBytes?: number;
 }): Promise<string> {
-  const request: Record<string, string> = {
+  const request: Record<string, string | number> = {
     bucket_name: bucketName,
     object_name: objectName,
     method,
@@ -378,6 +386,14 @@ async function signObjectURL({
   // from claiming an allowed type in the API but uploading active HTML/JS bytes.
   if (contentType) {
     request.content_type = contentType;
+  }
+  // Pass the declared max size to the sidecar so it can embed a Content-Length
+  // ceiling directly in the signed URL when the sidecar supports that
+  // constraint.  Sidecars that ignore unknown fields will simply produce an
+  // unconstrained URL as before; those that honour it enforce the limit at the
+  // storage layer before any bytes are persisted.
+  if (maxBytes != null && maxBytes > 0) {
+    request.max_bytes = maxBytes;
   }
   const response = await fetch(
     `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
