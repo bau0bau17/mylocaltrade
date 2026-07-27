@@ -219,6 +219,11 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
           const remaining = muted ? mutedRemaining(item.mutedUntil) : null;
           const muteLabel = muted ? (remaining ? `Muted · ${remaining}` : "Muted") : null;
           const spokenName = otherName ?? (isTrader ? "a customer" : "a trader");
+          // "Boiler · MLT-000008" line so similar-looking conversations are
+          // easy to tell apart; job reference only exists after hire.
+          const jobLine = [item.serviceRequired, item.jobReference]
+            .filter(Boolean)
+            .join(" · ");
           const stageLabel = stagePillLabel(item.stage, item.status);
           const statusSpoken = stageLabel.toLowerCase();
           const unreadPhrase = unread
@@ -235,6 +240,7 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
             : null;
           const a11yLabel = [
             `Conversation with ${spokenName}`,
+            jobLine || null,
             unreadPhrase,
             `last updated ${spokenTimeAgo(item.lastMessageAt)}`,
             `status ${statusSpoken}`,
@@ -282,6 +288,14 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
                     {timeAgo(item.lastMessageAt)}
                   </Text>
                 </View>
+                {jobLine ? (
+                  <Text
+                    style={[styles.rowJob, muted && styles.mutedDim]}
+                    numberOfLines={1}
+                  >
+                    {jobLine}
+                  </Text>
+                ) : null}
                 <Text
                   style={[styles.rowPreview, muted && styles.mutedDim]}
                   numberOfLines={1}
@@ -451,6 +465,7 @@ const styles = StyleSheet.create({
   },
   rowNameUnread: { fontWeight: "700" },
   rowTime: { fontSize: 11, color: Colors.light.textMuted },
+  rowJob: { fontSize: 12, fontWeight: "600", color: Colors.light.primary },
   rowPreview: { fontSize: 13, color: Colors.light.textSecondary },
   rowFooter: { flexDirection: "row", gap: 6, marginTop: 4 },
   statusPill: {

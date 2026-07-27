@@ -3442,6 +3442,20 @@ components:
         contactUnlocked:
           type: boolean
           description: Whether the customer's contact details (email, phone) are revealed to the trader. False until the customer hires the trader.
+        traderStatus:
+          type: string
+          enum: [NEW, CONTACTED, QUOTED, COMPLETED]
+          nullable: true
+          description: Trader's own lead status from the linked conversation, if one exists.
+        stage:
+          type: string
+          enum: [AWAITING_REPLY, HIRED, AWAITING_CUSTOMER_CONFIRMATION, JOB_DONE, CANCELLED, CLOSED]
+          nullable: true
+          description: Derived lifecycle stage of the linked conversation, if one exists.
+        jobReference:
+          type: string
+          nullable: true
+          description: Human-readable job reference (e.g. MLT-000008). Only set once the customer has hired the trader.
         createdAt:
           type: string
           format: date-time

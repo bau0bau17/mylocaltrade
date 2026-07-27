@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EnquirySpecialistFields } from "./enquirySpecialistFields";
+import type { EnquiryStage } from "./enquiryStage";
 import type { EnquiryStatus } from "./enquiryStatus";
+import type { EnquiryTraderStatus } from "./enquiryTraderStatus";
 
 export interface Enquiry {
   id: number;
@@ -28,5 +30,11 @@ export interface Enquiry {
   viewedByTrader?: boolean;
   /** Whether the customer's contact details (email, phone) are revealed to the trader. False until the customer hires the trader. */
   contactUnlocked: boolean;
+  /** Trader's own lead status from the linked conversation, if one exists. */
+  traderStatus?: EnquiryTraderStatus;
+  /** Derived lifecycle stage of the linked conversation, if one exists. */
+  stage?: EnquiryStage;
+  /** Human-readable job reference (e.g. MLT-000008). Only set once the customer has hired the trader. */
+  jobReference?: string | null;
   createdAt: Date;
 }

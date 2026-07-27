@@ -1901,6 +1901,31 @@ export const GetEnquiriesResponse = zod.object({
         .describe(
           "Whether the customer's contact details (email, phone) are revealed to the trader. False until the customer hires the trader.",
         ),
+      traderStatus: zod
+        .enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"])
+        .nullish()
+        .describe(
+          "Trader's own lead status from the linked conversation, if one exists.",
+        ),
+      stage: zod
+        .enum([
+          "AWAITING_REPLY",
+          "HIRED",
+          "AWAITING_CUSTOMER_CONFIRMATION",
+          "JOB_DONE",
+          "CANCELLED",
+          "CLOSED",
+        ])
+        .nullish()
+        .describe(
+          "Derived lifecycle stage of the linked conversation, if one exists.",
+        ),
+      jobReference: zod
+        .string()
+        .nullish()
+        .describe(
+          "Human-readable job reference (e.g. MLT-000008). Only set once the customer has hired the trader.",
+        ),
       createdAt: zod.date(),
     }),
   ),

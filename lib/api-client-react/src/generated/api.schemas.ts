@@ -659,6 +659,36 @@ export const EnquiryStatus = {
   closed: "closed",
 } as const;
 
+/**
+ * Trader's own lead status from the linked conversation, if one exists.
+ */
+export type EnquiryTraderStatus =
+  | (typeof EnquiryTraderStatus)[keyof typeof EnquiryTraderStatus]
+  | null;
+
+export const EnquiryTraderStatus = {
+  NEW: "NEW",
+  CONTACTED: "CONTACTED",
+  QUOTED: "QUOTED",
+  COMPLETED: "COMPLETED",
+} as const;
+
+/**
+ * Derived lifecycle stage of the linked conversation, if one exists.
+ */
+export type EnquiryStage =
+  | (typeof EnquiryStage)[keyof typeof EnquiryStage]
+  | null;
+
+export const EnquiryStage = {
+  AWAITING_REPLY: "AWAITING_REPLY",
+  HIRED: "HIRED",
+  AWAITING_CUSTOMER_CONFIRMATION: "AWAITING_CUSTOMER_CONFIRMATION",
+  JOB_DONE: "JOB_DONE",
+  CANCELLED: "CANCELLED",
+  CLOSED: "CLOSED",
+} as const;
+
 export interface Enquiry {
   id: number;
   traderId: number;
@@ -679,6 +709,12 @@ export interface Enquiry {
   viewedByTrader?: boolean;
   /** Whether the customer's contact details (email, phone) are revealed to the trader. False until the customer hires the trader. */
   contactUnlocked: boolean;
+  /** Trader's own lead status from the linked conversation, if one exists. */
+  traderStatus?: EnquiryTraderStatus;
+  /** Derived lifecycle stage of the linked conversation, if one exists. */
+  stage?: EnquiryStage;
+  /** Human-readable job reference (e.g. MLT-000008). Only set once the customer has hired the trader. */
+  jobReference?: string | null;
   createdAt: string;
 }
 

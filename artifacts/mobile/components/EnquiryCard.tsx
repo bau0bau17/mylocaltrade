@@ -63,7 +63,6 @@ export function EnquiryCard({
   };
 
   const isCustomerView = viewerRole === 'customer';
-  const statusColor = getStatusColor(enquiry.status);
   const isUnopened = enquiry.viewedByTrader === false;
   const customerStatusLabel = (() => {
     switch (enquiry.status) {
@@ -73,7 +72,27 @@ export function EnquiryCard({
       default: return String(enquiry.status);
     }
   })();
-  const statusLabel = isCustomerView ? customerStatusLabel : enquiry.status.toUpperCase();
+  // Trader lead status: prefer the job lifecycle (from the linked
+  // conversation) over the raw enquiry status, so the leads list reads as a
+  // job overview: New -> Responded -> Quoted -> Hired -> Completed.
+  // Reuses existing statuses only — no new workflow.
+  const traderLeadStatus = ((): { label: string; color: string } => {
+    switch (enquiry.stage) {
+      case 'JOB_DONE': return { label: 'Completed', color: Colors.light.success };
+      case 'CANCELLED': return { label: 'Cancelled', color: Colors.light.textMuted };
+      case 'HIRED':
+      case 'AWAITING_CUSTOMER_CONFIRMATION':
+        return { label: 'Hired', color: Colors.light.primary };
+    }
+    if (enquiry.traderStatus === 'QUOTED') return { label: 'Quoted', color: Colors.light.warning };
+    if (enquiry.traderStatus === 'CONTACTED' || enquiry.status === 'responded') {
+      return { label: 'Responded', color: Colors.light.secondary };
+    }
+    if (enquiry.status === 'closed') return { label: 'Closed', color: Colors.light.textMuted };
+    return { label: 'New', color: Colors.light.featured };
+  })();
+  const statusColor = isCustomerView ? getStatusColor(enquiry.status) : traderLeadStatus.color;
+  const statusLabel = isCustomerView ? customerStatusLabel : traderLeadStatus.label.toUpperCase();
   const specialistParts = specialistSummary(enquiry.specialistFields);
   const headerName = isCustomerView
     ? (enquiry.traderBusinessName?.trim() || 'Trader')
@@ -94,6 +113,7 @@ export function EnquiryCard({
   const accessibilityLabel = [
     isCustomerView ? `Enquiry to ${headerName}` : `Enquiry from ${headerName}`,
     enquiry.serviceRequired,
+    !isCustomerView && enquiry.jobReference ? `job reference ${enquiry.jobReference}` : null,
     !isCustomerView && isUnopened ? 'unread' : null,
     statusLabel.toLowerCase(),
     specialistParts.length > 0 ? specialistParts.join(', ') : null,
@@ -119,7 +139,12 @@ export function EnquiryCard({
       <View style={styles.header}>
         <View style={styles.headerInfo}>
           <Text style={styles.name}>{headerName}</Text>
-          <Text style={styles.service}>{enquiry.serviceRequired}</Text>
+          <Text style={styles.service}>
+            {/* Job reference is a trader-facing lead identifier; customer view stays unchanged. */}
+            {!isCustomerView && enquiry.jobReference
+              ? `${enquiry.serviceRequired} · ${enquiry.jobReference}`
+              : enquiry.serviceRequired}
+          </Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: `${statusColor}1A` }]}>
           <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>

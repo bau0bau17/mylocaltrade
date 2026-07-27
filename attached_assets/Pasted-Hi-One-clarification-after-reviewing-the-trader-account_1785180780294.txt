@@ -1,0 +1,83 @@
+Hi,
+
+One clarification after reviewing the trader account:
+
+The email/phone currently shown in Enquiries & Leads is correct for the examples I tested because those customers have already hired the trader, so please KEEP the existing post-hire contact visibility rules unchanged.
+
+However, I noticed that “Enquiries & Leads” and “Messages” currently feel quite similar from a trader UX perspective.
+
+Please do a small targeted review of these two screens and make their purpose clearly distinct without merging them or redesigning the app.
+
+Expected distinction:
+
+ENQUIRIES & LEADS
+This should act as the trader's lead/job overview.
+
+It should focus on:
+- customer name
+- requested service
+- short enquiry/job description
+- date
+- current lead/job status
+- Job Reference after hire, where available
+- contact details only when the existing post-hire rules allow them
+- tapping the item can continue into the relevant job/conversation
+
+Relevant statuses may include the existing equivalents of:
+- New
+- Responded
+- Quoted
+- Hired
+- Completed
+
+Please reuse the statuses already implemented rather than creating a new workflow unnecessarily.
+
+MESSAGES
+This should remain the communication inbox.
+
+It should focus on:
+- customer name
+- service/job title
+- Job Reference where available
+- most recent message/event preview
+- unread/read state if already supported
+- current high-level job status
+- tapping opens the conversation directly
+
+For example, instead of two rows that both only show:
+
+Lucian Sabau
+The customer confirmed the job is done...
+
+please make them easier to distinguish, such as:
+
+Lucian Sabau
+Boiler · MLT-000008
+[latest message]
+
+and
+
+Lucian Sabau
+Electrical issue · MLT-000007
+[latest message]
+
+Do not expose contact details in Messages before hire.
+
+IMPORTANT:
+- Do not merge Enquiries & Leads with Messages.
+- Do not create another messaging system.
+- Do not change quote, hire, booking, completion or contact-visibility logic.
+- Keep this a small UX clarification.
+- Reuse existing data.
+- No broad audit.
+- No EAS build.
+- No deploy/publish.
+- Minimum relevant checks only.
+
+Afterwards please confirm:
+1. Whether the two screens were already backed by different data/logic.
+2. Files changed.
+3. How Enquiries & Leads now differs from Messages.
+4. Whether Job Reference/service title were added to make conversations easier to identify.
+5. Confirm post-hire contact visibility remains unchanged.
+6. Confirm no build/deploy/publish was started.

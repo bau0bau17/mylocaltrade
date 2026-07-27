@@ -4,6 +4,7 @@ import { db } from "@workspace/db";
 import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable, quotesTable } from "@workspace/db/schema";
 import { eq, desc, and, isNull, isNotNull, inArray, sql, gte } from "drizzle-orm";
 import { deriveStage } from "../lib/conversation-stage";
+import { jobReferenceOf } from "../lib/job-reference";
 import { serializeQuote, type SerializedQuote } from "../lib/quotes";
 import { computeResponseTimes } from "../lib/response-times";
 import { authMiddleware } from "../lib/auth";
@@ -499,9 +500,7 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
           enquiry: enquiriesTable,
           customer: usersTable,
           trader: traderProfilesTable,
-          conversationId: conversationsTable.id,
-          traderViewedAt: conversationsTable.traderViewedAt,
-          customerAcceptedAt: conversationsTable.customerAcceptedAt,
+          conv: conversationsTable,
         })
         .from(enquiriesTable)
         .innerJoin(usersTable, eq(enquiriesTable.customerId, usersTable.id))
@@ -515,9 +514,7 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
           enquiry: enquiriesTable,
           customer: usersTable,
           trader: traderProfilesTable,
-          conversationId: conversationsTable.id,
-          traderViewedAt: conversationsTable.traderViewedAt,
-          customerAcceptedAt: conversationsTable.customerAcceptedAt,
+          conv: conversationsTable,
         })
         .from(enquiriesTable)
         .innerJoin(usersTable, eq(enquiriesTable.customerId, usersTable.id))
@@ -528,13 +525,13 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
     }
 
     const viewerIsTrader = userRole === "trader";
-    const formatted = enquiries.map(({ enquiry: e, customer: c, trader: t, conversationId, traderViewedAt, customerAcceptedAt }) => {
+    const formatted = enquiries.map(({ enquiry: e, customer: c, trader: t, conv }) => {
       // Stage gate: a trader only sees the customer's contact details once the
       // customer has hired them (customerAcceptedAt set = HIRED stage). Before
       // that, they communicate via in-app messaging only. Deterministic and
       // auditable — tied to a concrete lifecycle timestamp, not a trust score.
       // Customers always see their own details.
-      const contactUnlocked = !viewerIsTrader || customerAcceptedAt != null;
+      const contactUnlocked = !viewerIsTrader || conv?.customerAcceptedAt != null;
       return {
         id: e.id,
         traderId: e.traderId,
@@ -549,9 +546,16 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
         attachmentUrls: e.attachmentUrls ?? [],
         specialistFields: e.specialistFields ?? null,
         status: e.status,
-        conversationId: conversationId ?? null,
-        viewedByTrader: traderViewedAt != null,
+        conversationId: conv?.id ?? null,
+        viewedByTrader: conv?.traderViewedAt != null,
         contactUnlocked,
+        // Lead-lifecycle context so the trader's Enquiries & Leads list can
+        // show the real job status (New/Responded/Quoted/Hired/Completed)
+        // and the Job Reference after hire. Read-only projections of
+        // existing conversation state — no new workflow.
+        traderStatus: conv?.traderStatus ?? null,
+        stage: conv ? deriveStage(conv) : null,
+        jobReference: conv ? jobReferenceOf(conv) : null,
         createdAt: e.createdAt.toISOString(),
       };
     });
