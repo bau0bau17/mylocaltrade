@@ -1088,10 +1088,28 @@ export default function ConversationThreadScreen() {
             (isTrader && item.senderRole === "trader") ||
             (!isTrader && item.senderRole === "customer") ||
             item.senderUserId === user?.id;
+          // The first enquiry message ends with a "[N photo(s) attached]"
+          // placeholder written server-side. When the photos exist, make it
+          // actionable: a tappable chip that opens the existing photo viewer.
+          const hasPhotoPlaceholder =
+            enquiryAttachments.length > 0 && /\[\d+ photos? attached\]/.test(item.body);
           return (
             <View style={[styles.bubbleWrap, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
               <View style={[styles.bubble, mine ? styles.bubbleMineBg : styles.bubbleTheirsBg]}>
                 <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.body}</Text>
+                {hasPhotoPlaceholder ? (
+                  <Pressable
+                    style={styles.viewPhotosChip}
+                    onPress={() => setPhotoViewer(0)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${enquiryAttachments.length} attached photo${enquiryAttachments.length === 1 ? "" : "s"}`}
+                  >
+                    <Feather name="image" size={13} color={Colors.light.primary} />
+                    <Text style={styles.viewPhotosChipText}>
+                      View photo{enquiryAttachments.length === 1 ? "" : "s"}
+                    </Text>
+                  </Pressable>
+                ) : null}
                 <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
                   {fmtTime(item.createdAt)}
                 </Text>
@@ -2397,6 +2415,18 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
   },
   bubbleText: { fontSize: 14, color: Colors.light.text, lineHeight: 20 },
+  viewPhotosChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primaryMuted,
+  },
+  viewPhotosChipText: { fontSize: 12, fontWeight: "700", color: Colors.light.primary },
   bubbleTextMine: { color: Colors.light.white },
   bubbleTime: {
     fontSize: 10,

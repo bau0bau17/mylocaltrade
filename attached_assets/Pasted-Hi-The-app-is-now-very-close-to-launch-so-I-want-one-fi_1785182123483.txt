@@ -1,0 +1,317 @@
+Hi,
+
+The app is now very close to launch, so I want one final targeted polish pass only.
+
+Please do NOT add new features beyond the items below.
+
+IMPORTANT:
+- No broad repository audit.
+- No redesign.
+- No new architecture.
+- Reuse existing components and logic.
+- Do not start an EAS build.
+- Do not deploy/publish.
+- Do not run production migrations.
+- Run only the minimum relevant checks.
+- Keep all existing working flows unchanged.
+
+Please review and implement ONLY the following items.
+
+--------------------------------------------------
+1. DELETE ACCOUNT + ACTIVE APPLE SUBSCRIPTION
+--------------------------------------------------
+
+Please inspect the current trader Delete Account flow.
+
+For a trader with an active Apple/App Store subscription, make sure the user is clearly informed that:
+
+Deleting the MyLocalTrade account does NOT automatically cancel the Apple subscription.
+
+The user should be able to manage/cancel the subscription via the existing App Store subscription management flow/link.
+
+Suggested wording:
+
+“You currently have an active App Store subscription. Deleting your MyLocalTrade account does not automatically cancel your Apple subscription. Please manage or cancel your subscription through the App Store.”
+
+Please use wording appropriate to the existing UI.
+
+Also update:
+
+“This is permanent”
+
+to something more precise such as:
+
+“Account deletion is permanent once finalised.”
+
+because the current request can still be cancelled before an admin finalises it.
+
+Please also show a clear expected processing timeframe if the backend/admin flow already supports one.
+
+For example:
+
+“We aim to finalise account deletion within 7 days. You’ll receive confirmation when your account has been permanently deleted.”
+
+Do NOT invent a 7-day promise if the current operational process cannot support it. Inspect the current flow and use a realistic timeframe.
+
+Please confirm whether the existing deletion-completion email/notification already provides final confirmation.
+
+--------------------------------------------------
+2. BILLING & PLAN — PREMIUM BENEFIT ACCURACY
+--------------------------------------------------
+
+Please inspect the Premium benefits shown on Billing & Plan.
+
+I previously noticed wording such as:
+
+“Website and social links on your profile”
+
+Please verify whether this is genuinely available to customers under the current contact/privacy rules.
+
+Our current rule is that trader contact details are protected before hire.
+
+Do NOT weaken or change contact-visibility/privacy rules just to match this marketing text.
+
+If website/social links are not actually a public Premium benefit, replace this line with an accurate existing Premium benefit.
+
+Do not invent a feature that does not exist.
+
+Please tell me exactly what wording was changed and why.
+
+--------------------------------------------------
+3. ENQUIRY PHOTO ATTACHMENTS
+--------------------------------------------------
+
+Please verify the trader enquiry/conversation experience for customer attachments.
+
+Where the UI currently shows something like:
+
+“[1 photo attached]”
+
+make sure the trader can actually open/view the attached photo.
+
+Preferred UX:
+- thumbnail where already easy to support, or
+- clear tappable “View photo” / attachment action
+
+Do not leave a non-interactive text placeholder if the underlying attachment exists.
+
+Do not redesign the messaging system.
+
+Preserve attachment privacy and existing access controls.
+
+--------------------------------------------------
+4. BOOKING + IPHONE CALENDAR — FINAL CHECK
+--------------------------------------------------
+
+Please inspect the implemented booking → Add to Calendar flow.
+
+Verify:
+
+- Calendar prompt/action appears only after appointment confirmation.
+- Nothing is added automatically without user action.
+- iOS Calendar permission is requested only when required.
+- The event contains the confirmed date/time.
+- Job Reference can be included in notes where appropriate.
+- Private data is not unnecessarily included.
+- Repeated taps do not create duplicate events if duplicate prevention is already implemented.
+- Reschedule/cancel behaviour follows the lightweight approach already agreed.
+
+Do not add a complex calendar synchronisation system.
+
+--------------------------------------------------
+5. CONTACT SUPPORT — PREFILL LOGGED-IN USER DETAILS
+--------------------------------------------------
+
+On the Contact Support form, the logged-in user should not have to manually re-enter information MyLocalTrade already knows.
+
+Please prefill, where available:
+
+- Full name
+- Email address
+
+using the authenticated account data.
+
+Keep the existing form and validation.
+
+Do not expose or prefill data from another account/profile.
+
+--------------------------------------------------
+6. MY SERVICES — REMOVE DUPLICATE MAIN CATEGORY
+--------------------------------------------------
+
+On the trader My Services screen, the main category can currently also appear again in the additional services list.
+
+Example:
+
+MAIN CATEGORY:
+Electrician
+
+ADDITIONAL SERVICES:
+Electrician
+AC installation
+Air conditioning
+
+Please avoid showing the main category again as an additional service.
+
+This should be a display/selection consistency improvement only.
+
+Do not destructively rewrite existing trader data unless absolutely necessary.
+
+Existing stored profiles must remain compatible.
+
+--------------------------------------------------
+7. SERVICE DISPLAY NORMALISATION
+--------------------------------------------------
+
+Please improve display casing for common technical acronyms where appropriate.
+
+Examples:
+
+“Ac installation” → “AC installation”
+“Ev charger installation” → “EV charger installation”
+“Epc improvements” → “EPC improvements”
+“Cctv installation” → “CCTV installation”
+
+Do not blindly uppercase arbitrary words.
+
+Use a small deliberate acronym-normalisation mapping where relevant.
+
+Keep the underlying saved data compatible unless there is a strong reason to normalise it at storage level.
+
+--------------------------------------------------
+8. ABOUT US WORDING
+--------------------------------------------------
+
+Please make one small copy improvement in the trader/mobile About Us screen.
+
+Where the current wording refers specifically to:
+
+“homeowners”
+
+please use the broader:
+
+“customers”
+
+because MyLocalTrade can also be used by renters/tenants and other customer types.
+
+Also avoid wording that could imply public direct contact before hire.
+
+Preferred concept:
+
+“MyLocalTrade makes it easier for customers to discover, connect with, hire and review local tradespeople.”
+
+Please preserve the existing booking-inclusive flow.
+
+Do not rewrite the whole About Us page.
+
+--------------------------------------------------
+9. EMPTY HEADER ACTION / ICON
+--------------------------------------------------
+
+Across several trader subpages there appears to be a rounded empty square/action area in the top-right of the header.
+
+Please inspect this.
+
+If it is:
+- an intended action with a missing icon → fix the icon/action
+- a placeholder with no functionality → remove it cleanly
+
+Do not leave an apparently broken/empty control visible.
+
+Please check only the shared header/subpage component(s) responsible rather than manually patching every screen.
+
+--------------------------------------------------
+10. BOTTOM SAFE AREA / TAB BAR
+--------------------------------------------------
+
+Please do a targeted check of the trader subpages, especially Legal & Support / Billing / longer scrolling pages.
+
+Ensure the final content is not obscured by the fixed bottom navigation/tab bar.
+
+Use the existing safe-area/tab-bar padding approach.
+
+Do not globally change spacing unless required.
+
+--------------------------------------------------
+11. DO NOT CHANGE THESE EXISTING WORKING AREAS
+--------------------------------------------------
+
+Please preserve:
+
+- Enquiries & Leads vs Messages distinction
+- Job Reference display
+- post-hire contact visibility
+- quote/hire flow
+- booking flow
+- completion/review flow
+- trader verification
+- green Verified shield
+- Service Areas search matching
+- “Serves [location]” trader-card display
+- category canonical matching
+- Apple IAP / RevenueCat
+- Twilio/RCS
+- Universal Links
+- profile-change approval logic
+- admin moderation
+- existing notification infrastructure
+
+--------------------------------------------------
+12. FINAL REPORT
+--------------------------------------------------
+
+After completion, please report:
+
+1. Files changed.
+
+2. Delete Account:
+   - active-subscription warning behaviour
+   - wording used
+   - deletion timeframe shown
+   - whether completion confirmation already exists
+
+3. Billing:
+   - whether “Website and social links” was accurate
+   - final replacement wording if changed
+
+4. Enquiry attachments:
+   - whether photo attachments are now tappable/viewable
+   - how they are displayed
+
+5. Calendar:
+   - final confirmed behaviour
+   - duplicate handling
+   - reschedule/cancel handling
+
+6. Contact Support:
+   - which fields are prefilled and from what account data
+
+7. My Services:
+   - how duplicate main-category display is prevented
+
+8. Acronym normalisation:
+   - exact mapping added
+
+9. About Us:
+   - exact wording changed
+
+10. Empty header control:
+    - root cause
+    - whether it was fixed or removed
+
+11. Safe-area/tab-bar:
+    - screens checked
+    - any fix made
+
+12. Any database/schema changes required.
+   Do NOT apply production migrations.
+
+13. Minimum checks/tests run and results.
+
+14. Confirm:
+   - no EAS build
+   - no deployment
+   - no publish
+   - no production migration
+
+Please keep this as the final small pre-launch polish pass, not a new feature-development round.

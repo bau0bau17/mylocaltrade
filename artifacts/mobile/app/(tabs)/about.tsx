@@ -29,7 +29,7 @@ export default function AboutScreen() {
           MyLocalTrade connects customers with independent local tradespeople across the UK.
         </Text>
         <Text style={styles.paragraph}>
-          Our goal is to make it easier for homeowners to discover, contact and review tradespeople in their area. Traders listed on MyLocalTrade are independent businesses and are not employees, agents or representatives of MyLocalTrade.
+          Our goal is to make it easier for customers to discover, connect with, hire and review local tradespeople in their area. Traders listed on MyLocalTrade are independent businesses and are not employees, agents or representatives of MyLocalTrade.
         </Text>
         <Text style={styles.paragraph}>
           Customers should always make their own checks before hiring a tradesperson, including requesting written quotes and confirming any qualifications, insurance or registrations relevant to the work.

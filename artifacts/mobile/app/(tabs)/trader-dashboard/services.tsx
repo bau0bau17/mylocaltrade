@@ -6,6 +6,7 @@ import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { useGetTraderProfile, useUpdateTraderProfile } from '@workspace/api-client-react';
 import { SPECIALISMS } from '@/constants/specialisms';
+import { formatServiceLabel } from '@/lib/format-service';
 
 export default function ServicesScreen() {
   const insets = useSafeAreaInsets();
@@ -16,15 +17,32 @@ export default function ServicesScreen() {
   const [services, setServices] = useState<string[]>([]);
   const [newService, setNewService] = useState('');
 
+  const mainCategory = profileData?.mainCategory ?? '';
+  const isMainCategory = (s: string) =>
+    !!mainCategory && s.trim().toLowerCase() === mainCategory.trim().toLowerCase();
+
   useEffect(() => {
     if (profileData?.additionalServices) {
-      setServices(profileData.additionalServices);
+      // Display/selection consistency: the main category is already shown
+      // above, so never repeat it in the additional-services list. Stored
+      // data is only affected if the trader saves, and only by omitting the
+      // duplicate entry.
+      const main = (profileData.mainCategory ?? '').trim().toLowerCase();
+      setServices(
+        profileData.additionalServices.filter(
+          (s) => !main || s.trim().toLowerCase() !== main,
+        ),
+      );
     }
   }, [profileData]);
 
   const addService = () => {
     const trimmed = newService.trim();
     if (!trimmed) return;
+    if (isMainCategory(trimmed)) {
+      Alert.alert('Already covered', 'This is your main category, so it is already shown on your profile.');
+      return;
+    }
     if (services.some((s) => s.toLowerCase() === trimmed.toLowerCase())) {
       Alert.alert('Duplicate', 'This service is already listed');
       return;
@@ -34,6 +52,7 @@ export default function ServicesScreen() {
   };
 
   const addSuggested = (label: string) => {
+    if (isMainCategory(label)) return;
     if (services.some((s) => s.toLowerCase() === label.toLowerCase())) return;
     setServices((prev) => [...prev, label]);
   };
@@ -70,7 +89,9 @@ export default function ServicesScreen() {
         <Text style={styles.sectionTitle}>Main Category</Text>
         <View style={styles.mainCategory}>
           <Feather name="briefcase" size={20} color={Colors.light.primary} />
-          <Text style={styles.mainCategoryText}>{profileData?.mainCategory || 'Not set'}</Text>
+          <Text style={styles.mainCategoryText}>
+            {profileData?.mainCategory ? formatServiceLabel(profileData.mainCategory) : 'Not set'}
+          </Text>
         </View>
 
         <Text style={styles.sectionTitle}>Additional Services</Text>
@@ -130,7 +151,7 @@ export default function ServicesScreen() {
             {services.map((service, idx) => (
               <View key={idx} style={styles.serviceItem}>
                 <Feather name="check-circle" size={16} color={Colors.light.secondary} />
-                <Text style={styles.serviceText}>{service}</Text>
+                <Text style={styles.serviceText}>{formatServiceLabel(service)}</Text>
                 <Pressable onPress={() => removeService(idx)} hitSlop={8}>
                   <Feather name="x" size={18} color={Colors.light.error} />
                 </Pressable>

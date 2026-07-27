@@ -17,6 +17,7 @@ import { ReviewsSection } from '@/components/ReviewsSection';
 import { formatResponseTime, isTopRated, isFastResponder } from '@/components/TraderCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { detectSpecialisms, SPECIALISM_BY_KEY } from '@/constants/specialisms';
+import { formatServiceLabel } from '@/lib/format-service';
 import { objectImageUrl } from '@/lib/api-url';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
@@ -294,14 +295,19 @@ export default function TraderProfileScreen() {
                 <View style={styles.serviceCheck}>
                   <Feather name="check" size={12} color={Colors.light.primary} />
                 </View>
-                <Text style={styles.serviceText}>{trader.mainCategory}</Text>
+                <Text style={styles.serviceText}>{formatServiceLabel(trader.mainCategory)}</Text>
               </View>
-              {trader.additionalServices?.map((service, idx) => (
+              {trader.additionalServices
+                ?.filter(
+                  (service) =>
+                    service.trim().toLowerCase() !== trader.mainCategory?.trim().toLowerCase(),
+                )
+                .map((service, idx) => (
                 <View key={idx} style={styles.serviceItem}>
                   <View style={styles.serviceCheck}>
                     <Feather name="check" size={12} color={Colors.light.primary} />
                   </View>
-                  <Text style={styles.serviceText}>{service}</Text>
+                  <Text style={styles.serviceText}>{formatServiceLabel(service)}</Text>
                 </View>
               ))}
             </View>

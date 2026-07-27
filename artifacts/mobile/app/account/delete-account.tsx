@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
 import { getGetMeQueryKey } from '@workspace/api-client-react';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { useSubscription } from '@/lib/revenuecat';
 
 type DeletionStatus = {
   deletionStatus: string | null;
@@ -434,6 +435,7 @@ function RequestDeletionView({
   onRequested: (newToken: string) => Promise<void>;
 }) {
   const insets = useSafeAreaInsets();
+  const subscription = useSubscription();
   const [password, setPassword] = useState('');
   const [reason, setReason] = useState('');
   const [confirm, setConfirm] = useState(false);
@@ -494,14 +496,36 @@ function RequestDeletionView({
         <View style={styles.warnCard}>
           <Feather name="alert-triangle" size={22} color={Colors.light.error} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.warnTitle}>This is permanent</Text>
+            <Text style={styles.warnTitle}>Account deletion is permanent once finalised</Text>
             <Text style={styles.warnBody}>
               Deleting your account will sign you out of every other device, hide your trader profile (if any) from
-              customers, and stop all email and push notifications. Our admin team will then finalise the deletion.
+              customers, and stop all email and push notifications. Our admin team will then finalise the deletion —
+              until then, you can still cancel your request from this screen.
               Some records may be retained where the law requires us to do so.
             </Text>
           </View>
         </View>
+
+        {subscription.hasTraderSubscription ? (
+          <View style={styles.subCard}>
+            <Feather name="credit-card" size={22} color={Colors.light.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.subCardTitle}>You have an active App Store subscription</Text>
+              <Text style={styles.subCardBody}>
+                Deleting your MyLocalTrade account does not automatically cancel your Apple
+                subscription. Please manage or cancel your subscription through the App Store.
+              </Text>
+              <Pressable
+                onPress={() => void subscription.manageSubscriptions()}
+                accessibilityRole="button"
+                accessibilityLabel="Manage subscription in the App Store"
+                hitSlop={6}
+              >
+                <Text style={styles.subCardLink}>Manage in App Store</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         <Text style={styles.sectionLabel}>What happens immediately</Text>
         <View style={styles.bulletList}>
@@ -616,6 +640,24 @@ const styles = StyleSheet.create({
   },
   warnTitle: { fontSize: 15, fontWeight: '700', color: Colors.light.error, marginBottom: 4 },
   warnBody: { fontSize: 13, color: Colors.light.text, lineHeight: 19 },
+  subCard: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: Colors.light.primaryMuted,
+    borderColor: Colors.light.border,
+    borderWidth: 1,
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 20,
+  },
+  subCardTitle: { fontSize: 15, fontWeight: '700', color: Colors.light.text, marginBottom: 4 },
+  subCardBody: { fontSize: 13, color: Colors.light.text, lineHeight: 19 },
+  subCardLink: {
+    marginTop: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.light.primary,
+  },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',

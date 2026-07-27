@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { getApiUrl } from '@/lib/api-url';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function ContactSupportScreen() {
   const insets = useSafeAreaInsets();
@@ -16,13 +17,27 @@ export default function ContactSupportScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ subject?: string }>();
   const initialSubject = typeof params.subject === 'string' ? params.subject : '';
+  const { user } = useAuth();
 
+  // Prefill from the logged-in account so the user doesn't retype details we
+  // already hold. Fields stay fully editable and validation is unchanged.
   const [form, setForm] = useState({
-    name: '',
-    email: '',
+    name: user?.fullName ?? '',
+    email: user?.email ?? '',
     subject: initialSubject,
     message: '',
   });
+
+  // Auth state can hydrate after first render; fill only still-empty fields
+  // so anything the user typed is never overwritten.
+  useEffect(() => {
+    if (!user) return;
+    setForm(prev => ({
+      ...prev,
+      name: prev.name || (user.fullName ?? ''),
+      email: prev.email || (user.email ?? ''),
+    }));
+  }, [user]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);

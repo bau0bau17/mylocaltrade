@@ -353,7 +353,7 @@ export default function BillingScreen() {
         <Text style={s.sectionTitle}>Your Plan Features</Text>
         <View style={s.featuresCard}>
           <Feature included text="Receive customer enquiries" />
-          <Feature included text="Website and social links on your profile" />
+          <Feature included text="Public profile with photos and reviews" />
           <Feature included={isActive && isPremium} text="Higher search ranking and priority placement" />
           <Feature included={isActive && isPremium} text="Featured listing badge and home screen placement" />
           <Feature included={isActive && isPremium} text="Unlimited gallery images" />
@@ -387,7 +387,7 @@ export default function BillingScreen() {
           </View>
           <Text style={s.modalNote}>
             Your free Basic listing stays live — you keep customer enquiries, your profile,
-            photos and your website and social links.
+            photos and reviews.
           </Text>
           <Text style={s.modalNote}>
             Your subscription is billed by Apple, so the final step is completed in your App Store settings.

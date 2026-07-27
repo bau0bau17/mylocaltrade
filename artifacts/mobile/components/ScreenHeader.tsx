@@ -67,7 +67,14 @@ export function ScreenHeader({
           <View style={styles.backBtn} />
         )}
         <Text style={styles.stackTitle} numberOfLines={1}>{title}</Text>
-        <View style={styles.backBtn}>{rightSlot}</View>
+        {/* When there is no right action, keep an invisible spacer (same width
+            as the back button) so the title stays centred — without rendering
+            what looks like an empty, broken control. */}
+        {rightSlot ? (
+          <View style={styles.backBtn}>{rightSlot}</View>
+        ) : (
+          <View style={styles.rightSpacer} />
+        )}
       </View>
     </View>
   );
@@ -101,6 +108,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  rightSpacer: {
+    width: 36,
+    height: 36,
   },
   tabWrap: {
     backgroundColor: Colors.light.surface,
