@@ -1,0 +1,45 @@
+diff --git a/dist/commonjs/index.d.ts b/dist/commonjs/index.d.ts
+index f3e2de9d87e1ce462517e49f35733bed8bdf85af..37672176e12551326b794363090a3c64f3f179d8 100644
+--- a/dist/commonjs/index.d.ts
++++ b/dist/commonjs/index.d.ts
+@@ -6,3 +6,4 @@ export type BraceExpansionOptions = {
+ };
+ export declare function expand(str: string, options?: BraceExpansionOptions): string[];
+ //# sourceMappingURL=index.d.ts.map
++export default expand;
+diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+index be9df86be09c7655787a65c55ae6da01858894c3..a95794265b682fe11f7d1c4cc966fe7e17d7d536 100644
+--- a/dist/commonjs/index.js
++++ b/dist/commonjs/index.js
+@@ -260,4 +260,10 @@ function expand_(str, max, maxLength, isTop) {
+     }
+     return acc;
+ }
++
++// Compatibility shim: brace-expansion v1/v2 exported the expand function
++// directly (`module.exports = expand`). This package is aliased over those
++// majors to pick up the CVE-2026-14257 fix, so restore the callable default
++// while keeping the named exports intact for v5 consumers.
++module.exports = Object.assign(expand, module.exports);
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+index f3e2de9d87e1ce462517e49f35733bed8bdf85af..37672176e12551326b794363090a3c64f3f179d8 100644
+--- a/dist/esm/index.d.ts
++++ b/dist/esm/index.d.ts
+@@ -6,3 +6,4 @@ export type BraceExpansionOptions = {
+ };
+ export declare function expand(str: string, options?: BraceExpansionOptions): string[];
+ //# sourceMappingURL=index.d.ts.map
++export default expand;
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 6dc0392fc0feedb811e63d70a30be2736af17a3a..b94df11469c4a4457248b8040d8855191c0cdc7e 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -256,4 +256,6 @@ function expand_(str, max, maxLength, isTop) {
+     }
+     return acc;
+ }
++// Compatibility shim: default export for consumers of aliased v1/v2.
++export default expand;
+ //# sourceMappingURL=index.js.map

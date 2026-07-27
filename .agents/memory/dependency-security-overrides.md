@@ -26,3 +26,14 @@ to ^11.1.1 is safe for CJS consumers like `@expo/ngrok` and `xcode`.
 **How to apply:** when given a "fix N vulnerabilities" task, batch-query the bulk
 advisory endpoint for exact patched ranges, add/raise overrides, `pnpm install`,
 then `runDependencyAudit` to confirm 0.
+
+**Cross-major alias + compat patch (brace-expansion case).** When an advisory covers
+ALL versions of the old majors (e.g. CVE-2026-14257: `<=5.0.7`, only 5.0.8 fixed) a
+pnpm patch on the vulnerable version does NOT clear the audit — the scanner is
+version-based. Instead alias the old majors to the fixed version
+(`brace-expansion@1: npm:brace-expansion@^5.0.8`) and, if the new major changed the
+export shape (v5 = named `expand`, v1/v2 = callable default used by minimatch), add a
+`pnpm patch` on the NEW version restoring compatibility
+(`module.exports = Object.assign(expand, module.exports)` in dist/commonjs +
+`export default expand` in dist/esm). Verify every minimatch major in the tree still
+brace-matches after install.

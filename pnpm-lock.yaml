@@ -65,38 +65,7 @@ catalogs:
       version: 3.25.76
 
 overrides:
-  tar@7: ^7.5.21
-  form-data@4: ^4.0.6
-  undici@6: ^6.27.0
-  js-yaml@4: ^4.3.0
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
-  '@tootallnate/once': ^3.0.1
-  '@xmldom/xmldom': ^0.8.13
-  brace-expansion@1: ^1.1.16
-  brace-expansion@2: ^2.1.2
-  brace-expansion@5: ^5.0.7
-  qs@6: ^6.15.2
-  shell-quote: ^1.8.4
-  uuid@3: ^11.1.1
-  uuid@7: ^11.1.1
-  uuid@8: ^11.1.1
-  uuid@9: ^11.1.1
-  ws@8: ^8.20.1
-  fast-uri: ^3.1.2
-  ip-address: ^10.1.1
-  lodash: ^4.18.0
-  node-forge: ^1.4.0
-  path-to-regexp@8: ^8.4.0
-  picomatch@2: ^2.3.2
-  picomatch@3: ^3.0.2
-  picomatch@4: ^4.0.4
-  postcss: ^8.5.18
-  yaml@1: ^1.10.3
-  yaml@2: ^2.8.3
-  drizzle-orm: ^0.45.2
-  nodemailer: ^9.0.1
-  vite: ^7.3.5
-  esbuild@0.18: ^0.25.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-freebsd-ia32': '-'
@@ -117,6 +86,12 @@ overrides:
   '@tailwindcss/oxide>@tailwindcss/oxide-linux-x64-musl': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-arm64-msvc': '-'
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-x64-msvc': '-'
+  '@tootallnate/once': ^3.0.1
+  '@xmldom/xmldom': ^0.8.13
+  brace-expansion@1: npm:brace-expansion@^5.0.8
+  brace-expansion@2: npm:brace-expansion@^5.0.8
+  brace-expansion@5: ^5.0.8
+  drizzle-orm: ^0.45.2
   esbuild: 0.27.3
   esbuild>@esbuild/aix-ppc64: '-'
   esbuild>@esbuild/android-arm: '-'
@@ -143,6 +118,11 @@ overrides:
   esbuild>@esbuild/win32-arm64: '-'
   esbuild>@esbuild/win32-ia32: '-'
   esbuild>@esbuild/win32-x64: '-'
+  esbuild@0.18: ^0.25.0
+  fast-uri: ^3.1.2
+  form-data@4: ^4.0.6
+  ip-address: ^10.1.1
+  js-yaml@4: ^4.3.0
   lightningcss>lightningcss-android-arm64: '-'
   lightningcss>lightningcss-darwin-arm64: '-'
   lightningcss>lightningcss-darwin-x64: '-'
@@ -153,6 +133,15 @@ overrides:
   lightningcss>lightningcss-linux-x64-musl: '-'
   lightningcss>lightningcss-win32-arm64-msvc: '-'
   lightningcss>lightningcss-win32-x64-msvc: '-'
+  lodash: ^4.18.0
+  node-forge: ^1.4.0
+  nodemailer: ^9.0.1
+  path-to-regexp@8: ^8.4.0
+  picomatch@2: ^2.3.2
+  picomatch@3: ^3.0.2
+  picomatch@4: ^4.0.4
+  postcss: ^8.5.18
+  qs@6: ^6.15.2
   rollup>@rollup/rollup-android-arm-eabi: '-'
   rollup>@rollup/rollup-android-arm64: '-'
   rollup>@rollup/rollup-darwin-arm64: '-'
@@ -177,6 +166,22 @@ overrides:
   rollup>@rollup/rollup-win32-ia32-msvc: '-'
   rollup>@rollup/rollup-win32-x64-gnu: '-'
   rollup>@rollup/rollup-win32-x64-msvc: '-'
+  shell-quote: ^1.8.4
+  tar@7: ^7.5.21
+  undici@6: ^6.27.0
+  uuid@3: ^11.1.1
+  uuid@7: ^11.1.1
+  uuid@8: ^11.1.1
+  uuid@9: ^11.1.1
+  vite: ^7.3.5
+  ws@8: ^8.20.1
+  yaml@1: ^1.10.3
+  yaml@2: ^2.8.3
+
+patchedDependencies:
+  brace-expansion@5.0.8:
+    hash: 2fe94fe614da85b7596cd3211abece31b5e7fb98c23db728beee00dfbc2d6441
+    path: patches/brace-expansion@5.0.8.patch
 
 importers:
 
@@ -3414,9 +3419,6 @@ packages:
   badgin@1.2.3:
     resolution: {integrity: sha512-NQGA7LcfCpSzIbGRbkgjgdWkjy7HI+Th5VLxTJfW5EeaAf3fnS+xWQaQOCYiny+q6QSvxqoSO04vCx+4u++EJw==}
 
-  balanced-match@1.0.2:
-    resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
-
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
@@ -3464,12 +3466,6 @@ packages:
   bplist-parser@0.3.2:
     resolution: {integrity: sha512-apC2+fspHGI3mMKj+dGevkGo/tCqVB8jMb6i+OX+E29p0Iposz07fABkRIfVUPNd5A5VbuOz1bZbnmkKLYF+wQ==}
     engines: {node: '>= 5.10.0'}
-
-  brace-expansion@1.1.16:
-    resolution: {integrity: sha512-IDw48K2/2kRkg9LdJxurvq3lV3aBgq0REY89duEqFRthjlPdXHKMj7EnQOXVckxzgisinf3nHfrcE2FufFLXMw==}
-
-  brace-expansion@2.1.2:
-    resolution: {integrity: sha512-w5JZcKgdhDOgOwm8H+KgbosopHMuGcl6qbulwjtz3SM7I7P3yW1eAjzMPLrIE+NQ9vjgANKHWeMHnrT0OXW1oA==}
 
   brace-expansion@5.0.8:
     resolution: {integrity: sha512-JZyDyq3D4AUifKTPOB7DELf6XsB3WdPuNxCtob1vFXPsSXhdAiHBWJ/tJ8HAc9aH84BK+5JFZLNkJKx3G9kzQg==}
@@ -3681,9 +3677,6 @@ packages:
   compression@1.8.1:
     resolution: {integrity: sha512-9mAqGPHLakhCLeNyxPkK4xVo746zQ/czLH1Ky+vkitMnWfWZps8r0qXuwhwizagCRttsL4lfG4pIOvaWLpAP0w==}
     engines: {node: '>= 0.8.0'}
-
-  concat-map@0.0.1:
-    resolution: {integrity: sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==}
 
   connect@3.7.0:
     resolution: {integrity: sha512-ZqRXc+tZukToSNmh5C2iWMSoV3X1YUcPbqEM4DkEG5tNQXrQUZCNVGGv3IuicnkMtPfGf3Xtp8WCXs295iQ1pQ==}
@@ -4155,7 +4148,7 @@ packages:
   esbuild-register@3.6.0:
     resolution: {integrity: sha512-H2/S7Pm8a9CL1uhp9OvjwrBh5Pvx0H8qVOxNu8Wed9Y7qv56MPtq+GGM8RJpq6glYJn9Wspr8uw7l55uyinNeg==}
     peerDependencies:
-      esbuild: 0.27.3
+      esbuild: ^0.25.0
 
   esbuild@0.27.3:
     resolution: {integrity: sha512-8VwMnyGCONIs6cWue2IdpHxHnAjzxnw2Zr7MkVxB2vjmQ2ivqGFb4LEG3SMnv0Gb2F/G/2yA8zUaiL1gywDCCg==}
@@ -10872,8 +10865,6 @@ snapshots:
 
   badgin@1.2.3: {}
 
-  balanced-match@1.0.2: {}
-
   balanced-match@4.0.4: {}
 
   base64-js@1.5.1: {}
@@ -10922,16 +10913,7 @@ snapshots:
     dependencies:
       big-integer: 1.6.52
 
-  brace-expansion@1.1.16:
-    dependencies:
-      balanced-match: 1.0.2
-      concat-map: 0.0.1
-
-  brace-expansion@2.1.2:
-    dependencies:
-      balanced-match: 1.0.2
-
-  brace-expansion@5.0.8:
+  brace-expansion@5.0.8(patch_hash=2fe94fe614da85b7596cd3211abece31b5e7fb98c23db728beee00dfbc2d6441):
     dependencies:
       balanced-match: 4.0.4
 
@@ -11158,8 +11140,6 @@ snapshots:
       vary: 1.1.2
     transitivePeerDependencies:
       - supports-color
-
-  concat-map@0.0.1: {}
 
   connect@3.7.0:
     dependencies:
@@ -13324,15 +13304,15 @@ snapshots:
 
   minimatch@10.2.4:
     dependencies:
-      brace-expansion: 5.0.8
+      brace-expansion: 5.0.8(patch_hash=2fe94fe614da85b7596cd3211abece31b5e7fb98c23db728beee00dfbc2d6441)
 
   minimatch@3.1.5:
     dependencies:
-      brace-expansion: 1.1.16
+      brace-expansion: 5.0.8(patch_hash=2fe94fe614da85b7596cd3211abece31b5e7fb98c23db728beee00dfbc2d6441)
 
   minimatch@9.0.9:
     dependencies:
-      brace-expansion: 2.1.2
+      brace-expansion: 5.0.8(patch_hash=2fe94fe614da85b7596cd3211abece31b5e7fb98c23db728beee00dfbc2d6441)
 
   minimist@1.2.8: {}
 
