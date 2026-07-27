@@ -192,6 +192,16 @@ const LOGO_IMG_HTML = logoImgHtml();
 
 export type EmailCategory = "verification" | "notifications" | "contact";
 
+/**
+ * True when the address is a wiped placeholder assigned during account
+ * anonymisation/deletion (e.g. `deleted-user-<id>@deleted.mylocaltrade.invalid`
+ * or `released-<id>-<ts>@released.mylocaltrade.invalid`). Such addresses must
+ * never receive real email; `dispatchEmail` refuses them as a safety net.
+ */
+export function isWipedPlaceholderEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith(".invalid");
+}
+
 const BREVO_KEY_ENV: Record<EmailCategory, string> = {
   verification: "BREVO_API_KEY_VERIFICATION",
   notifications: "BREVO_API_KEY_NOTIFICATIONS",

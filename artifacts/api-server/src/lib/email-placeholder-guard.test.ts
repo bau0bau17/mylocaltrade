@@ -25,12 +25,19 @@ describe("isPlaceholderEmail", () => {
     expect(isPlaceholderEmail("someone@example.invalid")).toBe(true);
   });
 
+  it("matches released-email placeholder addresses", () => {
+    expect(
+      isPlaceholderEmail("released-42-1700000000000@released.mylocaltrade.invalid"),
+    ).toBe(true);
+  });
+
   it("does not block normal user addresses", () => {
     expect(isPlaceholderEmail("jane.doe@gmail.com")).toBe(false);
     expect(isPlaceholderEmail("trader@my-invalid-business.co.uk")).toBe(false);
     // "invalid" appearing in the local part or as a non-TLD label is fine.
     expect(isPlaceholderEmail("invalid@example.com")).toBe(false);
     expect(isPlaceholderEmail("user@invalid.example.com")).toBe(false);
+    expect(isPlaceholderEmail("user@notinvalid.co.uk")).toBe(false);
   });
 });
 
