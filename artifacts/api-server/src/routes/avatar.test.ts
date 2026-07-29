@@ -1,4 +1,5 @@
-import { describe, it, beforeAll, afterAll, expect } from "vitest";
+import { describe, it, beforeAll, afterAll, afterEach, expect, vi } from "vitest";
+import { Readable } from "stream";
 import request from "supertest";
 import { db } from "@workspace/db";
 import {
@@ -9,6 +10,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import app from "../app";
 import { generateToken } from "../lib/auth";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 /**
  * Phase 1A personal profile photo (users.avatar_url) tests.
@@ -21,11 +23,10 @@ import { generateToken } from "../lib/auth";
  *  - /auth/me exposes avatarUrl.
  *  - GET /customer/uploads/avatar-file authorisation: owner OK,
  *    conversation counterpart OK, stranger 404, unauthenticated 401.
- *    (Streaming itself needs a real stored object, so authorised callers
- *    reaching the storage-lookup stage return 404 for a missing object —
- *    which still proves they passed the membership gate differently from
- *    the stranger, whose 404 comes before any storage access. We assert
- *    the DENIED cases, and the owner/member cases via the DB predicate.)
+ *  - Streaming end-to-end: with ObjectStorageService.getObjectEntityFile
+ *    mocked to return a File-like object, authorised callers get a 200 with
+ *    the exact image bytes and content type, while a stranger still gets a
+ *    404 BEFORE any storage access (the mock is never called).
  */
 
 const SUFFIX = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -194,6 +195,68 @@ describe("GET /customer/uploads/avatar-file", () => {
       expect(res.status).not.toBe(401);
       expect(res.status).not.toBe(403);
     }
+  });
+
+  describe("with a (mocked) real stored object", () => {
+    const FAKE_BYTES = Buffer.from([
+      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46,
+    ]); // JPEG magic-number prefix + filler
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("streams 200 + image bytes to the owner and the conversation counterpart", async () => {
+      // Mock ONLY the storage lookup: the route's normalisation, live-avatar
+      // lookup and membership gate all run for real against the DB. The mock
+      // returns a File-like object so the actual streaming code path
+      // (metadata headers + createReadStream pipe) is exercised end-to-end.
+      const spy = vi
+        .spyOn(ObjectStorageService.prototype, "getObjectEntityFile")
+        .mockImplementation(async (objectPath: string) => {
+          expect(objectPath).toBe(path());
+          return {
+            getMetadata: async () => [
+              { contentType: "image/jpeg", size: FAKE_BYTES.length },
+            ],
+            createReadStream: () => Readable.from([FAKE_BYTES]),
+          } as never;
+        });
+
+      for (const token of [traderToken, customerToken]) {
+        const res = await request(app)
+          .get(`/api/customer/uploads/avatar-file?path=${encodeURIComponent(path())}`)
+          .set("Authorization", `Bearer ${token}`)
+          .buffer(true)
+          .parse((r, cb) => {
+            const chunks: Buffer[] = [];
+            r.on("data", (c) => chunks.push(c));
+            r.on("end", () => cb(null, Buffer.concat(chunks)));
+          });
+        expect(res.status).toBe(200);
+        expect(res.headers["content-type"]).toContain("image/jpeg");
+        expect(res.headers["cache-control"]).toContain("private");
+        expect(Buffer.compare(res.body as Buffer, FAKE_BYTES)).toBe(0);
+      }
+
+      // Storage was reached exactly once per authorised caller.
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+
+    it("still 404s a stranger before any storage access, even when the object exists", async () => {
+      const spy = vi
+        .spyOn(ObjectStorageService.prototype, "getObjectEntityFile")
+        .mockResolvedValue({
+          getMetadata: async () => [{ contentType: "image/jpeg" }],
+          createReadStream: () => Readable.from([FAKE_BYTES]),
+        } as never);
+
+      const res = await request(app)
+        .get(`/api/customer/uploads/avatar-file?path=${encodeURIComponent(path())}`)
+        .set("Authorization", `Bearer ${strangerToken}`);
+      expect(res.status).toBe(404);
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 
   it("stops serving a removed avatar (path no longer live)", async () => {
