@@ -15,6 +15,12 @@ export interface ConversationSummary {
   customerName: string;
   traderProfileId: number;
   traderBusinessName: string;
+  /** Personal profile photo object path of the trader user handling this
+conversation, when they have set one. Only populated on the
+conversation DETAIL response (null in list responses). Load it via
+the authenticated avatar-file endpoint.
+ */
+  traderAvatarUrl?: string | null;
   traderVerified: boolean;
   enquiryId?: number | null;
   serviceRequired?: string | null;

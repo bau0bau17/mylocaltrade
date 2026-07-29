@@ -13,6 +13,11 @@ import {
   bookingsTable,
 } from "@workspace/db/schema";
 import { and, eq, desc, sql, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
+// Second reference to users for joining the TRADER user on a conversation
+// (the primary usersTable join is the customer).
+const traderUsers = alias(usersTable, "trader_users");
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendNewMessageEmail } from "../lib/email";
@@ -77,6 +82,10 @@ function serializeConversation(
     customerName?: string | null;
     customerId?: number;
     traderBusinessName?: string | null;
+    // Personal profile photo of the trader user handling this conversation.
+    // Only supplied by the DETAIL route (list responses leave it null) so the
+    // chat header can show the individual person alongside the business name.
+    traderAvatarUrl?: string | null;
     traderVerified?: boolean;
     unreadCount: number;
     viewerRole: "customer" | "trader";
@@ -96,6 +105,7 @@ function serializeConversation(
     customerName: extras.customerName ?? "Customer",
     traderProfileId: c.traderProfileId,
     traderBusinessName: extras.traderBusinessName ?? "",
+    traderAvatarUrl: extras.traderAvatarUrl ?? null,
     traderVerified: extras.traderVerified ?? false,
     enquiryId: c.enquiryId,
     serviceRequired: c.serviceRequired,
@@ -261,10 +271,12 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         traderContactName: traderProfilesTable.contactName,
         traderPhone: traderProfilesTable.phone,
         traderEmail: traderProfilesTable.email,
+        traderAvatarUrl: traderUsers.avatarUrl,
       })
       .from(conversationsTable)
       .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
       .innerJoin(traderProfilesTable, eq(conversationsTable.traderProfileId, traderProfilesTable.id))
+      .leftJoin(traderUsers, eq(conversationsTable.traderUserId, traderUsers.id))
       .where(eq(conversationsTable.id, id))
       .limit(1);
 
@@ -416,6 +428,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         customerName: row.customerName,
         customerId: row.conv.customerId,
         traderBusinessName: row.traderBusinessName,
+        traderAvatarUrl: row.traderAvatarUrl,
         traderVerified: row.traderVerificationStatus === "VERIFIED",
         unreadCount: 0,
         viewerRole: isCustomer ? "customer" : "trader",

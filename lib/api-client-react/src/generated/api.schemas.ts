@@ -197,6 +197,13 @@ export interface UserProfile {
   id: number;
   email: string;
   fullName: string;
+  /** Personal profile photo (headshot) object path, e.g.
+/objects/customer-uploads/42/v/uuid. Null when the user has not set
+one. Distinct from the trader's business logo. Served via the
+authenticated avatar-file endpoint; never shown on public trader
+cards.
+ */
+  avatarUrl?: string | null;
   role: UserProfileRole;
   isActive: boolean;
   plan?: string | null;
@@ -215,6 +222,17 @@ users cannot reach this endpoint.
 export interface AuthResponse {
   token: string;
   user: UserProfile;
+}
+
+export interface UpdateAvatarRequest {
+  /**
+   * Object path from the customer-uploads presigned upload flow
+(/objects/customer-uploads/<userId>/...), or null to remove the
+current photo.
+
+   * @maxLength 512
+   */
+  objectPath: string | null;
 }
 
 export interface UpdateNotificationSettingsRequest {
@@ -454,7 +472,10 @@ export interface UpdateTraderProfileRequest {
   businessDescription?: string;
   website?: string;
   openingHours?: string;
-  logoUrl?: string;
+  /** Business logo object path from the customer-uploads flow, or null
+to remove the current logo. Ownership is verified server-side.
+ */
+  logoUrl?: string | null;
   galleryUrls?: string[];
   socialLinks?: UpdateTraderProfileRequestSocialLinks;
   businessRole?: UpdateTraderProfileRequestBusinessRole;
@@ -802,6 +823,12 @@ export interface ConversationSummary {
   customerName: string;
   traderProfileId: number;
   traderBusinessName: string;
+  /** Personal profile photo object path of the trader user handling this
+conversation, when they have set one. Only populated on the
+conversation DETAIL response (null in list responses). Load it via
+the authenticated avatar-file endpoint.
+ */
+  traderAvatarUrl?: string | null;
   traderVerified: boolean;
   enquiryId?: number | null;
   serviceRequired?: string | null;
@@ -1586,6 +1613,11 @@ export interface ResolveUserReportRequest {
   action: ResolveUserReportRequestAction;
   notes?: string;
 }
+
+export type UpdateAvatar200 = {
+  ok: boolean;
+  avatarUrl?: string | null;
+};
 
 export type ListTradersParams = {
   category?: string;

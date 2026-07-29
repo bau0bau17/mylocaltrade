@@ -6,9 +6,27 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
-import { useGetTraderProfile, useUpdateTraderProfile } from '@workspace/api-client-react';
+import { Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { useGetTraderProfile, useUpdateTraderProfile, useGetCustomerUploadUrl } from '@workspace/api-client-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getApiUrl } from '@/lib/api-url';
+import { getApiUrl, objectImageUrl } from '@/lib/api-url';
+
+const LOGO_MAX_BYTES = 8 * 1024 * 1024;
+const LOGO_ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
+function guessLogoMime(uri: string, fallback?: string | null): string {
+  if (fallback && LOGO_ALLOWED_MIMES.includes(fallback)) return fallback;
+  const ext = uri.split('?')[0].split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'jpg': case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'webp': return 'image/webp';
+    case 'heic': return 'image/heic';
+    case 'heif': return 'image/heif';
+    default: return 'image/jpeg';
+  }
+}
 
 type OwnChangeRequest = {
   id: number;
@@ -57,6 +75,70 @@ export default function EditProfileScreen() {
   const [changeControlActive, setChangeControlActive] = useState(false);
   const [requests, setRequests] = useState<OwnChangeRequest[]>([]);
   const [banner, setBanner] = useState<string | null>(null);
+
+  // --- Business logo (the COMPANY's mark, shown on your public business
+  // profile — not your personal profile photo, which lives in Account).
+  const { mutateAsync: getUploadUrl } = useGetCustomerUploadUrl();
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  const pickAndUploadLogo = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Please allow photo library access to set your business logo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const mimeType = guessLogoMime(asset.uri, asset.mimeType ?? null);
+    if (!LOGO_ALLOWED_MIMES.includes(mimeType)) {
+      Alert.alert('Unsupported', 'Please choose a JPEG, PNG, WEBP or HEIC image.');
+      return;
+    }
+    const sizeBytes = asset.fileSize ?? 0;
+    if (sizeBytes > LOGO_MAX_BYTES) {
+      Alert.alert('File too large', 'Maximum size is 8 MB.');
+      return;
+    }
+    setLogoBusy(true);
+    try {
+      const filename = asset.fileName || `logo-${Date.now()}.jpg`;
+      const urlResp = await getUploadUrl({ data: { filename, mimeType, sizeBytes: sizeBytes || 1 } });
+      const fileResp = await fetch(asset.uri);
+      const blob = await fileResp.blob();
+      const putRes = await fetch(urlResp.uploadURL, {
+        method: 'PUT',
+        headers: { 'Content-Type': mimeType },
+        body: blob,
+      });
+      if (!putRes.ok) throw new Error('Upload to storage failed');
+      await updateProfile({ data: { logoUrl: urlResp.objectPath } });
+      setLogoPreview(asset.uri);
+      refetch();
+    } catch (e) {
+      Alert.alert('Upload failed', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setLogoBusy(false);
+    }
+  };
+
+  const removeLogo = async () => {
+    setLogoBusy(true);
+    try {
+      await updateProfile({ data: { logoUrl: null } });
+      setLogoPreview(null);
+      refetch();
+    } catch (e) {
+      Alert.alert('Could not remove logo', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setLogoBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (profile) {
@@ -199,6 +281,54 @@ export default function EditProfileScreen() {
           <FieldStatus request={latestFor('website')} />
         </View>
 
+        <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Business Logo</Text>
+        <View style={styles.inputGroup}>
+          <Text style={styles.fieldHint}>
+            Your company&apos;s logo, shown on your public business profile. This is separate from
+            your personal profile photo, which you can set from the Account screen.
+          </Text>
+          <View style={styles.logoRow}>
+            <View style={styles.logoBox}>
+              {logoPreview || profile?.logoUrl ? (
+                <Image
+                  source={{ uri: logoPreview ?? objectImageUrl(profile?.logoUrl)! }}
+                  style={styles.logoImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Feather name="image" size={22} color={Colors.light.textSecondary} />
+              )}
+              {logoBusy ? (
+                <View style={styles.logoBusyOverlay}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              ) : null}
+            </View>
+            <View style={{ flex: 1, gap: 8 }}>
+              <Pressable
+                style={[styles.logoBtn, logoBusy && { opacity: 0.5 }]}
+                onPress={() => void pickAndUploadLogo()}
+                disabled={logoBusy}
+              >
+                <Feather name="upload" size={14} color={Colors.light.primary} />
+                <Text style={styles.logoBtnText}>
+                  {logoPreview || profile?.logoUrl ? 'Change logo' : 'Upload logo'}
+                </Text>
+              </Pressable>
+              {logoPreview || profile?.logoUrl ? (
+                <Pressable
+                  style={[styles.logoBtn, logoBusy && { opacity: 0.5 }]}
+                  onPress={() => void removeLogo()}
+                  disabled={logoBusy}
+                >
+                  <Feather name="trash-2" size={14} color="#B91C1C" />
+                  <Text style={[styles.logoBtnText, { color: '#B91C1C' }]}>Remove logo</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        </View>
+
         <Text style={[styles.sectionTitle, { marginTop: 16 }]}>About Your Business</Text>
 
         <View style={styles.inputGroup}>
@@ -334,6 +464,50 @@ const styles = StyleSheet.create({
     color: Colors.light.textMuted,
     lineHeight: 15,
     marginLeft: 4,
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 10,
+  },
+  logoBox: {
+    width: 72,
+    height: 72,
+    borderRadius: 14,
+    backgroundColor: Colors.light.primaryMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  logoBusyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: '#fff',
+    alignSelf: 'flex-start',
+  },
+  logoBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.light.primary,
   },
   noticeText: {
     fontSize: 12,

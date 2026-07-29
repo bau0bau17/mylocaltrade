@@ -23,6 +23,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import { confirmAction } from "@/lib/confirm";
+import { avatarImageUrl } from "@/lib/api-url";
 import { isPhoneVerificationRequired, promptPhoneVerification } from "@/lib/phone-gate";
 
 // Server returns 409 with this machine-readable code when the customer tries
@@ -176,7 +177,7 @@ export default function ConversationThreadScreen() {
     router.replace(
       (returnTo ?? "/messages") as Parameters<typeof router.replace>[0],
     );
-  const { isTrader, isAdmin, user } = useAuth();
+  const { isTrader, isAdmin, user, token } = useAuth();
   const listRef = useRef<FlatList>(null);
 
   const { data, isLoading, error, refetch } = useGetConversation(conversationId, {
@@ -936,6 +937,19 @@ export default function ConversationThreadScreen() {
         <Pressable onPress={goBack} style={styles.headerBackBtn} hitSlop={10}>
           <Feather name="chevron-left" size={24} color={Colors.light.primary} />
         </Pressable>
+        {!isTrader && conv.traderAvatarUrl ? (
+          // Personal photo of the trader handling this conversation — shown to
+          // the customer only, next to the business name. Served through the
+          // authenticated avatar endpoint (membership-scoped), so pass the
+          // bearer token with the image request.
+          <Image
+            source={{
+              uri: avatarImageUrl(conv.traderAvatarUrl)!,
+              headers: { Authorization: `Bearer ${token}` },
+            }}
+            style={styles.headerAvatar}
+          />
+        ) : null}
         <View style={{ flex: 1 }}>
           <Text style={styles.headerName} numberOfLines={1}>
             {otherName}
@@ -2014,6 +2028,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerName: { fontSize: 16, fontWeight: "700", color: Colors.light.text },
+  headerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
   headerSub: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 2 },
   headerJobRef: { fontSize: 12, fontWeight: "600", color: Colors.light.textSecondary, marginTop: 2 },
   headerPills: { flexDirection: "row", gap: 6, marginTop: 6 },

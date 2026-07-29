@@ -161,6 +161,8 @@ export * from "./traderProfileSocialLinks";
 export * from "./traderReviewsResponse";
 export * from "./unreadCountResponse";
 export * from "./unregisterPushTokenRequest";
+export * from "./updateAvatar200";
+export * from "./updateAvatarRequest";
 export * from "./updateLeadReminderSettingsRequest";
 export * from "./updateLeadReminderSettingsRequestLeadReminderMinutes";
 export * from "./updateNotificationSettingsRequest";

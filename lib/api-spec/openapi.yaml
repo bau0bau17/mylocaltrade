@@ -346,6 +346,52 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /auth/me/avatar:
+    patch:
+      operationId: updateAvatar
+      tags: [auth]
+      summary: Set or remove the current trader's personal profile photo
+      description: |
+        Traders only. Pass the objectPath returned by the customer-uploads
+        presigned upload flow to set the photo, or null to remove it. The
+        object must live under the caller's own customer-uploads prefix and be
+        a supported image type. This is the personal headshot, NOT the
+        business logo (which lives on the trader profile).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAvatarRequest"
+      responses:
+        "200":
+          description: Updated avatar state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  avatarUrl:
+                    type: string
+                    nullable: true
+                required: [ok]
+        "400":
+          description: Invalid or unowned image object
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Only traders can set a personal profile photo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/me/notification-settings:
     patch:
       operationId: updateNotificationSettings
@@ -2790,6 +2836,15 @@ components:
           type: string
         fullName:
           type: string
+        avatarUrl:
+          type: string
+          nullable: true
+          description: |
+            Personal profile photo (headshot) object path, e.g.
+            /objects/customer-uploads/42/v/uuid. Null when the user has not set
+            one. Distinct from the trader's business logo. Served via the
+            authenticated avatar-file endpoint; never shown on public trader
+            cards.
         role:
           type: string
           enum: [customer, trader, admin]
@@ -2822,6 +2877,19 @@ components:
         - fullName
         - role
         - isActive
+
+    UpdateAvatarRequest:
+      type: object
+      properties:
+        objectPath:
+          type: string
+          nullable: true
+          maxLength: 512
+          description: |
+            Object path from the customer-uploads presigned upload flow
+            (/objects/customer-uploads/<userId>/...), or null to remove the
+            current photo.
+      required: [objectPath]
 
     UpdateNotificationSettingsRequest:
       type: object
@@ -3133,6 +3201,10 @@ components:
           type: string
         logoUrl:
           type: string
+          nullable: true
+          description: |
+            Business logo object path from the customer-uploads flow, or null
+            to remove the current logo. Ownership is verified server-side.
         galleryUrls:
           type: array
           items:
@@ -3534,6 +3606,14 @@ components:
           type: integer
         traderBusinessName:
           type: string
+        traderAvatarUrl:
+          type: string
+          nullable: true
+          description: |
+            Personal profile photo object path of the trader user handling this
+            conversation, when they have set one. Only populated on the
+            conversation DETAIL response (null in list responses). Load it via
+            the authenticated avatar-file endpoint.
         traderVerified:
           type: boolean
         enquiryId:

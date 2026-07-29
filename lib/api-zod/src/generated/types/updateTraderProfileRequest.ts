@@ -22,7 +22,10 @@ export interface UpdateTraderProfileRequest {
   businessDescription?: string;
   website?: string;
   openingHours?: string;
-  logoUrl?: string;
+  /** Business logo object path from the customer-uploads flow, or null
+to remove the current logo. Ownership is verified server-side.
+ */
+  logoUrl?: string | null;
   galleryUrls?: string[];
   socialLinks?: UpdateTraderProfileRequestSocialLinks;
   businessRole?: UpdateTraderProfileRequestBusinessRole;

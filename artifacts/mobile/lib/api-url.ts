@@ -37,3 +37,24 @@ export function objectImageUrl(
   }
   return path;
 }
+
+// Turn a stored PERSONAL avatar object path into an absolute URL for the
+// authenticated avatar-file endpoint. Unlike gallery images this endpoint
+// requires a bearer token — pass the result to <Image> together with the
+// caller's auth headers, e.g.
+//   <Image source={{ uri: avatarImageUrl(p)!, headers: { Authorization: `Bearer ${token}` } }} />
+// Local picker URIs and absolute URLs are returned unchanged for previews.
+export function avatarImageUrl(
+  path: string | null | undefined,
+): string | undefined {
+  if (!path) return undefined;
+  if (/^(https?:|file:|content:|data:|assets-library:|ph:)/i.test(path)) {
+    return path;
+  }
+  if (path.startsWith("/objects/")) {
+    return `${getApiUrl()}/api/customer/uploads/avatar-file?path=${encodeURIComponent(
+      path,
+    )}`;
+  }
+  return path;
+}

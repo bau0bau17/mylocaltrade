@@ -9,7 +9,9 @@ import {
   LoginBody,
   UpdateNotificationSettingsBody,
   UpdateLeadReminderSettingsBody,
+  UpdateAvatarBody,
 } from "@workspace/api-zod";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { DEFAULT_REMINDER_MINUTES } from "../lib/lead-reminders";
 import {
   generateToken,
@@ -1173,6 +1175,7 @@ router.get("/auth/me", authMiddlewareAllowDeletion, async (req, res) => {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
+      avatarUrl: user.avatarUrl ?? null,
       role: user.role,
       isSuperAdmin: user.isSuperAdmin,
       isActive: user.isActive,
@@ -1190,6 +1193,62 @@ router.get("/auth/me", authMiddlewareAllowDeletion, async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, "Get user failed");
     res.status(500).json({ error: "Failed to get user" });
+  }
+});
+
+// PATCH /auth/me/avatar — set or remove the caller's PERSONAL profile photo
+// (headshot). Trader-only for now (Phase 1A): the photo appears in the
+// trader's own account area and the conversation header, never on public
+// trader cards, and is entirely separate from the business logo on the
+// trader profile. Pass objectPath from the customer-uploads presigned flow,
+// or null to remove. Ownership + image type are verified server-side.
+router.patch("/auth/me/avatar", authMiddleware, async (req, res) => {
+  try {
+    const { userId, userRole } = req as AuthenticatedRequest;
+    if (userRole !== "trader") {
+      res.status(403).json({ error: "Only trader accounts can set a personal profile photo." });
+      return;
+    }
+    const body = UpdateAvatarBody.parse(req.body);
+
+    let avatarUrl: string | null = null;
+    if (body.objectPath !== null) {
+      const storage = new ObjectStorageService();
+      try {
+        avatarUrl = await storage.verifyCustomerUploadObject(body.objectPath, userId, {
+          maxBytes: 8 * 1024 * 1024,
+          allowedMimes: new Set([
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/heic",
+            "image/heif",
+          ]),
+          label: "profile photo",
+        });
+      } catch (err) {
+        res.status(400).json({ error: (err as Error).message });
+        return;
+      }
+    }
+
+    const [updated] = await db
+      .update(usersTable)
+      .set({ avatarUrl, updatedAt: new Date() })
+      .where(eq(usersTable.id, userId))
+      .returning({ avatarUrl: usersTable.avatarUrl });
+    if (!updated) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    res.json({ ok: true, avatarUrl: updated.avatarUrl ?? null });
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name === "ZodError") {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    req.log.error({ err: error }, "Update avatar failed");
+    res.status(500).json({ error: "Failed to update profile photo" });
   }
 });
 

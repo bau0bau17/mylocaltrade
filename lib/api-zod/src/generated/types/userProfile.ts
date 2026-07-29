@@ -11,6 +11,13 @@ export interface UserProfile {
   id: number;
   email: string;
   fullName: string;
+  /** Personal profile photo (headshot) object path, e.g.
+/objects/customer-uploads/42/v/uuid. Null when the user has not set
+one. Distinct from the trader's business logo. Served via the
+authenticated avatar-file endpoint; never shown on public trader
+cards.
+ */
+  avatarUrl?: string | null;
   role: UserProfileRole;
   isActive: boolean;
   plan?: string | null;

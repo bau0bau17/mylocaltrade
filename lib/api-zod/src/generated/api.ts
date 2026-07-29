@@ -150,6 +150,12 @@ export const ResetPasswordResponse = zod.object({
     id: zod.number(),
     email: zod.string(),
     fullName: zod.string(),
+    avatarUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Personal profile photo (headshot) object path, e.g.\n\/objects\/customer-uploads\/42\/v\/uuid. Null when the user has not set\none. Distinct from the trader's business logo. Served via the\nauthenticated avatar-file endpoint; never shown on public trader\ncards.\n",
+      ),
     role: zod.enum(["customer", "trader", "admin"]),
     isActive: zod.boolean(),
     plan: zod.string().nullish(),
@@ -195,6 +201,12 @@ export const VerifyEmailCodeResponse = zod.object({
     id: zod.number(),
     email: zod.string(),
     fullName: zod.string(),
+    avatarUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Personal profile photo (headshot) object path, e.g.\n\/objects\/customer-uploads\/42\/v\/uuid. Null when the user has not set\none. Distinct from the trader's business logo. Served via the\nauthenticated avatar-file endpoint; never shown on public trader\ncards.\n",
+      ),
     role: zod.enum(["customer", "trader", "admin"]),
     isActive: zod.boolean(),
     plan: zod.string().nullish(),
@@ -229,6 +241,12 @@ export const LoginResponse = zod.object({
     id: zod.number(),
     email: zod.string(),
     fullName: zod.string(),
+    avatarUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Personal profile photo (headshot) object path, e.g.\n\/objects\/customer-uploads\/42\/v\/uuid. Null when the user has not set\none. Distinct from the trader's business logo. Served via the\nauthenticated avatar-file endpoint; never shown on public trader\ncards.\n",
+      ),
     role: zod.enum(["customer", "trader", "admin"]),
     isActive: zod.boolean(),
     plan: zod.string().nullish(),
@@ -307,6 +325,12 @@ export const GetMeResponse = zod.object({
   id: zod.number(),
   email: zod.string(),
   fullName: zod.string(),
+  avatarUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Personal profile photo (headshot) object path, e.g.\n\/objects\/customer-uploads\/42\/v\/uuid. Null when the user has not set\none. Distinct from the trader's business logo. Served via the\nauthenticated avatar-file endpoint; never shown on public trader\ncards.\n",
+    ),
   role: zod.enum(["customer", "trader", "admin"]),
   isActive: zod.boolean(),
   plan: zod.string().nullish(),
@@ -322,6 +346,32 @@ export const GetMeResponse = zod.object({
       "GDPR account-deletion lifecycle stage. Null for normal accounts.\nREQUESTED \/ DISABLED_PENDING_RETENTION are still cancellable from\nthe mobile client. ANONYMISED \/ COMPLETED are terminal — those\nusers cannot reach this endpoint.\n",
     ),
   deletionRequestedAt: zod.date().nullish(),
+});
+
+/**
+ * Traders only. Pass the objectPath returned by the customer-uploads
+presigned upload flow to set the photo, or null to remove it. The
+object must live under the caller's own customer-uploads prefix and be
+a supported image type. This is the personal headshot, NOT the
+business logo (which lives on the trader profile).
+
+ * @summary Set or remove the current trader's personal profile photo
+ */
+export const updateAvatarBodyObjectPathMax = 512;
+
+export const UpdateAvatarBody = zod.object({
+  objectPath: zod
+    .string()
+    .max(updateAvatarBodyObjectPathMax)
+    .nullable()
+    .describe(
+      "Object path from the customer-uploads presigned upload flow\n(\/objects\/customer-uploads\/<userId>\/...), or null to remove the\ncurrent photo.\n",
+    ),
+});
+
+export const UpdateAvatarResponse = zod.object({
+  ok: zod.boolean(),
+  avatarUrl: zod.string().nullish(),
 });
 
 /**
@@ -994,7 +1044,12 @@ export const UpdateTraderProfileBody = zod.object({
   businessDescription: zod.string().optional(),
   website: zod.string().optional(),
   openingHours: zod.string().optional(),
-  logoUrl: zod.string().optional(),
+  logoUrl: zod
+    .string()
+    .nullish()
+    .describe(
+      "Business logo object path from the customer-uploads flow, or null\nto remove the current logo. Ownership is verified server-side.\n",
+    ),
   galleryUrls: zod.array(zod.string()).optional(),
   socialLinks: zod
     .object({
@@ -2055,6 +2110,12 @@ export const GetConversationsResponse = zod.object({
       customerName: zod.string(),
       traderProfileId: zod.number(),
       traderBusinessName: zod.string(),
+      traderAvatarUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          "Personal profile photo object path of the trader user handling this\nconversation, when they have set one. Only populated on the\nconversation DETAIL response (null in list responses). Load it via\nthe authenticated avatar-file endpoint.\n",
+        ),
       traderVerified: zod.boolean(),
       enquiryId: zod.number().nullish(),
       serviceRequired: zod.string().nullish(),
@@ -2161,6 +2222,12 @@ export const GetConversationResponse = zod.object({
     customerName: zod.string(),
     traderProfileId: zod.number(),
     traderBusinessName: zod.string(),
+    traderAvatarUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Personal profile photo object path of the trader user handling this\nconversation, when they have set one. Only populated on the\nconversation DETAIL response (null in list responses). Load it via\nthe authenticated avatar-file endpoint.\n",
+      ),
     traderVerified: zod.boolean(),
     enquiryId: zod.number().nullish(),
     serviceRequired: zod.string().nullish(),

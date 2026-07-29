@@ -100,6 +100,8 @@ import type {
   TraderReviewsResponse,
   UnreadCountResponse,
   UnregisterPushTokenRequest,
+  UpdateAvatar200,
+  UpdateAvatarRequest,
   UpdateLeadReminderSettingsRequest,
   UpdateNotificationSettingsRequest,
   UpdateNotificationSettingsResponse,
@@ -976,6 +978,98 @@ export function useGetMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Traders only. Pass the objectPath returned by the customer-uploads
+presigned upload flow to set the photo, or null to remove it. The
+object must live under the caller's own customer-uploads prefix and be
+a supported image type. This is the personal headshot, NOT the
+business logo (which lives on the trader profile).
+
+ * @summary Set or remove the current trader's personal profile photo
+ */
+export const getUpdateAvatarUrl = () => {
+  return `/api/auth/me/avatar`;
+};
+
+export const updateAvatar = async (
+  updateAvatarRequest: UpdateAvatarRequest,
+  options?: RequestInit,
+): Promise<UpdateAvatar200> => {
+  return customFetch<UpdateAvatar200>(getUpdateAvatarUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateAvatarRequest),
+  });
+};
+
+export const getUpdateAvatarMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAvatar>>,
+    TError,
+    { data: BodyType<UpdateAvatarRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAvatar>>,
+  TError,
+  { data: BodyType<UpdateAvatarRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateAvatar"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAvatar>>,
+    { data: BodyType<UpdateAvatarRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateAvatar(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAvatarMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAvatar>>
+>;
+export type UpdateAvatarMutationBody = BodyType<UpdateAvatarRequest>;
+export type UpdateAvatarMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Set or remove the current trader's personal profile photo
+ */
+export const useUpdateAvatar = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAvatar>>,
+    TError,
+    { data: BodyType<UpdateAvatarRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAvatar>>,
+  TError,
+  { data: BodyType<UpdateAvatarRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateAvatarMutationOptions(options));
+};
 
 /**
  * @summary Update the current user's global notification preferences

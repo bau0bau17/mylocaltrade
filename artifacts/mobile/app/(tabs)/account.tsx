@@ -1,10 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Image, RefreshControl } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Image, RefreshControl, Alert, ActivityIndicator } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { getApiUrl } from '@/lib/api-url';
+import { getApiUrl, avatarImageUrl } from '@/lib/api-url';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
@@ -23,7 +24,25 @@ import {
   useGetTraderOnboardingStatus,
   getGetTraderOnboardingStatusQueryKey,
   type TraderOnboardingStatus,
+  useGetCustomerUploadUrl,
+  useUpdateAvatar,
 } from '@workspace/api-client-react';
+
+const AVATAR_MAX_BYTES = 8 * 1024 * 1024;
+const AVATAR_ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
+function guessAvatarMime(uri: string, fallback?: string | null): string {
+  if (fallback && AVATAR_ALLOWED_MIMES.includes(fallback)) return fallback;
+  const ext = uri.split('?')[0].split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'jpg': case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'webp': return 'image/webp';
+    case 'heic': return 'image/heic';
+    case 'heif': return 'image/heif';
+    default: return 'image/jpeg';
+  }
+}
 
 type OnboardingPill = { label: string; bg: string; fg: string };
 
@@ -59,9 +78,94 @@ function computeOnboardingPill(
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, isAuthenticated, isTrader, isAdmin, logout, token: adminToken } = useAuth();
+  const { user, isAuthenticated, isTrader, isAdmin, logout, token: adminToken, refreshUser } = useAuth();
   const qc = useQueryClient();
   const { refreshing, onRefresh } = usePullToRefresh();
+
+  // --- Personal profile photo (headshot) — traders only. This is the
+  // individual's photo, NOT the business logo (managed in Edit Profile).
+  const { mutateAsync: getUploadUrl } = useGetCustomerUploadUrl();
+  const { mutateAsync: updateAvatar } = useUpdateAvatar();
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  // Local preview so the new photo shows instantly after upload.
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  const pickAndUploadAvatar = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission needed', 'Please allow photo library access to set a profile photo.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const mimeType = guessAvatarMime(asset.uri, asset.mimeType ?? null);
+    if (!AVATAR_ALLOWED_MIMES.includes(mimeType)) {
+      Alert.alert('Unsupported', 'Please choose a JPEG, PNG, WEBP or HEIC image.');
+      return;
+    }
+    const sizeBytes = asset.fileSize ?? 0;
+    if (sizeBytes > AVATAR_MAX_BYTES) {
+      Alert.alert('File too large', 'Maximum size is 8 MB.');
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      const filename = asset.fileName || `avatar-${Date.now()}.jpg`;
+      const urlResp = await getUploadUrl({ data: { filename, mimeType, sizeBytes: sizeBytes || 1 } });
+      const fileResp = await fetch(asset.uri);
+      const blob = await fileResp.blob();
+      const putRes = await fetch(urlResp.uploadURL, {
+        method: 'PUT',
+        headers: { 'Content-Type': mimeType },
+        body: blob,
+      });
+      if (!putRes.ok) throw new Error('Upload to storage failed');
+      await updateAvatar({ data: { objectPath: urlResp.objectPath } });
+      setAvatarPreview(asset.uri);
+      await refreshUser();
+    } catch (e) {
+      Alert.alert('Upload failed', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const removeAvatar = async () => {
+    setAvatarBusy(true);
+    try {
+      await updateAvatar({ data: { objectPath: null } });
+      setAvatarPreview(null);
+      await refreshUser();
+    } catch (e) {
+      Alert.alert('Could not remove photo', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const onManageAvatar = () => {
+    const hasPhoto = !!(avatarPreview || user?.avatarUrl);
+    Alert.alert(
+      'Profile photo',
+      'Your personal photo, shown alongside your business when you chat with customers. This is not your business logo.',
+      hasPhoto
+        ? [
+            { text: hasPhoto && avatarBusy ? 'Working…' : 'Change photo', onPress: () => void pickAndUploadAvatar() },
+            { text: 'Remove photo', style: 'destructive', onPress: () => void removeAvatar() },
+            { text: 'Cancel', style: 'cancel' },
+          ]
+        : [
+            { text: 'Add photo', onPress: () => void pickAndUploadAvatar() },
+            { text: 'Cancel', style: 'cancel' },
+          ],
+    );
+  };
   const { data: unreadData, refetch: refetchUnread } = useGetConversationsUnreadCount({
     query: {
       queryKey: getGetConversationsUnreadCountQueryKey(),
@@ -237,11 +341,39 @@ export default function AccountScreen() {
         }
       >
       <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {user?.fullName?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        <Pressable
+          onPress={isTrader ? onManageAvatar : undefined}
+          disabled={!isTrader || avatarBusy}
+          accessibilityLabel={isTrader ? 'Manage profile photo' : undefined}
+        >
+          <View style={styles.avatar}>
+            {avatarPreview || user?.avatarUrl ? (
+              <Image
+                source={{
+                  uri: avatarPreview ?? avatarImageUrl(user?.avatarUrl)!,
+                  ...(avatarPreview
+                    ? {}
+                    : { headers: { Authorization: `Bearer ${adminToken}` } }),
+                }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {user?.fullName?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
+              </Text>
+            )}
+            {avatarBusy ? (
+              <View style={styles.avatarBusyOverlay}>
+                <ActivityIndicator size="small" color="#fff" />
+              </View>
+            ) : null}
+          </View>
+          {isTrader ? (
+            <View style={styles.avatarEditBadge}>
+              <Feather name="camera" size={10} color="#fff" />
+            </View>
+          ) : null}
+        </Pressable>
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>{user?.fullName}</Text>
           <Text style={styles.profileEmail}>{user?.email}</Text>
@@ -620,6 +752,30 @@ const styles = StyleSheet.create({
     marginRight: 14,
     borderWidth: 1,
     borderColor: Colors.light.border,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarBusyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    right: 10,
+    bottom: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   avatarText: {
     fontSize: 22,

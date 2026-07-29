@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { traderProfilesTable, usersTable } from "@workspace/db/schema";
+import { traderProfilesTable, usersTable, conversationsTable } from "@workspace/db/schema";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
@@ -89,10 +89,10 @@ router.get("/customer/uploads/gallery-file", async (req, res) => {
       return;
     }
 
-    // Only serve images published in the gallery of a trader who is CURRENTLY
-    // publicly listed. gallery_urls is a JSON array of these paths; cast to
-    // jsonb so the containment operator can check membership. Joining users
-    // and applying publicTraderSqlConditions (the same single-source rule as
+    // Only serve images published by a trader who is CURRENTLY publicly
+    // listed: either a gallery image (gallery_urls JSON array membership via
+    // jsonb containment) or the business logo (logo_url). Joining users and
+    // applying publicTraderSqlConditions (the same single-source rule as
     // public trader pages) means images stop being served the moment the
     // owning trader is hidden, suspended, reset, deleted or unapproved —
     // path membership alone is NOT enough.
@@ -102,9 +102,9 @@ router.get("/customer/uploads/gallery-file", async (req, res) => {
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
       .where(
         and(
-          sql`${traderProfilesTable.galleryUrls}::jsonb @> ${JSON.stringify([
+          sql`(${traderProfilesTable.galleryUrls}::jsonb @> ${JSON.stringify([
             normalized,
-          ])}::jsonb`,
+          ])}::jsonb OR ${traderProfilesTable.logoUrl} = ${normalized})`,
           ...publicTraderSqlConditions(),
         ),
       )
@@ -138,6 +138,87 @@ router.get("/customer/uploads/gallery-file", async (req, res) => {
       return;
     }
     req.log.error({ err: error }, "Gallery file serve failed");
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to load image" });
+    }
+  }
+});
+
+// GET /api/customer/uploads/avatar-file?path=/objects/customer-uploads/...
+// AUTHENTICATED endpoint that streams a personal profile photo (headshot).
+// Unlike gallery images, avatars are not tied to a public trader listing —
+// they are only shown in private, membership-scoped contexts. A caller may
+// load an avatar only when:
+//   (a) it is their OWN avatar, or
+//   (b) it belongs to a user they share a conversation with (either side).
+// Anything else returns 404 so paths cannot be probed.
+router.get("/customer/uploads/avatar-file", authMiddleware, async (req, res) => {
+  try {
+    const { userId } = req as AuthenticatedRequest;
+    const parsed = GalleryFileQuery.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid path" });
+      return;
+    }
+    const normalized = storage.normalizeObjectEntityPath(parsed.data.path);
+    if (!normalized.startsWith("/objects/customer-uploads/")) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    // Find the user whose CURRENT avatar this path is. Only live avatar
+    // values are servable — removed/replaced photos stop being served
+    // immediately, and terminally deleted accounts never match because
+    // their avatarUrl is cleared on deletion of the row's public fields.
+    const [owner] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.avatarUrl, normalized))
+      .limit(1);
+    if (!owner) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    if (owner.id !== userId) {
+      // Membership check: the caller must share at least one conversation
+      // with the avatar's owner, in either direction.
+      const [shared] = await db
+        .select({ id: conversationsTable.id })
+        .from(conversationsTable)
+        .where(
+          sql`(${conversationsTable.customerId} = ${userId} AND ${conversationsTable.traderUserId} = ${owner.id})
+           OR (${conversationsTable.customerId} = ${owner.id} AND ${conversationsTable.traderUserId} = ${userId})`,
+        )
+        .limit(1);
+      if (!shared) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+    }
+
+    const file = await storage.getObjectEntityFile(normalized);
+    const [meta] = await file.getMetadata();
+    res.setHeader(
+      "Content-Type",
+      (meta.contentType as string) || "application/octet-stream",
+    );
+    // Private cache only: the response is authorised per-caller.
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    if (meta.size) res.setHeader("Content-Length", String(meta.size));
+    await new Promise<void>((resolve, reject) => {
+      file
+        .createReadStream()
+        .on("error", reject)
+        .on("end", resolve)
+        .pipe(res);
+    });
+  } catch (error: unknown) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    req.log.error({ err: error }, "Avatar file serve failed");
     if (!res.headersSent) {
       res.status(500).json({ error: "Failed to load image" });
     }

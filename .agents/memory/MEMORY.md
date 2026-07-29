@@ -48,4 +48,5 @@
 - [Mobile dead-session logout](mobile-dead-session-logout.md) — 401 with app session token attached ⇒ forceLogout; getMe check on start/foreground; applyToken sets 10s suppression for rotation races.
 - [Booking lifecycle invariants](booking-lifecycle-invariants.md) — one live booking per conversation (partial unique index); EVERY mutation incl. cancel passes the live-job gate; notify direction rules.
 - [Canonical service/category matching](service-category-matching.md) — one server-side synonym map (expandServiceTerms) for category+search; no per-screen rules, no generic cross-category terms.
+- [Personal avatar vs business logo](avatar-vs-logo-identity.md) — users.avatarUrl is membership-gated (auth'd avatar-file route, headers on RN Image); logoUrl is public via gallery-file; business-field edits pass canManageBusinessFields choke point.
 - [Universal Links in email CTAs](universal-links-email.md) — /open email links must use the associated-domain host via getOpenLinkBase(); Brevo click-tracking can also break direct app open.

@@ -1,0 +1,139 @@
+Thanks, the assessment is clear and I agree with the recommendation.
+
+Please implement Phase 1A only.
+
+Do NOT implement Employee onboarding, business_members, company invitations, employment letters, shared lead access, assignment, team notifications, reassignment, offboarding or shared business entitlements at this stage.
+
+PHASE 1A SCOPE
+
+1. Personal trader profile photo
+
+Add a nullable personal avatar/profile-photo field on the user account.
+
+Requirements:
+- personal headshot/profile photo, not business logo
+- optional for Owner, Director and Sole Trader
+- upload/change/remove from the trader Account/Profile area
+- initials fallback
+- reuse the existing presigned object-storage upload flow
+- resize/compress before upload
+- verify that the upload process removes or does not preserve unnecessary EXIF metadata
+- do not use ID-document images
+- do not display the personal photo on public trader cards
+- do not replace the business logo
+
+For this phase, show the photo only in safe individual-account contexts such as:
+- trader Account/Profile
+- own profile/settings
+- conversation header or trader identity area, only where the current conversation already identifies that exact trader user safely
+
+Please avoid introducing “Handled by” or assigned-employee wording before the multi-member system exists.
+
+2. Business role
+
+Add a structured business role for current trader accounts:
+
+- OWNER
+- DIRECTOR
+- SOLE_TRADER
+
+Please derive/backfill safely from the existing business type where possible:
+
+- SOLE_TRADER business type → SOLE_TRADER
+- LIMITED_COMPANY → OWNER by default unless the current user selects Director
+
+Please preserve existing trader accounts and onboarding completion.
+
+Do not introduce Employee yet.
+
+The role should be editable only through the appropriate existing profile/change-control rules if it is considered a protected business detail.
+
+Please tell me whether changing Owner ↔ Director should require admin review.
+
+3. Business logo and business-field permission guard
+
+Add one shared server-side permission helper/choke point for managing business-level fields.
+
+It should cover, where appropriate:
+- business logo
+- business name
+- services
+- service areas
+- business address/company details
+
+For Phase 1A:
+- Owner may manage business-level fields
+- Director may manage business-level fields
+- Sole Trader may manage their own business-level fields
+
+Do not rely only on hiding UI controls.
+
+Keep existing profile-change-request rules intact for protected fields.
+
+This work should prepare the API safely for future Employee accounts, but must not expose or implement any Employee behaviour yet.
+
+4. Business logo UI
+
+Please inspect the existing logo upload/change/remove flow.
+
+Ensure:
+- Owner / Director / Sole Trader can manage the business logo
+- personal profile photo and business logo are clearly labelled as different things
+- the UI does not confuse “Profile photo” with “Business logo”
+- existing logo data remains compatible
+
+5. Schema and migration
+
+Expected additive changes:
+- users.avatar_url nullable text
+- trader_profiles.business_role
+
+Prepare the development migration/schema change safely.
+
+Do not run any production migration.
+
+Please confirm:
+- backfill/default strategy
+- nullability
+- rollback considerations
+- whether any existing profile can become invalid
+
+6. Do not change
+
+Please preserve:
+- one user = one trader profile
+- RevenueCat / Apple IAP
+- subscription entitlement
+- verification
+- onboarding completion logic
+- quotes/messages/conversations
+- booking
+- notifications
+- public business cards
+- reviews
+- admin team accounts
+- account deletion
+- Universal Links
+- Twilio/RCS
+
+7. Final report
+
+After implementation, please confirm:
+
+1. Files changed.
+2. Exact schema changes.
+3. Backfill/default behaviour for existing traders.
+4. Where the personal avatar is stored.
+5. Upload/compression/storage flow.
+6. Whether EXIF removal was verified.
+7. Where the avatar is displayed.
+8. Where it is deliberately not displayed.
+9. Business-role values and onboarding behaviour.
+10. Whether Owner ↔ Director changes require review.
+11. Server-side permission helper added.
+12. Which business fields use that helper.
+13. Existing business-logo behaviour and any UI changes.
+14. Database migration required, but do not run production migration.
+15. Tests/typechecks run and results.
+16. Confirm no Employee/team/multi-user functionality was added.
+17. Confirm no EAS build, deployment, publish or production migration was started.

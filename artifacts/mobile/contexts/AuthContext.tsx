@@ -70,6 +70,12 @@ interface AuthContextType {
    * route.
    */
   applyToken: (token: string, user?: UserProfile) => Promise<void>;
+  /**
+   * Re-fetch /auth/me and update the cached user. Used after profile-level
+   * changes made outside the auth flow (e.g. changing the personal profile
+   * photo) so the UI reflects the new state immediately.
+   */
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
   isTrader: boolean;
   isCustomer: boolean;
@@ -151,6 +157,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       sub.remove();
     };
   }, []);
+
+  const refreshUser = async () => {
+    if (!tokenRef.current) return;
+    try {
+      const fresh = await apiGetMe();
+      await AsyncStorage.setItem('auth_user', JSON.stringify(fresh));
+      setUser(fresh);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        await forceLogout();
+      }
+      // Network/server errors: keep the cached user.
+    }
+  };
 
   const loadStoredAuth = async () => {
     try {
@@ -309,6 +329,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetPassword,
         logout,
         applyToken,
+        refreshUser,
         isAuthenticated: !!user,
         isTrader: user?.role === 'trader',
         isCustomer: user?.role === 'customer',

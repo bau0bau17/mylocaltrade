@@ -43,6 +43,10 @@ export const usersTable = pgTable(
   passwordHash: text("password_hash").notNull(),
   fullName: varchar("full_name", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 50 }),
+  // Personal profile photo (headshot) object path under /objects/customer-uploads/<id>/.
+  // Optional; distinct from trader_profiles.logoUrl (the business logo). Served via a
+  // membership-scoped route, never shown on public trader cards.
+  avatarUrl: text("avatar_url"),
   role: varchar("role", { length: 20 }).notNull().default("customer"),
   // Admin tier: super admins see audit logs and manage the admin team.
   // Regular admins ("normal users" in the console) handle day-to-day

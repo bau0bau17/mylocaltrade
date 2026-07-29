@@ -4,6 +4,7 @@ import { traderProfilesTable, usersTable, subscriptionsTable } from "@workspace/
 import { eq, and } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { UpdateTraderProfileBody } from "@workspace/api-zod";
+import { businessFieldsIn, canManageBusinessFields } from "../lib/business-permissions";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, evaluateBusinessProfileComplete, logAudit, REVALIDATION_INTERVAL_MS } from "../lib/trader-status";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -151,6 +152,25 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       }
     }
 
+    // -----------------------------------------------------------------------
+    // Business-field authorisation choke point (Phase 1A). Every mutation of
+    // business-level fields (logo, name, services, areas, address/company
+    // details) must pass canManageBusinessFields — enforced HERE at the API so
+    // hiding UI controls is never the only barrier. Today the check is
+    // trivially true (the profile's single owning user is the caller), but
+    // future Employee memberships will be denied by this same gate.
+    // -----------------------------------------------------------------------
+    const touchedBusinessFields = businessFieldsIn(Object.keys(updateData));
+    if (
+      touchedBusinessFields.length > 0 &&
+      !canManageBusinessFields(userId, prior.userId)
+    ) {
+      res.status(403).json({
+        error: "You do not have permission to change this business's details.",
+      });
+      return;
+    }
+
     // Companies House numbers are stored normalised (uppercase, no spaces) so
     // the deterministic register check and format validation see a canonical
     // value regardless of how the trader typed it.
@@ -239,6 +259,40 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
           }
           throw err;
         }
+      }
+    }
+
+    // If logoUrl is being set, verify the path against the caller's own
+    // customer-uploads namespace + stored object policy, exactly like gallery
+    // images — a trader must never be able to point their logo at an object
+    // they don't own. Re-saving the already-stored value skips the metadata
+    // fetch; clearing to null is always allowed.
+    if (typeof updateData.logoUrl === "string" && updateData.logoUrl.length > 0) {
+      try {
+        if (updateData.logoUrl === prior.logoUrl) {
+          if (!storage.isCustomerUploadPathFor(updateData.logoUrl, userId)) {
+            throw new Error("The business logo image does not belong to your account.");
+          }
+        } else {
+          updateData.logoUrl = await storage.verifyCustomerUploadObject(
+            updateData.logoUrl,
+            userId,
+            {
+              maxBytes: 8 * 1024 * 1024,
+              allowedMimes: new Set([
+                "image/jpeg",
+                "image/png",
+                "image/webp",
+                "image/heic",
+                "image/heif",
+              ]),
+              label: "business logo",
+            },
+          );
+        }
+      } catch (err) {
+        res.status(400).json({ error: (err as Error).message });
+        return;
       }
     }
 
