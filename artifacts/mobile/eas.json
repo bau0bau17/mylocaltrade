@@ -37,7 +37,7 @@
         "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_qHukXmrQAVympYwzJvgUmuuFcrW"
       },
       "node": "22.13.0",
-      "corepack": true
+      "pnpm": "11.18.0"
     }
   },
   "submit": {
