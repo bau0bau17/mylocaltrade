@@ -1,11 +1,16 @@
 import type { Booking } from "@workspace/db/schema";
+import { DEFAULT_LEGACY_DURATION_MINUTES } from "./booking-availability";
 
 /** Wire shape matching the OpenAPI Booking schema. */
 export function serializeBooking(b: Booking) {
+  const durationMinutes = b.durationMinutes ?? DEFAULT_LEGACY_DURATION_MINUTES;
+  const endAt = b.endAt ?? new Date(b.startAt.getTime() + durationMinutes * 60000);
   return {
     id: b.id,
     conversationId: b.conversationId,
     startAt: b.startAt.toISOString(),
+    durationMinutes,
+    endAt: endAt.toISOString(),
     note: b.note,
     status: b.status,
     proposedByRole: b.proposedByRole,

@@ -24,9 +24,11 @@ export interface BookingCalendarInput {
   contextLabel: string | null;
   /** Job reference shown in the notes, e.g. conversation id. */
   jobRef: number;
+  /** Appointment length in minutes; legacy bookings default to 60. */
+  durationMinutes?: number | null;
 }
 
-const DEFAULT_DURATION_MS = 60 * 60 * 1000;
+const DEFAULT_DURATION_MINUTES = 60;
 
 async function getWritableCalendarId(): Promise<string | null> {
   if (Platform.OS === "ios") {
@@ -98,7 +100,9 @@ export async function addBookingToCalendar(input: BookingCalendarInput): Promise
     const eventId = await Calendar.createEventAsync(calendarId, {
       title,
       startDate: start,
-      endDate: new Date(start.getTime() + DEFAULT_DURATION_MS),
+      endDate: new Date(
+        start.getTime() + (input.durationMinutes ?? DEFAULT_DURATION_MINUTES) * 60 * 1000,
+      ),
       notes: `MyLocalTrade job reference: MLT-${String(input.jobRef).padStart(6, "0")}`,
     });
 

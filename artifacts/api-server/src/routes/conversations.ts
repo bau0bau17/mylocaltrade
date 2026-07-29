@@ -12,7 +12,7 @@ import {
   quotesTable,
   bookingsTable,
 } from "@workspace/db/schema";
-import { and, eq, desc, sql, inArray } from "drizzle-orm";
+import { and, eq, desc, sql, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 // Second reference to users for joining the TRADER user on a conversation
@@ -20,7 +20,11 @@ import { alias } from "drizzle-orm/pg-core";
 const traderUsers = alias(usersTable, "trader_users");
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
-import { sendNewMessageEmail } from "../lib/email";
+import {
+  sendNewMessageEmail,
+  sendWorkMarkedCompleteEmail,
+  sendReviewInviteEmail,
+} from "../lib/email";
 import { sendPushToUser } from "../lib/push-notifications";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
 import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
@@ -578,16 +582,23 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
             .limit(1);
           senderName = tp?.businessName ?? senderName;
         }
+        // Email is best-effort and must NEVER block the push below — a Brevo
+        // outage or a bad address previously aborted the whole notify block,
+        // which is exactly how traders "stopped getting" message pushes.
         if (recipient?.email) {
-          await sendNewMessageEmail({
-            toEmail: recipient.email,
-            toName: recipient.fullName ?? "there",
-            senderName,
-            senderRole,
-            preview,
-            conversationId: id,
-            serviceRequired: conv.serviceRequired ?? null,
-          });
+          try {
+            await sendNewMessageEmail({
+              toEmail: recipient.email,
+              toName: recipient.fullName ?? "there",
+              senderName,
+              senderRole,
+              preview,
+              conversationId: id,
+              serviceRequired: conv.serviceRequired ?? null,
+            });
+          } catch (emailErr) {
+            req.log.warn({ err: emailErr, conversationId: id }, "Failed to send new-message email");
+          }
         }
         // Recipient mute check honours per-side timed mutes. If a timed mute
         // has expired by the time we fan out, opportunistically clear the
@@ -868,7 +879,10 @@ router.post("/conversations/:id/complete", authMiddleware, async (req, res) => {
       // customerCompletedAt = customer confirmed done; reviewUnlockedAt records
       // the single moment review submission becomes eligible. The trader marking
       // work done never reaches this branch — only the customer can.
-      await db
+      // Conditional update makes the transition atomic: concurrent requests
+      // race on `customer_completed_at IS NULL` and only ONE wins, so the
+      // notification fanout below can never double-send.
+      const updated = await db
         .update(conversationsTable)
         .set({
           customerCompletedAt: now,
@@ -876,7 +890,13 @@ router.post("/conversations/:id/complete", authMiddleware, async (req, res) => {
           traderStatus: "COMPLETED",
           updatedAt: now,
         })
-        .where(eq(conversationsTable.id, id));
+        .where(and(eq(conversationsTable.id, id), isNull(conversationsTable.customerCompletedAt)))
+        .returning({ id: conversationsTable.id });
+      if (updated.length === 0) {
+        // Another request completed the transition first.
+        res.json({ ok: true });
+        return;
+      }
       // Keep the linked enquiry past "pending" so review eligibility holds.
       if (conv.enquiryId) {
         await db
@@ -888,6 +908,61 @@ router.post("/conversations/:id/complete", authMiddleware, async (req, res) => {
         id,
         "The customer confirmed the job is done. You can now be reviewed.",
       );
+
+      // Milestone push to the trader + review invite (push/email) to the
+      // customer. Gated on the customerCompletedAt transition above, so
+      // repeat calls can never double-send.
+      void (async () => {
+        try {
+          const [tp] = await db
+            .select({
+              businessName: traderProfilesTable.businessName,
+              traderUserId: traderProfilesTable.userId,
+            })
+            .from(traderProfilesTable)
+            .where(eq(traderProfilesTable.id, conv.traderProfileId))
+            .limit(1);
+          const refPart = conv.jobReference ? `job ${conv.jobReference}` : "your job";
+          if (tp?.traderUserId) {
+            try {
+              await sendPushToUser(tp.traderUserId, {
+                title: "Job completed",
+                body: `Your customer confirmed ${refPart} as complete. Another completed job has been added to your MyLocalTrade history.`,
+                data: { type: "job_completed", conversationId: id },
+              });
+            } catch (pushErr) {
+              req.log.warn({ err: pushErr, conversationId: id }, "Completion push to trader failed");
+            }
+          }
+          // Review invite to the customer (immediate post-completion only —
+          // no scheduled reminders).
+          try {
+            await sendPushToUser(conv.customerId, {
+              title: "Leave a review",
+              body: `Thanks for confirming ${refPart} is complete. Share how it went to help other customers.`,
+              data: { type: "review_invite", conversationId: id },
+            });
+          } catch (pushErr) {
+            req.log.warn({ err: pushErr, conversationId: id }, "Review-invite push failed");
+          }
+          const [customer] = await db
+            .select({ email: usersTable.email, fullName: usersTable.fullName })
+            .from(usersTable)
+            .where(eq(usersTable.id, conv.customerId))
+            .limit(1);
+          if (customer?.email && tp) {
+            await sendReviewInviteEmail({
+              toEmail: customer.email,
+              toName: customer.fullName ?? "there",
+              businessName: tp.businessName,
+              traderProfileId: conv.traderProfileId,
+              conversationId: id,
+            });
+          }
+        } catch (err) {
+          req.log.warn({ err, conversationId: id }, "Completion notifications failed");
+        }
+      })();
     }
 
     res.json({ ok: true });
@@ -943,15 +1018,61 @@ router.post("/conversations/:id/trader-mark-done", authMiddleware, async (req, r
 
     if (!conv.traderMarkedDoneAt) {
       const now = new Date();
-      await db
+      // Atomic transition — only the request that flips NULL→now sends the
+      // notifications below (guards against concurrent double-taps).
+      const updated = await db
         .update(conversationsTable)
         .set({ traderMarkedDoneAt: now, updatedAt: now })
-        .where(eq(conversationsTable.id, id));
+        .where(and(eq(conversationsTable.id, id), isNull(conversationsTable.traderMarkedDoneAt)))
+        .returning({ id: conversationsTable.id });
+      if (updated.length === 0) {
+        res.json({ ok: true });
+        return;
+      }
       await postSystemMessage(
         id,
         "The trader marked the work as completed. Please confirm the job is done to leave a review, or reply here if there's a problem.",
         "customer",
       );
+
+      // Notify the customer with push + email. Gated on the traderMarkedDoneAt
+      // transition above, so repeat calls can never double-send.
+      void (async () => {
+        try {
+          const [tp] = await db
+            .select({ businessName: traderProfilesTable.businessName })
+            .from(traderProfilesTable)
+            .where(eq(traderProfilesTable.id, conv.traderProfileId))
+            .limit(1);
+          const businessName = tp?.businessName ?? "Your trader";
+          const refPart = conv.jobReference ? ` job ${conv.jobReference}` : " your job";
+          try {
+            await sendPushToUser(conv.customerId, {
+              title: "Work marked as completed",
+              body: `${businessName} marked${refPart} as complete. Review the job and confirm when ready.`,
+              data: { type: "work_marked_complete", conversationId: id },
+            });
+          } catch (pushErr) {
+            req.log.warn({ err: pushErr, conversationId: id }, "Mark-done push failed");
+          }
+          const [customer] = await db
+            .select({ email: usersTable.email, fullName: usersTable.fullName })
+            .from(usersTable)
+            .where(eq(usersTable.id, conv.customerId))
+            .limit(1);
+          if (customer?.email) {
+            await sendWorkMarkedCompleteEmail({
+              toEmail: customer.email,
+              toName: customer.fullName ?? "there",
+              businessName,
+              jobReference: conv.jobReference,
+              conversationId: id,
+            });
+          }
+        } catch (err) {
+          req.log.warn({ err, conversationId: id }, "Mark-done notifications failed");
+        }
+      })();
     }
 
     res.json({ ok: true });

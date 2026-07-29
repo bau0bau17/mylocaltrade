@@ -14,6 +14,7 @@ import {
   Modal,
   Image,
   ScrollView,
+  AppState,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
@@ -53,6 +54,8 @@ import {
   useProposeBooking,
   useConfirmBooking,
   useCancelBooking,
+  useGetBookingSlots,
+  getGetBookingSlotsQueryKey,
   getGetConversationQueryKey,
   getGetConversationsQueryKey,
   getGetConversationsUnreadCountQueryKey,
@@ -85,8 +88,11 @@ function bookingDayOptions(count = 14): { key: string; label: string; date: Date
   for (let i = 1; i <= count; i++) {
     const d = new Date(base);
     d.setDate(base.getDate() + i);
+    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
     out.push({
-      key: d.toDateString(),
+      key: ymd,
       label: d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }),
       date: d,
     });
@@ -94,14 +100,16 @@ function bookingDayOptions(count = 14): { key: string; label: string; date: Date
   return out;
 }
 
-const BOOKING_TIME_OPTIONS: string[] = (() => {
-  const out: string[] = [];
-  for (let h = 7; h <= 18; h++) {
-    out.push(`${String(h).padStart(2, "0")}:00`);
-    if (h < 18) out.push(`${String(h).padStart(2, "0")}:30`);
-  }
-  return out;
-})();
+/** Appointment length choices — mirrors the server's allowed durations. */
+const BOOKING_DURATION_OPTIONS: { minutes: number; label: string }[] = [
+  { minutes: 30, label: "30 min" },
+  { minutes: 60, label: "1 hr" },
+  { minutes: 90, label: "1.5 hrs" },
+  { minutes: 120, label: "2 hrs" },
+  { minutes: 180, label: "3 hrs" },
+  { minutes: 240, label: "Half day" },
+  { minutes: 480, label: "Full day" },
+];
 
 const TRADER_STATUSES = ["NEW", "CONTACTED", "QUOTED", "COMPLETED"] as const;
 type TraderStatus = (typeof TRADER_STATUSES)[number];
@@ -180,10 +188,18 @@ export default function ConversationThreadScreen() {
   const { isTrader, isAdmin, user, token } = useAuth();
   const listRef = useRef<FlatList>(null);
 
+  // Poll while the app is foregrounded so new replies appear without leaving
+  // the thread (there's no realtime channel; push may be denied/muted).
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s: string) => setAppActive(s === "active"));
+    return () => sub.remove();
+  }, []);
   const { data, isLoading, error, refetch } = useGetConversation(conversationId, {
     query: {
       enabled: !isAdmin,
       queryKey: getGetConversationQueryKey(conversationId),
+      refetchInterval: !isAdmin && appActive ? 12_000 : false,
     },
   });
 
@@ -312,8 +328,28 @@ export default function ConversationThreadScreen() {
   const [quoteValidDays, setQuoteValidDays] = useState<number | null>(14);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingDayKey, setBookingDayKey] = useState<string | null>(null);
-  const [bookingTime, setBookingTime] = useState<string | null>(null);
+  const [bookingDuration, setBookingDuration] = useState<number>(60);
+  const [bookingSlot, setBookingSlot] = useState<string | null>(null); // ISO start
   const [bookingNote, setBookingNote] = useState("");
+
+  // Available start times from the server (respects the trader's working
+  // hours and existing confirmed appointments across all their jobs).
+  const slotsQuery = useGetBookingSlots(
+    conversationId,
+    {
+      date: bookingDayKey ?? "",
+      durationMinutes: bookingDuration as 30 | 60 | 90 | 120 | 180 | 240 | 480,
+    },
+    {
+      query: {
+        enabled: bookingOpen && !!bookingDayKey,
+        queryKey: getGetBookingSlotsQueryKey(conversationId, {
+          date: bookingDayKey ?? "",
+          durationMinutes: bookingDuration as 30 | 60 | 90 | 120 | 180 | 240 | 480,
+        }),
+      },
+    },
+  );
 
   if (isAdmin) {
     return (
@@ -390,6 +426,7 @@ export default function ConversationThreadScreen() {
                 startAtIso: booking.startAt,
                 contextLabel: conv?.serviceRequired || otherName || null,
                 jobRef: conversationId,
+                durationMinutes: booking.durationMinutes ?? null,
               }),
           },
         ],
@@ -407,6 +444,7 @@ export default function ConversationThreadScreen() {
       startAtIso: booking.startAt,
       contextLabel: conv?.serviceRequired || otherName || null,
       jobRef: conversationId,
+      durationMinutes: booking.durationMinutes ?? null,
     });
   };
   const currentQuote = quotes[0] ?? null;
@@ -658,28 +696,29 @@ export default function ConversationThreadScreen() {
 
   const openBookingModal = () => {
     setBookingDayKey(null);
-    setBookingTime(null);
+    setBookingDuration(60);
+    setBookingSlot(null);
     setBookingNote("");
     setBookingOpen(true);
   };
 
   const submitBooking = () => {
-    const day = bookingDayOptions().find((d) => d.key === bookingDayKey);
-    if (!day || !bookingTime) {
-      Alert.alert("Pick a date and time", "Choose a day and a time for the appointment.");
+    if (!bookingDayKey || !bookingSlot) {
+      Alert.alert("Pick a date and time", "Choose a day and an available time for the appointment.");
       return;
     }
-    const [h, m] = bookingTime.split(":").map(Number);
-    const startAt = new Date(day.date);
-    startAt.setHours(h, m, 0, 0);
-    if (startAt.getTime() <= Date.now()) {
+    if (new Date(bookingSlot).getTime() <= Date.now()) {
       Alert.alert("Time has passed", "Please pick a time in the future.");
       return;
     }
     proposeBookingMutation.mutate(
       {
         id: conversationId,
-        data: { startAt: startAt.toISOString(), note: bookingNote.trim() || null },
+        data: {
+          startAt: bookingSlot,
+          durationMinutes: bookingDuration as 30 | 60 | 90 | 120 | 180 | 240 | 480,
+          note: bookingNote.trim() || null,
+        },
       },
       {
         onSuccess: () => setBookingOpen(false),
@@ -687,6 +726,9 @@ export default function ConversationThreadScreen() {
           const msg =
             err instanceof Error ? err.message : "Could not propose the appointment.";
           Alert.alert("Error", msg);
+          // The slot may have just been taken — refresh the list.
+          void slotsQuery.refetch();
+          setBookingSlot(null);
         },
       },
     );
@@ -1917,7 +1959,10 @@ export default function ConversationThreadScreen() {
                 <Pressable
                   key={d.key}
                   style={[styles.quoteChip, bookingDayKey === d.key && styles.quoteChipActive]}
-                  onPress={() => setBookingDayKey(d.key)}
+                  onPress={() => {
+                    setBookingDayKey(d.key);
+                    setBookingSlot(null);
+                  }}
                 >
                   <Text
                     style={[
@@ -1931,26 +1976,70 @@ export default function ConversationThreadScreen() {
               ))}
             </ScrollView>
 
-            <Text style={styles.quoteFieldLabel}>Time</Text>
+            <Text style={styles.quoteFieldLabel}>Duration</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.bookingChipRow}
             >
-              {BOOKING_TIME_OPTIONS.map((t) => (
+              {BOOKING_DURATION_OPTIONS.map((opt) => (
                 <Pressable
-                  key={t}
-                  style={[styles.quoteChip, bookingTime === t && styles.quoteChipActive]}
-                  onPress={() => setBookingTime(t)}
+                  key={opt.minutes}
+                  style={[
+                    styles.quoteChip,
+                    bookingDuration === opt.minutes && styles.quoteChipActive,
+                  ]}
+                  onPress={() => {
+                    setBookingDuration(opt.minutes);
+                    setBookingSlot(null);
+                  }}
                 >
                   <Text
-                    style={[styles.quoteChipText, bookingTime === t && styles.quoteChipTextActive]}
+                    style={[
+                      styles.quoteChipText,
+                      bookingDuration === opt.minutes && styles.quoteChipTextActive,
+                    ]}
                   >
-                    {t}
+                    {opt.label}
                   </Text>
                 </Pressable>
               ))}
             </ScrollView>
+
+            <Text style={styles.quoteFieldLabel}>Available times</Text>
+            {!bookingDayKey ? (
+              <Text style={styles.bookingModalHint}>Pick a date to see available times.</Text>
+            ) : slotsQuery.isLoading ? (
+              <ActivityIndicator size="small" color={Colors.light.primary} />
+            ) : (slotsQuery.data?.slots?.length ?? 0) === 0 ? (
+              <Text style={styles.bookingModalHint}>
+                No available times for this day and duration. Try another day or a shorter
+                appointment.
+              </Text>
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.bookingChipRow}
+              >
+                {(slotsQuery.data?.slots ?? []).map((iso) => (
+                  <Pressable
+                    key={iso}
+                    style={[styles.quoteChip, bookingSlot === iso && styles.quoteChipActive]}
+                    onPress={() => setBookingSlot(iso)}
+                  >
+                    <Text
+                      style={[
+                        styles.quoteChipText,
+                        bookingSlot === iso && styles.quoteChipTextActive,
+                      ]}
+                    >
+                      {fmtTime(iso)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
 
             <Text style={styles.quoteFieldLabel}>Note (optional)</Text>
             <TextInput
@@ -1973,10 +2062,10 @@ export default function ConversationThreadScreen() {
                 style={[
                   styles.quoteBtn,
                   styles.quoteBtnPrimary,
-                  (proposeBookingMutation.isPending || !bookingDayKey || !bookingTime) &&
+                  (proposeBookingMutation.isPending || !bookingDayKey || !bookingSlot) &&
                     styles.quoteBtnDisabled,
                 ]}
-                disabled={proposeBookingMutation.isPending || !bookingDayKey || !bookingTime}
+                disabled={proposeBookingMutation.isPending || !bookingDayKey || !bookingSlot}
                 onPress={submitBooking}
               >
                 {proposeBookingMutation.isPending ? (

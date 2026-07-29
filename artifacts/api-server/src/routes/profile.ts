@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { UpdateTraderProfileBody } from "@workspace/api-zod";
 import { businessFieldsIn, canManageBusinessFields } from "../lib/business-permissions";
+import { validateWorkingHours } from "../lib/booking-availability";
 import type { AuthenticatedRequest } from "../lib/types";
 import { TRADER_STATUS, evaluateBusinessProfileComplete, logAudit, REVALIDATION_INTERVAL_MS } from "../lib/trader-status";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -78,6 +79,7 @@ router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
       businessDescription: trader.businessDescription,
       website: trader.website,
       openingHours: trader.openingHours,
+      workingHours: trader.workingHours,
       logoUrl: trader.logoUrl,
       galleryUrls: trader.galleryUrls || [],
       socialLinks: trader.socialLinks,
@@ -140,6 +142,7 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       "businessName", "contactName", "phone", "mainCategory",
       "additionalServices", "businessAddress", "town", "postcode",
       "serviceAreas", "businessDescription", "website", "openingHours",
+      "workingHours",
       "logoUrl", "galleryUrls", "socialLinks",
       "businessRole", "businessType", "authorisedRepresentative", "businessEmailDomain",
       "vatNumber", "companyNumber",
@@ -149,6 +152,16 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       const value = (body as Record<string, unknown>)[field];
       if (value !== undefined) {
         updateData[field] = value;
+      }
+    }
+
+    // Structured working hours: validate shape server-side (days, HH:MM,
+    // end > start). Null clears back to "not configured".
+    if (updateData.workingHours !== undefined) {
+      const whError = validateWorkingHours(updateData.workingHours);
+      if (whError) {
+        res.status(400).json({ error: whError });
+        return;
       }
     }
 
@@ -531,6 +544,7 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       businessDescription: updated.businessDescription,
       website: updated.website,
       openingHours: updated.openingHours,
+      workingHours: updated.workingHours,
       businessRole: updated.businessRole,
       businessType: updated.businessType,
       companyNumber: updated.companyNumber,

@@ -1404,6 +1404,90 @@ export async function sendNewMessageEmail(opts: {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Job completion lifecycle senders
+// ---------------------------------------------------------------------------
+
+/** Trader marked the job done → ask the customer to confirm (or report). */
+export async function sendWorkMarkedCompleteEmail(opts: {
+  toEmail: string;
+  toName: string;
+  businessName: string;
+  jobReference?: string | null;
+  conversationId: number;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeBusiness = escapeHtml(opts.businessName);
+  const refText = opts.jobReference ? ` (job ${escapeHtml(opts.jobReference)})` : "";
+  const openUrl = `${getOpenLinkBase()}/open?c=${opts.conversationId}`;
+  const html = emailShell({
+    title: "Work marked as completed",
+    preheader: `${safeBusiness} marked your job as complete — please review and confirm.`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+        <strong style="color: #00B4D8;">${safeBusiness}</strong> has marked the work on your job${refText} as <strong>completed</strong>.
+      </p>
+      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 20px;">
+        Please take a moment to:
+      </p>
+      <ul style="color: #E5E7EB; font-size: 15px; line-height: 1.8; margin: 0 0 24px; padding-left: 20px;">
+        <li><strong>Confirm completion</strong> if you're happy the work is done</li>
+        <li><strong>Reply in the conversation</strong> if something isn't right</li>
+        <li><strong>Leave a review</strong> once you've confirmed — it helps other customers</li>
+      </ul>
+      <div style="text-align: center; margin-bottom: 8px;">
+        <a href="${openUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
+          Review the job
+        </a>
+      </div>`,
+  });
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: `Work marked as completed${opts.jobReference ? ` — job ${sanitizeHeaderValue(opts.jobReference)}` : ""}`,
+    html,
+    tag: `work-marked-complete[conv=${opts.conversationId}]`,
+  });
+}
+
+/** Customer confirmed completion → invite them to leave a review. */
+export async function sendReviewInviteEmail(opts: {
+  toEmail: string;
+  toName: string;
+  businessName: string;
+  traderProfileId: number;
+  conversationId: number;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const safeBusiness = escapeHtml(opts.businessName);
+  const openUrl = `${getOpenLinkBase()}/open?c=${opts.conversationId}`;
+  const html = emailShell({
+    title: "How did it go?",
+    preheader: `Leave a review for ${safeBusiness} on MyLocalTrade.`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+        Thanks for confirming your job with <strong style="color: #00B4D8;">${safeBusiness}</strong> is complete.
+      </p>
+      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
+        Your review is public and helps other customers hire with confidence. It only takes a minute.
+      </p>
+      <div style="text-align: center; margin-bottom: 8px;">
+        <a href="${openUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
+          Leave a review
+        </a>
+      </div>`,
+  });
+  await dispatchEmail({
+    category: "notifications",
+    to: { email: opts.toEmail, name: opts.toName },
+    subject: `How did it go with ${sanitizeHeaderValue(opts.businessName)}?`,
+    html,
+    tag: `review-invite[conv=${opts.conversationId}]`,
+  });
+}
+
 export function generateVerificationToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }

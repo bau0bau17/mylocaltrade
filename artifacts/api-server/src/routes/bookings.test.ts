@@ -121,7 +121,16 @@ async function createHiredConversation(opts?: {
   return c.id;
 }
 
-const futureStart = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+// Each call returns a DIFFERENT future slot (spaced 2h apart). The server now
+// enforces cross-conversation conflict protection for a trader's confirmed
+// bookings, so tests must not all share one identical start instant.
+// Generic slots start 30 days out so they can never collide with the fixed
+// near-term dates used by the conflict-protection tests below.
+let slotCounter = 0;
+const futureStart = () =>
+  new Date(
+    Date.now() + 30 * 24 * 60 * 60 * 1000 + slotCounter++ * 2 * 60 * 60 * 1000,
+  ).toISOString();
 
 function asTrader(req: request.Test) {
   return req.set("Authorization", `Bearer ${ctx.traderToken}`);
@@ -267,6 +276,169 @@ describe("POST /api/conversations/:id/bookings (propose)", () => {
       .where(eq(bookingsTable.conversationId, convId));
     const live = rows.filter((b) => b.status === "PROPOSED" || b.status === "CONFIRMED");
     expect(live.length).toBe(1);
+  });
+});
+
+describe("durations + cross-conversation conflict protection", () => {
+  // A UK-local date far enough out to be all-future, formatted YYYY-MM-DD.
+  const ukDateStr = (daysAhead: number) => {
+    const d = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000);
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/London",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(d);
+    return parts; // en-CA gives YYYY-MM-DD
+  };
+  const at = (daysAhead: number, hourUtc: number, min = 0) => {
+    const d = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000);
+    d.setUTCHours(hourUtc, min, 0, 0);
+    return d.toISOString();
+  };
+
+  it("rejects an invalid duration with 400 and defaults omitted duration to 60", async () => {
+    const convId = await createHiredConversation();
+    const bad = await asTrader(request(app).post(`/api/conversations/${convId}/bookings`)).send({
+      startAt: futureStart(),
+      durationMinutes: 45,
+    });
+    expect(bad.status).toBe(400);
+
+    const ok = await propose(convId);
+    expect(ok.status).toBe(201);
+    expect(ok.body.booking.durationMinutes).toBe(60);
+    expect(new Date(ok.body.booking.endAt).getTime()).toBe(
+      new Date(ok.body.booking.startAt).getTime() + 60 * 60000,
+    );
+  });
+
+  it("blocks proposing a slot that overlaps another conversation's CONFIRMED booking", async () => {
+    const convA = await createHiredConversation();
+    const convB = await createHiredConversation();
+    const start = at(3, 10);
+
+    const pa = await asTrader(request(app).post(`/api/conversations/${convA}/bookings`)).send({
+      startAt: start,
+      durationMinutes: 120,
+    });
+    expect(pa.status).toBe(201);
+    const ca = await asCustomer(
+      request(app).post(`/api/bookings/${pa.body.booking.id}/confirm`),
+    ).send({});
+    expect(ca.status).toBe(200);
+
+    // Overlapping start (one hour into the 2h confirmed job) → 409.
+    const pb = await asTrader(request(app).post(`/api/conversations/${convB}/bookings`)).send({
+      startAt: at(3, 11),
+      durationMinutes: 60,
+    });
+    expect(pb.status).toBe(409);
+    expect(pb.body.code).toBe("SLOT_TAKEN");
+
+    // Back-to-back (starts exactly when the confirmed one ends) is allowed.
+    const pb2 = await asTrader(request(app).post(`/api/conversations/${convB}/bookings`)).send({
+      startAt: at(3, 12),
+      durationMinutes: 60,
+    });
+    expect(pb2.status).toBe(201);
+  });
+
+  it("re-checks the slot at confirmation time (another job took it since the proposal)", async () => {
+    const convA = await createHiredConversation();
+    const convB = await createHiredConversation();
+    const start = at(4, 9);
+
+    // B proposes first (PROPOSED never blocks others).
+    const pb = await asTrader(request(app).post(`/api/conversations/${convB}/bookings`)).send({
+      startAt: start,
+      durationMinutes: 60,
+    });
+    expect(pb.status).toBe(201);
+
+    // A proposes AND confirms the same slot.
+    const pa = await asTrader(request(app).post(`/api/conversations/${convA}/bookings`)).send({
+      startAt: start,
+      durationMinutes: 60,
+    });
+    expect(pa.status).toBe(201);
+    const ca = await asCustomer(
+      request(app).post(`/api/bookings/${pa.body.booking.id}/confirm`),
+    ).send({});
+    expect(ca.status).toBe(200);
+
+    // Now confirming B's stale proposal must fail with the friendly 409.
+    const cb = await asCustomer(
+      request(app).post(`/api/bookings/${pb.body.booking.id}/confirm`),
+    ).send({});
+    expect(cb.status).toBe(409);
+    expect(cb.body.code).toBe("SLOT_TAKEN");
+  });
+
+  it("keeps the old confirmed slot blocked while a reschedule proposal is pending", async () => {
+    const convA = await createHiredConversation();
+    const convB = await createHiredConversation();
+    const oldStart = at(5, 10);
+
+    const pa = await asTrader(request(app).post(`/api/conversations/${convA}/bookings`)).send({
+      startAt: oldStart,
+      durationMinutes: 60,
+    });
+    const ca = await asCustomer(
+      request(app).post(`/api/bookings/${pa.body.booking.id}/confirm`),
+    ).send({});
+    expect(ca.status).toBe(200);
+
+    // Reschedule: propose a new time in the same conversation → old confirmed
+    // row becomes SUPERSEDED but must STILL block until the new one resolves.
+    const resched = await asTrader(request(app).post(`/api/conversations/${convA}/bookings`)).send({
+      startAt: at(5, 14),
+      durationMinutes: 60,
+    });
+    expect(resched.status).toBe(201);
+
+    const pb = await asTrader(request(app).post(`/api/conversations/${convB}/bookings`)).send({
+      startAt: oldStart,
+      durationMinutes: 60,
+    });
+    expect(pb.status).toBe(409);
+  });
+
+  it("GET booking-slots: participant-only, excludes conflicting starts", async () => {
+    const convA = await createHiredConversation();
+    const convB = await createHiredConversation();
+    const dateStr = ukDateStr(6);
+
+    // Confirm a 10:00–12:00 UK booking in conv A on that date.
+    const startIso = new Date(`${dateStr}T10:00:00Z`); // approx UK time; offset ≤1h
+    const pa = await asTrader(request(app).post(`/api/conversations/${convA}/bookings`)).send({
+      startAt: startIso.toISOString(),
+      durationMinutes: 120,
+    });
+    expect(pa.status).toBe(201);
+    await asCustomer(request(app).post(`/api/bookings/${pa.body.booking.id}/confirm`)).send({});
+
+    const res = await asCustomer(
+      request(app).get(
+        `/api/conversations/${convB}/booking-slots?date=${dateStr}&durationMinutes=60`,
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.hasWorkingHours).toBe(false);
+    expect(Array.isArray(res.body.slots)).toBe(true);
+    // No returned slot may overlap the confirmed 2h interval.
+    const busyStart = startIso.getTime();
+    const busyEnd = busyStart + 120 * 60000;
+    for (const iso of res.body.slots as string[]) {
+      const s = new Date(iso).getTime();
+      expect(s + 60 * 60000 <= busyStart || s >= busyEnd).toBe(true);
+    }
+
+    // Non-participants get a 404, same as the other booking routes.
+    const stranger = await request(app)
+      .get(`/api/conversations/${convB}/booking-slots?date=${dateStr}&durationMinutes=60`)
+      .set("Authorization", `Bearer ${ctx.otherCustomerToken}`);
+    expect(stranger.status).toBe(404);
   });
 });
 

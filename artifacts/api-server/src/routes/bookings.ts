@@ -12,11 +12,31 @@ import type { AuthenticatedRequest } from "../lib/types";
 import { sendPushToUser } from "../lib/push-notifications";
 import { postSystemMessage } from "../lib/system-messages";
 import { serializeBooking, formatBookingTime } from "../lib/bookings";
+import {
+  ALLOWED_DURATIONS_MINUTES,
+  DEFAULT_LEGACY_DURATION_MINUTES,
+  SLOT_CONFLICT_MESSAGE,
+  durationLabel,
+  findConflict,
+  generateSlots,
+  occupiedIntervalsForTrader,
+  withinWorkingHours,
+} from "../lib/booking-availability";
+import { traderProfilesTable as tpTable } from "@workspace/db/schema";
 
 const router: IRouter = Router();
 
 const BookingBody = z.object({
   startAt: z.coerce.date(),
+  // Optional for backwards compatibility with older app builds; defaults to
+  // one hour. New clients send an explicit controlled value.
+  durationMinutes: z
+    .number()
+    .int()
+    .refine((v) => (ALLOWED_DURATIONS_MINUTES as readonly number[]).includes(v), {
+      message: "Invalid appointment duration",
+    })
+    .optional(),
   note: z.string().trim().max(300).nullish(),
 });
 
@@ -121,6 +141,31 @@ router.post("/conversations/:id/bookings", authMiddleware, async (req, res) => {
       return;
     }
 
+    const durationMinutes = body.durationMinutes ?? DEFAULT_LEGACY_DURATION_MINUTES;
+    const endAt = new Date(body.startAt.getTime() + durationMinutes * 60000);
+
+    // Working-hours + conflict validation (server-side; UI options are never
+    // the only barrier). The conversation's own live booking is about to be
+    // superseded by this proposal, so exclude it from the conflict set.
+    const [tp] = await db
+      .select({ workingHours: tpTable.workingHours })
+      .from(tpTable)
+      .where(eq(tpTable.id, conv.traderProfileId))
+      .limit(1);
+    if (!withinWorkingHours(tp?.workingHours, body.startAt, durationMinutes)) {
+      res.status(400).json({
+        error: "That time is outside the trader's working hours. Please choose another appointment.",
+      });
+      return;
+    }
+    const occupied = (await occupiedIntervalsForTrader(conv.traderProfileId)).filter(
+      (iv) => iv.conversationId !== id,
+    );
+    if (findConflict(occupied, body.startAt, durationMinutes)) {
+      res.status(409).json({ error: SLOT_CONFLICT_MESSAGE, code: "SLOT_TAKEN" });
+      return;
+    }
+
     // Supersede any live booking + insert the new proposal atomically. The
     // partial unique index bookings_one_live_per_conversation backstops
     // concurrent proposals: the loser's INSERT throws 23505 → 409.
@@ -141,6 +186,8 @@ router.post("/conversations/:id/bookings", authMiddleware, async (req, res) => {
         .values({
           conversationId: id,
           startAt: body.startAt,
+          durationMinutes,
+          endAt,
           note: body.note?.length ? body.note : null,
           status: "PROPOSED",
           proposedByRole: role,
@@ -151,7 +198,7 @@ router.post("/conversations/:id/bookings", authMiddleware, async (req, res) => {
     });
 
     const who = role === "trader" ? "The trader" : "The customer";
-    const when = formatBookingTime(created.startAt);
+    const when = `${formatBookingTime(created.startAt)} (${durationLabel(durationMinutes)})`;
     const systemBody = superseded
       ? `${who} proposed a new appointment time: ${when} (replaces ${formatBookingTime(superseded.startAt)}). Awaiting confirmation.`
       : `${who} proposed an appointment: ${when}. Awaiting confirmation.`;
@@ -217,6 +264,32 @@ router.post("/bookings/:id/confirm", authMiddleware, async (req, res) => {
       return;
     }
 
+    // Re-check availability AT CONFIRMATION TIME: another conversation may
+    // have taken the slot since this was proposed. Exclude this booking's own
+    // conversation (its previous slot is being replaced by this confirm).
+    const confirmDuration = row.booking.durationMinutes ?? DEFAULT_LEGACY_DURATION_MINUTES;
+    // Also re-check working hours: the trader may have narrowed their hours
+    // since the proposal was made.
+    const [confirmTp] = await db
+      .select({ workingHours: tpTable.workingHours })
+      .from(tpTable)
+      .where(eq(tpTable.id, row.conv.traderProfileId))
+      .limit(1);
+    if (!withinWorkingHours(confirmTp?.workingHours, row.booking.startAt, confirmDuration)) {
+      res.status(409).json({
+        error: "That time is now outside the trader's working hours. Please propose another appointment.",
+        code: "SLOT_TAKEN",
+      });
+      return;
+    }
+    const confirmOccupied = (
+      await occupiedIntervalsForTrader(row.conv.traderProfileId)
+    ).filter((iv) => iv.conversationId !== row.conv.id);
+    if (findConflict(confirmOccupied, row.booking.startAt, confirmDuration)) {
+      res.status(409).json({ error: SLOT_CONFLICT_MESSAGE, code: "SLOT_TAKEN" });
+      return;
+    }
+
     // Conditional UPDATE = race-safe: only confirms while still PROPOSED.
     const now = new Date();
     const [updated] = await db
@@ -229,7 +302,7 @@ router.post("/bookings/:id/confirm", authMiddleware, async (req, res) => {
       return;
     }
 
-    const when = formatBookingTime(updated.startAt);
+    const when = `${formatBookingTime(updated.startAt)} (${durationLabel(confirmDuration)})`;
     await postSystemMessage(
       row.conv.id,
       `Appointment confirmed: ${when}.`,
@@ -315,6 +388,69 @@ router.post("/bookings/:id/cancel", authMiddleware, async (req, res) => {
   } catch (error) {
     req.log.error({ err: error }, "Cancel booking failed");
     res.status(500).json({ error: "Failed to cancel the appointment" });
+  }
+});
+
+// GET /api/conversations/:id/booking-slots?date=YYYY-MM-DD&durationMinutes=60
+// Available start times for the conversation's trader on a UK-local date.
+// Participant-only (same 404 policy as the other booking routes).
+router.get("/conversations/:id/booking-slots", authMiddleware, async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
+    if (id == null) {
+      res.status(400).json({ error: "Invalid conversation id" });
+      return;
+    }
+    const dateStr = String(req.query.date ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      res.status(400).json({ error: "Invalid date (expected YYYY-MM-DD)" });
+      return;
+    }
+    const durationMinutes = Number.parseInt(String(req.query.durationMinutes ?? "60"), 10);
+    if (!(ALLOWED_DURATIONS_MINUTES as readonly number[]).includes(durationMinutes)) {
+      res.status(400).json({ error: "Invalid appointment duration" });
+      return;
+    }
+    const { userId } = req as AuthenticatedRequest;
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, id))
+      .limit(1);
+    if (!conv) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    const role = await participantRole(conv, userId);
+    if (!role) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    const [tp] = await db
+      .select({ workingHours: tpTable.workingHours })
+      .from(tpTable)
+      .where(eq(tpTable.id, conv.traderProfileId))
+      .limit(1);
+    // Exclude this conversation's own live booking — proposing/confirming a
+    // new time replaces it, so its current slot shouldn't hide options.
+    const occupied = (await occupiedIntervalsForTrader(conv.traderProfileId)).filter(
+      (iv) => iv.conversationId !== id,
+    );
+    const slots = generateSlots({
+      dateStr,
+      workingHours: tp?.workingHours,
+      durationMinutes,
+      occupied,
+    });
+    res.json({
+      date: dateStr,
+      durationMinutes,
+      slots: slots.map((s) => s.toISOString()),
+      hasWorkingHours: !!(tp?.workingHours && Object.keys(tp.workingHours).length > 0),
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "Booking slots failed");
+    res.status(500).json({ error: "Failed to load available times" });
   }
 });
 

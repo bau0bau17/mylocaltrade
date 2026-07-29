@@ -32,6 +32,7 @@ export const BUSINESS_MANAGED_FIELDS = [
   "companyNumber",
   "vatNumber",
   "openingHours",
+  "workingHours",
   "website",
   "socialLinks",
   "businessEmailDomain",

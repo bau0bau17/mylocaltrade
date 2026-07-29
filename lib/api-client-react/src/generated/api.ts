@@ -24,6 +24,7 @@ import type {
   AdminUserReportListResponse,
   AuthResponse,
   BookingResponse,
+  BookingSlotsResponse,
   CancelConversationRequest,
   CancellationRequestResult,
   CategoriesResponse,
@@ -51,6 +52,7 @@ import type {
   GetAccountDeletionStatus200,
   GetAdminConversationReportsParams,
   GetAdminUserReportsParams,
+  GetBookingSlotsParams,
   GetFeaturedTradersParams,
   HandleStripeWebhookBody,
   HealthStatus,
@@ -5285,6 +5287,118 @@ export const useProposeBooking = <
 > => {
   return useMutation(getProposeBookingMutationOptions(options));
 };
+
+/**
+ * @summary Available appointment start times for the conversation's trader on a UK-local date.
+ */
+export const getGetBookingSlotsUrl = (
+  id: number,
+  params: GetBookingSlotsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/conversations/${id}/booking-slots?${stringifiedParams}`
+    : `/api/conversations/${id}/booking-slots`;
+};
+
+export const getBookingSlots = async (
+  id: number,
+  params: GetBookingSlotsParams,
+  options?: RequestInit,
+): Promise<BookingSlotsResponse> => {
+  return customFetch<BookingSlotsResponse>(getGetBookingSlotsUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBookingSlotsQueryKey = (
+  id: number,
+  params?: GetBookingSlotsParams,
+) => {
+  return [
+    `/api/conversations/${id}/booking-slots`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetBookingSlotsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBookingSlots>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  params: GetBookingSlotsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBookingSlots>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetBookingSlotsQueryKey(id, params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBookingSlots>>> = ({
+    signal,
+  }) => getBookingSlots(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBookingSlots>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBookingSlotsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBookingSlots>>
+>;
+export type GetBookingSlotsQueryError = ErrorType<void>;
+
+/**
+ * @summary Available appointment start times for the conversation's trader on a UK-local date.
+ */
+
+export function useGetBookingSlots<
+  TData = Awaited<ReturnType<typeof getBookingSlots>>,
+  TError = ErrorType<void>,
+>(
+  id: number,
+  params: GetBookingSlotsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getBookingSlots>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBookingSlotsQueryOptions(id, params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Confirm a proposed appointment (only the party who did NOT propose it)

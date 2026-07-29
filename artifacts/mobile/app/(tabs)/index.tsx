@@ -176,18 +176,22 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Pressable style={styles.quoteCta} onPress={() => router.push('/(tabs)/search')}>
-          <View style={styles.quoteCtaIcon}>
-            <Feather name="message-square" size={18} color={Colors.light.white} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.quoteCtaTitle}>Request a quote</Text>
-            <Text style={styles.quoteCtaSub}>
-              Find local traders with verified details and send your job details for free.
-            </Text>
-          </View>
-          <Feather name="arrow-right" size={18} color={Colors.light.white} />
-        </Pressable>
+        {/* Customer-only CTA: traders never request quotes, so hide it for
+            logged-in trader accounts (guests + customers still see it). */}
+        {!(isAuthenticated && isTrader) && (
+          <Pressable style={styles.quoteCta} onPress={() => router.push('/(tabs)/search')}>
+            <View style={styles.quoteCtaIcon}>
+              <Feather name="message-square" size={18} color={Colors.light.white} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.quoteCtaTitle}>Request a quote</Text>
+              <Text style={styles.quoteCtaSub}>
+                Find local traders with verified details and send your job details for free.
+              </Text>
+            </View>
+            <Feather name="arrow-right" size={18} color={Colors.light.white} />
+          </Pressable>
+        )}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>

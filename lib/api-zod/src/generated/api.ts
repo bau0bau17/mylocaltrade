@@ -515,6 +515,62 @@ export const ListTradersResponse = zod.object({
       businessDescription: zod.string().nullish(),
       website: zod.string().nullish(),
       openingHours: zod.string().nullish(),
+      workingHours: zod
+        .object({
+          mon: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          tue: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          wed: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          thu: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          fri: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          sat: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          sun: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+        })
+        .describe(
+          "Structured weekly availability (UK local time). Missing days count as unavailable.",
+        )
+        .nullish(),
       logoUrl: zod.string().nullish(),
       galleryUrls: zod.array(zod.string()).optional(),
       socialLinks: zod
@@ -658,6 +714,62 @@ export const GetFeaturedTradersResponse = zod.object({
       businessDescription: zod.string().nullish(),
       website: zod.string().nullish(),
       openingHours: zod.string().nullish(),
+      workingHours: zod
+        .object({
+          mon: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          tue: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          wed: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          thu: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          fri: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          sat: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          sun: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+        })
+        .describe(
+          "Structured weekly availability (UK local time). Missing days count as unavailable.",
+        )
+        .nullish(),
       logoUrl: zod.string().nullish(),
       galleryUrls: zod.array(zod.string()).optional(),
       socialLinks: zod
@@ -797,6 +909,62 @@ export const GetTraderResponse = zod.object({
   businessDescription: zod.string().nullish(),
   website: zod.string().nullish(),
   openingHours: zod.string().nullish(),
+  workingHours: zod
+    .object({
+      mon: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      tue: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      wed: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      thu: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      fri: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      sat: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      sun: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+    })
+    .describe(
+      "Structured weekly availability (UK local time). Missing days count as unavailable.",
+    )
+    .nullish(),
   logoUrl: zod.string().nullish(),
   galleryUrls: zod.array(zod.string()).optional(),
   socialLinks: zod
@@ -927,6 +1095,62 @@ export const GetTraderProfileResponse = zod.object({
   businessDescription: zod.string().nullish(),
   website: zod.string().nullish(),
   openingHours: zod.string().nullish(),
+  workingHours: zod
+    .object({
+      mon: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      tue: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      wed: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      thu: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      fri: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      sat: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      sun: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+    })
+    .describe(
+      "Structured weekly availability (UK local time). Missing days count as unavailable.",
+    )
+    .nullish(),
   logoUrl: zod.string().nullish(),
   galleryUrls: zod.array(zod.string()).optional(),
   socialLinks: zod
@@ -1044,6 +1268,65 @@ export const UpdateTraderProfileBody = zod.object({
   businessDescription: zod.string().optional(),
   website: zod.string().optional(),
   openingHours: zod.string().optional(),
+  workingHours: zod
+    .object({
+      mon: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      tue: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      wed: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      thu: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      fri: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      sat: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      sun: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+    })
+    .describe(
+      "Structured weekly availability (UK local time). Missing days count as unavailable.",
+    )
+    .nullish()
+    .describe(
+      'Structured weekly availability; null clears back to \"not configured\".',
+    ),
   logoUrl: zod
     .string()
     .nullish()
@@ -1102,6 +1385,62 @@ export const UpdateTraderProfileResponse = zod.object({
   businessDescription: zod.string().nullish(),
   website: zod.string().nullish(),
   openingHours: zod.string().nullish(),
+  workingHours: zod
+    .object({
+      mon: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      tue: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      wed: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      thu: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      fri: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      sat: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+      sun: zod
+        .object({
+          enabled: zod.boolean(),
+          start: zod.string().describe("24h HH:MM, UK local time"),
+          end: zod.string().describe("24h HH:MM, UK local time"),
+        })
+        .optional(),
+    })
+    .describe(
+      "Structured weekly availability (UK local time). Missing days count as unavailable.",
+    )
+    .nullish(),
   logoUrl: zod.string().nullish(),
   galleryUrls: zod.array(zod.string()).optional(),
   socialLinks: zod
@@ -1736,6 +2075,62 @@ export const GetSavedTradersResponse = zod.object({
       businessDescription: zod.string().nullish(),
       website: zod.string().nullish(),
       openingHours: zod.string().nullish(),
+      workingHours: zod
+        .object({
+          mon: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          tue: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          wed: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          thu: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          fri: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          sat: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+          sun: zod
+            .object({
+              enabled: zod.boolean(),
+              start: zod.string().describe("24h HH:MM, UK local time"),
+              end: zod.string().describe("24h HH:MM, UK local time"),
+            })
+            .optional(),
+        })
+        .describe(
+          "Structured weekly availability (UK local time). Missing days count as unavailable.",
+        )
+        .nullish(),
       logoUrl: zod.string().nullish(),
       galleryUrls: zod.array(zod.string()).optional(),
       socialLinks: zod
@@ -2409,6 +2804,14 @@ export const GetConversationResponse = zod.object({
       id: zod.number(),
       conversationId: zod.number(),
       startAt: zod.date(),
+      durationMinutes: zod
+        .number()
+        .optional()
+        .describe("Appointment length in minutes (legacy bookings report 60)."),
+      endAt: zod
+        .date()
+        .optional()
+        .describe("Reserved interval end (startAt + duration)."),
       note: zod.string().nullish(),
       status: zod.enum(["PROPOSED", "CONFIRMED", "CANCELLED", "SUPERSEDED"]),
       proposedByRole: zod.enum(["customer", "trader"]),
@@ -2692,11 +3095,56 @@ export const proposeBookingBodyNoteMax = 300;
 
 export const ProposeBookingBody = zod.object({
   startAt: zod.date().describe("Appointment start. Must be in the future."),
+  durationMinutes: zod
+    .union([
+      zod.literal(30),
+      zod.literal(60),
+      zod.literal(90),
+      zod.literal(120),
+      zod.literal(180),
+      zod.literal(240),
+      zod.literal(480),
+    ])
+    .optional()
+    .describe("Appointment length. Defaults to 60 for older clients."),
   note: zod
     .string()
     .max(proposeBookingBodyNoteMax)
     .nullish()
     .describe('Optional short note (e.g. \"Initial visit and inspection\").'),
+});
+
+/**
+ * @summary Available appointment start times for the conversation's trader on a UK-local date.
+ */
+export const GetBookingSlotsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetBookingSlotsQueryParams = zod.object({
+  date: zod.coerce.string().describe("UK-local date, YYYY-MM-DD."),
+  durationMinutes: zod
+    .union([
+      zod.literal(30),
+      zod.literal(60),
+      zod.literal(90),
+      zod.literal(120),
+      zod.literal(180),
+      zod.literal(240),
+      zod.literal(480),
+    ])
+    .optional(),
+});
+
+export const GetBookingSlotsResponse = zod.object({
+  date: zod.string().describe("The UK-local date requested (YYYY-MM-DD)."),
+  durationMinutes: zod.number(),
+  slots: zod
+    .array(zod.date())
+    .describe("Available start instants (UTC) fitting the duration."),
+  hasWorkingHours: zod
+    .boolean()
+    .describe("Whether the trader has configured structured hours."),
 });
 
 /**
@@ -2712,6 +3160,14 @@ export const ConfirmBookingResponse = zod.object({
       id: zod.number(),
       conversationId: zod.number(),
       startAt: zod.date(),
+      durationMinutes: zod
+        .number()
+        .optional()
+        .describe("Appointment length in minutes (legacy bookings report 60)."),
+      endAt: zod
+        .date()
+        .optional()
+        .describe("Reserved interval end (startAt + duration)."),
       note: zod.string().nullish(),
       status: zod.enum(["PROPOSED", "CONFIRMED", "CANCELLED", "SUPERSEDED"]),
       proposedByRole: zod.enum(["customer", "trader"]),
@@ -2738,6 +3194,14 @@ export const CancelBookingResponse = zod.object({
       id: zod.number(),
       conversationId: zod.number(),
       startAt: zod.date(),
+      durationMinutes: zod
+        .number()
+        .optional()
+        .describe("Appointment length in minutes (legacy bookings report 60)."),
+      endAt: zod
+        .date()
+        .optional()
+        .describe("Reserved interval end (startAt + duration)."),
       note: zod.string().nullish(),
       status: zod.enum(["PROPOSED", "CONFIRMED", "CANCELLED", "SUPERSEDED"]),
       proposedByRole: zod.enum(["customer", "trader"]),

@@ -1928,6 +1928,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /conversations/{id}/booking-slots:
+    get:
+      tags: [bookings]
+      summary: Available appointment start times for the conversation's trader on a UK-local date.
+      operationId: getBookingSlots
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+          description: UK-local date, YYYY-MM-DD.
+        - name: durationMinutes
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [30, 60, 90, 120, 180, 240, 480]
+      responses:
+        "200":
+          description: Available start times
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingSlotsResponse"
+        "400":
+          description: Invalid date or duration
+        "404":
+          description: Conversation not found or caller is not a participant
+
   /bookings/{id}/confirm:
     post:
       operationId: confirmBooking
@@ -3025,6 +3062,10 @@ components:
         openingHours:
           type: string
           nullable: true
+        workingHours:
+          allOf:
+            - $ref: "#/components/schemas/WorkingHours"
+          nullable: true
         logoUrl:
           type: string
           nullable: true
@@ -3199,6 +3240,11 @@ components:
           type: string
         openingHours:
           type: string
+        workingHours:
+          allOf:
+            - $ref: "#/components/schemas/WorkingHours"
+          nullable: true
+          description: Structured weekly availability; null clears back to "not configured".
         logoUrl:
           type: string
           nullable: true
@@ -3963,6 +4009,13 @@ components:
         startAt:
           type: string
           format: date-time
+        durationMinutes:
+          type: integer
+          description: Appointment length in minutes (legacy bookings report 60).
+        endAt:
+          type: string
+          format: date-time
+          description: Reserved interval end (startAt + duration).
         note:
           type: string
           nullable: true
@@ -3995,12 +4048,67 @@ components:
           type: string
           format: date-time
           description: Appointment start. Must be in the future.
+        durationMinutes:
+          type: integer
+          enum: [30, 60, 90, 120, 180, 240, 480]
+          description: Appointment length. Defaults to 60 for older clients.
         note:
           type: string
           maxLength: 300
           nullable: true
           description: Optional short note (e.g. "Initial visit and inspection").
       required: [startAt]
+
+    BookingSlotsResponse:
+      type: object
+      properties:
+        date:
+          type: string
+          description: The UK-local date requested (YYYY-MM-DD).
+        durationMinutes:
+          type: integer
+        slots:
+          type: array
+          items:
+            type: string
+            format: date-time
+          description: Available start instants (UTC) fitting the duration.
+        hasWorkingHours:
+          type: boolean
+          description: Whether the trader has configured structured hours.
+      required: [date, durationMinutes, slots, hasWorkingHours]
+
+    WorkingHoursDay:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        start:
+          type: string
+          description: "24h HH:MM, UK local time"
+        end:
+          type: string
+          description: "24h HH:MM, UK local time"
+      required: [enabled, start, end]
+
+    WorkingHours:
+      type: object
+      description: Structured weekly availability (UK local time). Missing days count as unavailable.
+      properties:
+        mon:
+          $ref: "#/components/schemas/WorkingHoursDay"
+        tue:
+          $ref: "#/components/schemas/WorkingHoursDay"
+        wed:
+          $ref: "#/components/schemas/WorkingHoursDay"
+        thu:
+          $ref: "#/components/schemas/WorkingHoursDay"
+        fri:
+          $ref: "#/components/schemas/WorkingHoursDay"
+        sat:
+          $ref: "#/components/schemas/WorkingHoursDay"
+        sun:
+          $ref: "#/components/schemas/WorkingHoursDay"
 
     BookingResponse:
       type: object

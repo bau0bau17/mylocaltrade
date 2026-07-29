@@ -5,10 +5,13 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateBookingRequestDurationMinutes } from "./createBookingRequestDurationMinutes";
 
 export interface CreateBookingRequest {
   /** Appointment start. Must be in the future. */
   startAt: Date;
+  /** Appointment length. Defaults to 60 for older clients. */
+  durationMinutes?: CreateBookingRequestDurationMinutes;
   /**
    * Optional short note (e.g. "Initial visit and inspection").
    * @maxLength 300

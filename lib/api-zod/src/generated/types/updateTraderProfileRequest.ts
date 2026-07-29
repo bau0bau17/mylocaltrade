@@ -8,6 +8,7 @@
 import type { UpdateTraderProfileRequestBusinessRole } from "./updateTraderProfileRequestBusinessRole";
 import type { UpdateTraderProfileRequestBusinessType } from "./updateTraderProfileRequestBusinessType";
 import type { UpdateTraderProfileRequestSocialLinks } from "./updateTraderProfileRequestSocialLinks";
+import type { WorkingHours } from "./workingHours";
 
 export interface UpdateTraderProfileRequest {
   businessName?: string;
@@ -22,6 +23,8 @@ export interface UpdateTraderProfileRequest {
   businessDescription?: string;
   website?: string;
   openingHours?: string;
+  /** Structured weekly availability; null clears back to "not configured". */
+  workingHours?: WorkingHours | null;
   /** Business logo object path from the customer-uploads flow, or null
 to remove the current logo. Ownership is verified server-side.
  */

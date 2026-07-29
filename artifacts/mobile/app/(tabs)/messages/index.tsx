@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -16,6 +17,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useGetConversations,
+  getGetConversationsQueryKey,
   type ConversationSummary,
 } from "@workspace/api-client-react";
 
@@ -125,7 +127,19 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
-  const { data, isLoading, isError, refetch, isRefetching } = useGetConversations();
+  // Poll every 30s while the app is foregrounded so new conversations/replies
+  // appear without a manual refresh (no push permission required).
+  const [appActive, setAppActive] = React.useState(AppState.currentState === "active");
+  React.useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => setAppActive(s === "active"));
+    return () => sub.remove();
+  }, []);
+  const { data, isLoading, isError, refetch, isRefetching } = useGetConversations({
+    query: {
+      queryKey: getGetConversationsQueryKey(),
+      refetchInterval: appActive ? 30_000 : false,
+    },
+  });
 
   // Re-pull the list (and its per-row unread badges) each time the screen gains
   // focus, so counts clear right after the user reads a thread and comes back.
@@ -172,7 +186,8 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <Text style={styles.title}>Messages</Text>
         <Text style={styles.subtitle}>
           {isTrader ? "Conversations with customers" : "Conversations with traders"}
         </Text>

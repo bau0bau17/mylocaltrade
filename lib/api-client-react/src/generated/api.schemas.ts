@@ -363,6 +363,27 @@ export const TraderProfilePlan = {
   premium: "premium",
 } as const;
 
+export interface WorkingHoursDay {
+  enabled: boolean;
+  /** 24h HH:MM, UK local time */
+  start: string;
+  /** 24h HH:MM, UK local time */
+  end: string;
+}
+
+/**
+ * Structured weekly availability (UK local time). Missing days count as unavailable.
+ */
+export interface WorkingHours {
+  mon?: WorkingHoursDay;
+  tue?: WorkingHoursDay;
+  wed?: WorkingHoursDay;
+  thu?: WorkingHoursDay;
+  fri?: WorkingHoursDay;
+  sat?: WorkingHoursDay;
+  sun?: WorkingHoursDay;
+}
+
 export interface TraderProfile {
   id: number;
   userId: number;
@@ -381,6 +402,7 @@ export interface TraderProfile {
   businessDescription?: string | null;
   website?: string | null;
   openingHours?: string | null;
+  workingHours?: WorkingHours | null;
   logoUrl?: string | null;
   galleryUrls?: string[];
   socialLinks?: TraderProfileSocialLinks;
@@ -472,6 +494,8 @@ export interface UpdateTraderProfileRequest {
   businessDescription?: string;
   website?: string;
   openingHours?: string;
+  /** Structured weekly availability; null clears back to "not configured". */
+  workingHours?: WorkingHours | null;
   /** Business logo object path from the customer-uploads flow, or null
 to remove the current logo. Ownership is verified server-side.
  */
@@ -1000,6 +1024,10 @@ export interface Booking {
   id: number;
   conversationId: number;
   startAt: string;
+  /** Appointment length in minutes (legacy bookings report 60). */
+  durationMinutes?: number;
+  /** Reserved interval end (startAt + duration). */
+  endAt?: string;
   note?: string | null;
   status: BookingStatus;
   proposedByRole: BookingProposedByRole;
@@ -1066,14 +1094,42 @@ export interface QuoteResponse {
   quote: Quote;
 }
 
+/**
+ * Appointment length. Defaults to 60 for older clients.
+ */
+export type CreateBookingRequestDurationMinutes =
+  (typeof CreateBookingRequestDurationMinutes)[keyof typeof CreateBookingRequestDurationMinutes];
+
+export const CreateBookingRequestDurationMinutes = {
+  NUMBER_30: 30,
+  NUMBER_60: 60,
+  NUMBER_90: 90,
+  NUMBER_120: 120,
+  NUMBER_180: 180,
+  NUMBER_240: 240,
+  NUMBER_480: 480,
+} as const;
+
 export interface CreateBookingRequest {
   /** Appointment start. Must be in the future. */
   startAt: string;
+  /** Appointment length. Defaults to 60 for older clients. */
+  durationMinutes?: CreateBookingRequestDurationMinutes;
   /**
    * Optional short note (e.g. "Initial visit and inspection").
    * @maxLength 300
    */
   note?: string | null;
+}
+
+export interface BookingSlotsResponse {
+  /** The UK-local date requested (YYYY-MM-DD). */
+  date: string;
+  durationMinutes: number;
+  /** Available start instants (UTC) fitting the duration. */
+  slots: string[];
+  /** Whether the trader has configured structured hours. */
+  hasWorkingHours: boolean;
 }
 
 export interface BookingResponse {
@@ -1693,6 +1749,27 @@ export const AdminListReviewsStatus = {
 } as const;
 
 export type HandleStripeWebhookBody = { [key: string]: unknown };
+
+export type GetBookingSlotsParams = {
+  /**
+   * UK-local date, YYYY-MM-DD.
+   */
+  date: string;
+  durationMinutes?: GetBookingSlotsDurationMinutes;
+};
+
+export type GetBookingSlotsDurationMinutes =
+  (typeof GetBookingSlotsDurationMinutes)[keyof typeof GetBookingSlotsDurationMinutes];
+
+export const GetBookingSlotsDurationMinutes = {
+  NUMBER_30: 30,
+  NUMBER_60: 60,
+  NUMBER_90: 90,
+  NUMBER_120: 120,
+  NUMBER_180: 180,
+  NUMBER_240: 240,
+  NUMBER_480: 480,
+} as const;
 
 export type GetAdminConversationReportsParams = {
   status?: GetAdminConversationReportsStatus;

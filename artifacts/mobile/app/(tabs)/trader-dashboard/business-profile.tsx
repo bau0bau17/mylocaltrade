@@ -65,6 +65,7 @@ interface ProfileForm {
   additionalServices: string[];
   serviceAreas: string[];
   openingHours: string;
+  workingHours: WorkingHoursState;
   website: string;
   businessRole: string;
   businessType: string;
@@ -72,6 +73,52 @@ interface ProfileForm {
   authorisedRepresentative: boolean;
   businessEmailDomain: string;
   vatNumber: string;
+}
+
+// --- Structured working hours (for appointment booking) ---------------------
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+type WorkingHoursState = Record<DayKey, { enabled: boolean; start: string; end: string }>;
+
+const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const DAY_LABEL: Record<DayKey, string> = {
+  mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
+};
+
+function defaultWorkingHours(): WorkingHoursState {
+  const weekday = { enabled: true, start: '08:00', end: '18:00' };
+  return {
+    mon: { ...weekday }, tue: { ...weekday }, wed: { ...weekday },
+    thu: { ...weekday }, fri: { ...weekday },
+    sat: { enabled: false, start: '09:00', end: '13:00' },
+    sun: { enabled: false, start: '09:00', end: '13:00' },
+  };
+}
+
+function normalizeWorkingHours(raw: unknown): WorkingHoursState {
+  const base = defaultWorkingHours();
+  if (!raw || typeof raw !== 'object') return base;
+  for (const key of DAY_ORDER) {
+    const d = (raw as Record<string, { enabled?: boolean; start?: string; end?: string }>)[key];
+    if (d && typeof d.enabled === 'boolean' && typeof d.start === 'string' && typeof d.end === 'string') {
+      base[key] = { enabled: d.enabled, start: d.start, end: d.end };
+    }
+  }
+  return base;
+}
+
+// Tap a time to cycle through 30-minute options (06:00 → 22:00 → wraps).
+const TIME_OPTIONS: string[] = (() => {
+  const out: string[] = [];
+  for (let h = 6; h <= 22; h++) {
+    out.push(`${String(h).padStart(2, '0')}:00`);
+    if (h < 22) out.push(`${String(h).padStart(2, '0')}:30`);
+  }
+  return out;
+})();
+
+function nextTimeOption(current: string): string {
+  const idx = TIME_OPTIONS.indexOf(current);
+  return TIME_OPTIONS[(idx + 1) % TIME_OPTIONS.length] ?? '08:00';
 }
 
 export default function BusinessProfileScreen() {
@@ -89,6 +136,7 @@ export default function BusinessProfileScreen() {
     additionalServices: [],
     serviceAreas: [],
     openingHours: '',
+    workingHours: defaultWorkingHours(),
     website: '',
     businessRole: '',
     businessType: '',
@@ -140,6 +188,7 @@ export default function BusinessProfileScreen() {
           additionalServices: Array.isArray(json.additionalServices) ? json.additionalServices : [],
           serviceAreas: Array.isArray(json.serviceAreas) ? json.serviceAreas : [],
           openingHours: json.openingHours ?? '',
+          workingHours: normalizeWorkingHours(json.workingHours),
           website: json.website ?? '',
           businessRole: json.businessRole ?? '',
           businessType: json.businessType ?? '',
@@ -215,6 +264,7 @@ export default function BusinessProfileScreen() {
           additionalServices: form.additionalServices,
           serviceAreas: form.serviceAreas,
           openingHours: form.openingHours.trim(),
+          workingHours: form.workingHours,
           website: form.website.trim() || undefined,
           businessRole: form.businessRole || undefined,
           businessType: form.businessType || undefined,
@@ -712,6 +762,68 @@ export default function BusinessProfileScreen() {
           {fieldErr('openingHours') && <Text style={styles.fieldError}>{fieldErr('openingHours')}</Text>}
         </View>
 
+        <Text style={styles.sectionTitle}>Working hours (for appointments)</Text>
+        <Text style={styles.whHint}>
+          Customers can only book appointment times inside these hours. Tap a day to switch it on
+          or off, then adjust the start and end times.
+        </Text>
+        <View style={styles.inputGroup}>
+          {DAY_ORDER.map((dayKey) => {
+            const day = form.workingHours[dayKey];
+            return (
+              <View key={dayKey} style={styles.whRow}>
+                <Pressable
+                  style={[styles.whDayToggle, day.enabled && styles.whDayToggleOn]}
+                  onPress={() =>
+                    setForm(p => ({
+                      ...p,
+                      workingHours: {
+                        ...p.workingHours,
+                        [dayKey]: { ...p.workingHours[dayKey], enabled: !p.workingHours[dayKey].enabled },
+                      },
+                    }))
+                  }
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: day.enabled }}
+                  accessibilityLabel={`${DAY_LABEL[dayKey]} ${day.enabled ? 'working' : 'not working'}`}
+                >
+                  <Text style={[styles.whDayText, day.enabled && styles.whDayTextOn]}>
+                    {DAY_LABEL[dayKey]}
+                  </Text>
+                </Pressable>
+                {day.enabled ? (
+                  <View style={styles.whTimes}>
+                    {(['start', 'end'] as const).map((edge) => (
+                      <Pressable
+                        key={edge}
+                        style={styles.whTimeBtn}
+                        onPress={() =>
+                          setForm(p => ({
+                            ...p,
+                            workingHours: {
+                              ...p.workingHours,
+                              [dayKey]: {
+                                ...p.workingHours[dayKey],
+                                [edge]: nextTimeOption(p.workingHours[dayKey][edge]),
+                              },
+                            },
+                          }))
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`${DAY_LABEL[dayKey]} ${edge} time ${day[edge]}, tap to change`}
+                      >
+                        <Text style={styles.whTimeText}>{day[edge]}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.whClosed}>Not working</Text>
+                )}
+              </View>
+            );
+          })}
+        </View>
+
         <Text style={styles.sectionTitle}>Website (optional)</Text>
         <View style={styles.inputGroup}>
           <View style={styles.inputWrap}>
@@ -834,6 +946,45 @@ function computeRequirements(form: ProfileForm) {
 }
 
 const styles = StyleSheet.create({
+  whHint: {
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  whRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    gap: 10,
+  },
+  whDayToggle: {
+    width: 64,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.surface,
+    alignItems: 'center',
+  },
+  whDayToggleOn: {
+    backgroundColor: Colors.light.primaryMuted,
+    borderColor: Colors.light.primary,
+  },
+  whDayText: { fontSize: 13, fontWeight: '700', color: Colors.light.textMuted },
+  whDayTextOn: { color: Colors.light.primary },
+  whTimes: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  whTimeBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
+  },
+  whTimeText: { fontSize: 14, fontWeight: '600', color: Colors.light.text },
+  whClosed: { fontSize: 13, color: Colors.light.textMuted },
   container: { flex: 1, backgroundColor: Colors.light.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 8 },

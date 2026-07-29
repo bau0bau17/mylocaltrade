@@ -10,6 +10,7 @@ import type { TraderProfileBusinessRole } from "./traderProfileBusinessRole";
 import type { TraderProfileBusinessType } from "./traderProfileBusinessType";
 import type { TraderProfilePlan } from "./traderProfilePlan";
 import type { TraderProfileSocialLinks } from "./traderProfileSocialLinks";
+import type { WorkingHours } from "./workingHours";
 
 export interface TraderProfile {
   id: number;
@@ -29,6 +30,7 @@ export interface TraderProfile {
   businessDescription?: string | null;
   website?: string | null;
   openingHours?: string | null;
+  workingHours?: WorkingHours | null;
   logoUrl?: string | null;
   galleryUrls?: string[];
   socialLinks?: TraderProfileSocialLinks;

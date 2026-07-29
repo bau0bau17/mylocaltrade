@@ -49,4 +49,6 @@
 - [Booking lifecycle invariants](booking-lifecycle-invariants.md) — one live booking per conversation (partial unique index); EVERY mutation incl. cancel passes the live-job gate; notify direction rules.
 - [Canonical service/category matching](service-category-matching.md) — one server-side synonym map (expandServiceTerms) for category+search; no per-screen rules, no generic cross-category terms.
 - [Personal avatar vs business logo](avatar-vs-logo-identity.md) — users.avatarUrl is membership-gated (auth'd avatar-file route, headers on RN Image); logoUrl is public via gallery-file; business-field edits pass canManageBusinessFields choke point.
+- [Booking conflict & blocking rules](booking-conflict-blocking-rules.md) — CONFIRMED + old-slot-during-pending-reschedule block; hours+conflict re-checked at confirm; ukLocalToUtc null = DST gap; tests need distinct slots.
+- [Notification fan-out conventions](notification-fanout-conventions.md) — transition sends gated by conditional UPDATE...RETURNING (never in-memory checks); email try/catch separate from push so one can't kill the other.
 - [Universal Links in email CTAs](universal-links-email.md) — /open email links must use the associated-domain host via getOpenLinkBase(); Brevo click-tracking can also break direct app open.

@@ -63,7 +63,9 @@ const INNER_ROUTES: {
   { name: "saved-traders", title: "Saved Traders", parent: "/account" },
   { name: "my-enquiries", title: "My Enquiries", parent: "/account" },
   { name: "compare-offers", title: "Compare Offers", parent: "/account" },
-  { name: "messages/index", title: "Messages", parent: "/account" },
+  // Traders directory moved off the tab bar (replaced by Messages); still
+  // reachable from Home/Search links, so it lives on as a hidden inner route.
+  { name: "traders", title: "Traders", parent: "/" },
   { name: "messages/[id]", title: "Conversation", parent: "/messages" },
   { name: "about", title: "About Us", parent: "/legal-support" },
   { name: "privacy", title: "Privacy Policy", parent: "/legal-support" },
@@ -173,9 +175,9 @@ function NativeTabLayout() {
         <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
         <Label>Search</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="traders">
-        <Icon sf={{ default: "briefcase", selected: "briefcase.fill" }} />
-        <Label>Traders</Label>
+      <NativeTabs.Trigger name="messages/index">
+        <Icon sf={{ default: "message", selected: "message.fill" }} />
+        <Label>Messages</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="account">
         <Icon sf={{ default: "person", selected: "person.fill" }} />
@@ -294,22 +296,9 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="traders"
+        name="messages/index"
         options={{
-          title: "Traders",
-          headerShown: false,
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="briefcase" tintColor={color} size={24} />
-            ) : (
-              <Feather name="briefcase" size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: "Account",
+          title: "Messages",
           headerShown: false,
           ...(unreadCount > 0
             ? {
@@ -322,6 +311,19 @@ function ClassicTabLayout() {
                 },
               }
             : {}),
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="message" tintColor={color} size={24} />
+            ) : (
+              <Feather name="message-circle" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: "Account",
+          headerShown: false,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person" tintColor={color} size={24} />

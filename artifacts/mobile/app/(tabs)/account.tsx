@@ -417,7 +417,6 @@ export default function AccountScreen() {
             <View style={styles.separator} />
             <MenuRow icon="message-square" label="Enquiries & Leads" sub="New customer enquiries and job requests" onPress={() => router.push('/trader-dashboard/leads')} />
             <View style={styles.separator} />
-            <MenuRow icon="message-circle" label="Messages" sub="Chat with customers" onPress={() => router.push('/messages')} accent badge={unreadCount} />
             <View style={styles.separator} />
             <MenuRow icon="credit-card" label="Billing & Plan" onPress={() => router.push('/trader-dashboard/billing')} accent />
           </View>
@@ -432,7 +431,6 @@ export default function AccountScreen() {
             <View style={styles.separator} />
             <MenuRow icon="message-circle" label="My Enquiries" onPress={() => router.push('/my-enquiries')} />
             <View style={styles.separator} />
-            <MenuRow icon="send" label="Messages" sub="Chat with traders" onPress={() => router.push('/messages')} accent badge={unreadCount} />
           </View>
         </>
       )}

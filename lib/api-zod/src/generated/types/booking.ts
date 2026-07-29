@@ -17,6 +17,10 @@ export interface Booking {
   id: number;
   conversationId: number;
   startAt: Date;
+  /** Appointment length in minutes (legacy bookings report 60). */
+  durationMinutes?: number;
+  /** Reserved interval end (startAt + duration). */
+  endAt?: Date;
   note?: string | null;
   status: BookingStatus;
   proposedByRole: BookingProposedByRole;

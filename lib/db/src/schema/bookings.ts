@@ -29,6 +29,14 @@ export const bookingsTable = pgTable(
       .references(() => conversationsTable.id),
     // When the appointment is scheduled to start (UTC instant).
     startAt: timestamp("start_at").notNull(),
+    // Appointment length in minutes (30, 60, 90, 120, 180, 240 = half day,
+    // 480 = full day). Nullable for legacy rows created before durations
+    // existed — treat NULL as 60 minutes when computing occupied intervals.
+    durationMinutes: integer("duration_minutes"),
+    // Denormalised end instant (startAt + duration) so overlap checks are a
+    // simple range comparison in SQL. Nullable for legacy rows (derive
+    // startAt + 60min).
+    endAt: timestamp("end_at"),
     note: varchar("note", { length: 300 }),
     status: varchar("status", { length: 16 }).notNull().default("PROPOSED"),
     // Who proposed this booking ("customer" | "trader") + their user id.

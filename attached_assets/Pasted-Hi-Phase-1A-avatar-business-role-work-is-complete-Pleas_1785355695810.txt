@@ -1,0 +1,668 @@
+Hi,
+
+Phase 1A avatar/business-role work is complete.
+
+Please treat this bug-fix, booking, notification and navigation package as a separate implementation scope and a separate commit.
+
+Do not revisit or expand avatar/logo functionality, except where strictly required to avoid regressions.
+
+IMPORTANT SCOPE / COST CONTROL:
+
+- Do not perform a broad repository audit.
+- Inspect only the relevant mobile, API, messaging, booking, availability, notification, email, review, Home-screen and bottom-navigation components.
+- Reuse existing models, endpoints, push/email infrastructure, unread-count logic and booking logic wherever possible.
+- Do not redesign unrelated screens.
+- Do not add a new realtime platform unless genuinely necessary.
+- Do not start an EAS build.
+- Do not deploy or publish.
+- Do not run production migrations.
+- If schema changes are required, prepare and report them but do not apply them to production.
+- Run only the minimum relevant typechecks/tests.
+- Preserve all existing working quote, hire, contact-visibility, booking, calendar, completion and review flows.
+
+Please first inspect the current implementation, report the root causes briefly, and then implement the smallest production-safe fixes.
+
+--------------------------------------------------
+1. TRADER DOES NOT RECEIVE NEW-MESSAGE NOTIFICATION
+--------------------------------------------------
+
+BUG:
+
+When a customer sends a new message inside an enquiry/quote conversation, the trader does not reliably receive a notification.
+
+Expected behaviour:
+
+Customer sends a message
+→ trader receives a push notification if notifications are enabled
+→ unread count updates
+→ tapping the notification opens the correct conversation.
+
+Please inspect:
+
+- message creation endpoint
+- conversation participant resolution
+- customer/trader recipient selection
+- push token lookup
+- notification preferences
+- deleted/anonymised user guards
+- unread count handling
+- deep-link destination
+- foreground vs background behaviour
+
+Requirements:
+
+- Do not notify the message sender.
+- Do not send duplicate notifications.
+- Do not send to invalid, removed or anonymised push tokens.
+- Reuse the existing push notification infrastructure.
+- Preserve notification preference settings.
+- Use the correct conversation/job destination.
+
+--------------------------------------------------
+2. MESSAGES DO NOT REFRESH WHILE APP IS OPEN
+--------------------------------------------------
+
+BUG:
+
+If the app is already open and the user is on:
+
+- the Messages inbox, or
+- an open conversation
+
+new messages do not appear automatically.
+
+The user currently has to leave/reopen the app or restart it to see updates.
+
+Expected behaviour:
+
+- An open conversation updates while the app remains active.
+- The Messages inbox updates when new messages arrive.
+- Unread badges update correctly.
+- Sending a message appears immediately.
+- Returning from background triggers a refresh.
+- Returning to the screen triggers a refresh.
+- Pull-to-refresh may remain as a fallback, but must not be the only method.
+
+Please use the smallest reliable approach supported by the current architecture.
+
+Preferred order:
+
+1. Reuse any existing realtime/WebSocket/subscription infrastructure.
+2. If none exists, use lightweight foreground polling at a sensible interval.
+3. Also refresh on screen focus and app foreground.
+
+Avoid:
+
+- excessive API requests
+- duplicated messages
+- scroll-position jumping
+- battery-heavy polling
+- introducing a large new realtime dependency unnecessarily
+
+--------------------------------------------------
+3. BOTTOM NAVIGATION — REPLACE TRADERS WITH MESSAGES
+--------------------------------------------------
+
+Please update the mobile bottom navigation for both customer and trader accounts.
+
+CURRENT ISSUE:
+
+The bottom navigation currently includes a “Traders” tab.
+
+For a logged-in trader, this is not a useful primary destination.
+
+For customers, trader discovery is already available through Home, Search, categories and the relevant discovery flows, while Messages is a more important repeated action.
+
+EXPECTED BEHAVIOUR:
+
+Replace the “Traders” bottom-navigation tab with:
+
+Messages
+
+This should apply to:
+
+- customer accounts
+- trader accounts
+
+The Messages tab should open the existing Messages inbox.
+
+Do not create a new inbox or messaging route.
+
+Please reuse the existing Messages screen and existing conversation data.
+
+The bottom navigation should remain role-appropriate, but Messages must occupy the current Traders tab position for both roles.
+
+--------------------------------------------------
+4. REMOVE DUPLICATE MESSAGES ENTRY FROM ACCOUNT LIST
+--------------------------------------------------
+
+Once Messages is available directly in the bottom navigation, remove the duplicate “Messages” entry from the Account/Profile menu list.
+
+This should apply wherever the Account menu currently contains a separate Messages row.
+
+Do not remove the actual Messages screen.
+
+Only remove the redundant navigation entry from the Account list.
+
+Make sure:
+
+- Messages remains accessible from the bottom navigation.
+- Existing deep links and push-notification navigation still open the correct conversation.
+- No route is deleted unnecessarily.
+- Account menu spacing remains clean after removing the row.
+
+--------------------------------------------------
+5. MESSAGES TAB — UNREAD BADGE / RED DOT
+--------------------------------------------------
+
+The bottom Messages tab must clearly show when the user has unread messages.
+
+Expected behaviour:
+
+When one or more unread conversations/messages exist:
+
+- show a visible red notification dot or unread badge on the Messages tab
+- update it while the app is open
+- update it when a push/new message arrives
+- clear or reduce it when conversations are read
+- restore the correct state after app restart/login
+
+Preferred display:
+
+- If the existing bottom-tab system supports numeric badges cleanly, show the unread count.
+- Otherwise, use a simple red dot.
+- If the unread count is large, use a sensible capped display such as “9+” or “99+”, depending on existing app conventions.
+
+Please reuse the existing unread-count source where possible.
+
+Do not maintain a separate client-only unread counter that can drift from the server.
+
+The badge must work for both:
+
+- customer receiving messages from traders
+- trader receiving messages from customers
+
+It must not include notifications unrelated to messaging.
+
+--------------------------------------------------
+6. NAVIGATION CONSISTENCY
+--------------------------------------------------
+
+Please verify the resulting navigation flow.
+
+CUSTOMER:
+
+- Home/Search remains the main way to discover traders.
+- Messages is available directly in the bottom bar.
+- Account no longer duplicates Messages.
+
+TRADER:
+
+- Trader dashboard/leads remains available through the existing trader navigation.
+- Messages is available directly in the bottom bar.
+- The customer-facing Traders directory is no longer a primary trader-account tab.
+- Account no longer duplicates Messages.
+
+Please do not remove the Traders/search functionality from the app entirely.
+
+The Traders directory/results screen may remain accessible through:
+
+- Home
+- Search
+- categories
+- Browse all
+- other existing customer discovery links
+
+Only remove it from the persistent bottom navigation.
+
+--------------------------------------------------
+7. HOME SCREEN — “REQUEST A QUOTE” VISIBLE ONLY TO CUSTOMERS
+--------------------------------------------------
+
+Please update the Home screen role-based visibility for the “Request a quote” card/button.
+
+CURRENT ISSUE:
+
+The “Request a quote” call-to-action is visible even when the logged-in user has a trader account.
+
+A trader does not need to request a quote as part of their normal trader journey, so this customer-focused CTA should not appear for trader accounts.
+
+EXPECTED BEHAVIOUR:
+
+Logged-in customer:
+- show the existing “Request a quote” card/button
+- preserve the current customer enquiry/quote-request flow
+
+Logged-in trader:
+- hide the entire “Request a quote” card/section
+- do not leave an empty gap or placeholder
+- surrounding Home content should close up naturally
+
+Logged-out user:
+- preserve the current intended public/guest behaviour
+- if the CTA is currently part of customer acquisition, it may remain visible
+- tapping it should continue through the existing login/customer flow
+
+Please use the authenticated user’s real role from the existing auth/profile state.
+
+Do not determine this only from whether a trader profile happens to exist locally.
+
+Do not change the quote-request route or delete the component.
+
+This is role-based visibility only.
+
+Please also check for any other clearly customer-only Home CTAs accidentally shown to logged-in traders, but keep this review strictly limited to the Home screen.
+
+--------------------------------------------------
+8. REPLACE FREE-TEXT TRADER AVAILABILITY
+--------------------------------------------------
+
+The trader’s working availability should not remain as free text.
+
+Replace the existing free-text availability input with structured working days and hours.
+
+Trader should be able to configure:
+
+- each day of the week
+- available/unavailable toggle
+- start time
+- end time
+- optional different hours per day
+
+Example:
+
+Monday: 08:00–19:00
+Tuesday: 08:00–19:00
+Wednesday: 08:00–19:00
+Thursday: 08:00–19:00
+Friday: 08:00–19:00
+Saturday: unavailable
+Sunday: unavailable
+
+Requirements:
+
+- Booking options must stay inside configured working periods.
+- Preserve existing profiles safely.
+- Do not silently destroy existing free-text availability.
+- If legacy free text exists, retain it safely as legacy/read-only data if needed.
+- Use UK local time consistently.
+
+--------------------------------------------------
+9. ADD APPOINTMENT DURATION
+--------------------------------------------------
+
+Appointments need a proper duration, not only a start date/time.
+
+When proposing or booking an appointment, include:
+
+- date
+- start time
+- estimated duration
+
+Use a simple controlled selection.
+
+Suggested options:
+
+- 30 minutes
+- 1 hour
+- 1.5 hours
+- 2 hours
+- 3 hours
+- Half day
+- Full day
+
+Internally, store/use proper start and end times.
+
+Example:
+
+Start:
+10:00
+
+Duration:
+2 hours
+
+Reserved interval:
+10:00–12:00
+
+The booking card and conversation system event should show the duration clearly.
+
+Do not use ambiguous free-text duration values internally.
+
+--------------------------------------------------
+10. PREVENT DOUBLE BOOKING
+--------------------------------------------------
+
+A trader must not be able to have overlapping confirmed appointments.
+
+Example:
+
+Existing confirmed appointment:
+10:00–12:00
+
+A customer must not be able to confirm:
+
+- 10:30–11:30
+- 11:00–13:00
+- 09:30–10:30
+
+for the same trader.
+
+Requirements:
+
+- Conflict checking must be enforced server-side.
+- Do not rely only on disabled UI options.
+- Recheck availability at confirmation time.
+- If another user takes the slot first, return a clear conflict response.
+- Client should refresh available times after conflict.
+
+Suggested message:
+
+“This time is no longer available. Please choose another appointment.”
+
+Please account for:
+
+- confirmed bookings
+- confirmed reschedules
+- cancelled bookings
+- declined bookings
+- completed bookings
+- expired proposals
+- active old slot while a reschedule is awaiting confirmation, where appropriate
+
+--------------------------------------------------
+11. ONLY SHOW AVAILABLE DATES AND TIMES
+--------------------------------------------------
+
+After a quote is accepted and the job is hired, customers and traders should only be able to choose appointment times that:
+
+- fall within the trader’s configured working days/hours
+- are not in the past
+- do not overlap active confirmed bookings
+- can fit the selected duration before the working period ends
+
+Example:
+
+Trader works:
+Monday 08:00–19:00
+
+Existing booking:
+10:00–12:00
+
+Requested duration:
+1 hour
+
+Valid options should exclude overlapping times.
+
+Keep the UI simple.
+
+Do not create a complex calendar or staff-scheduling product.
+
+--------------------------------------------------
+12. BOOKING BLOCKING RULES
+--------------------------------------------------
+
+Please use a clear, minimal rule set.
+
+My preferred behaviour:
+
+Blocking:
+
+- CONFIRMED appointments
+- the existing confirmed slot while a reschedule proposal is pending
+
+Not permanently blocking:
+
+- PROPOSED
+- CANCELLED
+- DECLINED
+- EXPIRED
+- COMPLETED after the scheduled interval has passed
+
+Important clarification:
+
+The job itself may remain active until work completion, but the trader’s whole future calendar must NOT stay blocked until the customer confirms completion.
+
+Only the actual scheduled appointment interval should block another booking unless the appointment is explicitly extended or rescheduled.
+
+Do not automatically mark a job complete when the appointment end time passes.
+
+--------------------------------------------------
+13. TRADER MARKS WORK COMPLETE — NOTIFY CUSTOMER
+--------------------------------------------------
+
+When the trader marks the work as completed, the customer must receive:
+
+- a push notification
+- an email
+
+The message should tell the customer that the trader marked the job complete and ask them to:
+
+- confirm completion
+- report a problem if the work is not complete
+- leave a review after final confirmation
+
+Suggested push wording:
+
+Title:
+Work marked as completed
+
+Body:
+[Business name] marked job [MLT reference] as complete. Review the job and confirm when ready.
+
+The email should contain a Universal Link opening the relevant conversation/job.
+
+Requirements:
+
+- Reuse existing push/email infrastructure.
+- Do not expose unnecessary private information in push previews.
+- Avoid duplicate sends.
+- Respect notification preferences where appropriate.
+- Email should still send as a transactional job-action message.
+
+--------------------------------------------------
+14. CUSTOMER CONFIRMS COMPLETION — NOTIFY TRADER
+--------------------------------------------------
+
+After the customer gives the final confirmation that the job is complete, send the trader a positive but factual milestone notification.
+
+Please create concise wording consistent with MyLocalTrade.
+
+Preferred tone:
+
+Title:
+Job completed
+
+Body:
+Your customer confirmed job MLT-000123 as complete. Another completed job has been added to your MyLocalTrade history.
+
+Do not say the customer is “happy” unless they actually left a positive review.
+
+Also show an appropriate in-app success state/message.
+
+Do not add points, badges, rewards or gamification.
+
+--------------------------------------------------
+15. REVIEW REQUEST AFTER FINAL COMPLETION
+--------------------------------------------------
+
+After the customer confirms the job is complete:
+
+- show/open the existing review prompt
+- send the customer a push notification where appropriate
+- send an email inviting them to leave a review
+- tapping the notification/link should open the correct review form
+
+Do not send repeated or excessive reminders.
+
+If the project does not already have scheduled review reminders, keep this task limited to the immediate post-completion request.
+
+Reuse Universal Links.
+
+--------------------------------------------------
+16. REVIEWS SHOULD APPEAR IN PROFILE, NOT ONBOARDING
+--------------------------------------------------
+
+Current UX requirement:
+
+Live/approved reviews should appear in the trader’s:
+
+- Profile
+- Public Profile
+- Reviews area
+
+They should not be presented as part of Onboarding & Verification once onboarding is complete.
+
+Expected behaviour:
+
+- Onboarding & Verification contains setup and verification progress only.
+- Trader has a clear Reviews entry in their Account/Dashboard.
+- Approved reviews display on the public trader profile.
+- Pending/rejected reviews continue to follow existing moderation rules.
+- Review replies remain associated with the review if already supported.
+
+Please inspect whether review data/counts are currently routed through onboarding and correct that without changing moderation.
+
+--------------------------------------------------
+17. NOTIFICATION AND EMAIL SAFETY
+--------------------------------------------------
+
+For every notification/email changed or added, verify:
+
+- correct sender and recipient
+- no self-notifications
+- no duplicate sends
+- correct push-token filtering
+- no sends to deleted/anonymised users
+- no sends to placeholder `.invalid` addresses
+- correct notification-preference handling
+- correct Universal Link destination
+- safe retry behaviour
+- no private-content leakage in notification previews
+
+Do not create a new notification framework.
+
+--------------------------------------------------
+18. SCHEMA / MIGRATION SAFETY
+--------------------------------------------------
+
+Please identify the smallest schema changes required for:
+
+- structured weekly working hours
+- appointment duration/start/end
+- any booking-conflict support
+
+Prefer additive changes.
+
+Do not apply production migrations.
+
+Please report:
+
+- exact columns/tables/indexes
+- backfill/default strategy
+- compatibility with existing bookings
+- rollback considerations
+- whether existing bookings need a migration or can derive safe defaults
+
+--------------------------------------------------
+19. DO NOT CHANGE
+--------------------------------------------------
+
+Please preserve:
+
+- quote creation and acceptance
+- contact details only after hire
+- existing conversation history
+- job references
+- Add to Calendar
+- booking proposal/confirm/reschedule/cancel flow
+- Phase 1A avatar/business-role work
+- Apple IAP / RevenueCat
+- Twilio/RCS
+- Universal Links
+- verification
+- profile-change approval
+- account deletion
+- review moderation
+- admin audit behaviour
+
+--------------------------------------------------
+20. INITIAL REPORT BEFORE CODING
+--------------------------------------------------
+
+Before implementation, briefly report:
+
+A. Why trader message notifications are currently missing.
+
+B. How messages currently refresh and why they become stale.
+
+C. How the current bottom navigation differs by role.
+
+D. Where the current Traders and Messages tabs/routes are defined.
+
+E. How unread-message counts are currently calculated and exposed.
+
+F. Whether the Account menu currently duplicates Messages for both roles.
+
+G. How the Home screen currently decides whether to show “Request a quote”.
+
+H. Current availability storage and whether it is free text.
+
+I. Current booking start/end/duration fields.
+
+J. Current booking-status model.
+
+K. Current conflict/overlap protection.
+
+L. Current completion notification/email triggers.
+
+M. Current review-request flow.
+
+N. Why reviews are visible in onboarding, if they are.
+
+O. Exact schema changes required.
+
+Then implement the smallest production-safe solution.
+
+--------------------------------------------------
+21. FINAL REPORT
+--------------------------------------------------
+
+After completion, please confirm:
+
+1. Root cause of missing trader message notifications.
+2. Root cause of stale message screens.
+3. Refresh/realtime mechanism implemented.
+4. Message notification behaviour.
+5. Final bottom-navigation tabs for customer accounts.
+6. Final bottom-navigation tabs for trader accounts.
+7. Where the Traders directory remains accessible.
+8. Whether Messages was removed from the Account menu.
+9. How the Messages tab unread red dot/count works.
+10. Whether unread state updates live and persists correctly.
+11. Final “Request a quote” visibility for:
+    - logged-in customer
+    - logged-in trader
+    - logged-out user
+12. Role/auth source used for the “Request a quote” visibility rule.
+13. Confirm the trader Home layout has no empty gap after hiding it.
+14. Structured working-hours model.
+15. Appointment-duration model.
+16. Available-slot generation.
+17. Server-side overlap protection.
+18. Booking-status blocking rules.
+19. Customer push/email after trader marks complete.
+20. Trader milestone notification after customer confirmation.
+21. Customer review prompt/push/email.
+22. Where trader reviews now appear.
+23. Files changed.
+24. Exact schema changes.
+25. Development migration status.
+26. Production migration required, but not applied.
+27. Tests added.
+28. Typecheck/test results.
+29. Manual TestFlight scenarios required.
+30. Confirm:
+   - no EAS build
+   - no production migration
+   - no deployment
+   - no publish

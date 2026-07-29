@@ -328,7 +328,12 @@ export default function TraderOnboardingDashboard() {
         </View>
       ) : null}
 
-      {/* Reviews summary card */}
+      {/* Reviews summary card — dashboard-only, never part of onboarding.
+          While the trader is still verifying, this screen is Onboarding &
+          Verification and must show setup/verification progress only. Once
+          VERIFIED it doubles as the dashboard, where reviews belong. */}
+      {status.verificationStatus === 'VERIFIED' && (
+      <>
       <Text style={styles.sectionLabel}>Reviews</Text>
       <ReviewsSummaryCard
         averageRating={reviewsData?.averageRating ?? null}
@@ -342,6 +347,8 @@ export default function TraderOnboardingDashboard() {
         })()}
         onOpen={() => router.push('/trader-dashboard/reviews')}
       />
+      </>
+      )}
 
       {/* Quick links to other trader-dashboard sections */}
       <Text style={styles.sectionLabel}>Manage</Text>

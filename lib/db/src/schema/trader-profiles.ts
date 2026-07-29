@@ -69,7 +69,20 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   serviceAreas: json("service_areas").$type<string[]>().default([]),
   businessDescription: text("business_description"),
   website: varchar("website", { length: 255 }),
+  // LEGACY free-text availability. Retained read-only for existing profiles;
+  // superseded by workingHours below. Do not build new features on this.
   openingHours: text("opening_hours"),
+  // Structured weekly availability, UK local time. Keys mon..sun; each day is
+  // either disabled or an HH:MM range. Null = trader has not configured
+  // structured hours yet (booking slot generation then falls back to a
+  // permissive default window rather than blocking bookings entirely).
+  workingHours: json("working_hours").$type<{
+    [day in "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun"]?: {
+      enabled: boolean;
+      start: string; // "08:00"
+      end: string;   // "19:00"
+    };
+  }>(),
   logoUrl: text("logo_url"),
   galleryUrls: json("gallery_urls").$type<string[]>().default([]),
   socialLinks: json("social_links").$type<{ facebook?: string; twitter?: string; instagram?: string; linkedin?: string }>(),
