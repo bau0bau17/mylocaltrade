@@ -1,0 +1,278 @@
+Hi,
+
+I want to introduce individual trader profile photos and, in the future, support multiple authorised employees under the same business.
+
+However, I do NOT want you to implement the full multi-user company/team system yet.
+
+Please perform a targeted architecture assessment first and recommend the safest phased rollout.
+
+IMPORTANT:
+
+- Do not make code changes yet.
+- Do not perform a broad repository audit.
+- Inspect only the relevant user, trader/business profile, onboarding, verification, quote, conversation, job, notification, admin and RevenueCat/IAP models.
+- Do not start an EAS build.
+- Do not deploy or publish.
+- Do not run migrations.
+- Keep this as a design/architecture assessment only.
+
+--------------------------------------------------
+PRODUCT INTENT
+--------------------------------------------------
+
+I want to support the following model:
+
+- A business/company has one shared business profile.
+- Each authorised person working for that business has their own individual user account.
+- Each individual can have their own personal profile photo/headshot.
+- The business can have its own logo.
+- Owner/director/sole trader can manage the business logo.
+- Employees cannot change the business logo.
+- Employees must be verified and approved before acting on behalf of the company.
+- In a future phase, the first authorised person who sends a valid quote or explicitly takes the lead becomes the assigned representative for that job.
+- The customer should then see both:
+  - the business identity
+  - the individual person handling the job
+
+Example:
+
+Business:
+ABC Electrical LTD
+
+Assigned representative:
+John Smith
+[John’s profile photo]
+
+--------------------------------------------------
+PHASE 1 — SAFE PRE-LAUNCH SCOPE
+--------------------------------------------------
+
+Please assess whether the following Phase 1 can be implemented safely before launch:
+
+1. Individual profile photo/headshot for trader users.
+2. New onboarding role:
+   - Employee
+3. Mandatory employee authorisation/employment letter.
+4. Safe company association approval.
+5. Business logo editable only by:
+   - Owner
+   - Director
+   - Sole trader for their own business
+6. Employees can edit only their own personal profile details/photo.
+7. No full team inbox, job assignment or reassignment yet.
+8. No RevenueCat/IAP entitlement changes yet.
+
+Please confirm whether this Phase 1 is genuinely small enough and safe enough before launch.
+
+--------------------------------------------------
+PHASE 2 — DEFERRED UNTIL AFTER LAUNCH
+--------------------------------------------------
+
+Please assess, but do not implement:
+
+- Multiple active company members under one business.
+- Shared company lead visibility.
+- First person to send a valid quote becomes assigned representative.
+- Server-side concurrency protection for assignment.
+- Individual name/photo shown in quote, conversation and job.
+- Post-assignment notifications to the assigned representative.
+- Owner/director oversight.
+- Explicit reassignment.
+- Employee offboarding.
+- Historical job attribution.
+- Shared business subscription entitlement.
+
+--------------------------------------------------
+TARGETED CURRENT-ARCHITECTURE QUESTIONS
+--------------------------------------------------
+
+Please inspect and answer:
+
+1. Is the current model effectively one user = one trader/business profile?
+
+2. Can multiple users already belong to one trader/business profile?
+
+3. Where are these currently stored:
+   - business name
+   - business logo
+   - trader verification
+   - services
+   - service areas
+   - subscription entitlement
+
+4. Does a personal avatar/profile-photo field already exist?
+
+5. Do quotes store the individual user ID who sent them?
+
+6. Do messages store the individual sender user ID distinctly from the trader/business profile ID?
+
+7. Could the first valid quote safely become the assignment event in a future phase?
+
+8. How is RevenueCat entitlement currently linked:
+   - user
+   - trader profile
+   - business profile
+   - another identifier
+
+9. Does the admin portal already support team members/company associations in any form?
+
+10. What exact schema changes would Phase 1 require?
+
+11. What exact schema changes would Phase 2 require?
+
+--------------------------------------------------
+EMPLOYEE ASSOCIATION — RECOMMENDATION NEEDED
+--------------------------------------------------
+
+An employee must not be able to attach themselves to any company simply by typing its name.
+
+Please recommend the smallest safe association method for Phase 1.
+
+Options may include:
+
+- invitation from verified owner/director
+- company-specific invitation code
+- employee association request approved by owner/director
+- admin approval using the mandatory employment letter
+- verified company-domain email plus admin approval
+
+Please recommend the best approach for the existing architecture.
+
+--------------------------------------------------
+EMPLOYEE AUTHORISATION LETTER
+--------------------------------------------------
+
+For an Employee account, the required letter should confirm:
+
+- employee full name
+- business/company name
+- that they are employed by or authorised to represent the company
+- that they may communicate with customers and provide quotes on behalf of the company
+- name/title of the authorising representative
+- date
+- signature or appropriate company confirmation
+
+This document should be additional to existing required verification documents.
+
+Please assess:
+- where this document type should live
+- how admin reviews it
+- whether a new document type is sufficient
+- whether the employee should remain pending until approval
+
+--------------------------------------------------
+ROLE / PERMISSION MATRIX
+--------------------------------------------------
+
+Please provide a recommended permission matrix for:
+
+- Owner
+- Director
+- Sole trader
+- Employee
+
+At minimum cover:
+
+- business logo
+- business name
+- business address
+- company/VAT details
+- verification documents
+- services/service areas
+- subscription/plan
+- personal profile photo
+- personal contact details
+- ability to receive/send quotes
+- ability to represent the company
+
+--------------------------------------------------
+PROFILE PHOTO
+--------------------------------------------------
+
+Please assess the smallest safe implementation for an individual trader profile photo.
+
+Requirements:
+
+- optional for owner/director/sole trader unless you strongly recommend otherwise
+- mandatory or strongly encouraged for Employee accounts
+- upload/change/remove from Account/Profile
+- initials fallback
+- image resize/compression
+- existing object storage reused
+- no unnecessary metadata exposure
+- displayed later in quote/chat/job contexts
+- does not replace the business logo on public trader cards
+
+For Phase 1, please recommend exactly where the photo should be shown without adding the full team/job-assignment system yet.
+
+--------------------------------------------------
+BUSINESS LOGO
+--------------------------------------------------
+
+Please assess:
+
+- whether a business-logo field already exists
+- whether it is currently editable by any trader user
+- how to enforce server-side permissions so only Owner/Director/Sole trader can change it
+- whether Employee accounts should see it as read-only
+
+Do not rely only on hiding the UI control.
+
+--------------------------------------------------
+SUBSCRIPTION / REVENUECAT
+--------------------------------------------------
+
+Do not change Apple IAP or RevenueCat.
+
+Please explain only:
+
+- how entitlement is currently attached
+- why multi-user business sharing may be difficult
+- what would be required later for employees to inherit a business Premium entitlement
+- whether Phase 1 can safely avoid this issue
+
+--------------------------------------------------
+ADMIN REQUIREMENTS
+--------------------------------------------------
+
+Please recommend the minimum Phase 1 admin additions:
+
+- employee role/status
+- linked business
+- uploaded employment/authorisation letter
+- approve/reject/request more information
+- association audit history
+- ability to remove/disable employee association
+
+Do not design a full team-management portal yet.
+
+--------------------------------------------------
+FINAL RESPONSE REQUIRED
+--------------------------------------------------
+
+Please return:
+
+1. Current architecture findings.
+2. Whether multi-user businesses are already supported.
+3. Recommended Phase 1 scope.
+4. Recommended Phase 2 scope.
+5. Recommended company-association method.
+6. Role/permission matrix.
+7. Profile-photo implementation proposal.
+8. Business-logo permission proposal.
+9. Employee verification/document proposal.
+10. RevenueCat/IAP implications.
+11. Required schema changes for Phase 1.
+12. Required schema changes for Phase 2.
+13. Security/concurrency risks.
+14. Recommended admin changes.
+15. Estimated implementation size for each phase:
+    - small
+    - medium
+    - large
+16. Clear recommendation:
+    - what is safe before launch
+    - what should be deferred
+
+Do not start implementation yet.
+Do not start a build, migration, deployment or publish.
