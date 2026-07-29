@@ -152,6 +152,9 @@ export default function BusinessProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [attemptedSave, setAttemptedSave] = useState(false);
+  // Whether the SERVER already has structured working hours saved. Legacy
+  // traders (free-text opening hours only) see a prompt until they save.
+  const [serverHasWorkingHours, setServerHasWorkingHours] = useState(true);
 
   // Business email domain confirmation (round-trip email proof). Advisory only.
   const [emailVerify, setEmailVerify] = useState<{
@@ -197,6 +200,7 @@ export default function BusinessProfileScreen() {
           businessEmailDomain: json.businessEmailDomain ?? '',
           vatNumber: json.vatNumber ?? '',
         });
+        setServerHasWorkingHours(Boolean(json.workingHours));
         setEmailVerify({
           verified: Boolean(json.businessEmailVerified),
           verifiedAddress: json.businessEmailVerifiedAddress ?? null,
@@ -298,6 +302,7 @@ export default function BusinessProfileScreen() {
         );
         return;
       }
+      setServerHasWorkingHours(true);
       setCompleted(true);
       // Navigate straight to the trader dashboard. We previously used
       // Alert.alert as a confirmation, but native alerts do not render
@@ -743,7 +748,7 @@ export default function BusinessProfileScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Opening hours *</Text>
+        <Text style={styles.sectionTitle}>Opening hours notes (optional)</Text>
         <View style={styles.inputGroup}>
           <TextInput
             style={[
@@ -763,10 +768,21 @@ export default function BusinessProfileScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>Working hours (for appointments)</Text>
+        {!serverHasWorkingHours && (
+          <View style={styles.whPromptBanner}>
+            <Feather name="clock" size={16} color={Colors.light.primary} />
+            <Text style={styles.whPromptText}>
+              Please set your working hours. Appointments can only be booked within them — until
+              you save a schedule, customers can request times between 08:00 and 18:00. Your
+              existing opening-hours text is kept as a note.
+            </Text>
+          </View>
+        )}
         <Text style={styles.whHint}>
           Customers can only book appointment times inside these hours. Tap a day to switch it on
           or off, then adjust the start and end times.
         </Text>
+        {fieldErr('workingHours') && <Text style={styles.fieldError}>{fieldErr('workingHours')}</Text>}
         <View style={styles.inputGroup}>
           {DAY_ORDER.map((dayKey) => {
             const day = form.workingHours[dayKey];
@@ -918,8 +934,17 @@ function computeFieldErrors(form: ProfileForm) {
     postcode: form.postcode.trim().length === 0 ? 'This field is required.' : null,
     additionalServices: form.additionalServices.length === 0 ? 'Add at least one service.' : null,
     serviceAreas: form.serviceAreas.length === 0 ? 'Add at least one service area.' : null,
-    openingHours: form.openingHours.trim().length === 0 ? 'This field is required.' : null,
+    // Legacy free-text opening hours are OPTIONAL now — structured working
+    // hours are the availability source of truth for onboarding + bookings.
+    openingHours: null,
+    workingHours: hasEnabledWorkingDay(form.workingHours)
+      ? null
+      : 'Enable at least one working day.',
   };
+}
+
+function hasEnabledWorkingDay(wh: WorkingHoursState): boolean {
+  return DAY_ORDER.some((d) => wh[d].enabled);
 }
 
 function computeRequirements(form: ProfileForm) {
@@ -941,11 +966,28 @@ function computeRequirements(form: ProfileForm) {
     { field: 'businessAddress', label: 'Business address', satisfied: addr.length > 0 && town.length > 0 && postcode.length > 0, hint: 'Street, town and postcode.' },
     { field: 'additionalServices', label: 'Services offered', satisfied: form.additionalServices.length >= 1, hint: 'Add at least one service.' },
     { field: 'serviceAreas', label: 'Service areas', satisfied: form.serviceAreas.length >= 1, hint: 'Add at least one area you cover.' },
-    { field: 'openingHours', label: 'Opening hours', satisfied: hours.length > 0, hint: 'Tell customers when you work.' },
+    { field: 'workingHours', label: 'Working hours', satisfied: hasEnabledWorkingDay(form.workingHours) || hours.length > 0, hint: 'Set your weekly working hours.' },
   ];
 }
 
 const styles = StyleSheet.create({
+  whPromptBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: Colors.light.primaryMuted,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+  },
+  whPromptText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.light.text,
+  },
   whHint: {
     fontSize: 13,
     color: Colors.light.textSecondary,

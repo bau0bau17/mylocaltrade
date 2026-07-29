@@ -353,7 +353,7 @@ const MIN_DESCRIPTION_LEN = 80;
 export function evaluateBusinessProfileComplete(
   profile: Pick<TraderProfile,
     "businessDescription" | "businessAddress" | "additionalServices" | "serviceAreas" |
-    "openingHours" | "town" | "postcode" | "mainCategory" |
+    "openingHours" | "workingHours" | "town" | "postcode" | "mainCategory" |
     "businessType" | "companyNumber">,
 ): BusinessProfileEvaluation {
   const desc = (profile.businessDescription ?? "").trim();
@@ -362,7 +362,16 @@ export function evaluateBusinessProfileComplete(
   const postcode = (profile.postcode ?? "").trim();
   const services = profile.additionalServices ?? [];
   const areas = profile.serviceAreas ?? [];
-  const hours = (profile.openingHours ?? "").trim();
+  const legacyHours = (profile.openingHours ?? "").trim();
+  // Structured working hours are the availability source of truth. A schedule
+  // counts as configured when at least one day is enabled. Existing traders
+  // who only ever entered legacy free-text opening hours stay grandfathered
+  // (their completion state must not silently regress), but they are prompted
+  // in the app to configure structured hours — the legacy text is never
+  // auto-converted.
+  const wh = profile.workingHours;
+  const structuredConfigured =
+    !!wh && Object.values(wh).some((d) => d && d.enabled === true);
   const category = (profile.mainCategory ?? "").trim();
   const businessType = (profile.businessType ?? "").trim();
   const companyNumber = (profile.companyNumber ?? "").replace(/\s+/g, "").toUpperCase();
@@ -406,10 +415,10 @@ export function evaluateBusinessProfileComplete(
       hint: "Add at least one town/area you cover.",
     },
     {
-      field: "openingHours",
-      label: "Opening hours",
-      satisfied: hours.length > 0,
-      hint: "Tell customers when you're available.",
+      field: "workingHours",
+      label: "Working hours",
+      satisfied: structuredConfigured || legacyHours.length > 0,
+      hint: "Set your weekly working hours so customers can book appointments.",
     },
   ];
 

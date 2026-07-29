@@ -16,4 +16,6 @@ Single source: `artifacts/api-server/src/lib/booking-availability.ts`.
 
 **UK time:** `ukLocalToUtc` returns **null** for nonexistent spring-forward wall times — callers must skip/reject. Slot generation is UK-local (Europe/London) with 30-min steps; traders without configured `workingHours` fall back permissively to 08:00–18:00.
 
+**Onboarding:** structured `workingHours` (≥1 enabled day) is the completion requirement (field name `workingHours` in the checklist, client + server); legacy free-text `openingHours` is optional, kept as a note, and grandfathers existing traders (satisfied if non-empty) — never auto-converted. The 08:00–18:00 permissive fallback applies ONLY while `workingHours` is NULL (legacy traders are banner-prompted to configure).
+
 **Tests gotcha:** bookings tests must give every proposal a distinct future slot (shared timestamps now 409 against each other); generic test slots start 30 days out to avoid the fixed-date conflict tests.
