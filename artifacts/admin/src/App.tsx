@@ -2,6 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Route, Router, Switch } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { AuthProvider } from "@/lib/auth";
+import { ThemeProvider } from "@/lib/theme";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AdminLayout } from "@/components/AdminLayout";
 import { Toaster } from "@/components/ui/toaster";
@@ -60,6 +61,7 @@ function ProtectedRoutes() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
       <AuthProvider>
         <Router base={BASE_PATH === "/" ? "" : BASE_PATH}>
           <Switch>
@@ -72,6 +74,7 @@ export default function App() {
         </Router>
         <Toaster />
       </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

@@ -5,13 +5,13 @@ const styleMap: Record<TraderStatus, string> = {
   PENDING_EMAIL_VERIFICATION: "bg-muted text-muted-foreground border-transparent",
   PENDING_PHONE_VERIFICATION: "bg-muted text-muted-foreground border-transparent",
   PROFILE_INCOMPLETE: "bg-muted text-muted-foreground border-transparent",
-  PENDING_DOCUMENTS: "bg-blue-100 text-blue-800 border-transparent",
-  UNDER_REVIEW: "bg-amber-100 text-amber-900 border-transparent",
-  NEEDS_MORE_INFO: "bg-yellow-100 text-yellow-900 border-transparent",
-  VERIFIED: "bg-emerald-100 text-emerald-800 border-transparent",
-  REJECTED: "bg-red-100 text-red-800 border-transparent",
-  SUSPENDED: "bg-zinc-200 text-zinc-800 border-transparent",
-  EXPIRED_DOCUMENTS: "bg-orange-100 text-orange-900 border-transparent",
+  PENDING_DOCUMENTS: "bg-[hsl(var(--info-tint))] text-[hsl(var(--info))] border-transparent",
+  UNDER_REVIEW: "bg-[hsl(var(--warning-tint))] text-[hsl(var(--warning))] border-transparent",
+  NEEDS_MORE_INFO: "bg-[hsl(var(--warning-tint))] text-[hsl(var(--warning))] border-transparent",
+  VERIFIED: "bg-[hsl(var(--success-tint))] text-[hsl(var(--success))] border-transparent",
+  REJECTED: "bg-[hsl(var(--destructive-tint))] text-[hsl(var(--destructive))] border-transparent",
+  SUSPENDED: "bg-muted text-muted-foreground border-transparent",
+  EXPIRED_DOCUMENTS: "bg-[hsl(var(--warning-tint))] text-[hsl(var(--warning))] border-transparent",
 };
 
 export function StatusBadge({ status }: { status: TraderStatus | string }) {
@@ -26,10 +26,10 @@ export function StatusBadge({ status }: { status: TraderStatus | string }) {
 }
 
 const docStatusMap: Record<string, string> = {
-  PENDING_REVIEW: "bg-amber-100 text-amber-900 border-transparent",
-  APPROVED: "bg-emerald-100 text-emerald-800 border-transparent",
-  REJECTED: "bg-red-100 text-red-800 border-transparent",
-  EXPIRED: "bg-orange-100 text-orange-900 border-transparent",
+  PENDING_REVIEW: "bg-[hsl(var(--warning-tint))] text-[hsl(var(--warning))] border-transparent",
+  APPROVED: "bg-[hsl(var(--success-tint))] text-[hsl(var(--success))] border-transparent",
+  REJECTED: "bg-[hsl(var(--destructive-tint))] text-[hsl(var(--destructive))] border-transparent",
+  EXPIRED: "bg-[hsl(var(--warning-tint))] text-[hsl(var(--warning))] border-transparent",
 };
 
 export function DocumentStatusBadge({ status }: { status: string }) {
