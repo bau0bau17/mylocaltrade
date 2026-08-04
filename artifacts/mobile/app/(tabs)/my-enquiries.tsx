@@ -37,7 +37,10 @@ export default function MyEnquiriesScreen() {
 
   if (isAdmin) {
     return (
-      <View style={[styles.centered, { padding: 32 }]}>
+      <View style={styles.emptyWrap}>
+        <View style={styles.emptyIconWrap}>
+          <Feather name="slash" size={24} color={Colors.light.textMuted} />
+        </View>
         <Text style={styles.emptyTitle}>Not available for admins</Text>
         <Text style={styles.emptySubtitle}>
           Admin accounts don't send enquiries. Use a customer account for this.
@@ -109,7 +112,10 @@ export default function MyEnquiriesScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
           }
         >
-          <View style={styles.centered}>
+          <View style={styles.emptyWrap}>
+            <View style={styles.emptyIconWrap}>
+              <Feather name="inbox" size={24} color={Colors.light.textMuted} />
+            </View>
             <Text style={styles.emptyTitle}>No enquiries yet</Text>
             <Text style={styles.emptySubtitle}>
               When you send enquiries to traders, they will appear here.
@@ -133,8 +139,22 @@ export default function MyEnquiriesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: Colors.light.text, marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, color: Colors.light.textSecondary, textAlign: 'center', lineHeight: 20 },
+  // Empty/blocked states anchor in the upper portion of the screen (shared
+  // app pattern) instead of floating in the middle of a blank area.
+  emptyWrap: { flex: 1, alignItems: 'center', paddingHorizontal: 32, paddingTop: 48 },
+  emptyIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: Colors.light.text, marginBottom: 4 },
+  emptySubtitle: { fontSize: 13, color: Colors.light.textSecondary, textAlign: 'center', lineHeight: 19 },
   reviewBtn: {
     flexDirection: 'row',
     alignItems: 'center',

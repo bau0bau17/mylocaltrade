@@ -175,21 +175,24 @@ export default function TraderProfileScreen() {
                 <Feather name="info" size={10} color={Colors.light.success} style={{ marginLeft: 3 }} />
               </Pressable>
             )}
+            {/* Perk badges are deliberately quieter (outline style) than the
+                Category + Verified badges, so identity and trust signals lead
+                the hierarchy at the top of the profile. */}
             {!!trader.plan && trader.plan !== 'basic' && (
-              <View style={[styles.planBadge, { backgroundColor: Colors.light.primaryMuted }]}>
-                <Text style={[styles.planTextColored, { color: Colors.light.primary }]}>Premium</Text>
+              <View style={styles.secondaryBadge}>
+                <Text style={styles.secondaryBadgeText}>Premium</Text>
               </View>
             )}
             {isTopRated(trader.rating, trader.reviewCount) && (
-              <View style={[styles.planBadge, { backgroundColor: 'rgba(245, 158, 11, 0.14)' }]}>
+              <View style={styles.secondaryBadge}>
                 <FontAwesome name="star" size={11} color={Colors.light.featured} />
-                <Text style={[styles.planTextColored, { color: '#B45309' }]}>Top rated</Text>
+                <Text style={styles.secondaryBadgeText}>Top rated</Text>
               </View>
             )}
             {isFastResponder(trader.responseTimeMinutes) ? (
-              <View style={[styles.planBadge, { backgroundColor: Colors.light.primaryMuted }]}>
+              <View style={styles.secondaryBadge}>
                 <Feather name="zap" size={11} color={Colors.light.primary} />
-                <Text style={[styles.planTextColored, { color: Colors.light.primary }]}>Replies fast</Text>
+                <Text style={styles.secondaryBadgeText}>Replies fast</Text>
               </View>
             ) : null}
           </View>
@@ -753,6 +756,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  secondaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.surface,
+  },
+  secondaryBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    color: Colors.light.textSecondary,
   },
   content: {
     padding: 20,

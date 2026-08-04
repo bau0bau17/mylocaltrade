@@ -86,7 +86,12 @@ export default function CompareOffersScreen() {
         <Text style={styles.emptySubtitle}>
           {error instanceof Error ? error.message : 'Failed to load offers'}
         </Text>
-        <Pressable style={styles.retryBtn} onPress={() => refetch()}>
+        <Pressable
+          style={styles.retryBtn}
+          onPress={() => refetch()}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+        >
           <Text style={styles.retryText}>Try again</Text>
         </Pressable>
       </View>
@@ -456,7 +461,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   awaitingChatText: { fontSize: 11, color: Colors.light.textSecondary, fontStyle: 'italic' },
-  retryBtn: { marginTop: 12, paddingHorizontal: 18, height: 40, borderRadius: 10, backgroundColor: Colors.light.primary, alignItems: 'center', justifyContent: 'center' },
+  retryBtn: { marginTop: 12, paddingHorizontal: 18, height: 44, borderRadius: 12, backgroundColor: Colors.light.primary, alignItems: 'center', justifyContent: 'center' },
   retryText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
   intro: { fontSize: 13, color: Colors.light.textSecondary, lineHeight: 18, marginBottom: 14 },

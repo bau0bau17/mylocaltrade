@@ -316,7 +316,11 @@ export default function RegisterTraderScreen() {
                   );
                 })}
               </ScrollView>
-              <Pressable style={styles.suggestionDismiss} onPress={() => setChOpen(false)}>
+              <Pressable
+                style={styles.suggestionDismiss}
+                onPress={() => setChOpen(false)}
+                accessibilityRole="button"
+              >
                 <Text style={styles.suggestionDismissText}>Hide suggestions</Text>
               </Pressable>
             </View>

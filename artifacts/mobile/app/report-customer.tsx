@@ -23,7 +23,8 @@ export default function ReportCustomerScreen() {
           paddingHorizontal: 20,
         }}
       >
-        <Text style={styles.title}>Report this customer</Text>
+        {/* Page title comes from the shared stack header (Stack.Screen
+            options above) — no duplicate inline title. */}
         <Text style={styles.paragraph}>
           If a customer has behaved inappropriately, please let us know. We review all reports and may take action on the account where appropriate.
         </Text>
@@ -41,12 +42,5 @@ export default function ReportCustomerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.light.text,
-    marginBottom: 16,
-    letterSpacing: 0.3,
-  },
   paragraph: { fontSize: 14, color: Colors.light.textSecondary, lineHeight: 22, marginBottom: 16 },
 });

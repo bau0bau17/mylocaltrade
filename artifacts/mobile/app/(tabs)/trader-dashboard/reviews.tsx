@@ -85,9 +85,12 @@ export default function TraderReviewsScreen() {
 
         {reviews.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Feather name="message-circle" size={22} color={Colors.light.textMuted} />
+            <View style={styles.emptyIconWrap}>
+              <Feather name="message-circle" size={22} color={Colors.light.textMuted} />
+            </View>
+            <Text style={styles.emptyTitle}>No reviews yet</Text>
             <Text style={styles.emptyText}>
-              You haven't received any reviews yet. They'll appear here once customers leave feedback.
+              They'll appear here once customers leave feedback.
             </Text>
           </View>
         ) : (
@@ -130,6 +133,8 @@ export default function TraderReviewsScreen() {
                             setReplyText(r.traderReply ?? '');
                           }}
                           hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit your reply"
                         >
                           <Text style={styles.editLink}>Edit</Text>
                         </Pressable>
@@ -144,6 +149,7 @@ export default function TraderReviewsScreen() {
                       setReplyOpen(r.id);
                       setReplyText('');
                     }}
+                    accessibilityRole="button"
                   >
                     <Feather name="message-square" size={13} color={Colors.light.primary} />
                     <Text style={styles.replyBtnText}>Reply publicly</Text>
@@ -169,6 +175,7 @@ export default function TraderReviewsScreen() {
                           setReplyOpen(null);
                           setReplyText('');
                         }}
+                        accessibilityRole="button"
                       >
                         <Text style={styles.cancelBtnText}>Cancel</Text>
                       </Pressable>
@@ -176,6 +183,8 @@ export default function TraderReviewsScreen() {
                         style={[styles.postBtn, replying && { opacity: 0.6 }]}
                         onPress={() => submitReply(r.id)}
                         disabled={replying}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: replying, busy: replying }}
                       >
                         {replying ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.postBtnText}>Post reply</Text>}
                       </Pressable>
@@ -199,9 +208,11 @@ const styles = StyleSheet.create({
   summary: { padding: 16, marginBottom: 16, backgroundColor: Colors.light.card, borderRadius: 14, borderWidth: 1, borderColor: Colors.light.border, alignItems: 'flex-start', gap: 6 },
   avgValue: { fontSize: 32, fontWeight: '700', color: Colors.light.text },
   avgLabel: { fontSize: 12, color: Colors.light.textMuted, marginTop: 4 },
-  emptyBox: { padding: 18, borderRadius: 12, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border, alignItems: 'center', gap: 8 },
+  emptyBox: { padding: 20, borderRadius: 12, backgroundColor: Colors.light.surface, borderWidth: 1, borderColor: Colors.light.border, alignItems: 'center', gap: 8 },
+  emptyIconWrap: { width: 48, height: 48, borderRadius: 16, backgroundColor: Colors.light.card, borderWidth: 1, borderColor: Colors.light.border, alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: Colors.light.text },
   emptyText: { fontSize: 13, color: Colors.light.textMuted, textAlign: 'center', lineHeight: 18 },
-  card: { backgroundColor: Colors.light.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: Colors.light.border, marginBottom: 12, gap: 10 },
+  card: { backgroundColor: Colors.light.card, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: Colors.light.border, marginBottom: 12, gap: 10 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   reviewer: { fontSize: 14, fontWeight: '700', color: Colors.light.text },
   reviewDate: { fontSize: 11, color: Colors.light.textMuted, marginTop: 2 },
