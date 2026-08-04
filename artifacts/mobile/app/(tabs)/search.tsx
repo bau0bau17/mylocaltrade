@@ -298,11 +298,13 @@ export default function SearchScreen() {
             ))
           ) : (
             <View style={styles.emptyRecent}>
-              <Feather name="search" size={32} color={Colors.light.textMuted} style={{ marginBottom: 8 }} />
-              <Text style={styles.emptyText}>No recent searches</Text>
-              {!location.isLoading && !location.permissionDenied && location.city && (
-                <Text style={styles.emptySubText}>Searching near {location.city}</Text>
-              )}
+              <View style={styles.emptyRecentIconWrap}>
+                <Feather name="search" size={16} color={Colors.light.textMuted} />
+              </View>
+              <View style={styles.emptyRecentTextWrap}>
+                <Text style={styles.emptyText}>No recent searches yet</Text>
+                <Text style={styles.emptySubText}>Your recent trader searches will appear here.</Text>
+              </View>
             </View>
           )}
         </View>
@@ -562,19 +564,37 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.light.text,
   },
+  // Compact, left-aligned empty state that sits directly under the
+  // "Recent Searches" heading instead of floating in the remaining space.
   emptyRecent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 40,
-    gap: 8,
+    gap: 12,
+    paddingVertical: 6,
+  },
+  emptyRecentIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: Colors.light.card,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyRecentTextWrap: {
+    flex: 1,
   },
   emptyText: {
-    fontSize: 13,
-    color: Colors.light.textMuted,
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.light.textSecondaryStrong,
   },
   emptySubText: {
     fontSize: 12,
     color: Colors.light.textSecondary,
     letterSpacing: 0.2,
+    marginTop: 2,
   },
   resultsContainer: {
     flex: 1,

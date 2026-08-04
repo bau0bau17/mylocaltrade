@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Image, RefreshControl, Alert, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { getApiUrl, avatarImageUrl } from '@/lib/api-url';
@@ -281,17 +281,22 @@ export default function AccountScreen() {
   if (!isAuthenticated) {
     return (
       <View style={styles.container}>
-        <ScreenHeader variant="tab" title="Account" />
+        {/* No "Account" page title while logged out — "Join MyLocalTrade" is
+            the hero title. Safe-area spacing moves onto the scroll content. */}
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 100 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingTop: Math.max(insets.top, 24) + 8,
+            paddingBottom: insets.bottom + 100,
+          }}
           showsVerticalScrollIndicator={false}
         >
         <View style={styles.unauthContent}>
-          {/* Brand-palette mark (cyan tools on muted cyan) instead of the
-              royal-blue logo tile, which clashed with the navy/cyan scheme. */}
-          <View style={styles.unauthIconWrap}>
-            <MaterialCommunityIcons name="hammer-wrench" size={34} color={Colors.light.primary} />
-          </View>
+          <Image
+            source={require('@/assets/images/logo.png')}
+            style={styles.unauthIcon}
+            resizeMode="contain"
+          />
 
           <Text style={styles.unauthTitle}>Join MyLocalTrade</Text>
           <Text style={styles.unauthSubtitle}>
@@ -651,16 +656,13 @@ const styles = StyleSheet.create({
     paddingTop: 32,
     alignItems: 'center',
   },
-  unauthIconWrap: {
-    width: 72,
-    height: 72,
+  // The original brand logo tile (white tools on bright blue) — restored
+  // exactly; do not recolour or replace it with a themed icon.
+  unauthIcon: {
+    width: 88,
+    height: 88,
     borderRadius: 22,
-    backgroundColor: Colors.light.primaryMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
+    marginBottom: 24,
   },
   unauthTitle: {
     fontSize: 22,

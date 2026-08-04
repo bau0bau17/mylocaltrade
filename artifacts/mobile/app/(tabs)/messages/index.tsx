@@ -97,11 +97,29 @@ export default function MessagesIndexScreen() {
 
   if (!isAuthenticated) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyTitle}>Log in to view your messages</Text>
-        <Pressable style={styles.cta} onPress={() => router.push("/auth/login")}>
-          <Text style={styles.ctaText}>Log In</Text>
-        </Pressable>
+      <View style={styles.container}>
+        {/* Compact page header so the logged-out state matches the
+            authenticated inbox chrome. */}
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <Text style={styles.title}>Messages</Text>
+        </View>
+        <View style={styles.loggedOutBody}>
+          <View style={styles.emptyIcon}>
+            <Feather name="message-circle" size={28} color={Colors.light.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>Log in to view your messages</Text>
+          <Text style={styles.emptySub}>
+            Keep track of enquiries and conversations with local traders.
+          </Text>
+          <Pressable
+            style={styles.cta}
+            onPress={() => router.push("/auth/login")}
+            accessibilityRole="button"
+            accessibilityLabel="Log in"
+          >
+            <Text style={styles.ctaText}>Log In</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -390,6 +408,14 @@ const styles = StyleSheet.create({
   },
   subtitle: { fontSize: 13, color: Colors.light.textSecondary, marginTop: 4 },
   empty: { alignItems: "center", padding: 32, marginTop: 40 },
+  // Logged-out state: anchored in the upper portion of the screen under the
+  // compact header, rather than floating in the vertical centre.
+  loggedOutBody: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 32,
+    paddingTop: 56,
+  },
   emptyIcon: {
     width: 64,
     height: 64,
@@ -404,6 +430,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.light.text,
     marginBottom: 6,
+    textAlign: "center",
   },
   emptySub: {
     fontSize: 14,
