@@ -42,6 +42,7 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  '@babel/core@7': ^7.29.6
   '@esbuild-kit/esm-loader': npm:tsx@^4.21.0
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-arm64': '-'
   '@expo/ngrok-bin>@expo/ngrok-bin-darwin-x64': '-'
@@ -65,11 +66,11 @@ overrides:
   '@tailwindcss/oxide>@tailwindcss/oxide-win32-x64-msvc': '-'
   '@tootallnate/once': ^3.0.1
   '@xmldom/xmldom': ^0.8.13
-  brace-expansion@1: npm:brace-expansion@^5.0.8
-  brace-expansion@2: npm:brace-expansion@^5.0.8
-  brace-expansion@5: ^5.0.8
+  brace-expansion@1: npm:brace-expansion@^5.0.9
+  brace-expansion@2: npm:brace-expansion@^5.0.9
+  brace-expansion@5: ^5.0.9
   drizzle-orm: ^0.45.2
-  esbuild: 0.27.3
+  esbuild: 0.28.1
   esbuild>@esbuild/aix-ppc64: '-'
   esbuild>@esbuild/android-arm: '-'
   esbuild>@esbuild/android-arm64: '-'
@@ -96,9 +97,11 @@ overrides:
   esbuild>@esbuild/win32-ia32: '-'
   esbuild>@esbuild/win32-x64: '-'
   esbuild@0.18: ^0.25.0
-  fast-uri: ^3.1.2
+  fast-uri: ^3.1.5
+  form-data@2: ^2.5.6
   form-data@4: ^4.0.6
-  ip-address: ^10.1.1
+  ip-address: ^10.3.1
+  js-yaml@3: ^3.15.0
   js-yaml@4: ^4.3.0
   lightningcss>lightningcss-android-arm64: '-'
   lightningcss>lightningcss-darwin-arm64: '-'
@@ -110,6 +113,7 @@ overrides:
   lightningcss>lightningcss-linux-x64-musl: '-'
   lightningcss>lightningcss-win32-arm64-msvc: '-'
   lightningcss>lightningcss-win32-x64-msvc: '-'
+  linkify-it: ^5.0.2
   lodash: ^4.18.0
   node-forge: ^1.4.0
   nodemailer: ^9.0.1
@@ -117,7 +121,8 @@ overrides:
   picomatch@2: ^2.3.2
   picomatch@3: ^3.0.2
   picomatch@4: ^4.0.4
-  postcss: ^8.5.18
+  markdown-it: ^14.2.0
+  postcss: ^8.5.23
   qs@6: ^6.15.2
   rollup>@rollup/rollup-android-arm-eabi: '-'
   rollup>@rollup/rollup-android-arm64: '-'
@@ -143,20 +148,24 @@ overrides:
   rollup>@rollup/rollup-win32-ia32-msvc: '-'
   rollup>@rollup/rollup-win32-x64-gnu: '-'
   rollup>@rollup/rollup-win32-x64-msvc: '-'
-  shell-quote: ^1.8.4
+  shell-quote: ^1.9.0
   tar@7: ^7.5.21
-  undici@6: ^6.27.0
+  undici@6: ^6.28.0
+  undici@7: ^7.29.0
   uuid@3: ^11.1.1
   uuid@7: ^11.1.1
   uuid@8: ^11.1.1
   uuid@9: ^11.1.1
   vite: ^7.3.5
+  body-parser@2: ^2.3.0
+  ws@6: ^6.2.4
+  ws@7: ^7.5.11
   ws@8: ^8.20.1
   yaml@1: ^1.10.3
   yaml@2: ^2.8.3
 
 patchedDependencies:
-  brace-expansion@5.0.8: patches/brace-expansion@5.0.8.patch
+  brace-expansion@5.0.9: patches/brace-expansion@5.0.9.patch
 
 allowBuilds:
   esbuild: true

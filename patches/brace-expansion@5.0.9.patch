@@ -1,0 +1,52 @@
+diff --git a/dist/commonjs/index.d.ts b/dist/commonjs/index.d.ts
+index f3e2de9d87e1ce462517e49f35733bed8bdf85af..3767217a1b2f3c8e4d5f6a7b8c9d0e1f2a3b4c5 100644
+--- a/dist/commonjs/index.d.ts
++++ b/dist/commonjs/index.d.ts
+@@ -5,4 +5,5 @@ export type BraceExpansionOptions = {
+     maxLength?: number;
+ };
+ export declare function expand(str: string, options?: BraceExpansionOptions): string[];
+-//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=index.d.ts.map
++export default expand;
+diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+index 869a6be5f1d2e3c4d5f6a7b8c9d0e1f2a3b4c5d6..0f6159e7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3 100644
+--- a/dist/commonjs/index.js
++++ b/dist/commonjs/index.js
+@@ -286,4 +286,10 @@ function expand_(str, max, maxLength, isTop) {
+     }
+     return acc;
+ }
++
++// Compatibility shim: brace-expansion v1/v2 exported the expand function
++// directly (`module.exports = expand`). This package is aliased over those
++// majors to pick up the CVE-2026-14257 fix, so restore the callable default
++// while keeping the named exports intact for v5 consumers.
++module.exports = Object.assign(expand, module.exports);
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+index f3e2de9d87e1ce462517e49f35733bed8bdf85af..3767217a1b2f3c8e4d5f6a7b8c9d0e1f2a3b4c5 100644
+--- a/dist/esm/index.d.ts
++++ b/dist/esm/index.d.ts
+@@ -5,4 +5,5 @@ export type BraceExpansionOptions = {
+     maxLength?: number;
+ };
+ export declare function expand(str: string, options?: BraceExpansionOptions): string[];
+-//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=index.d.ts.map
++export default expand;
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index fd68f57a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6..6a86e57f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -282,4 +282,6 @@ function expand_(str, max, maxLength, isTop) {
+     }
+     return acc;
+ }
++// Compatibility shim: default export for consumers of aliased v1/v2.
++export default expand;
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file
