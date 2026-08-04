@@ -171,6 +171,35 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
+        <div className="px-3 pt-3 pb-1">
+          <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg bg-[hsl(0_0%_100%/0.04)]">
+            <div className="w-8 h-8 rounded-full bg-[hsl(0_0%_100%/0.08)] flex items-center justify-center text-xs font-bold text-white shrink-0">
+              {initialsOf(user?.fullName, user?.email)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold text-white truncate">
+                {user?.fullName || user?.email}
+              </div>
+              {user?.fullName && (
+                <div className="text-[11px] opacity-50 truncate" title={user?.email}>
+                  {user?.email}
+                </div>
+              )}
+            </div>
+            <ThemeToggle className="w-7 h-7 text-sidebar-foreground/60 hover:text-white hover:bg-[hsl(0_0%_100%/0.08)]" />
+            <button
+              type="button"
+              className="w-7 h-7 rounded-md flex items-center justify-center opacity-60 hover:opacity-100 hover:bg-[hsl(0_0%_100%/0.08)] transition-colors"
+              onClick={logout}
+              aria-label="Sign out"
+              title="Sign out"
+              data-testid="button-logout"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
         <nav className="admin-scrollbar flex-1 px-3 py-4 space-y-5 overflow-y-auto">
           {NAV_GROUPS.map((group) => {
             const items = group.items.filter((it) => !it.superAdminOnly || user?.isSuperAdmin);
@@ -212,33 +241,6 @@ export function AdminLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="p-3 border-t border-sidebar-border">
-          <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg">
-            <div className="w-8 h-8 rounded-full bg-[hsl(0_0%_100%/0.08)] flex items-center justify-center text-xs font-bold text-white shrink-0">
-              {initialsOf(user?.fullName, user?.email)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-white truncate">
-                {user?.fullName || user?.email}
-              </div>
-              {user?.fullName && (
-                <div className="text-[11px] opacity-50 truncate" title={user?.email}>
-                  {user?.email}
-                </div>
-              )}
-            </div>
-            <ThemeToggle className="w-7 h-7 text-sidebar-foreground/60 hover:text-white hover:bg-[hsl(0_0%_100%/0.08)]" />
-            <button
-              type="button"
-              className="w-7 h-7 rounded-md flex items-center justify-center opacity-60 hover:opacity-100 hover:bg-[hsl(0_0%_100%/0.08)] transition-colors"
-              onClick={logout}
-              aria-label="Sign out"
-              data-testid="button-logout"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
