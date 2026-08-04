@@ -1,0 +1,114 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+.add-root {
+  --add-bg: 222 26% 8%;
+  --add-card: 222 22% 11%;
+  --add-card-border: 222 16% 20%;
+  --add-foreground: 30 20% 94%;
+  --add-muted: 220 12% 62%;
+  --add-muted-bg: 222 18% 15%;
+
+  --add-primary: 24 92% 56%;
+  --add-primary-foreground: 222 30% 8%;
+  --add-primary-tint: 22 55% 20%;
+
+  --add-success: 152 48% 52%;
+  --add-success-tint: 152 40% 16%;
+  --add-warning: 38 92% 58%;
+  --add-warning-tint: 38 60% 16%;
+  --add-danger: 358 78% 62%;
+  --add-danger-tint: 358 55% 18%;
+  --add-info: 213 75% 62%;
+  --add-info-tint: 213 55% 17%;
+
+  --add-sidebar-from: 224 32% 6%;
+  --add-sidebar-to: 224 34% 4%;
+  --add-sidebar-fg: 220 18% 88%;
+  --add-sidebar-border: 222 22% 15%;
+  --add-sidebar-active: 24 92% 56%;
+
+  font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  color: hsl(var(--add-foreground));
+  background: hsl(var(--add-bg));
+}
+
+.add-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.add-sidebar {
+  background: linear-gradient(180deg, hsl(var(--add-sidebar-from)), hsl(var(--add-sidebar-to)));
+  border-right: 1px solid hsl(var(--add-sidebar-border));
+}
+
+.add-nav-item {
+  position: relative;
+  color: hsl(var(--add-sidebar-fg) / 0.78);
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.add-nav-item:hover {
+  background: hsl(0 0% 100% / 0.05);
+  color: hsl(0 0% 100%);
+}
+
+.add-nav-item.active {
+  background: hsl(24 92% 56% / 0.14);
+  color: hsl(0 0% 100%);
+}
+
+.add-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: hsl(var(--add-sidebar-active));
+  box-shadow: 0 0 12px hsl(var(--add-sidebar-active) / 0.7);
+}
+
+.add-card {
+  background: hsl(var(--add-card));
+  border: 1px solid hsl(var(--add-card-border));
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.3);
+}
+
+.add-card-hover {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.add-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px -12px hsl(24 90% 45% / 0.35);
+  border-color: hsl(var(--add-primary) / 0.45);
+}
+
+@keyframes add-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.add-animate {
+  animation: add-fade-up 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.add-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.add-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(0 0% 100% / 0.12);
+  border-radius: 999px;
+}
+
+.add-progress-track {
+  background: hsl(var(--add-muted-bg));
+}
+
+.add-noise {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
