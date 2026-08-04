@@ -10,6 +10,8 @@ export default {
     cardElevated: "#1A2332",
     text: "#E8EDF5",
     textSecondary: "#7B8CA8",
+    // Brighter secondary for small labels that need a touch more contrast.
+    textSecondaryStrong: "#94A6C2",
     textMuted: "#4B5B73",
     border: "#1E293B",
     borderLight: "#263245",
@@ -39,6 +41,8 @@ export default {
     cardElevated: "#1A2332",
     text: "#E8EDF5",
     textSecondary: "#7B8CA8",
+    // Brighter secondary for small labels that need a touch more contrast.
+    textSecondaryStrong: "#94A6C2",
     textMuted: "#4B5B73",
     border: "#1E293B",
     borderLight: "#263245",

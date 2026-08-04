@@ -212,8 +212,12 @@ export default function HomeScreen() {
               <Feather name="message-square" size={19} color={Colors.light.white} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.quoteCtaTitle}>Request a quote</Text>
-              <Text style={styles.quoteCtaSub}>
+              {/* Text wraps freely (no numberOfLines) and the banner sizes from
+                  padding, so larger Dynamic Type grows the card instead of
+                  clipping; the multiplier cap keeps the row readable between
+                  the fixed icon and arrow at accessibility sizes. */}
+              <Text style={styles.quoteCtaTitle} maxFontSizeMultiplier={1.5}>Request a quote</Text>
+              <Text style={styles.quoteCtaSub} maxFontSizeMultiplier={1.5}>
                 Find local traders with verified details and send your job details for free.
               </Text>
             </View>
@@ -418,7 +422,7 @@ const styles = StyleSheet.create({
   },
   headerSubtitle: {
     fontSize: 12,
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
     marginTop: 2,
     letterSpacing: 0.2,
     lineHeight: 16,
@@ -450,7 +454,7 @@ const styles = StyleSheet.create({
   locationText: {
     flex: 1,
     fontSize: 12,
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
     letterSpacing: 0.2,
   },
   locationTextMuted: {
@@ -494,7 +498,7 @@ const styles = StyleSheet.create({
   searchText: {
     flex: 1,
     fontSize: 14,
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
     letterSpacing: 0.1,
   },
   filterBtn: {
@@ -543,7 +547,7 @@ const styles = StyleSheet.create({
   trustSub: {
     fontSize: 10,
     fontWeight: '500',
-    color: Colors.light.textMuted,
+    color: Colors.light.textSecondary,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
@@ -566,7 +570,7 @@ const styles = StyleSheet.create({
   sectionLocation: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
   },
   seeAllBtn: {
     flexDirection: 'row',
@@ -602,7 +606,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
   },
   loadingText: {
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
     fontSize: 13,
   },
   emptyContainer: {
@@ -632,7 +636,7 @@ const styles = StyleSheet.create({
   },
   emptySubtext: {
     fontSize: 13,
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -688,7 +692,7 @@ const styles = StyleSheet.create({
   },
   traderCtaSub: {
     fontSize: 13,
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
   },
   traderCtaArrow: {
     width: 38,
@@ -770,7 +774,7 @@ const styles = StyleSheet.create({
   },
   enquiryRowSub: {
     fontSize: 12,
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
     marginTop: 2,
   },
   enquiryRowStatus: {

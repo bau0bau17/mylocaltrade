@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 11,
     fontWeight: '600',
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
     textAlign: 'center',
     letterSpacing: 0.1,
     lineHeight: 14,
