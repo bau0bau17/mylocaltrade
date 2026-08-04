@@ -280,7 +280,7 @@ export default function Traders() {
                       <td className="px-4 py-3">
                         <StatusBadge status={t.verificationStatus} />
                         {!t.visibility.isPublic && (
-                          <div className="text-xs text-orange-700 mt-1" data-testid={`hidden-trader-${t.userId}`}>
+                          <div className="text-xs text-[hsl(var(--warning))] mt-1" data-testid={`hidden-trader-${t.userId}`}>
                             Hidden — {t.visibility.reasons.map((r) => VISIBILITY_REASON_LABELS[r]).join(", ")}
                           </div>
                         )}

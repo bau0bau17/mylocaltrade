@@ -73,9 +73,9 @@
   --popover: 0 0% 100%;
   --popover-foreground: 222 18% 14%;
 
-  --primary: 21 88% 50%;
+  --primary: 190 100% 42%;
   --primary-foreground: 0 0% 100%;
-  --primary-tint: 21 95% 95%;
+  --primary-tint: 190 80% 94%;
 
   --secondary: 30 20% 94%;
   --secondary-foreground: 222 14% 18%;
@@ -83,8 +83,8 @@
   --muted: 30 20% 94%;
   --muted-foreground: 25 12% 46%;
 
-  --accent: 21 95% 95%;
-  --accent-foreground: 21 90% 35%;
+  --accent: 190 80% 94%;
+  --accent-foreground: 190 100% 30%;
 
   --destructive: 358 72% 48%;
   --destructive-foreground: 0 0% 100%;
@@ -104,7 +104,7 @@
 
   --border: 25 20% 90%;
   --input: 25 20% 87%;
-  --ring: 21 88% 50%;
+  --ring: 190 100% 42%;
 
   /* Sidebar: dark gradient in both themes */
   --sidebar-from: 222 32% 12%;
@@ -114,9 +114,9 @@
   --sidebar-border: 222 22% 20%;
   --sidebar-accent: 222 18% 18%;
   --sidebar-accent-foreground: 0 0% 100%;
-  --sidebar-primary: 21 88% 50%;
+  --sidebar-primary: 190 100% 42%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-ring: 21 88% 50%;
+  --sidebar-ring: 190 100% 42%;
 
   --app-font-sans: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --app-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -139,9 +139,9 @@
   --popover: 222 22% 11%;
   --popover-foreground: 30 20% 94%;
 
-  --primary: 24 92% 56%;
-  --primary-foreground: 222 30% 8%;
-  --primary-tint: 22 55% 20%;
+  --primary: 190 100% 42%;
+  --primary-foreground: 0 0% 100%;
+  --primary-tint: 192 70% 16%;
 
   --secondary: 222 18% 15%;
   --secondary-foreground: 30 20% 94%;
@@ -149,8 +149,8 @@
   --muted: 222 18% 15%;
   --muted-foreground: 220 12% 62%;
 
-  --accent: 22 55% 20%;
-  --accent-foreground: 24 92% 66%;
+  --accent: 192 70% 16%;
+  --accent-foreground: 190 90% 55%;
 
   --destructive: 358 78% 62%;
   --destructive-foreground: 0 0% 100%;
@@ -170,7 +170,7 @@
 
   --border: 222 16% 20%;
   --input: 222 16% 24%;
-  --ring: 24 92% 56%;
+  --ring: 190 100% 42%;
 
   --sidebar-from: 224 32% 6%;
   --sidebar-to: 224 34% 4%;
@@ -179,9 +179,9 @@
   --sidebar-border: 222 22% 15%;
   --sidebar-accent: 222 18% 18%;
   --sidebar-accent-foreground: 0 0% 100%;
-  --sidebar-primary: 24 92% 56%;
-  --sidebar-primary-foreground: 222 30% 8%;
-  --sidebar-ring: 24 92% 56%;
+  --sidebar-primary: 190 100% 42%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-ring: 190 100% 42%;
 }
 
 @layer base {
@@ -209,6 +209,20 @@
     color: hsl(var(--muted-foreground)) !important;
     -webkit-text-fill-color: hsl(var(--muted-foreground)) !important;
     opacity: 1 !important;
+  }
+  /* Browser autofill forces a pale-yellow background; with the dark theme's
+     white text the value becomes invisible. Paint the theme background over
+     it (inset-shadow trick) and keep the text theme-coloured. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: hsl(var(--foreground)) !important;
+    -webkit-box-shadow: 0 0 0 1000px hsl(var(--card)) inset !important;
+    box-shadow: 0 0 0 1000px hsl(var(--card)) inset !important;
+    caret-color: hsl(var(--foreground)) !important;
+    transition: background-color 9999s ease-in-out 0s;
   }
 }
 
@@ -260,11 +274,11 @@
 }
 .admin-card-hover:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 30px -12px hsl(21 80% 40% / 0.18);
+  box-shadow: 0 10px 30px -12px hsl(190 90% 35% / 0.18);
   border-color: hsl(var(--primary) / 0.45);
 }
 .dark .admin-card-hover:hover {
-  box-shadow: 0 12px 32px -12px hsl(24 90% 45% / 0.35);
+  box-shadow: 0 12px 32px -12px hsl(190 95% 40% / 0.35);
 }
 
 /* Staggered entrance animation */

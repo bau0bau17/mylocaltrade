@@ -387,7 +387,7 @@ export default function TraderDetail({ userId }: Props) {
             {visibility.isPublic ? (
               <Badge className="bg-emerald-100 text-emerald-800 border-transparent">Live</Badge>
             ) : (
-              <Badge className="bg-orange-100 text-orange-900 border-transparent">
+              <Badge className="bg-[hsl(var(--warning-tint))] text-[hsl(var(--warning))] border-transparent">
                 Hidden — {visibility.reasons.map((r) => VISIBILITY_REASON_LABELS[r]).join(", ")}
               </Badge>
             )}
@@ -752,7 +752,7 @@ export default function TraderDetail({ userId }: Props) {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-sm">{labelForDocType(doc.type)}</span>
                             <DocumentStatusBadge status={doc.status} />
-                            {expired && <Badge variant="outline" className="bg-orange-100 text-orange-900 border-transparent">Expired</Badge>}
+                            {expired && <Badge variant="outline" className="bg-[hsl(var(--warning-tint))] text-[hsl(var(--warning))] border-transparent">Expired</Badge>}
                             {expSoon && !expired && (
                               <Badge variant="outline" className="bg-amber-100 text-amber-900 border-transparent">
                                 Expires in {days}d
