@@ -1,0 +1,191 @@
+Please make one final focused header, top-spacing and results-screen consistency pass for the mobile app.
+
+DESIGN/LAYOUT/COPY ONLY.
+
+Do not change routes, functionality, authentication, APIs, data loading, filtering or business logic.
+
+--------------------------------------------------
+1. CREATE A CONSISTENT TAB-SCREEN HEADER PATTERN
+--------------------------------------------------
+
+Search and Messages should use the same simple page-header pattern.
+
+Please use the existing safe-area utilities and shared design tokens.
+
+The standard header should have:
+
+- correct top safe-area spacing below the Dynamic Island/status bar
+- approximately 20px horizontal padding
+- a clear but not oversized page title
+- consistent title font size, weight and line height
+- balanced spacing below the title
+- a subtle bottom divider only where it improves structure
+- no duplicated title inside the page content
+
+Do not create a visually heavy navigation bar.
+
+--------------------------------------------------
+2. SEARCH SCREEN
+--------------------------------------------------
+
+Keep the title “Search”, but refine it:
+
+- reduce the oversized appearance slightly
+- align it consistently with the page content
+- ensure it sits safely below the Dynamic Island/status bar
+- use the same header spacing and typography as Messages
+- preserve the search form, location field, button and recent-search functionality
+
+The search fields should begin at a natural distance below the header, without excessive empty space.
+
+Keep the improved compact Recent Searches empty state.
+
+--------------------------------------------------
+3. LOGGED-OUT MESSAGES SCREEN
+--------------------------------------------------
+
+Fix the “Messages” title positioning.
+
+Current issue:
+
+- the title is too high and visually collides with the Dynamic Island/status area
+
+Expected behaviour:
+
+- place “Messages” inside the same safe-area-aware header used by Search
+- keep it fully visible on all supported iPhones
+- match Search title size, weight, padding and alignment
+- position the logged-out hero content naturally below the header
+- keep the message icon, title, supporting copy and Log In button
+- avoid vertically centring the content so low that the upper half feels empty
+
+Preserve:
+
+- login destination
+- Messages route
+- authenticated inbox
+- polling
+- unread badge
+- push and deep-link behaviour
+
+--------------------------------------------------
+4. TRADERS RESULTS SCREEN
+--------------------------------------------------
+
+Please remove the duplicated large “Traders” heading from the Traders results screen.
+
+Keep the top navigation header:
+
+- back button
+- centred “Traders” title
+
+Below the header, keep only the result count as a compact status line, for example:
+
+“2 traders available”
+
+Place the result count directly above the category filter chips with balanced spacing.
+
+Requirements:
+
+- do not repeat the page title
+- move the filters and trader cards upward naturally
+- preserve the result-count logic
+- preserve filters, routes, trader cards and search behaviour
+- keep correct singular/plural wording:
+  - “1 trader available”
+  - “2 traders available”
+  - “No traders available”
+
+Ensure the results screen also uses correct top safe-area spacing and does not place the navigation header too close to the Dynamic Island.
+
+This is a layout/copy refinement only.
+
+Do not change:
+
+- API logic
+- filtering logic
+- navigation
+- trader-card functionality
+- result ordering
+- trader visibility rules
+
+--------------------------------------------------
+5. HOME AND ACCOUNT
+--------------------------------------------------
+
+Home:
+
+- preserve the current MyLocalTrade branding header exactly
+- do not add a “Home” title
+
+Logged-out Account:
+
+- preserve the current design without an “Account” page title
+- keep “Join MyLocalTrade” as the hero title
+- preserve the restored bright-blue rounded-square illustration with white tools
+- do not redesign or recolour the illustration again
+
+Authenticated Account:
+
+- keep the existing Account/Profile title behaviour
+
+--------------------------------------------------
+6. RESPONSIVE AND ACCESSIBILITY CHECKS
+--------------------------------------------------
+
+Verify the headers and top layouts on:
+
+- smaller supported iPhones
+- standard iPhones
+- Pro Max widths
+- devices with Dynamic Island
+- increased text size
+
+Requirements:
+
+- no title clipping
+- no overlap with the status bar or Dynamic Island
+- no duplicate headers
+- no excessive vertical gap below headers
+- no content hidden behind the bottom navigation
+- no result filters or cards pushed unnecessarily far down the screen
+
+--------------------------------------------------
+7. PRESERVE
+--------------------------------------------------
+
+Do not change:
+
+- Home visual design
+- Account visual design
+- bottom-navigation tabs or destinations
+- dark navy/cyan palette
+- search behaviour
+- messaging behaviour
+- trader filtering
+- trader-card data
+- role-based behaviour
+- routes
+- APIs
+- backend
+- database
+
+Do not start an EAS build.
+Do not deploy or publish.
+
+--------------------------------------------------
+FINAL REPORT
+--------------------------------------------------
+
+After completion, report:
+
+1. Header pattern used for Search and Messages.
+2. How safe-area spacing was corrected.
+3. Final title typography and spacing.
+4. How the duplicate Traders heading was removed.
+5. Final result-count wording and positioning.
+6. Files changed.
+7. Mobile typecheck result.
+8. Confirmation that Home and logged-out Account were not redesigned.
+9. Confirmation that no functionality, route, filtering, API or business logic changed.
+10. Confirmation that no build, deployment or publish was started.
