@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Text,
   View,
-  useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,8 +18,9 @@ export type ErrorFallbackProps = {
 };
 
 export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
+  // Dark-mode-only app: never follow the device scheme here — a light error
+  // screen over the dark UI is exactly the flash we want to avoid.
+  const isDark = true;
   const insets = useSafeAreaInsets();
 
   const theme = {

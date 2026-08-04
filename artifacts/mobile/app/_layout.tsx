@@ -9,8 +9,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
+import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef } from "react";
 import {
+  Appearance,
   Platform,
   Keyboard,
   TextInput,
@@ -37,6 +39,21 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "@/lib/api-url";
 
 SplashScreen.preventAutoHideAsync();
+
+// MyLocalTrade is a dark-mode-only app. Force the native appearance to dark
+// at startup so system surfaces the app presents (keyboard, alerts, action
+// sheets, date pickers, share sheets) never render light over the dark UI
+// when the device itself is in Light mode. This is the runtime counterpart
+// of `"userInterfaceStyle": "dark"` in app.json (which is baked into the
+// native binary and only takes effect from the next build onward).
+if (Platform.OS !== "web") {
+  try {
+    Appearance.setColorScheme("dark");
+  } catch {
+    // Very old runtimes without setColorScheme: the app.json setting covers
+    // them from the next native build.
+  }
+}
 
 setBaseUrl(getApiUrl());
 setAuthTokenGetter(() => AsyncStorage.getItem("auth_token"));
@@ -237,6 +254,8 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
+      {/* Dark app chrome: status bar icons/text always light. */}
+      <StatusBar style="light" />
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
