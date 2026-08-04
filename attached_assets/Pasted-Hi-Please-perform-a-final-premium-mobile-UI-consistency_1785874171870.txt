@@ -1,0 +1,633 @@
+Hi,
+
+Please perform a final premium mobile UI consistency and visual-polish pass across MyLocalTrade.
+
+The goal is to bring the complete mobile app close to a consistent 9.5/10–10/10, App-Store-ready standard.
+
+This is DESIGN, LAYOUT, COPY-PRESENTATION AND ACCESSIBILITY POLISH ONLY.
+
+The current refined Home screen should be treated as the visual benchmark.
+
+Do not redesign the product or introduce a new visual direction.
+
+--------------------------------------------------
+IMPORTANT SCOPE AND SAFETY
+--------------------------------------------------
+
+Inspect and update mobile UI files only.
+
+Do not modify:
+
+- backend code
+- API behaviour
+- database schemas
+- authentication logic
+- role permissions
+- routes or tab destinations
+- quote, hire, messaging or booking logic
+- notifications
+- verification
+- RevenueCat
+- Universal Links
+- trader/customer business rules
+
+Do not add a new UI framework.
+Do not install large design or animation dependencies.
+Do not start an EAS build.
+Do not deploy or publish.
+Do not run migrations.
+
+Preserve the app as Dark Mode only.
+
+Use the existing MyLocalTrade:
+
+- dark navy background
+- cyan primary accent
+- green verification/success accent
+- amber rating/review accent
+- typography and icon libraries
+
+Avoid:
+
+- unnecessary gradients
+- random category colours
+- glow effects
+- oversized shadows
+- excessive animations
+- generic template styling
+
+--------------------------------------------------
+1. INITIAL VISUAL REVIEW
+--------------------------------------------------
+
+Before implementation, briefly identify:
+
+1. The mobile screens that require refinement.
+2. Shared components that should be standardised.
+3. Header, spacing, typography or safe-area inconsistencies.
+4. Screens with excessive visual density.
+5. Screens with excessive empty space.
+6. Buttons, cards or fields that differ unnecessarily.
+7. Any clipping, truncation or accessibility risks.
+
+Keep the inspection limited to mobile UI files.
+
+Use the existing Home screen as the visual-quality benchmark.
+
+Then implement the smallest shared and screen-level refinements required.
+
+--------------------------------------------------
+2. GLOBAL DESIGN CONSISTENCY
+--------------------------------------------------
+
+Standardise the mobile design system without changing the brand.
+
+Use a consistent spacing rhythm based on the existing design, approximately:
+
+- 20px horizontal page padding
+- 24px between major sections
+- 16px internal card padding
+- consistent 12–16px card radiuses
+- consistent button and input heights
+- consistent safe-area spacing
+- sufficient bottom scroll padding above the tab bar
+
+Standardise:
+
+- page-title size and line height
+- section-title hierarchy
+- secondary-text contrast
+- card backgrounds and borders
+- button hierarchy
+- input-field appearance
+- icon-container dimensions
+- badge/chip height
+- empty-state spacing
+- loading and disabled states
+- error/help text
+- pressed states
+
+Do not make every component visually identical where its purpose differs, but ensure they clearly belong to the same application.
+
+--------------------------------------------------
+3. HEADER PATTERNS
+--------------------------------------------------
+
+Use three intentional header patterns.
+
+A. Branding header:
+- Home only
+- preserve the current MyLocalTrade branding header exactly
+- do not add a “Home” page title
+
+B. Simple tab-screen header:
+- Search
+- Messages
+- authenticated Account/Profile screens where appropriate
+- safe-area aware
+- fully below the Dynamic Island/status bar
+- approximately 20px horizontal padding
+- clear but not oversized page title
+- consistent title size, weight and line height
+- balanced spacing below the title
+
+C. Back-navigation header:
+- Traders results
+- conversations
+- profiles
+- booking/detail screens
+- back button
+- centred or correctly balanced page title
+- no duplicate page title inside the content
+
+Verify that no title:
+
+- overlaps the status bar
+- enters the Dynamic Island area
+- is clipped
+- is duplicated unnecessarily
+- leaves an excessive gap below it
+
+--------------------------------------------------
+4. HOME SCREEN
+--------------------------------------------------
+
+Preserve the current refined Home screen as the design benchmark.
+
+Do not redesign it.
+
+Preserve:
+
+- MyLocalTrade branding
+- location selector
+- search field
+- trust card
+- Request a quote CTA
+- responsive four-column category grid
+- category labels and icons
+- bottom navigation
+- customer/trader role visibility
+
+Only correct genuine consistency, clipping or accessibility regressions discovered during the review.
+
+--------------------------------------------------
+5. SEARCH SCREEN
+--------------------------------------------------
+
+Keep the “Search” page title.
+
+Refine it to use the standard safe-area-aware tab header:
+
+- fully visible below the Dynamic Island
+- consistent with Messages
+- not oversized
+- aligned with the page content
+- balanced spacing before the form
+
+Preserve:
+
+- service search
+- location selection
+- Find Traders action
+- recent-search behaviour
+
+Keep the compact Recent Searches empty state:
+
+- “No recent searches yet”
+- “Your recent trader searches will appear here.”
+
+It should sit naturally below the section heading rather than floating in the centre of a large empty screen.
+
+--------------------------------------------------
+6. LOGGED-OUT MESSAGES SCREEN
+--------------------------------------------------
+
+Use the same header pattern as Search.
+
+Fix the title positioning so “Messages” is fully visible and safely below the Dynamic Island/status bar.
+
+Keep the logged-out state:
+
+- message/conversation icon
+- “Log in to view your messages”
+- concise supporting explanation
+- Log In button
+
+Improve the layout so it feels intentionally positioned rather than isolated in a large blank area.
+
+Preserve:
+
+- login destination
+- Messages route
+- authenticated inbox
+- polling
+- unread badge
+- push-notification navigation
+- conversation deep links
+
+--------------------------------------------------
+7. LOGGED-OUT ACCOUNT SCREEN
+--------------------------------------------------
+
+Do not show a separate “Account” page title in the logged-out state.
+
+“Join MyLocalTrade” is the hero title and the active Account tab already supplies navigation context.
+
+Preserve the earlier Account hero illustration exactly:
+
+- white tools illustration
+- bright blue rounded-square background
+- original size, spacing and positioning
+
+Do not redesign, recolour or replace this illustration.
+
+Preserve the CTA hierarchy:
+
+1. Log In — primary filled cyan
+2. Register as Customer — secondary brand-consistent action
+3. Join as a Trader — cyan outlined action
+4. Help & Legal
+
+Keep the screen responsive and scrollable without excessive empty space.
+
+Authenticated Account and Profile screens may retain their existing page titles.
+
+--------------------------------------------------
+8. TRADERS RESULTS SCREEN
+--------------------------------------------------
+
+Remove the duplicated large “Traders” heading from the page content.
+
+Keep the top navigation header:
+
+- back button
+- centred “Traders” title
+
+Below the header, show only a compact result-count status line:
+
+- “1 trader available”
+- “2 traders available”
+- “No traders available”
+
+Place the count directly above the category filter chips with balanced spacing.
+
+Move the filter chips and trader cards upward naturally.
+
+Preserve:
+
+- result-count logic
+- category filters
+- result ordering
+- routes
+- search behaviour
+- trader visibility rules
+- trader-card functionality
+
+--------------------------------------------------
+9. TRADER RESULT CARDS
+--------------------------------------------------
+
+Refine trader cards to improve scanning and reduce visual noise.
+
+Suggested information hierarchy:
+
+Row 1:
+- business logo/avatar
+- business name
+- verified status
+
+Row 2:
+- main service/category
+- town or service-area information
+
+Row 3:
+- rating and review count
+- or “New” where no reviews exist
+- response indicator only if already supported and accurate
+
+Navigation:
+- clear chevron or card press behaviour
+
+The cards currently display several individual verification chips such as:
+
+- Email
+- Phone
+- Profile
+- Docs
+
+Reduce their visual dominance.
+
+Where appropriate, present an aggregated “Verified profile” indication rather than making every verification item compete with the business name.
+
+Do not remove underlying verification information or functionality. Detailed verification information can remain available on the full profile.
+
+Ensure:
+
+- long business names do not break the layout
+- names use an intentional one- or two-line treatment
+- no awkward ellipsis where a two-line layout is appropriate
+- badges remain legible
+- icons and text align consistently
+- cards remain comfortable to tap
+
+--------------------------------------------------
+10. PUBLIC TRADER PROFILE
+--------------------------------------------------
+
+Refine the public profile without changing its content or behaviour.
+
+Ensure clear hierarchy for:
+
+- business identity
+- verified status
+- service/category
+- service area
+- reviews
+- gallery
+- business description
+- contact/hire actions
+- availability where shown
+
+Avoid displaying too many equal-weight badges at the top.
+
+The customer should immediately understand:
+
+1. who the business is
+2. what service it provides
+3. whether it is verified
+4. its review reputation
+5. the next action
+
+Preserve all contact-visibility and hire rules.
+
+--------------------------------------------------
+11. MESSAGES INBOX AND CONVERSATIONS
+--------------------------------------------------
+
+Ensure the authenticated Messages inbox and conversation screens match the refined design system.
+
+Review only visual presentation:
+
+- inbox row spacing
+- unread-state emphasis
+- service name and job-reference hierarchy
+- timestamp alignment
+- avatar/initial fallback
+- empty inbox state
+- chat bubble spacing
+- system-event cards
+- photo attachments
+- quote and booking cards
+- composer safe area
+- keyboard avoidance
+- loading and sending states
+
+Preserve all messaging logic, polling, unread state and notification behaviour.
+
+Avoid unnecessary decoration that reduces message readability.
+
+--------------------------------------------------
+12. ENQUIRIES, LEADS AND QUOTES
+--------------------------------------------------
+
+Ensure customer Enquiries and trader Leads are visually distinct from Messages while remaining consistent with the app.
+
+Cards should prioritise:
+
+- service
+- job/reference number where available
+- location
+- lifecycle status
+- most important next action
+
+Standardise:
+
+- status chips
+- card padding
+- text hierarchy
+- empty states
+- loading states
+- action-button placement
+
+Preserve all quote, acceptance, hire and contact-visibility behaviour.
+
+--------------------------------------------------
+13. BOOKING AND COMPLETION FLOWS
+--------------------------------------------------
+
+Visually refine existing:
+
+- appointment proposal
+- slot selection
+- duration selection
+- confirmed booking
+- reschedule
+- cancellation
+- completion
+- customer confirmation
+- review request
+
+Ensure:
+
+- dates and times are easy to scan
+- duration is clearly shown
+- primary and destructive actions are visually distinct
+- status cards have consistent spacing and hierarchy
+- disabled/unavailable slots are clear
+- error messages are readable
+- confirmation states feel complete
+
+Do not change booking or overlap logic.
+
+--------------------------------------------------
+14. FORMS AND SETTINGS
+--------------------------------------------------
+
+Standardise the mobile forms used in:
+
+- login
+- registration
+- customer profile
+- trader business profile
+- onboarding
+- availability
+- settings
+- support
+- account deletion
+
+Review:
+
+- label placement
+- required markers
+- helper text
+- validation messages
+- field height
+- picker appearance
+- keyboard behaviour
+- section spacing
+- save-button placement
+- loading/disabled states
+
+Avoid placing too many visually identical fields into one uninterrupted block.
+
+Use section grouping where it already fits the product structure.
+
+Preserve all validation and submission logic.
+
+--------------------------------------------------
+15. TRADER DASHBOARD AND ONBOARDING
+--------------------------------------------------
+
+Refine the trader dashboard so that the primary next action is always obvious.
+
+Prioritise:
+
+- onboarding/verification status where incomplete
+- Leads
+- Messages
+- profile completion
+- reviews
+- business settings
+
+Avoid presenting every dashboard module at equal visual weight.
+
+Onboarding should remain focused on setup and verification, not live review content.
+
+Preserve existing verification, review and subscription behaviour.
+
+--------------------------------------------------
+16. EMPTY, LOADING AND ERROR STATES
+--------------------------------------------------
+
+Use a consistent empty-state pattern:
+
+- relevant icon
+- concise title
+- one short explanation
+- one primary action only where useful
+
+Avoid empty states that are vertically centred in a large blank screen without context.
+
+Use consistent loading presentation:
+
+- avoid layout jumping
+- use existing activity/skeleton patterns
+- keep card dimensions stable where possible
+
+Use concise error presentation with a clear retry action where supported.
+
+Do not invent new functionality or unsupported promises.
+
+--------------------------------------------------
+17. BOTTOM NAVIGATION
+--------------------------------------------------
+
+Preserve the current tabs, icons, destinations and unread badge behaviour.
+
+Refine only where inconsistent:
+
+- active/inactive contrast
+- icon and label alignment
+- label weight
+- unread badge alignment
+- safe-area height
+- top separation from content
+- pressed state
+
+Ensure scrollable content always clears the bottom navigation.
+
+--------------------------------------------------
+18. ACCESSIBILITY AND RESPONSIVENESS
+--------------------------------------------------
+
+Verify representative screens on:
+
+- smaller supported iPhones
+- standard iPhones
+- Pro Max widths
+- devices with Dynamic Island
+- increased text sizes
+
+Requirements:
+
+- no status-bar or Dynamic Island overlap
+- no clipped titles
+- no clipped buttons
+- no inaccessible two-line labels
+- no content hidden behind the tab bar
+- minimum comfortable touch targets
+- sufficient contrast for secondary text
+- clear focus/pressed/disabled states
+- accessibility labels for icon-only actions
+
+Respect reduced-motion behaviour where relevant.
+
+--------------------------------------------------
+19. QUALITY GATES
+--------------------------------------------------
+
+Before considering the pass complete:
+
+- dark mode must remain visually consistent
+- Home must not regress
+- navigation must remain unchanged
+- no functionality may be removed
+- no API or schema change may occur
+- mobile typecheck must pass
+- no new dependency should be added unless absolutely unavoidable and explicitly reported
+
+Please visually review at least these representative screens:
+
+1. Home
+2. Search
+3. Traders results
+4. Public trader profile
+5. Logged-out Messages
+6. Authenticated Messages inbox
+7. Conversation
+8. Logged-out Account
+9. Authenticated customer Account
+10. Trader dashboard
+11. Business Profile
+12. Booking flow
+13. Enquiries/Leads
+14. Reviews
+
+--------------------------------------------------
+20. DELIVERY
+--------------------------------------------------
+
+Keep changes in a dedicated final-design commit or clearly grouped commits.
+
+Commit and push/sync the completed changes to origin/main using the normal Git workflow.
+
+Do not ask me to checkout files directly from origin/replit-agent.
+
+Do not start an EAS build.
+Do not deploy or publish.
+
+--------------------------------------------------
+FINAL REPORT
+--------------------------------------------------
+
+After completion, report:
+
+1. Screens reviewed.
+2. Screens changed.
+3. Shared components/design primitives standardised.
+4. Header and safe-area corrections.
+5. Trader-card simplifications.
+6. Empty/loading/error-state improvements.
+7. Form and button consistency changes.
+8. Accessibility/responsiveness improvements.
+9. Files changed.
+10. Mobile typecheck result.
+11. Any manual TestFlight scenarios still required.
+12. Confirmation that:
+   - no routes changed
+   - no API/backend logic changed
+   - no database schema changed
+   - no business logic changed
+   - no EAS build started
+   - no deployment or publish occurred
+13. Final commit hash on origin/main.

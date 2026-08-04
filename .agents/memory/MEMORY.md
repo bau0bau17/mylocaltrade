@@ -53,3 +53,4 @@
 - [Notification fan-out conventions](notification-fanout-conventions.md) — transition sends gated by conditional UPDATE...RETURNING (never in-memory checks); email try/catch separate from push so one can't kill the other.
 - [Universal Links in email CTAs](universal-links-email.md) — /open email links must use the associated-domain host via getOpenLinkBase(); Brevo click-tracking can also break direct app open.
 - [Dark-mode-only policy](dark-mode-only-policy.md) — user cancelled light/system theming; appearance is locked dark (app.json + runtime override + light status bar). Never reintroduce scheme-following.
+- [Trader card & profile badge hierarchy](trader-card-badge-hierarchy.md) — cards show ONE aggregated Verified badge (never re-add per-item chips); profile perk badges stay quiet outline style.
