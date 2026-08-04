@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Image, RefreshControl, Alert, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { getApiUrl, avatarImageUrl } from '@/lib/api-url';
@@ -287,11 +287,11 @@ export default function AccountScreen() {
           showsVerticalScrollIndicator={false}
         >
         <View style={styles.unauthContent}>
-          <Image
-            source={require('@/assets/images/logo.png')}
-            style={styles.unauthIcon}
-            resizeMode="contain"
-          />
+          {/* Brand-palette mark (cyan tools on muted cyan) instead of the
+              royal-blue logo tile, which clashed with the navy/cyan scheme. */}
+          <View style={styles.unauthIconWrap}>
+            <MaterialCommunityIcons name="hammer-wrench" size={34} color={Colors.light.primary} />
+          </View>
 
           <Text style={styles.unauthTitle}>Join MyLocalTrade</Text>
           <Text style={styles.unauthSubtitle}>
@@ -299,7 +299,12 @@ export default function AccountScreen() {
           </Text>
 
           <View style={styles.authButtons}>
-            <Pressable style={styles.primaryButton} onPress={() => router.push('/auth/login')}>
+            <Pressable
+              style={styles.primaryButton}
+              accessibilityRole="button"
+              accessibilityLabel="Log in"
+              onPress={() => router.push('/auth/login')}
+            >
               <Text style={styles.primaryButtonText}>Log In</Text>
             </Pressable>
 
@@ -309,21 +314,36 @@ export default function AccountScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            <Pressable style={styles.secondaryButton} onPress={() => router.push('/auth/register-customer')}>
-              <Feather name="user-plus" size={18} color={Colors.light.white} style={{ marginRight: 8 }} />
+            <Pressable
+              style={styles.secondaryButton}
+              accessibilityRole="button"
+              accessibilityLabel="Register as Customer"
+              onPress={() => router.push('/auth/register-customer')}
+            >
+              <Feather name="user-plus" size={18} color={Colors.light.primary} style={{ marginRight: 8 }} />
               <Text style={styles.secondaryButtonText}>Register as Customer</Text>
             </Pressable>
 
-            <Pressable style={styles.outlineButton} onPress={() => router.push('/auth/register-trader')}>
+            <Pressable
+              style={styles.outlineButton}
+              accessibilityRole="button"
+              accessibilityLabel="Join as a Trader"
+              onPress={() => router.push('/auth/register-trader')}
+            >
               <Feather name="briefcase" size={18} color={Colors.light.primary} style={{ marginRight: 8 }} />
               <Text style={styles.outlineButtonText}>Join as a Trader</Text>
             </Pressable>
           </View>
         </View>
 
-        <Text style={styles.sectionLabel}>Support & Legal</Text>
+        {/* Flexible spacer: soaks up spare height on tall screens (capped so
+            the help section stays visually attached to the actions) and
+            collapses on small screens where the ScrollView takes over. */}
+        <View style={styles.unauthSpacer} />
+
+        <Text style={[styles.sectionLabel, styles.sectionLabelUnauth]}>Help & Legal</Text>
         <View style={[styles.group, { marginHorizontal: 16 }]}>
-          <MenuRow icon="life-buoy" label="Legal & Support" onPress={() => router.push('/legal-support')} />
+          <MenuRow icon="life-buoy" label="Help, support and legal" onPress={() => router.push('/legal-support')} />
         </View>
         </ScrollView>
       </View>
@@ -627,27 +647,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   unauthContent: {
-    flex: 1,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 32,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   unauthIconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
+    width: 72,
+    height: 72,
+    borderRadius: 22,
     backgroundColor: Colors.light.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: Colors.light.border,
-  },
-  unauthIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 22,
-    marginBottom: 24,
   },
   unauthTitle: {
     fontSize: 22,
@@ -657,15 +670,25 @@ const styles = StyleSheet.create({
   },
   unauthSubtitle: {
     fontSize: 14,
-    color: Colors.light.textSecondary,
+    color: Colors.light.textSecondaryStrong,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 28,
     lineHeight: 22,
   },
   authButtons: {
     width: '100%',
     gap: 12,
-    marginBottom: 24,
+  },
+  // Grows on tall screens but never beyond 36pt, so the help section stays
+  // near the actions; on small screens it shrinks to 8pt and the screen
+  // scrolls normally.
+  unauthSpacer: {
+    flexGrow: 1,
+    minHeight: 8,
+    maxHeight: 36,
+  },
+  sectionLabelUnauth: {
+    color: Colors.light.textSecondary,
   },
   primaryButton: {
     width: '100%',
@@ -680,6 +703,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  // Tonal cyan fill — sits between the solid Log In button and the outlined
+  // trader button so both registration paths read as equal siblings.
   secondaryButton: {
     width: '100%',
     paddingVertical: 16,
@@ -687,10 +712,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.light.secondary,
+    backgroundColor: Colors.light.primaryMuted,
+    borderWidth: 1,
+    borderColor: `${Colors.light.primary}4D`,
   },
   secondaryButtonText: {
-    color: Colors.light.white,
+    color: Colors.light.primary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -721,7 +748,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.border,
   },
   dividerText: {
-    color: Colors.light.textMuted,
+    color: Colors.light.textSecondary,
     paddingHorizontal: 16,
     fontSize: 12,
     fontWeight: '600',
