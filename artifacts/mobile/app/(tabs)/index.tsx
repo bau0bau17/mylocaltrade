@@ -145,19 +145,22 @@ export default function HomeScreen() {
           )}
         </Pressable>
 
+        {/* One clean search entry point. Advanced filters live ONLY on the
+            Search screen, so no filter icon here. The `reset` nonce tells
+            Search this is a fresh open: it must show an empty query and no
+            stale results (the tab screen stays mounted between visits). */}
         <Pressable
           style={({ pressed }) => [styles.searchBar, pressed && styles.searchBarPressed]}
           accessibilityRole="search"
           accessibilityLabel="Search for a trade or service"
-          onPress={() => router.push('/(tabs)/search')}
+          onPress={() =>
+            router.push({ pathname: '/(tabs)/search', params: { reset: String(Date.now()) } })
+          }
         >
           <View style={styles.searchIconWrap}>
             <Feather name="search" size={17} color={Colors.light.primary} />
           </View>
           <Text style={styles.searchText}>Search plumber, electrician, roofer...</Text>
-          <View style={styles.filterBtn}>
-            <Feather name="sliders" size={15} color={Colors.light.primary} />
-          </View>
         </Pressable>
       </View>
 
@@ -500,16 +503,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.textSecondaryStrong,
     letterSpacing: 0.1,
-  },
-  filterBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primaryMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: `${Colors.light.primary}33`,
   },
   scrollContent: {
     paddingHorizontal: 20,

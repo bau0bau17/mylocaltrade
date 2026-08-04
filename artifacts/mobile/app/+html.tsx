@@ -67,4 +67,22 @@ body {
     background-color: #0B1120;
   }
 }
+/*
+  Web-only focus styling. The browser's DEFAULT focus ring (colour varies by
+  OS/browser theme — often orange/amber in dev previews) is replaced with the
+  brand cyan. Native iOS/Android never render CSS outlines, so this cannot
+  affect the TestFlight/App Store app. Keyboard accessibility is preserved:
+  :focus-visible still draws a clear ring for keyboard users (and for text
+  inputs, which browsers always treat as focus-visible).
+  The border-radius only rounds the ring on elements that don't already set
+  their own radius inline (react-native-web inline styles win otherwise).
+*/
+:focus:not(:focus-visible) {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid rgba(0, 180, 216, 0.7);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
 `;

@@ -1,0 +1,387 @@
+Hi,
+
+The previous header and premium visual-polish passes are complete in commits:
+
+- 239d94d
+- 122486b
+
+Please do not redo or reinterpret the completed:
+
+- Search and Messages shared headers
+- Traders duplicate-title removal
+- trader-card simplification
+- public-profile hierarchy
+- Home design
+- Account design
+- empty-state polish
+- general design-system pass
+
+This follow-up is limited strictly to:
+
+A. Home/Search/filter behaviour and focus styling.
+B. Customer and trader registration layout.
+
+Do not perform another broad UI audit.
+
+--------------------------------------------------
+1. ORANGE/YELLOW FOCUS OUTLINE
+--------------------------------------------------
+
+Please determine the exact source of the orange/yellow rectangular outline visible around focused controls in the Replit/browser development preview.
+
+Inspect only the relevant:
+
+- Search TextInput
+- filter button and filter chips
+- registration fields
+- shared input/button components
+- React Native Web focus/focus-visible styling
+- Replit preview/editor behaviour
+
+Required behaviour:
+
+- If it is a Replit/browser development overlay, do not change native production code unnecessarily.
+- Confirm whether it can appear in the native iOS/TestFlight app.
+- If it comes from application styling, replace the orange/yellow outline with a subtle rounded MyLocalTrade cyan focus indicator.
+- Do not remove visible keyboard-focus accessibility on web.
+- Do not add harsh rectangular outlines outside rounded controls.
+
+--------------------------------------------------
+2. REMOVE THE HOME FILTER ICON
+--------------------------------------------------
+
+The full advanced-filter interface already exists on the Search screen.
+
+Please remove the filter/settings icon from the right side of the Home search field.
+
+Final Home behaviour:
+
+- Home keeps one clean service-search field.
+- Tapping the field opens the existing Search screen.
+- If a genuine query was entered, preserve that exact query.
+- If the field was empty, Search must open with an empty query.
+- Do not inject “plumber” or another default service.
+- Do not automatically execute a search merely because Search was opened.
+- Do not restore an unrelated stale query or stale results.
+- Preserve the current Home design apart from removing the redundant icon.
+
+Search must remain the single source of truth for advanced filters.
+
+--------------------------------------------------
+3. ROOT CAUSE OF AUTOMATIC “PLUMBER”
+--------------------------------------------------
+
+Please identify and fix why opening Search from the Home filter control currently inserts:
+
+“plumber”
+
+Inspect:
+
+- Home navigation parameters
+- Search initial state
+- placeholder/demo values
+- persisted search state
+- cached query state
+- route parameters
+- mount effects
+- automatic search execution
+
+The copy:
+
+“Search plumber, electrician, roofer…”
+
+must remain placeholder text only and must never become the actual query value.
+
+Please report the exact root cause rather than only suppressing the visible value.
+
+--------------------------------------------------
+4. SEARCH FILTER SHEET
+--------------------------------------------------
+
+Keep and reuse the existing Search filter bottom sheet.
+
+It must be accessible both:
+
+- before a search has been run
+- after results are displayed
+
+Required behaviour:
+
+- Filters opens the existing sheet.
+- Draft selections do not alter live results until Apply/Show results is pressed.
+- Dismissing the sheet without applying preserves the previously active filters and results.
+- Clear all resets filters without clearing the genuine service query or selected location.
+- Applying filters does not modify the service query.
+- Selected filters are visibly identifiable.
+- The Filters button displays an active state or small count when filters are applied.
+- Opening the sheet does not inject a service or automatically execute an unrelated search.
+- The displayed result count remains accurate.
+- Recommended may remain the default sort without counting as a manually active filter.
+
+Preserve the currently supported sort, verification and specialism filters.
+
+Do not invent unsupported API filters.
+
+--------------------------------------------------
+5. CUSTOMER-FACING PREMIUM FILTER
+--------------------------------------------------
+
+Please inspect the purpose of:
+
+PLAN → Premium
+
+My preference is that Premium subscription status should not be exposed to customers as a quality criterion when it merely indicates that a trader pays for a subscription.
+
+Customers should primarily filter by meaningful criteria such as:
+
+- verification
+- rating
+- review count
+- recency
+- relevant specialisms
+
+If Premium is only a paid-plan indicator:
+
+- remove it from the customer-facing filter sheet
+- do not change RevenueCat
+- do not change subscription entitlements
+- do not change Premium benefits
+- do not change internal ranking logic
+
+Report the decision and exact rationale.
+
+--------------------------------------------------
+6. SEARCH STATE TESTS
+--------------------------------------------------
+
+Please verify:
+
+A. Empty Home search:
+- open Search
+- query remains empty
+- no automatic results
+- no “plumber”
+- Home filter icon is absent
+
+B. Genuine Home query:
+- enter “electrician”
+- open Search
+- “electrician” is preserved exactly
+- no replacement with “plumber”
+
+C. Filters before searching:
+- empty query remains empty
+- sheet opens
+- no search runs automatically
+
+D. Apply filter:
+- results update only after Apply/Show results
+- active filter state is visible
+- query and location remain unchanged
+
+E. Dismiss without applying:
+- draft changes are discarded
+- active results remain unchanged
+
+F. Clear all:
+- filters reset
+- genuine query and location remain
+
+--------------------------------------------------
+7. CUSTOMER REGISTER SCREEN
+--------------------------------------------------
+
+Preserve all current registration fields, validation, navigation and business logic.
+
+Please correct only the layout:
+
+A. Header/content overlap
+
+The fixed centred “Register” header must never cover or clip:
+
+- the Create Account hero
+- form fields
+- validation messages
+
+Use correct safe-area and scroll-content insets.
+
+B. Hide persistent tab navigation
+
+The bottom tab bar should not appear on the customer Register route.
+
+This is a focused secondary flow with its own Back button.
+
+Requirements:
+
+- hide the tab bar only on this registration route
+- preserve Back navigation
+- do not change the main tabs elsewhere
+- ensure the Register button and login link clear the bottom safe area
+- ensure every field remains reachable with the keyboard open
+
+C. Form consistency
+
+Preserve the current field order and cyan Register CTA.
+
+Verify:
+
+- consistent spacing
+- readable placeholders
+- aligned icons
+- validation messages directly associated with fields
+- correct keyboard avoidance
+- no clipped content on smaller iPhones
+
+--------------------------------------------------
+8. JOIN AS TRADER SCREEN
+--------------------------------------------------
+
+Preserve all existing:
+
+- fields
+- Companies House lookup
+- manual-review logic
+- category/address details
+- validation
+- terms acceptance
+- submission and verification behaviour
+
+Please correct only the visual/layout issues.
+
+A. Header/content overlap
+
+Keep the centred “Join as Trader” header and Back button.
+
+Ensure:
+
+- the title is truly centred
+- it remains below the Dynamic Island/status bar
+- scrolling content never appears visibly underneath or clipped by the header
+
+B. Hide persistent tab navigation
+
+The bottom tab bar should not appear on the Join as Trader route.
+
+Requirements:
+
+- hide it only for this registration flow
+- preserve Back navigation
+- preserve the main tabs everywhere else
+- ensure all final content clears the bottom safe area
+
+C. Primary CTA colour
+
+Change:
+
+“Create Trader Account”
+
+from bright green to the same primary MyLocalTrade cyan treatment used by:
+
+- Log In
+- Register
+- Find Traders
+
+Green must remain reserved for:
+
+- verification
+- success
+- completion
+- positive status feedback
+
+Match the existing primary-button:
+
+- height
+- radius
+- typography
+- pressed state
+- loading/disabled treatment
+
+D. Long-form hierarchy
+
+Preserve the single registration flow and every field, but make the sections visually clear:
+
+1. Business details
+2. Address
+3. Contact & login
+4. Terms and confirmation
+
+Use spacing and subtle separators rather than heavy new cards.
+
+Verify:
+
+- helper copy remains readable but secondary
+- long placeholders do not clip
+- fields are not hidden behind the keyboard
+- checkbox and legal links have comfortable tap targets
+- final CTA and login link remain fully accessible
+
+Do not convert the form into a multi-step workflow.
+
+--------------------------------------------------
+9. HEADER RULES TO PRESERVE
+--------------------------------------------------
+
+Do not alter the completed header decisions:
+
+- Home: existing branding header
+- Search: left-aligned shared tab header
+- Messages: left-aligned shared tab header
+- Register: centred Back-navigation header
+- Join as Trader: centred Back-navigation header
+- Traders results: centred Back-navigation header
+- logged-out Account: no separate Account header
+
+Only fix actual overlap/inset problems on registration screens.
+
+--------------------------------------------------
+10. PRESERVE
+--------------------------------------------------
+
+Do not change:
+
+- completed Home polish
+- Search/Messages header design
+- Traders result-count/title solution
+- trader cards
+- public trader profile
+- search API contracts
+- canonical mappings
+- authentication rules
+- registration business rules
+- location behaviour
+- RevenueCat
+- Universal Links
+- backend or database schemas
+- unrelated screens
+
+Do not start an EAS build.
+Do not deploy or publish.
+Do not run migrations.
+
+--------------------------------------------------
+FINAL REPORT
+--------------------------------------------------
+
+After completion, please report:
+
+1. Source of the orange/yellow outline.
+2. Native iOS/TestFlight impact.
+3. Root cause of the automatic “plumber” value.
+4. Final Home-to-Search behaviour.
+5. Confirmation that the Home filter icon was removed.
+6. Final filter Apply/Clear/Dismiss behaviour.
+7. Active-filter indication.
+8. Premium-filter decision and rationale.
+9. Customer Register header/inset correction.
+10. Confirmation that the tab bar is hidden on customer Register.
+11. Trader Register header/inset correction.
+12. Confirmation that the tab bar is hidden on Join as Trader.
+13. Confirmation that Create Trader Account is now cyan.
+14. Trader-form hierarchy changes.
+15. Files changed.
+16. Tests/manual scenarios completed.
+17. Mobile typecheck result.
+18. Confirmation that completed design work was not redone.
+19. Confirmation that no APIs, schemas, authentication or business logic changed.
+20. Confirmation that no build, migration, deployment or publish started.
+21. Final commit hash pushed to origin/main.

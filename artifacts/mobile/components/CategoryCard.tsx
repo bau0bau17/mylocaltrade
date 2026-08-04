@@ -32,7 +32,13 @@ export function CategoryCard({
         if (Platform.OS !== 'web') {
           Haptics.selectionAsync().catch(() => {});
         }
-        router.push({ pathname: '/(tabs)/search', params: { category: name } });
+        // `ts` nonce: the Search tab stays mounted, so an identical category
+        // param would be ignored on re-taps. The nonce makes every tap a
+        // distinct navigation that Search's param-sync effect can detect.
+        router.push({
+          pathname: '/(tabs)/search',
+          params: { category: name, ts: String(Date.now()) },
+        });
       }}
     >
       <View style={styles.iconContainer}>

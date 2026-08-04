@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, FlatList, Pressable, ActivityIndicator, ScrollView, Modal, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -113,10 +113,48 @@ export default function SearchScreen() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [hasSearched, setHasSearched] = useState(!!params.category);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [planFilter, setPlanFilter] = useState<'all' | 'premium'>('all');
   const [specialismFilter, setSpecialismFilter] = useState<SpecialismKey | null>(null);
   const [sort, setSort] = useState<'recommended' | 'rating' | 'reviews' | 'newest'>('recommended');
   const [showFilters, setShowFilters] = useState(false);
+
+  // ---- Draft filters -------------------------------------------------------
+  // The sheet edits DRAFT copies only. Committed filters change exclusively
+  // via Apply ("Show results"), an active-chip removal, or "Clear filters" in
+  // the empty state — so dismissing the sheet discards unapplied changes.
+  const [draftSort, setDraftSort] = useState<typeof sort>('recommended');
+  const [draftVerifiedOnly, setDraftVerifiedOnly] = useState(false);
+  const [draftSpecialism, setDraftSpecialism] = useState<SpecialismKey | null>(null);
+
+  // ---- Navigation param sync ----------------------------------------------
+  // This tab screen stays MOUNTED between visits, so `useState(initial)` only
+  // captures params from the very first navigation. These effects also apply
+  // later navigations; the refs stop ordinary re-renders (the params object
+  // persists on the route) from re-applying an already-consumed navigation.
+  const categoryParam = typeof params.category === 'string' ? params.category : undefined;
+  const categoryTs = typeof params.ts === 'string' ? params.ts : undefined;
+  const resetParam = typeof params.reset === 'string' ? params.reset : undefined;
+
+  const lastCategoryKeyRef = useRef<string | null>(
+    categoryParam ? `${categoryParam}|${categoryTs ?? ''}` : null,
+  );
+  useEffect(() => {
+    if (!categoryParam) return;
+    const key = `${categoryParam}|${categoryTs ?? ''}`;
+    if (lastCategoryKeyRef.current === key) return;
+    lastCategoryKeyRef.current = key;
+    setSearchQuery(categoryParam);
+    setHasSearched(true);
+  }, [categoryParam, categoryTs]);
+
+  // Home's search field sends a `reset` nonce: a fresh open shows an empty
+  // query and no stale results. Location and committed filters are untouched.
+  const lastResetRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!resetParam || lastResetRef.current === resetParam) return;
+    lastResetRef.current = resetParam;
+    setSearchQuery('');
+    setHasSearched(false);
+  }, [resetParam]);
 
   const activeSpecialism = specialismFilter
     ? SPECIALISMS.find((s) => s.key === specialismFilter) ?? null
@@ -124,7 +162,6 @@ export default function SearchScreen() {
 
   const clearAllFilters = () => {
     setVerifiedOnly(false);
-    setPlanFilter('all');
     setSpecialismFilter(null);
     setSort('recommended');
   };
@@ -135,9 +172,6 @@ export default function SearchScreen() {
       : []),
     ...(verifiedOnly
       ? [{ key: 'verified', label: 'Verified only', onRemove: () => setVerifiedOnly(false) }]
-      : []),
-    ...(planFilter === 'premium'
-      ? [{ key: 'plan', label: 'Premium', onRemove: () => setPlanFilter('all') }]
       : []),
     ...(activeSpecialism
       ? [{ key: 'specialism', label: activeSpecialism.label, onRemove: () => setSpecialismFilter(null) }]
@@ -185,7 +219,6 @@ export default function SearchScreen() {
     location: locationQuery,
     sort,
     ...(verifiedOnly ? { verified: true } : {}),
-    ...(planFilter !== 'all' ? { plan: planFilter } : {}),
     ...(activeSpecialism ? { specialism: activeSpecialism.keywords[0] } : {}),
   };
   const { data, isLoading, refetch } = useListTraders(searchParams, {
@@ -196,15 +229,61 @@ export default function SearchScreen() {
   });
   const { refreshing, onRefresh } = usePullToRefresh(refetch);
 
+  // Preview count for the sheet CTA, keyed on the DRAFT filters so
+  // "Show N results" is accurate before committing. It shares the React Query
+  // cache with the main query whenever draft == committed, so it is free then,
+  // and it never touches the live results list.
+  const draftActiveSpecialism = draftSpecialism
+    ? SPECIALISMS.find((s) => s.key === draftSpecialism) ?? null
+    : null;
+  const draftParams: ListTradersParams = {
+    search: searchQuery,
+    location: locationQuery,
+    sort: draftSort,
+    ...(draftVerifiedOnly ? { verified: true } : {}),
+    ...(draftActiveSpecialism ? { specialism: draftActiveSpecialism.keywords[0] } : {}),
+  };
+  const draftPreviewEnabled = showFilters && (hasSearched || !!draftActiveSpecialism);
+  const { data: draftData, isLoading: draftLoading } = useListTraders(draftParams, {
+    query: {
+      queryKey: getListTradersQueryKey(draftParams),
+      enabled: draftPreviewEnabled,
+    },
+  });
+
   const handleSearch = () => {
     setHasSearched(true);
     if (searchQuery) saveRecentSearch(searchQuery);
   };
 
-  const toggleSpecialism = (key: SpecialismKey) => {
-    setSpecialismFilter((prev) => (prev === key ? null : key));
-    setHasSearched(true);
+  // Opening the sheet only snapshots committed filters into the drafts —
+  // it never injects a query or executes a search by itself.
+  const openFilters = () => {
+    setDraftSort(sort);
+    setDraftVerifiedOnly(verifiedOnly);
+    setDraftSpecialism(specialismFilter);
+    setShowFilters(true);
   };
+  const applyFilters = () => {
+    setSort(draftSort);
+    setVerifiedOnly(draftVerifiedOnly);
+    setSpecialismFilter(draftSpecialism);
+    setShowFilters(false);
+    // A specialism works as a browse filter even without a typed query —
+    // committing one shows results (existing behaviour, now Apply-gated).
+    if (draftSpecialism) setHasSearched(true);
+  };
+  // "Clear all" inside the sheet resets the DRAFTS only; the user still
+  // confirms with Apply. The query and location are never touched.
+  const clearDraftFilters = () => {
+    setDraftSort('recommended');
+    setDraftVerifiedOnly(false);
+    setDraftSpecialism(null);
+  };
+  const draftCount =
+    (draftSort !== 'recommended' ? 1 : 0) +
+    (draftVerifiedOnly ? 1 : 0) +
+    (draftSpecialism ? 1 : 0);
 
   const applyRecentSearch = (query: string) => {
     setSearchQuery(query);
@@ -281,6 +360,33 @@ export default function SearchScreen() {
         </View>
       </View>
 
+      {/* Filters entry point — reachable BEFORE a search as well as with
+          results, so users can set up sort/verification/specialism first. */}
+      <View style={styles.filterBar}>
+        <Pressable
+          style={styles.filtersButton}
+          onPress={openFilters}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Open filters"
+        >
+          <Feather name="sliders" size={14} color={Colors.light.white} />
+          <Text style={styles.filtersButtonText}>Filters</Text>
+          {activeCount > 0 && (
+            <View style={styles.filterCountBadge}>
+              <Text style={styles.filterCountText}>{activeCount}</Text>
+            </View>
+          )}
+        </Pressable>
+        {activeFilters.length > 0 ? (
+          activeFilters.map((f) => (
+            <ActiveChip key={f.key + f.label} label={f.label} onRemove={f.onRemove} />
+          ))
+        ) : (
+          <Text style={styles.filterHint}>Sort, verification &amp; specialisms</Text>
+        )}
+      </View>
+
       {!hasSearched ? (
         <View style={styles.recentSection}>
           <Text style={styles.sectionTitle}>Recent Searches</Text>
@@ -312,119 +418,6 @@ export default function SearchScreen() {
         </View>
       ) : (
         <View style={styles.resultsContainer}>
-          <View style={styles.filterBar}>
-            <Pressable
-              style={styles.filtersButton}
-              onPress={() => setShowFilters(true)}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Open filters"
-            >
-              <Feather name="sliders" size={14} color={Colors.light.white} />
-              <Text style={styles.filtersButtonText}>Filters</Text>
-              {activeCount > 0 && (
-                <View style={styles.filterCountBadge}>
-                  <Text style={styles.filterCountText}>{activeCount}</Text>
-                </View>
-              )}
-            </Pressable>
-            {activeFilters.length > 0 ? (
-              activeFilters.map((f) => (
-                <ActiveChip key={f.key + f.label} label={f.label} onRemove={f.onRemove} />
-              ))
-            ) : (
-              <Text style={styles.filterHint}>Sort, verify, plan &amp; specialisms</Text>
-            )}
-          </View>
-
-          <Modal
-            visible={showFilters}
-            transparent
-            animationType="slide"
-            onRequestClose={() => setShowFilters(false)}
-          >
-            <View style={styles.sheetBackdrop}>
-              <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFilters(false)} />
-              <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-                <View style={styles.sheetHandle} />
-                <View style={styles.sheetHeader}>
-                  <Text style={styles.sheetTitle}>Filters</Text>
-                  <Pressable
-                    onPress={() => setShowFilters(false)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Close filters"
-                  >
-                    <Feather name="x" size={22} color={Colors.light.textSecondary} />
-                  </Pressable>
-                </View>
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
-                  <Text style={styles.sheetSection}>Sort by</Text>
-                  <View style={styles.sheetGroup}>
-                    {(['recommended', 'rating', 'reviews', 'newest'] as const).map((key) => (
-                      <FilterChip
-                        key={key}
-                        label={SORT_LABELS[key]}
-                        active={sort === key}
-                        onPress={() => setSort(key)}
-                      />
-                    ))}
-                  </View>
-
-                  <Text style={styles.sheetSection}>Verification</Text>
-                  <View style={styles.sheetGroup}>
-                    <FilterChip
-                      icon="check-circle"
-                      label="Verified only"
-                      active={verifiedOnly}
-                      onPress={() => setVerifiedOnly((v) => !v)}
-                    />
-                  </View>
-
-                  <Text style={styles.sheetSection}>Plan</Text>
-                  <View style={styles.sheetGroup}>
-                    <FilterChip
-                      icon="star"
-                      label="Premium"
-                      active={planFilter === 'premium'}
-                      onPress={() => setPlanFilter((p) => (p === 'premium' ? 'all' : 'premium'))}
-                    />
-                  </View>
-
-                  <Text style={styles.sheetSection}>Specialism</Text>
-                  <View style={styles.sheetGroup}>
-                    {SPECIALISMS.map((spec) => (
-                      <FilterChip
-                        key={spec.key}
-                        icon={spec.icon}
-                        label={spec.label}
-                        active={specialismFilter === spec.key}
-                        onPress={() => toggleSpecialism(spec.key)}
-                      />
-                    ))}
-                  </View>
-                </ScrollView>
-                <View style={styles.sheetFooter}>
-                  <Pressable
-                    onPress={clearAllFilters}
-                    hitSlop={8}
-                    disabled={activeCount === 0}
-                    accessibilityRole="button"
-                    accessibilityLabel="Clear all filters"
-                  >
-                    <Text style={[styles.sheetClear, activeCount === 0 && styles.sheetClearDisabled]}>
-                      Clear all
-                    </Text>
-                  </Pressable>
-                  <Pressable style={styles.sheetApply} onPress={() => setShowFilters(false)}>
-                    <Text style={styles.sheetApplyText}>
-                      {isLoading ? 'Show results' : `Show ${data?.total ?? 0} results`}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          </Modal>
           <Text style={styles.resultsCount}>
             {isLoading ? 'Searching...' : `${data?.total || 0} results found`}
             {!isLoading && locationQuery ? ` near ${locationQuery}` : ''}
@@ -458,7 +451,7 @@ export default function SearchScreen() {
               </View>
               <Text style={styles.emptyTitle}>No traders found</Text>
               <Text style={styles.emptySubtitle}>
-                {verifiedOnly || planFilter !== 'all' || specialismFilter !== null
+                {verifiedOnly || specialismFilter !== null
                   ? 'No traders match these filters. Try clearing them, or widen your location.'
                   : 'Try adjusting your search or location.'}
               </Text>
@@ -478,6 +471,99 @@ export default function SearchScreen() {
           )}
         </View>
       )}
+
+      {/* Filter sheet — lives OUTSIDE the results branch so it opens before a
+          search too. It edits drafts; Apply ("Show results") commits them,
+          while the X, backdrop tap or hardware back discard them. */}
+      <Modal
+        visible={showFilters}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFilters(false)}
+      >
+        <View style={styles.sheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowFilters(false)} />
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Filters</Text>
+              <Pressable
+                onPress={() => setShowFilters(false)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Close filters"
+              >
+                <Feather name="x" size={22} color={Colors.light.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
+              <Text style={styles.sheetSection}>Sort by</Text>
+              <View style={styles.sheetGroup}>
+                {(['recommended', 'rating', 'reviews', 'newest'] as const).map((key) => (
+                  <FilterChip
+                    key={key}
+                    label={SORT_LABELS[key]}
+                    active={draftSort === key}
+                    onPress={() => setDraftSort(key)}
+                  />
+                ))}
+              </View>
+
+              <Text style={styles.sheetSection}>Verification</Text>
+              <View style={styles.sheetGroup}>
+                <FilterChip
+                  icon="check-circle"
+                  label="Verified only"
+                  active={draftVerifiedOnly}
+                  onPress={() => setDraftVerifiedOnly((v) => !v)}
+                />
+              </View>
+
+              <Text style={styles.sheetSection}>Specialism</Text>
+              <View style={styles.sheetGroup}>
+                {SPECIALISMS.map((spec) => (
+                  <FilterChip
+                    key={spec.key}
+                    icon={spec.icon}
+                    label={spec.label}
+                    active={draftSpecialism === spec.key}
+                    onPress={() =>
+                      setDraftSpecialism((prev) => (prev === spec.key ? null : spec.key))
+                    }
+                  />
+                ))}
+              </View>
+            </ScrollView>
+            <View style={styles.sheetFooter}>
+              <Pressable
+                onPress={clearDraftFilters}
+                hitSlop={8}
+                disabled={draftCount === 0}
+                accessibilityRole="button"
+                accessibilityLabel="Clear all filters"
+              >
+                <Text style={[styles.sheetClear, draftCount === 0 && styles.sheetClearDisabled]}>
+                  Clear all
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.sheetApply}
+                onPress={applyFilters}
+                accessibilityRole="button"
+                accessibilityLabel="Apply filters"
+              >
+                <Text style={styles.sheetApplyText}>
+                  {draftPreviewEnabled
+                    ? draftLoading || !draftData
+                      ? 'Show results'
+                      : `Show ${draftData.total} results`
+                    : 'Apply filters'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

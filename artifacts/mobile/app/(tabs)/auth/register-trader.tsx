@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
@@ -21,7 +20,6 @@ interface ChHit {
 
 export default function RegisterTraderScreen() {
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { registerTrader } = useAuth();
 
@@ -199,7 +197,9 @@ export default function RegisterTraderScreen() {
         style={styles.scroll}
         contentContainerStyle={{
           paddingTop: 24,
-          paddingBottom: tabBarHeight + insets.bottom + 32,
+          // Tab bar is hidden on this route (see (tabs)/_layout), so only the
+          // device safe area needs clearing below the CTA / login link.
+          paddingBottom: insets.bottom + 32,
           paddingHorizontal: 24,
         }}
         bottomOffset={60}
@@ -360,6 +360,9 @@ export default function RegisterTraderScreen() {
           </View>
         </View>
 
+        <View style={styles.sectionDivider} />
+        <Text style={styles.sectionTitle}>Address</Text>
+
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Business Address *</Text>
           <View style={styles.inputWrap}>
@@ -404,7 +407,8 @@ export default function RegisterTraderScreen() {
           </View>
         </View>
 
-        <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Contact & Login</Text>
+        <View style={styles.sectionDivider} />
+        <Text style={styles.sectionTitle}>Contact & Login</Text>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Your Name *</Text>
@@ -481,9 +485,14 @@ export default function RegisterTraderScreen() {
           </View>
         </View>
 
+        <View style={styles.sectionDivider} />
+        <Text style={styles.sectionTitle}>Terms & Confirmation</Text>
+
         <Pressable
           style={styles.checkboxRow}
           onPress={() => setAcceptedTerms(v => !v)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: acceptedTerms }}
         >
           <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
             {acceptedTerms && <Feather name="check" size={14} color={Colors.light.white} />}
@@ -575,6 +584,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
+  },
+  // Subtle hairline between form sections — keeps one continuous flow
+  // (no cards), just enough structure to scan the long form.
+  sectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: Colors.light.border,
+    marginTop: 10,
+    marginBottom: 2,
   },
   form: {
     gap: 14,
@@ -768,7 +785,9 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   button: {
-    backgroundColor: Colors.light.secondary,
+    // Primary CTA cyan, matching the customer Register button. Green stays
+    // reserved for success/verified accents (CH match, checkbox, icon).
+    backgroundColor: Colors.light.primary,
     height: 52,
     borderRadius: 14,
     alignItems: 'center',

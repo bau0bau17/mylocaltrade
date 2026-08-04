@@ -54,3 +54,4 @@
 - [Universal Links in email CTAs](universal-links-email.md) — /open email links must use the associated-domain host via getOpenLinkBase(); Brevo click-tracking can also break direct app open.
 - [Dark-mode-only policy](dark-mode-only-policy.md) — user cancelled light/system theming; appearance is locked dark (app.json + runtime override + light status bar). Never reintroduce scheme-following.
 - [Trader card & profile badge hierarchy](trader-card-badge-hierarchy.md) — cards show ONE aggregated Verified badge (never re-add per-item chips); profile perk badges stay quiet outline style.
+- [Search screen state conventions](search-screen-state-conventions.md) — Search tab stays mounted: nav uses nonce params; filter sheet edits drafts (Apply commits, dismiss discards); Premium filter removed on purpose.

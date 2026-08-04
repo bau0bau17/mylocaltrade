@@ -346,7 +346,13 @@ function ClassicTabLayout() {
         // and the absolutely-positioned tab bar would cover it. Hide the
         // tab bar on those routes so the bottom controls are visible.
         const hideTabBar =
-          r.name === "messages/[id]" || r.name === "enquiry/[traderId]";
+          r.name === "messages/[id]" ||
+          r.name === "enquiry/[traderId]" ||
+          // Registration is a focused, form-heavy flow: hiding the tab bar
+          // keeps it from covering the bottom CTA / legal links and avoids
+          // accidental tab switches mid-form.
+          r.name === "auth/register-customer" ||
+          r.name === "auth/register-trader";
         // The conversation screen renders its own rich header (name, status,
         // actions) with its own back button, so hide the shared ScreenHeader
         // there to avoid a duplicate header stacked on top of it.
