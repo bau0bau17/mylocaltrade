@@ -244,6 +244,14 @@ function ClassicTabLayout() {
         tabBarActiveTintColor: theme.tabActive,
         tabBarInactiveTintColor: theme.tabInactive,
         headerShown: false,
+        tabBarLabelStyle: {
+          fontSize: 10.5,
+          fontWeight: "600",
+          letterSpacing: 0.2,
+        },
+        tabBarItemStyle: {
+          paddingTop: 4,
+        },
         tabBarStyle: {
           position: "absolute",
           backgroundColor: isIOS ? "transparent" : theme.surface,

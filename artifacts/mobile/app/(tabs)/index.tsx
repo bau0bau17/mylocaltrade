@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl, useWindowDimensions, Platform } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -21,27 +22,38 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/lib/revenuecat';
 import type { FeatherIconName } from '@/types/feather-icons';
 
-const CATEGORIES: { name: string; icon: FeatherIconName }[] = [
+// `name` is the CANONICAL category value sent to search (never change it —
+// it drives category routing and the server-side synonym mapping). `label`
+// is only what's painted on the Home tile; keep it concise so nothing
+// truncates with an ellipsis on 4/5-column grids.
+type CategoryDef = {
+  name: string;
+  label?: string;
+  icon: string;
+  iconSet?: 'feather' | 'mci';
+};
+
+const CATEGORIES: CategoryDef[] = [
   { name: 'Plumbing', icon: 'droplet' },
   { name: 'Electrical', icon: 'zap' },
   { name: 'Roofing', icon: 'home' },
-  { name: 'Gas engineers', icon: 'thermometer' },
+  { name: 'Gas engineers', icon: 'fire', iconSet: 'mci' },
   { name: 'Heating', icon: 'thermometer' },
   { name: 'Solar panels', icon: 'sun' },
   { name: 'EV chargers', icon: 'battery-charging' },
   { name: 'Heat pumps', icon: 'wind' },
   { name: 'Insulation', icon: 'layers' },
-  { name: 'EPC improvements', icon: 'bar-chart-2' },
+  { name: 'EPC improvements', label: 'EPC upgrades', icon: 'bar-chart-2' },
   { name: 'Damp & mould', icon: 'cloud-drizzle' },
-  { name: 'Cladding & remediation', icon: 'shield' },
-  { name: 'General maintenance', icon: 'tool' },
-  { name: 'Leasehold repairs', icon: 'file-text' },
+  { name: 'Cladding & remediation', label: 'Cladding repairs', icon: 'shield' },
+  { name: 'General maintenance', label: 'Maintenance', icon: 'tool' },
+  { name: 'Leasehold repairs', label: 'Leasehold repairs', icon: 'file-text' },
   { name: 'Locksmiths', icon: 'key' },
-  { name: 'Cleaning', icon: 'trash-2' },
-  { name: 'Gardening & landscaping', icon: 'scissors' },
-  { name: 'Painting', icon: 'edit-2' },
-  { name: 'Building', icon: 'home' },
-  { name: 'Handyman', icon: 'settings' },
+  { name: 'Cleaning', icon: 'broom', iconSet: 'mci' },
+  { name: 'Gardening & landscaping', label: 'Gardening', icon: 'scissors' },
+  { name: 'Painting', icon: 'brush', iconSet: 'mci' },
+  { name: 'Building', icon: 'wall', iconSet: 'mci' },
+  { name: 'Handyman', icon: 'hammer-wrench', iconSet: 'mci' },
 ];
 
 const STATUS_LABEL: Record<string, string> = {
@@ -54,6 +66,10 @@ const STATUS_LABEL: Record<string, string> = {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  // 4 columns on standard iPhone widths; 5 only where labels stay readable
+  // and tiles keep comfortable tap targets (Plus/Max-class widths, tablets).
+  const categoryColumns = width >= 430 ? 5 : 4;
   const location = useLocation();
   const { isAuthenticated, isCustomer, isTrader } = useAuth();
   const { hasTraderSubscription } = useSubscription();
@@ -130,7 +146,9 @@ export default function HomeScreen() {
         </Pressable>
 
         <Pressable
-          style={styles.searchBar}
+          style={({ pressed }) => [styles.searchBar, pressed && styles.searchBarPressed]}
+          accessibilityRole="search"
+          accessibilityLabel="Search for a trade or service"
           onPress={() => router.push('/(tabs)/search')}
         >
           <View style={styles.searchIconWrap}>
@@ -144,7 +162,9 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+        // The tab bar is absolutely positioned (49pt row + bottom inset), so
+        // content needs enough bottom padding to scroll fully above it.
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 110 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
@@ -156,32 +176,40 @@ export default function HomeScreen() {
               <Feather name="check-circle" size={17} color={Colors.light.secondary} />
             </View>
             <Text style={styles.trustLabel}>Verified</Text>
-            <Text style={styles.trustSub}>Details</Text>
+            <Text style={styles.trustSub}>Traders</Text>
           </View>
-          <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
             <View style={[styles.trustIconWrap, { backgroundColor: Colors.light.primaryMuted }]}>
-              <Feather name="shield" size={17} color={Colors.light.primary} />
+              <Feather name="map" size={17} color={Colors.light.primary} />
             </View>
-            <Text style={styles.trustLabel}>UK</Text>
-            <Text style={styles.trustSub}>Wide</Text>
+            <Text style={styles.trustLabel}>UK-wide</Text>
+            <Text style={styles.trustSub}>Coverage</Text>
           </View>
-          <View style={styles.trustDivider} />
           <View style={styles.trustItem}>
             <View style={[styles.trustIconWrap, { backgroundColor: Colors.light.featuredMuted }]}>
               <FontAwesome name="star" size={17} color={Colors.light.featured} />
             </View>
-            <Text style={styles.trustLabel}>Top</Text>
-            <Text style={styles.trustSub}>Rated</Text>
+            <Text style={styles.trustLabel}>Top rated</Text>
+            <Text style={styles.trustSub}>Reviews</Text>
           </View>
         </View>
 
         {/* Customer-only CTA: traders never request quotes, so hide it for
             logged-in trader accounts (guests + customers still see it). */}
         {!(isAuthenticated && isTrader) && (
-          <Pressable style={styles.quoteCta} onPress={() => router.push('/(tabs)/search')}>
+          <Pressable
+            style={({ pressed }) => [styles.quoteCta, pressed && styles.quoteCtaPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Request a quote"
+            onPress={() => {
+              if (Platform.OS !== 'web') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              }
+              router.push('/(tabs)/search');
+            }}
+          >
             <View style={styles.quoteCtaIcon}>
-              <Feather name="message-square" size={18} color={Colors.light.white} />
+              <Feather name="message-square" size={19} color={Colors.light.white} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.quoteCtaTitle}>Request a quote</Text>
@@ -189,7 +217,9 @@ export default function HomeScreen() {
                 Find local traders with verified details and send your job details for free.
               </Text>
             </View>
-            <Feather name="arrow-right" size={18} color={Colors.light.white} />
+            <View style={styles.quoteCtaArrow}>
+              <Feather name="arrow-right" size={17} color={Colors.light.white} />
+            </View>
           </Pressable>
         )}
 
@@ -202,9 +232,14 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <View style={styles.categoriesGrid}>
-            {CATEGORIES.map((cat, index) => (
-              <View key={index} style={styles.categoryWrapper}>
-                <CategoryCard name={cat.name} icon={cat.icon} />
+            {CATEGORIES.map((cat) => (
+              <View key={cat.name} style={{ width: `${100 / categoryColumns}%` }}>
+                <CategoryCard
+                  name={cat.name}
+                  label={cat.label}
+                  icon={cat.icon as never}
+                  iconSet={cat.iconSet}
+                />
               </View>
             ))}
           </View>
@@ -438,10 +473,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 11,
+    minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.light.borderLight,
+  },
+  searchBarPressed: {
+    backgroundColor: Colors.light.cardElevated,
+    borderColor: `${Colors.light.primary}55`,
   },
   searchIconWrap: {
     width: 32,
@@ -454,8 +493,8 @@ const styles = StyleSheet.create({
   },
   searchText: {
     flex: 1,
-    fontSize: 13,
-    color: Colors.light.textMuted,
+    fontSize: 14,
+    color: Colors.light.textSecondary,
     letterSpacing: 0.1,
   },
   filterBtn: {
@@ -469,15 +508,16 @@ const styles = StyleSheet.create({
     borderColor: `${Colors.light.primary}33`,
   },
   scrollContent: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   trustSection: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: Colors.light.card,
     borderRadius: 16,
     paddingVertical: 16,
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
     marginBottom: 24,
     borderWidth: 1,
     borderColor: Colors.light.border,
@@ -486,11 +526,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     gap: 5,
-  },
-  trustDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: Colors.light.border,
   },
   trustIconWrap: {
     width: 38,
@@ -513,7 +548,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   section: {
-    marginBottom: 28,
+    marginBottom: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -548,10 +583,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -4,
-    rowGap: 4,
-  },
-  categoryWrapper: {
-    width: '20%',
+    rowGap: 8,
   },
   horizontalScroll: {
     paddingRight: 16,
@@ -676,12 +708,26 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  quoteCtaPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.985 }],
   },
   quoteCtaIcon: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quoteCtaArrow: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
