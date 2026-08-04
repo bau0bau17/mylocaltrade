@@ -26,6 +26,8 @@ import {
   FileCheck2,
   UserPlus,
   Search,
+  Sun,
+  Moon,
 } from "lucide-react";
 import "./admin-dashboard-dark.css";
 
@@ -197,12 +199,14 @@ function StatCard({
 
 export default function AdminDashboardDark() {
   const [activeItem, setActiveItem] = useState("Dashboard");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const isSuperAdmin = true;
   const totalTraders = STATUS_BREAKDOWN.reduce((n, s) => n + s.count, 0);
+  const isLight = theme === "light";
 
   return (
-    <div className="add-root min-h-[100dvh] w-full flex relative">
-      <div className="add-noise fixed inset-0 pointer-events-none z-0" />
+    <div className={`add-root add-theme-transition min-h-[100dvh] w-full flex relative ${isLight ? "light" : ""}`}>
+      {!isLight && <div className="add-noise fixed inset-0 pointer-events-none z-0" />}
       {/* Sidebar */}
       <aside className="add-sidebar hidden md:flex md:flex-col w-64 shrink-0 text-[hsl(var(--add-sidebar-fg))] relative z-10">
         <div className="px-5 py-5 flex items-center gap-2.5 border-b border-[hsl(var(--add-sidebar-border))]">
@@ -299,6 +303,24 @@ export default function AdminDashboardDark() {
                 <span className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--add-success))]" />
                 Updated 12s ago
               </div>
+              <button
+                type="button"
+                onClick={() => setTheme(isLight ? "dark" : "light")}
+                className="add-theme-toggle relative w-9 h-9 rounded-lg border border-[hsl(var(--add-card-border))] bg-[hsl(var(--add-card))] flex items-center justify-center text-[hsl(var(--add-muted))] hover:text-[hsl(var(--add-primary))] hover:border-[hsl(var(--add-primary)/0.4)] active:scale-90 transition-all overflow-hidden"
+                aria-label={isLight ? "Switch to dark theme" : "Switch to light theme"}
+                title={isLight ? "Switch to dark theme" : "Switch to light theme"}
+              >
+                <Sun
+                  className={`w-4 h-4 absolute transition-all duration-300 ${
+                    isLight ? "opacity-100 rotate-0 scale-100" : "opacity-0 -rotate-90 scale-50"
+                  }`}
+                />
+                <Moon
+                  className={`w-4 h-4 absolute transition-all duration-300 ${
+                    isLight ? "opacity-0 rotate-90 scale-50" : "opacity-100 rotate-0 scale-100"
+                  }`}
+                />
+              </button>
               <button
                 type="button"
                 className="w-9 h-9 rounded-lg border border-[hsl(var(--add-card-border))] bg-[hsl(var(--add-card))] flex items-center justify-center text-[hsl(var(--add-muted))] hover:text-[hsl(var(--add-primary))] hover:border-[hsl(var(--add-primary)/0.4)] transition-colors"

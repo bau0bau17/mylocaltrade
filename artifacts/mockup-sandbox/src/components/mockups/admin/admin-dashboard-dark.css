@@ -112,3 +112,60 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
   mix-blend-mode: overlay;
 }
+
+/* -------------------------------------------------------------------------
+   Light theme override — the "refined" light palette, same hue language and
+   orange accent as dark mode, swapped onto light surfaces. The sidebar stays
+   on the dark gradient in both themes (as in the original refined design),
+   only the main canvas, cards and text swap.
+   ------------------------------------------------------------------------- */
+.add-root.light {
+  --add-bg: 30 30% 97%;
+  --add-card: 0 0% 100%;
+  --add-card-border: 25 20% 90%;
+  --add-foreground: 222 18% 14%;
+  --add-muted: 25 12% 46%;
+  --add-muted-bg: 30 20% 94%;
+
+  --add-primary: 21 88% 50%;
+  --add-primary-foreground: 0 0% 100%;
+  --add-primary-tint: 21 95% 95%;
+
+  --add-success: 152 58% 34%;
+  --add-success-tint: 152 55% 94%;
+  --add-warning: 35 92% 45%;
+  --add-warning-tint: 40 90% 94%;
+  --add-danger: 358 72% 48%;
+  --add-danger-tint: 358 80% 95%;
+  --add-info: 213 70% 46%;
+  --add-info-tint: 213 75% 95%;
+
+  /* sidebar stays dark in light mode, matching the source design */
+  --add-sidebar-from: 222 32% 12%;
+  --add-sidebar-to: 222 30% 8%;
+  --add-sidebar-fg: 220 18% 86%;
+  --add-sidebar-border: 222 22% 20%;
+  --add-sidebar-active: 21 88% 50%;
+}
+
+.add-root.light .add-card-hover:hover {
+  box-shadow: 0 10px 30px -12px hsl(21 80% 40% / 0.18);
+}
+
+.add-root.light .add-nav-item.active::before {
+  box-shadow: 0 0 10px hsl(var(--add-sidebar-active) / 0.6);
+}
+
+/* Smooth cross-fade when toggling theme */
+.add-theme-transition,
+.add-theme-transition * {
+  transition: background-color 420ms ease, border-color 420ms ease, color 420ms ease, box-shadow 420ms ease;
+}
+
+.add-theme-toggle:hover {
+  box-shadow: 0 0 0 4px hsl(var(--add-primary) / 0.12);
+}
+
+.add-theme-toggle:active {
+  box-shadow: 0 0 0 6px hsl(var(--add-primary) / 0.18);
+}
