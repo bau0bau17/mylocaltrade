@@ -9,10 +9,11 @@ The user (MyLocalTrade) edits/builds on Replit but actually RUNS Expo/Metro + iO
 
 **Why it matters:** "Fix verified on Replit" is not enough — symptom screenshots will keep showing the OLD code (old line numbers) until the Mac clone is updated and Metro cache cleared.
 
-## Git/GitHub topology (as of mid-2026)
-- Replit local working branch is `master`, tracking GitHub `origin/main` (`branch.master.merge=refs/heads/main`). There is also a long-lived `replit-agent` branch (hundreds of commits ahead) and Replit auto-creates a local `main` at origin/main.
-- The Replit **terminal cannot push to GitHub** (HTTPS password auth unsupported, no GitHub connector/token available). Pushing must go through the **Replit Git pane (UI)**, which uses the GitHub App auth.
-- No GitHub connector in `listConnections` (401). Don't try programmatic push.
+## Git/GitHub topology (UPDATED Aug 2026 — old replit-agent flow retired)
+- Replit working branch is now `main`; origin is `https://github.com/bau0bau17/mylocaltrade.git`.
+- **Programmatic push WORKS now**: shell `git add`/`git commit` on main, then the git-remote skill's `gitPush({ branch: "main" })` callback (GitHub App auth) — verified by matching `git ls-remote origin main` to local HEAD.
+- User's requested workflow: commit + push straight to `origin/main`; they pull `main` normally on the Mac. Do NOT tell them to `git checkout origin/replit-agent -- <files>` anymore (explicitly banned by user).
+- The sections below about master/replit-agent divergence and UI-only pushes are historical context only.
 
 ## Replit-side git is locked for main agent
 `git branch -m`, and other writes are blocked: "Destructive git operations are not allowed in the main agent." Don't attempt rename/merge/checkout from the agent shell — only read-only git (status, log, ls-remote, rev-list, fetch) works.
