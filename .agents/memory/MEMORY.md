@@ -52,3 +52,4 @@
 - [Booking conflict & blocking rules](booking-conflict-blocking-rules.md) — CONFIRMED + old-slot-during-pending-reschedule block; hours+conflict re-checked at confirm; ukLocalToUtc null = DST gap; tests need distinct slots.
 - [Notification fan-out conventions](notification-fanout-conventions.md) — transition sends gated by conditional UPDATE...RETURNING (never in-memory checks); email try/catch separate from push so one can't kill the other.
 - [Universal Links in email CTAs](universal-links-email.md) — /open email links must use the associated-domain host via getOpenLinkBase(); Brevo click-tracking can also break direct app open.
+- [Dark-mode-only policy](dark-mode-only-policy.md) — user cancelled light/system theming; appearance is locked dark (app.json + runtime override + light status bar). Never reintroduce scheme-following.

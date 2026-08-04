@@ -1,0 +1,115 @@
+Please make one final focused navigation-screen consistency pass.
+
+DESIGN/LAYOUT ONLY.
+
+Do not change routes, functionality, authentication, APIs or business logic.
+
+--------------------------------------------------
+1. LOGGED-OUT ACCOUNT SCREEN
+--------------------------------------------------
+
+- Remove the large “Account” page header only for the logged-out state.
+- Keep the authenticated customer and trader Account headers unchanged.
+- Move the “Join MyLocalTrade” hero upward naturally while preserving safe-area spacing.
+
+The previous Account hero icon has still not been restored correctly.
+
+Please restore it exactly to the earlier version:
+
+- white tools illustration
+- bright blue rounded-square background
+- previous size
+- previous spacing
+- previous positioning
+
+Do not redesign, recolour or reinterpret the icon again.
+
+Keep all other Account-screen refinements unchanged.
+
+--------------------------------------------------
+2. SEARCH SCREEN
+--------------------------------------------------
+
+- Keep the “Search” page title.
+- Make the Recent Searches empty state more compact.
+- Move it closer to the “RECENT SEARCHES” heading instead of vertically centring it in the large remaining space.
+- Use a concise empty-state message such as:
+
+“No recent searches yet”
+
+“Your recent trader searches will appear here.”
+
+- Keep the empty-state icon subtle and consistent with the current design.
+- Preserve all existing search behaviour, location behaviour and routing.
+
+--------------------------------------------------
+3. LOGGED-OUT MESSAGES SCREEN
+--------------------------------------------------
+
+The current logged-out Messages screen feels too empty.
+
+Please refine it with:
+
+- a compact “Messages” page header at the top
+- a subtle message/conversation icon
+- the existing title:
+  “Log in to view your messages”
+- a short secondary explanation, for example:
+  “Keep track of enquiries and conversations with local traders.”
+- the existing Log In action
+
+Please improve the spacing so the content feels intentionally positioned rather than isolated in the middle of a large blank screen.
+
+Preserve:
+
+- the existing login destination
+- the Messages route
+- authenticated inbox behaviour
+- unread badge logic
+- notification and deep-link navigation
+
+--------------------------------------------------
+4. SCREEN-TITLE CONSISTENCY
+--------------------------------------------------
+
+Use this final title behaviour:
+
+- Home: no “Home” page title; keep the MyLocalTrade branding header
+- Search: keep the “Search” page title
+- Messages logged out: show a compact “Messages” page title
+- Account logged out: remove the “Account” page title because “Join MyLocalTrade” already acts as the hero title
+- Authenticated Account screens: keep their existing Account/Profile titles
+
+Do not remove titles mechanically from all tab screens.
+
+--------------------------------------------------
+5. PRESERVE
+--------------------------------------------------
+
+Please preserve:
+
+- current Home design
+- current dark navy/cyan colour palette
+- bottom-navigation tabs, icons and destinations
+- safe-area behaviour
+- customer/trader role behaviour
+- login and registration flows
+- all routes and functionality
+- all backend/API behaviour
+
+Do not start an EAS build.
+Do not deploy or publish.
+
+--------------------------------------------------
+FINAL REPORT
+--------------------------------------------------
+
+After completion, please report:
+
+1. Exact screens changed.
+2. Confirmation that the earlier white-tools-on-bright-blue Account hero icon was restored exactly.
+3. Final title behaviour for Home, Search, Messages and Account.
+4. Files changed.
+5. Mobile typecheck result.
+6. Confirmation that no functionality, routes, authentication or business logic changed.
+7. Confirmation that no build, deployment or publish was started.
