@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 
-type Variant = 'stack' | 'tab';
+type Variant = 'stack' | 'tab' | 'page';
 
 interface ScreenHeaderProps {
   title: string;
@@ -15,6 +15,10 @@ interface ScreenHeaderProps {
   onBack?: () => void;
   rightSlot?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  /** `page` variant only: render the subtle bottom divider (default true).
+      Pass false when the header sits on the same surface as the content
+      directly below it, so they read as one block. */
+  divider?: boolean;
 }
 
 // Minimum top padding so the header never sits under a device cutout / notch
@@ -30,6 +34,7 @@ export function ScreenHeader({
   onBack,
   rightSlot,
   style,
+  divider = true,
 }: ScreenHeaderProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -39,6 +44,35 @@ export function ScreenHeader({
   // Default: back button shown for `stack`, hidden for `tab`.
   const back = showBack ?? variant === 'stack';
   const handleBack = onBack ?? (() => router.back());
+
+  // Compact page header shared by top-level tab screens (Search, Messages):
+  // safe-area aware, 20px horizontal padding, restrained title size.
+  if (variant === 'page') {
+    return (
+      <View
+        style={[
+          styles.pageWrap,
+          divider && styles.pageDivider,
+          { paddingTop: topPad + 4 },
+          style,
+        ]}
+      >
+        <View style={styles.tabRow}>
+          <View style={styles.tabTextWrap}>
+            <Text style={styles.pageTitle} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={styles.pageSubtitle} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          {rightSlot ? <View style={styles.rightSlot}>{rightSlot}</View> : null}
+        </View>
+      </View>
+    );
+  }
 
   if (variant === 'tab') {
     return (
@@ -112,6 +146,28 @@ const styles = StyleSheet.create({
   rightSpacer: {
     width: 36,
     height: 36,
+  },
+  pageWrap: {
+    backgroundColor: Colors.light.surface,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  pageDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.light.border,
+  },
+  pageTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '700',
+    color: Colors.light.text,
+    letterSpacing: 0.2,
+  },
+  pageSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.light.textSecondary,
+    marginTop: 2,
   },
   tabWrap: {
     backgroundColor: Colors.light.surface,

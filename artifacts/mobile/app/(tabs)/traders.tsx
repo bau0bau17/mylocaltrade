@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import Colors from '@/constants/colors';
 import { TraderCard } from '@/components/TraderCard';
-import { ScreenHeader } from '@/components/ScreenHeader';
 import { useListTraders } from '@workspace/api-client-react';
 
 const CATEGORIES = ['All', 'Plumber', 'Electrician', 'Roofer', 'Cleaner', 'Painter', 'Builder'];
@@ -25,14 +24,17 @@ export default function TradersScreen() {
     setIsRefreshing(false);
   };
 
+  const count = data?.total ?? 0;
+  const countLabel =
+    count === 0 ? 'No traders available' : count === 1 ? '1 trader available' : `${count} traders available`;
+
   return (
     <View style={styles.container}>
-      <ScreenHeader
-        variant="tab"
-        title="Traders"
-        subtitle={`${data?.total || 0} available`}
-      />
-      
+      {/* The back-button nav header with the centred "Traders" title comes
+          from the tabs layout — no page title here, just a compact result
+          count directly above the category chips. */}
+      <Text style={styles.resultsCount}>{countLabel}</Text>
+
       <View style={styles.filterBar}>
         <FlatList
           horizontal
@@ -127,6 +129,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.light.textSecondary,
     marginTop: 2,
+  },
+  resultsCount: {
+    backgroundColor: Colors.light.surface,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+    letterSpacing: 0.2,
   },
   filterBar: {
     backgroundColor: Colors.light.surface,

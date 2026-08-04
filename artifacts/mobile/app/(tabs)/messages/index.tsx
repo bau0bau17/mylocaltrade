@@ -14,6 +14,7 @@ import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useGetConversations,
@@ -91,18 +92,14 @@ const TRADER_STATUS_COLORS: Record<string, { text: string; bg: string }> = {
 };
 
 export default function MessagesIndexScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { isAuthenticated, isTrader, isAdmin } = useAuth();
 
   if (!isAuthenticated) {
     return (
       <View style={styles.container}>
-        {/* Compact page header so the logged-out state matches the
-            authenticated inbox chrome. */}
-        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-          <Text style={styles.title}>Messages</Text>
-        </View>
+        {/* Shared safe-area-aware page header — same pattern as Search. */}
+        <ScreenHeader variant="page" title="Messages" />
         <View style={styles.loggedOutBody}>
           <View style={styles.emptyIcon}>
             <Feather name="message-circle" size={28} color={Colors.light.primary} />
@@ -204,12 +201,11 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Text style={styles.title}>Messages</Text>
-        <Text style={styles.subtitle}>
-          {isTrader ? "Conversations with customers" : "Conversations with traders"}
-        </Text>
-      </View>
+      <ScreenHeader
+        variant="page"
+        title="Messages"
+        subtitle={isTrader ? "Conversations with customers" : "Conversations with traders"}
+      />
 
       <FlatList
         data={conversations}
@@ -392,21 +388,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 32,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 14,
-    backgroundColor: Colors.light.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: Colors.light.text,
-    letterSpacing: 0.3,
-  },
-  subtitle: { fontSize: 13, color: Colors.light.textSecondary, marginTop: 4 },
   empty: { alignItems: "center", padding: 32, marginTop: 40 },
   // Logged-out state: anchored in the upper portion of the screen under the
   // compact header, rather than floating in the vertical centre.
@@ -414,7 +395,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     paddingHorizontal: 32,
-    paddingTop: 56,
+    paddingTop: 48,
   },
   emptyIcon: {
     width: 64,

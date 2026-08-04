@@ -224,7 +224,9 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader variant="tab" title="Search" />
+      {/* Same compact page-header pattern as Messages; no divider because the
+          search form below shares the same surface — they read as one block. */}
+      <ScreenHeader variant="page" title="Search" divider={false} />
       <View style={styles.header}>
         <View style={styles.searchForm}>
           <View style={styles.inputContainer}>
@@ -486,7 +488,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
-    padding: 20,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     backgroundColor: Colors.light.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.light.border,
