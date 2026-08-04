@@ -1,0 +1,256 @@
+Please perform a premium visual refinement of the existing mobile Home screen.
+
+This is DESIGN AND UX POLISH ONLY.
+
+Do not redesign the product, change functionality, modify routes, APIs, database logic, role behaviour or navigation destinations.
+
+The goal is to make the current Home screen feel highly polished, premium, trustworthy and App-Store-ready.
+
+--------------------------------------------------
+1. RESPONSIVE CATEGORY GRID
+--------------------------------------------------
+
+The current five-column category grid is too cramped on standard iPhone widths.
+
+Please use:
+
+- 4 columns on standard/smaller iPhone widths
+- 5 columns only where the available width genuinely supports readable labels and comfortable tap targets
+
+Requirements:
+
+- larger and more comfortable icon tiles
+- minimum 44x44 touch targets
+- category labels should use up to two lines
+- no visible ellipsis such as “EPC improvem...”
+- balanced spacing between rows and columns
+- maintain existing category routes and canonical mappings
+
+Prefer concise display labels where needed, for example:
+
+- EPC upgrades
+- Gas engineers
+- Solar panels
+- EV chargers
+- Heat pumps
+
+Display labels may change, but underlying category values and search behaviour must remain unchanged.
+
+--------------------------------------------------
+2. LAYOUT RHYTHM AND SPACING
+--------------------------------------------------
+
+Create a consistent spacing system across the Home screen.
+
+Suggested direction:
+
+- approximately 20px horizontal screen padding
+- approximately 24px between major sections
+- approximately 16px internal card padding
+- consistent card radiuses
+- balanced top and bottom spacing
+
+The screen should feel spacious but not wasteful.
+
+Ensure the final category row scrolls completely above the persistent bottom navigation and safe area.
+
+--------------------------------------------------
+3. HEADER AND SEARCH HIERARCHY
+--------------------------------------------------
+
+Preserve the current MyLocalTrade header and branding.
+
+Refine:
+
+- logo/title alignment
+- subtitle contrast
+- account/profile button alignment
+- location selector spacing
+- vertical hierarchy between location and search
+
+Make the Search field the strongest interactive element near the top of the screen.
+
+Improve:
+
+- search placeholder contrast
+- icon alignment
+- filter button alignment
+- comfortable input height
+- pressed/focused state
+
+Do not change search functionality.
+
+--------------------------------------------------
+4. TRUST SUMMARY CARD
+--------------------------------------------------
+
+Refine the existing trust strip into three balanced and easy-to-scan columns.
+
+Suggested wording:
+
+- Verified / Traders
+- UK-wide / Coverage
+- Top rated / Reviews
+
+Alternatively, use concise combined labels if visually cleaner:
+
+- Verified traders
+- UK-wide coverage
+- Top-rated professionals
+
+Requirements:
+
+- equal column widths
+- aligned icons
+- consistent typography
+- remove unnecessary visual separators if cleaner without them
+- improve readability without making the card visually heavy
+
+Do not change the underlying meaning or add unsupported claims.
+
+--------------------------------------------------
+5. REQUEST A QUOTE CTA
+--------------------------------------------------
+
+Preserve the current cyan brand CTA and existing route.
+
+Make it feel more refined through:
+
+- improved internal alignment
+- stronger title/subtitle hierarchy
+- consistent icon container
+- balanced padding
+- clearer directional arrow
+- subtle pressed state
+- optional very subtle tonal depth, without excessive gradient or glow
+
+Preserve role visibility:
+
+- shown for customers
+- hidden for logged-in traders
+- existing guest behaviour unchanged
+
+--------------------------------------------------
+6. CATEGORY ICON CONSISTENCY
+--------------------------------------------------
+
+Review the visible Home category icons only.
+
+Requirements:
+
+- every category must use a relevant and distinct icon
+- Gas engineers and Heating must not share the same icon
+- consistent icon stroke weight
+- consistent icon size
+- consistent tile size and centring
+- no changes to category IDs, routes or API values
+
+--------------------------------------------------
+7. BOTTOM NAVIGATION POLISH
+--------------------------------------------------
+
+Preserve the current tabs and destinations.
+
+Improve only:
+
+- active/inactive contrast
+- icon and label alignment
+- top separation from content
+- safe-area spacing
+- unread Messages badge alignment
+- pressed states
+
+The bottom bar must not cover scrollable content.
+
+--------------------------------------------------
+8. MICRO-INTERACTIONS
+--------------------------------------------------
+
+Add only subtle native-feeling interactions where the current architecture supports them safely:
+
+- small press-scale or opacity feedback
+- short transitions
+- light haptic feedback for primary CTA/category selection where appropriate
+
+Avoid:
+
+- slow animations
+- excessive motion
+- glowing effects
+- large new animation dependencies
+- visual effects that reduce performance
+
+Respect reduced-motion settings where already supported.
+
+--------------------------------------------------
+9. ACCESSIBILITY AND RESPONSIVENESS
+--------------------------------------------------
+
+Verify:
+
+- readable secondary text contrast
+- minimum comfortable tap targets
+- no clipped category labels
+- no content hidden behind the bottom bar
+- Dynamic Type does not cause obvious overlap
+- layout works on smaller and larger supported iPhones
+- light/dark mode behaviour remains correct if both are supported
+
+--------------------------------------------------
+10. DESIGN SYSTEM CONSISTENCY
+--------------------------------------------------
+
+Use the current MyLocalTrade design language.
+
+Standardise where inconsistent:
+
+- typography hierarchy
+- spacing
+- card borders
+- corner radiuses
+- icon containers
+- button heights
+- disabled/pressed states
+- secondary text colours
+
+Do not introduce a new UI framework or visual identity.
+
+--------------------------------------------------
+DO NOT CHANGE
+--------------------------------------------------
+
+Do not change:
+
+- backend or API code
+- database schema
+- routes
+- tab destinations
+- quote flow
+- messaging
+- booking
+- notifications
+- role permissions
+- authentication
+- category mapping
+- Universal Links
+- RevenueCat
+- trader/customer business logic
+
+Do not start an EAS build.
+Do not deploy or publish.
+
+--------------------------------------------------
+FINAL REPORT
+--------------------------------------------------
+
+After completion, report:
+
+1. Exact Home-screen design changes.
+2. Final responsive category-column behaviour.
+3. Category labels and icons adjusted.
+4. Spacing/design tokens standardised.
+5. Accessibility improvements.
+6. Files changed.
+7. Mobile typecheck result.
+8. Confirmation that no functionality, routes, APIs or business logic changed.
+9. Confirmation that no build, deploy or publish was started.
