@@ -19,7 +19,6 @@ import {
   Flag,
   Tag,
   Trash2,
-  Ban,
   UserCog,
   UsersRound,
   BellOff,
@@ -43,7 +42,6 @@ interface AttentionCounts {
   reviews: number;
   conversationReports: number;
   userReports: number;
-  cancellationRequests: number;
   accountDeletions: number;
   profileChangeRequests: number;
 }
@@ -78,7 +76,6 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/reviews", label: "Reviews", icon: Star, countKey: "reviews" },
       { href: "/conversation-reports", label: "Conversation reports", icon: ShieldAlert, countKey: "conversationReports" },
       { href: "/user-reports", label: "User reports", icon: Flag, countKey: "userReports" },
-      { href: "/cancellation-requests", label: "Cancellations", icon: Ban, countKey: "cancellationRequests" },
       { href: "/account-deletions", label: "Account deletions", icon: Trash2, countKey: "accountDeletions" },
     ],
   },

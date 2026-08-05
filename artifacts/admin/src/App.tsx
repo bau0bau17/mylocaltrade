@@ -17,7 +17,6 @@ import EnquiriesPage from "@/pages/Enquiries";
 import ReviewsPage from "@/pages/Reviews";
 import ConversationReportsPage from "@/pages/ConversationReports";
 import UserReportsPage from "@/pages/UserReports";
-import CancellationRequestsPage from "@/pages/CancellationRequests";
 import Subscriptions from "@/pages/Subscriptions";
 import PromoCodes from "@/pages/PromoCodes";
 import AccountDeletions from "@/pages/AccountDeletions";
@@ -44,7 +43,6 @@ function ProtectedRoutes() {
           <Route path="/reviews" component={ReviewsPage} />
           <Route path="/conversation-reports" component={ConversationReportsPage} />
           <Route path="/user-reports" component={UserReportsPage} />
-          <Route path="/cancellation-requests" component={CancellationRequestsPage} />
           <Route path="/subscriptions" component={Subscriptions} />
           <Route path="/promo-codes" component={PromoCodes} />
           <Route path="/account-deletions" component={AccountDeletions} />

@@ -40,7 +40,7 @@ export default function LegalSupportScreen() {
           <MenuRow
             icon="refresh-ccw"
             label="Refund & Cancellation Policy"
-            sub="Subscription cancellation terms"
+            sub="How App Store subscriptions are managed"
             onPress={() => router.push('/refund')}
           />
           <View style={styles.separator} />

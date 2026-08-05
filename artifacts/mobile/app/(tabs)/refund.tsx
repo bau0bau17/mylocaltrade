@@ -23,54 +23,31 @@ export default function RefundScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          This policy is issued by Service Provider LTD, a company registered in England and Wales under company number 15830141, trading as MyLocalTrade, and outlines the terms regarding refunds and cancellations for trader subscriptions on the MyLocalTrade platform. Our registered office address is shown in the contact section below.
+          This policy is issued by Service Provider LTD, a company registered in England and Wales under company number 15830141, trading as MyLocalTrade, and explains how billing, cancellations and refunds work for trader subscriptions on the MyLocalTrade platform. Our registered office address is shown in the contact section below.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>Your Right to Cancel</Text>
+        <Text style={styles.heading}>App Store Subscriptions</Text>
         <Text style={styles.paragraph}>
-          Under the Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013, you have the right to cancel your subscription within 14 days of purchase without giving any reason. This 14-day cooling-off period begins from the day after you subscribe.
-        </Text>
-        <Text style={styles.paragraph}>
-          To exercise your right to cancel, you must inform us of your decision by a clear statement (e.g. via the Contact Us button below or letter to our registered address). You may use the following wording: "I hereby give notice that I cancel my subscription to MyLocalTrade."
+          Premium subscriptions are purchased through the Apple App Store. Apple takes your payment and manages your subscription, including billing, renewals, cancellations and refunds, in accordance with Apple's own policies and terms. MyLocalTrade manages your access to Premium features once Apple confirms your subscription.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>Digital Services During Cooling-Off Period</Text>
+        <Text style={styles.heading}>Cancelling Your Subscription</Text>
         <Text style={styles.paragraph}>
-          Your subscription gives you access to digital features as soon as it starts. We do not currently ask you to give up your 14-day cooling-off right in exchange for that immediate access, so your right to cancel within the cooling-off period continues to apply even though access begins straight away. If you cancel within that period, your refund is handled as set out below.
-        </Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.heading}>App Store Purchases & Refunds</Text>
-        <Text style={styles.paragraph}>
-          If you subscribed through the iOS app, your payment is taken and managed by Apple. Refunds for App Store purchases are handled by Apple, not by MyLocalTrade, and must be requested directly from Apple at reportaproblem.apple.com or via Settings then your name then Subscriptions on your device.
-        </Text>
-        <Text style={styles.paragraph}>
-          Your statutory rights set out above still apply. If you need any help, please contact us using the button below and we will do our best to assist.
-        </Text>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.heading}>Subscription Cancellations</Text>
-        <Text style={styles.paragraph}>
-          You can cancel your subscription at any time through the App or by contacting us. When you cancel after the 14-day cooling-off period, you will continue to have access to the subscription features until the end of your current billing period. No further payments will be taken.
+          You can cancel your subscription at any time in your App Store settings: open Settings, tap your name, then Subscriptions, and choose MyLocalTrade. Your Premium access continues until the end of the current billing period, and no further payments are taken after that. Your free Basic listing stays live.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>Refunds</Text>
         <Text style={styles.paragraph}>
-          How any refund is issued depends on how you paid. If you subscribed through the iOS app, your payment was taken by Apple, so any refund must be issued by Apple — we cannot process App Store refunds ourselves, but we will help you request one (see "App Store Purchases & Refunds" above). For payments taken directly by us (for example, on the web), any refund will be made using the same method of payment used for the original transaction.
+          Because your payment is taken by Apple, refunds for App Store purchases are requested from and decided by Apple under Apple's own policies. You can request a refund from Apple at reportaproblem.apple.com or through your App Store purchase history.
         </Text>
         <Text style={styles.paragraph}>
-          Your statutory cooling-off rights are not affected by how you paid. If you cancel within the 14-day cooling-off period, you are entitled to reimbursement of the payments received, without undue delay and no later than 14 days from the day we are informed of your decision to cancel. Where Apple took the payment, we will support your refund request with Apple so that those rights are given effect.
-        </Text>
-        <Text style={styles.paragraph}>
-          Refunds after the 14-day cooling-off period are provided at our discretion, except where required by the Consumer Rights Act 2015 (for example, if the service was not as described or not fit for purpose).
+          MyLocalTrade does not take subscription payments directly and cannot issue refunds for App Store purchases.
         </Text>
       </View>
 
@@ -82,7 +59,7 @@ export default function RefundScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>How to Request a Refund</Text>
+        <Text style={styles.heading}>Questions About This Policy</Text>
         <View style={styles.contactCard}>
           <Text style={styles.contactText}>
             Service Provider LTD{'\n'}
@@ -93,7 +70,7 @@ export default function RefundScreen() {
         </View>
         <Pressable
           style={styles.contactBtn}
-          onPress={() => router.push('/contact-support?subject=Refund%20Request')}
+          onPress={() => router.push('/contact-support?subject=Billing%20Question')}
         >
           <Feather name="mail" size={16} color={Colors.light.primary} />
           <Text style={styles.contactBtnText}>Contact Us</Text>

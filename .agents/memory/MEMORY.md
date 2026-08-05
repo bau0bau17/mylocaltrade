@@ -55,3 +55,5 @@
 - [Dark-mode-only policy](dark-mode-only-policy.md) — user cancelled light/system theming; appearance is locked dark (app.json + runtime override + light status bar). Never reintroduce scheme-following.
 - [Trader card & profile badge hierarchy](trader-card-badge-hierarchy.md) — cards show ONE aggregated Verified badge (never re-add per-item chips); profile perk badges stay quiet outline style.
 - [Search screen state conventions](search-screen-state-conventions.md) — Search tab stays mounted: nav uses nonce params; filter sheet edits drafts (Apply commits, dismiss discards); Premium filter removed on purpose.
+- [Landing site prebuilt lockstep](landing-site-prebuilt-lockstep.md) — landing pages are compiled output (no source in repo); edit prerendered HTML + matching assets/*.js chunk with identical text or hydration shows stale copy.
+- [Apple-owned billing policy](apple-owned-billing-policy.md) — all refund/cancel copy defers to Apple (App Store); cooling-off UI+copy removed; backend cancellation-request endpoint/table dormant on purpose; never reintroduce refunds-from-us wording.

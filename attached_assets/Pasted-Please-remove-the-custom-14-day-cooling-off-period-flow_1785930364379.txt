@@ -1,0 +1,87 @@
+Please remove the custom "14-day cooling-off period" flow and all App Store refund-specific messaging from MyLocalTrade.
+
+After reviewing the subscription UX, I think we should fully align with Apple's subscription model instead of maintaining our own refund/cooling-off experience.
+
+Billing & Plan
+
+Remove the entire cooling-off/refund card, including:
+- "14-day cooling-off period"
+- remaining days
+- refund messaging
+- "Tell our support team"
+- any wording about requesting subscription refunds through MyLocalTrade
+
+When the current plan is Free, the Billing & Plan page should simply show:
+- Current plan
+- Free
+- Choose a plan
+- Restore purchases
+
+No cooling-off or refund information should be displayed.
+
+When a subscription is active or cancelled-but-still-active, only show the relevant subscription status, for example:
+- Premium Monthly
+- Renews on...
+or
+- Premium ends on...
+
+If the user needs to manage their subscription, a simple "Manage in App Store" button is sufficient.
+
+Apple already manages:
+- subscriptions
+- billing
+- renewals
+- cancellations
+- refunds
+
+Our app should not duplicate or explain Apple's refund process.
+
+Policies & Legal
+
+Please perform a full project-wide review and remove or update any wording that references:
+- 14-day cooling-off period
+- requesting refunds from MyLocalTrade
+- contacting MyLocalTrade for App Store subscription refunds
+- subscription cancellations handled by us
+
+Review all user-facing content, including (where applicable):
+- in-app legal pages
+- landing site
+- Refund Policy
+- Terms & Conditions
+- Privacy Policy
+- FAQ
+- Help & Support pages
+- Billing & Plan
+- Subscription Plans
+- customer-facing emails
+- any other customer-visible copy
+
+The wording should instead clearly state that subscriptions purchased through the Apple App Store are managed by Apple according to Apple's own policies.
+
+Admin
+
+Please also review the admin portal.
+
+If there are any refund- or cooling-off-related pages, labels, actions, statuses or text that assume MyLocalTrade processes App Store refunds, remove or adapt them so they correctly reflect the Apple subscription model.
+
+Goal
+
+The subscription flow should follow Apple's standard model:
+
+- MyLocalTrade manages Premium feature access.
+- Apple manages subscriptions.
+- Apple manages billing.
+- Apple manages renewals.
+- Apple manages cancellations.
+- Apple manages refunds.
+
+This simplifies the legal side, avoids conflicting information, and keeps the UX consistent with App Store expectations.
+
+Please perform a full project-wide search so no outdated refund or cooling-off references remain anywhere.
+
+Do not change RevenueCat entitlement logic, App Store products, APIs, backend logic or subscription functionality.
+
+This is a UX, legal copy and consistency refinement only.
+
+Do not start a build, deployment or publish.
