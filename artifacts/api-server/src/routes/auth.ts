@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import bcryptjs from "bcryptjs";
+import { randomInt } from "crypto";
 import { db } from "@workspace/db";
 import { usersTable, traderProfilesTable, subscriptionsTable } from "@workspace/db/schema";
 import { and, eq, isNotNull, or, sql } from "drizzle-orm";
@@ -32,6 +33,10 @@ import { traderDocumentsTable } from "@workspace/db/schema";
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
+// Email verification link token TTL (24 hours). After expiry the link is
+// rejected; the user must request a new verification email.
+const EMAIL_VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
 // In-app email verification code (OTP). Mirrors the trader phone OTP policy.
 const EMAIL_OTP_TTL_MS = 10 * 60 * 1000;
 const EMAIL_OTP_TTL_MINUTES = EMAIL_OTP_TTL_MS / 60000;
@@ -43,7 +48,7 @@ const EMAIL_OTP_MAX_ATTEMPTS = 5;
 const DUMMY_OTP_HASH = bcryptjs.hashSync("000000", 10);
 
 function generateEmailOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }
 
 /** Mint a fresh 6-digit email OTP and its bcrypt hash + expiry. */
@@ -316,6 +321,7 @@ router.post("/auth/register/customer", async (req, res) => {
         isActive: false,
         emailVerified: false,
         emailVerificationToken: verificationToken,
+        emailVerificationTokenExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
         emailVerificationSentAt: new Date(),
         emailOtpHash: emailOtp.hash,
         emailOtpExpiresAt: emailOtp.expiresAt,
@@ -488,6 +494,7 @@ router.post("/auth/register/trader", async (req, res) => {
         isActive: false,
         emailVerified: false,
         emailVerificationToken: verificationToken,
+        emailVerificationTokenExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
         emailVerificationSentAt: now,
         emailOtpHash: emailOtp.hash,
         emailOtpExpiresAt: emailOtp.expiresAt,
@@ -593,27 +600,6 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
-    if (user.deletedAt) {
-      res.status(403).json({ error: "This account has been deleted." });
-      return;
-    }
-    if (
-      user.deletionStatus === "ANONYMISED" ||
-      user.deletionStatus === "COMPLETED"
-    ) {
-      // Account has been irreversibly anonymised or finalised — there is
-      // nothing meaningful left to sign in to.
-      res.status(403).json({
-        error: "This account has been deleted.",
-        code: "ACCOUNT_DELETED",
-      });
-      return;
-    }
-    // REQUESTED / DISABLED_PENDING_RETENTION: login is allowed so the user
-    // can view their deletion status and cancel from the mobile app. The
-    // mobile client routes them to the deletion-status screen instead of
-    // the normal app shell based on the deletionStatus field below.
-
     // Per-account lockout check — DB-backed so it is enforced globally across
     // all instances, not just the one handling this request. Check this before
     // bcrypt.compare() so locked-out requests incur no extra CPU cost.
@@ -683,6 +669,30 @@ router.post("/auth/login", async (req, res) => {
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
+
+    // Deleted / anonymised accounts — checked after password verification so
+    // that an incorrect password always returns the generic 401 regardless of
+    // deletion state, preventing account-existence enumeration.
+    if (user.deletedAt) {
+      res.status(403).json({ error: "This account has been deleted." });
+      return;
+    }
+    if (
+      user.deletionStatus === "ANONYMISED" ||
+      user.deletionStatus === "COMPLETED"
+    ) {
+      // Account has been irreversibly anonymised or finalised — there is
+      // nothing meaningful left to sign in to.
+      res.status(403).json({
+        error: "This account has been deleted.",
+        code: "ACCOUNT_DELETED",
+      });
+      return;
+    }
+    // REQUESTED / DISABLED_PENDING_RETENTION: login is allowed so the user
+    // can view their deletion status and cancel from the mobile app. The
+    // mobile client routes them to the deletion-status screen instead of
+    // the normal app shell based on the deletionStatus field below.
 
     // Deactivated STAFF accounts (admin whose access was removed or who is
     // suspended) must be rejected at the login boundary, not merely by
@@ -763,6 +773,17 @@ router.get("/auth/verify-email", async (req, res) => {
       return;
     }
 
+    // Enforce token expiry. Tokens issued before this column existed have a
+    // null expiry and are treated as expired to close the indefinite-validity
+    // window on pre-existing tokens.
+    if (
+      !user.emailVerificationTokenExpiresAt ||
+      user.emailVerificationTokenExpiresAt < new Date()
+    ) {
+      res.status(410).send(verifyPage("Link Expired", "This verification link has expired. Please request a new one from the app.", false));
+      return;
+    }
+
     await finalizeEmailVerification(user);
 
     res.send(verifyPage("Email Verified!", "Your email has been verified. You can now log in to MyLocalTrade.", true));
@@ -808,6 +829,7 @@ router.post("/auth/resend-verification", async (req, res) => {
     await db.update(usersTable)
       .set({
         emailVerificationToken: newToken,
+        emailVerificationTokenExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
         emailVerificationSentAt: new Date(),
         emailOtpHash: newOtp.hash,
         emailOtpExpiresAt: newOtp.expiresAt,

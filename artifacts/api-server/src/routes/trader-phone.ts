@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import bcryptjs from "bcryptjs";
+import { randomInt } from "crypto";
 import { db } from "@workspace/db";
 import { traderProfilesTable, usersTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -22,7 +23,7 @@ const MAX_ATTEMPTS = 5;
 const UK_PHONE_REGEX = /^(\+44\s?7\d{3}|\(?07\d{3}\)?)\s?\d{3}\s?\d{3}$/;
 
 function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }
 
 function normalisePhone(input: string): string {

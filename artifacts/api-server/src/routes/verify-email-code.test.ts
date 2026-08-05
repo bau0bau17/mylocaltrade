@@ -210,7 +210,10 @@ describe("Link/code parity — GET /auth/verify-email shares finalize", () => {
     });
     await db
       .update(usersTable)
-      .set({ emailVerificationToken: token })
+      .set({
+        emailVerificationToken: token,
+        emailVerificationTokenExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      })
       .where(eq(usersTable.id, user.id));
     await createTraderProfile(user.id, "parity");
 

@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import bcryptjs from "bcryptjs";
+import { randomInt } from "crypto";
 import { db } from "@workspace/db";
 import {
   phoneChangeVerificationsTable,
@@ -43,7 +44,7 @@ const VERIFIED_WINDOW_MS = 15 * 60 * 1000;
 const UK_PHONE_REGEX = /^(\+44\s?7\d{3}|\(?07\d{3}\)?)\s?\d{3}\s?\d{3}$/;
 
 function generateOtp(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }
 
 function normalisePhone(input: string): string {

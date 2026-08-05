@@ -55,6 +55,7 @@ export const usersTable = pgTable(
   isActive: boolean("is_active").notNull().default(true),
   emailVerified: boolean("email_verified").notNull().default(false),
   emailVerificationToken: text("email_verification_token"),
+  emailVerificationTokenExpiresAt: timestamp("email_verification_token_expires_at"),
   emailVerificationSentAt: timestamp("email_verification_sent_at"),
   // In-app email verification code (6-digit OTP). Mirrors the trader phone
   // OTP fields. The link-based token above remains as a web fallback; both
