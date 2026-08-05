@@ -11,9 +11,9 @@ This scan is production-focused. Assume `NODE_ENV=production`, platform TLS is p
 - **User accounts and bearer tokens** — customer, trader, and admin credentials/tokens grant access to marketplace actions and privileged back-office workflows.
 - **Personal and business data** — names, email addresses, phone numbers, trader business details, messages, enquiries, reviews, saved-trader relationships, and onboarding metadata contain PII and marketplace-sensitive data.
 - **Trader verification artifacts** — uploaded identity/business documents and moderation decisions are sensitive and high impact if exposed or tampered with.
-- **Billing state** — subscription rows synced from RevenueCat (Apple In-App Purchase) affect trader perks/featured placement and revenue. Legacy Stripe columns remain in the schema for historical reasons but are never written (Stripe integration removed Aug 2026).
+- **Billing state** — subscription rows synced from RevenueCat (Apple In-App Purchase) affect trader perks/featured placement and revenue. Stripe integration was fully removed (Aug 2026); legacy `stripe_*` DB columns remain as NULL placeholders only.
 - **Operational trust signals** — transactional emails, verification links, review/reply notifications, and support emails are sent from trusted app-controlled infrastructure and can be abused for phishing or impersonation if content handling is unsafe.
-- **Application secrets and integrations** — JWT signing material, database credentials, SMTP credentials, RevenueCat webhook/API credentials, object-storage credentials, and Companies House access must remain server-only.
+- **Application secrets and integrations** — JWT signing material, database credentials, SMTP credentials, RevenueCat webhook/API credentials, object-storage credentials, and Companies House access must remain server-only. RevenueCat iOS/Android public SDK keys (`EXPO_PUBLIC_REVENUECAT_*`) are intentionally public and embedded in the mobile app; they are not secrets.
 
 ## Trust Boundaries
 
@@ -35,6 +35,7 @@ This scan is production-focused. Assume `NODE_ENV=production`, platform TLS is p
 - Admin-only surfaces: `artifacts/api-server/src/routes/admin.ts` and the `artifacts/admin` app.
 - Usually out of scope: `artifacts/mockup-sandbox`, any `NODE_ENV !== production` branches, and demo-only subscription activation that is explicitly blocked in production.
 - `artifacts/mobile/server/serve.js` landing page server: SAST HIGH path-traversal is a confirmed false positive (four independent controls block traversal). Do not re-investigate unless the file changes.
+- `EXPO_PUBLIC_REVENUECAT_IOS_API_KEY` / `EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY` in `.replit` and `eas.json`: these are intentionally public RevenueCat mobile SDK keys; SAST flags them as secrets but they are not. Do not re-flag.
 
 ## Confirmed Clean (Task #108)
 
@@ -46,6 +47,10 @@ The following were investigated and found not vulnerable in the current codebase
 - Promo code double-claim — `SELECT … FOR UPDATE` + per-user unique constraint prevent concurrent abuse.
 - Rate limiting — all public endpoints have PostgreSQL-backed rate limits applied at the Express layer.
 - SQL injection — all queries use Drizzle parameterized helpers.
+
+## Confirmed Fixed (Task #119)
+
+- **Stripe webhook multi-signature verifier (ID 14)** — Stripe integration was fully removed in commit `a011817`. No Stripe webhook code remains in `subscriptions.ts`.
 
 ## Threat Categories
 
