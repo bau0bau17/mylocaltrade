@@ -481,7 +481,7 @@ export default function PricingScreen() {
         <Text style={styles.faqTitle}>FAQ</Text>
         <View style={styles.faqItem}>
           <Text style={styles.faqQuestion}>Can I cancel anytime?</Text>
-          <Text style={styles.faqAnswer}>Yes, you can cancel anytime with no penalty. Premium is available on a monthly or yearly basis.</Text>
+          <Text style={styles.faqAnswer}>Yes — you can cancel anytime in your App Store subscription settings, with no penalty. Premium is available on a monthly or yearly basis.</Text>
         </View>
         <View style={styles.faqItem}>
           <Text style={styles.faqQuestion}>How do verified reviews work?</Text>

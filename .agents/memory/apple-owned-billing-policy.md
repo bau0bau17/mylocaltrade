@@ -13,3 +13,5 @@ Decision (Aug 2026, user-directed): the product fully adopts Apple's subscriptio
 **Why:** App Store compliance and a prior custom flow that conflicted with Apple's actual refund ownership; a support-facing email path remains for traders who write in.
 
 **How to apply:** any new screen, email, FAQ or landing copy touching billing must follow the Apple-owned model; consistency check spans mobile legal pages, landing site refund page, and terms §10/§11.
+
+**Page naming (Aug 2026):** The customer-facing page formerly titled "Refund & Cancellation Policy" is now titled "Subscription & Billing" everywhere (mobile route title, legal hub row, landing page title/h1/meta, all landing footers). URLs, route names, and file names intentionally KEPT (`/refund` mobile route, `/refund-policy` landing URL, `refund.tsx`, `RefundPolicy-*.js`) to avoid breaking links/SEO. Mobile billing screen's cancel button says "Cancel Premium subscription" (not "Switch to Free plan"). Don't "fix" the URL/title mismatch — it's deliberate.

@@ -22,7 +22,7 @@ export function CompanyFooter() {
           <Text style={styles.linkText}>Privacy</Text>
         </Pressable>
         <Pressable onPress={() => router.push('/refund')} style={styles.linkItem} hitSlop={6}>
-          <Text style={styles.linkText}>Refunds</Text>
+          <Text style={styles.linkText}>Billing</Text>
         </Pressable>
       </View>
 

@@ -70,7 +70,7 @@ const INNER_ROUTES: {
   { name: "about", title: "About Us", parent: "/legal-support" },
   { name: "privacy", title: "Privacy Policy", parent: "/legal-support" },
   { name: "terms", title: "Terms & Conditions", parent: "/legal-support" },
-  { name: "refund", title: "Refund Policy", parent: "/legal-support" },
+  { name: "refund", title: "Subscription & Billing", parent: "/legal-support" },
   { name: "cookie-policy", title: "Cookie Policy", parent: "/legal-support" },
   { name: "complaints", title: "Complaints Procedure", parent: "/legal-support" },
   { name: "report-trader", title: "Report a Trader", parent: "/legal-support" },

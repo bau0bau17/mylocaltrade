@@ -23,7 +23,7 @@ export default function RefundScreen() {
       
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          This policy is issued by Service Provider LTD, a company registered in England and Wales under company number 15830141, trading as MyLocalTrade, and explains how billing, cancellations and refunds work for trader subscriptions on the MyLocalTrade platform. Our registered office address is shown in the contact section below.
+          This page is provided by Service Provider LTD, a company registered in England and Wales under company number 15830141, trading as MyLocalTrade, and explains how billing, cancellations and refunds work for trader subscriptions on the MyLocalTrade platform. Our registered office address is shown in the contact section below.
         </Text>
       </View>
 
@@ -59,7 +59,7 @@ export default function RefundScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>Questions About This Policy</Text>
+        <Text style={styles.heading}>Questions About Billing</Text>
         <View style={styles.contactCard}>
           <Text style={styles.contactText}>
             Service Provider LTD{'\n'}
@@ -79,7 +79,7 @@ export default function RefundScreen() {
 
       <View style={styles.legalNote}>
         <Text style={styles.legalNoteText}>
-          This policy does not affect your statutory rights. For further information about your rights, contact Citizens Advice (citizensadvice.org.uk) or your local Trading Standards office.
+          Nothing on this page affects your statutory rights. For further information about your rights, contact Citizens Advice (citizensadvice.org.uk) or your local Trading Standards office.
         </Text>
       </View>
     </ScrollView>

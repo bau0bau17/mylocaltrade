@@ -206,7 +206,7 @@ export default function BillingScreen() {
               {!status?.cancelAtPeriodEnd && (
                 <Pressable style={s.dangerBtn} onPress={() => setShowDowngrade(true)}>
                   <Feather name="arrow-down-circle" size={18} color={Colors.light.text} />
-                  <Text style={s.dangerBtnText}>Switch to Free plan</Text>
+                  <Text style={s.dangerBtnText}>Cancel Premium subscription</Text>
                 </Pressable>
               )}
               <Pressable style={s.dangerBtn} onPress={restoreApple}>
@@ -268,7 +268,7 @@ export default function BillingScreen() {
     >
       <View style={s.modalOverlay}>
         <View style={s.modalCard}>
-          <Text style={s.modalTitle}>Switch to the Free plan?</Text>
+          <Text style={s.modalTitle}>Cancel your Premium subscription?</Text>
           <Text style={s.modalBody}>
             {periodEndLabel
               ? `You'll keep your Premium perks until ${periodEndLabel}. After that your listing moves to the free Basic plan and you'll lose:`
