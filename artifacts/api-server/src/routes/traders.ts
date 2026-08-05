@@ -173,34 +173,49 @@ router.get("/traders", async (req, res) => {
       const n = Number(v);
       return Number.isFinite(n) ? n : null;
     };
-    const radiusMilesNum = parseNum(radiusMiles);
-    if (radiusMilesNum != null && radiusMilesNum > 0) {
-      const clampedRadius = Math.min(500, Math.max(1, radiusMilesNum));
-      let anchor: { latitude: number; longitude: number } | null = null;
-      const latNum = parseNum(lat);
-      const lngNum = parseNum(lng);
-      if (latNum != null && lngNum != null && Math.abs(latNum) <= 90 && Math.abs(lngNum) <= 180) {
-        anchor = { latitude: latNum, longitude: lngNum };
-      } else if (typeof near === "string" && near.trim()) {
-        anchor = await geocodeUkLocation(near);
-      }
-      if (anchor) {
-        // Haversine great-circle distance in miles (Earth radius 3958.8 mi),
-        // acos-clamped against floating-point drift.
-        conditions.push(
-          sql`(
-            ${traderProfilesTable.latitude} IS NOT NULL
-            AND ${traderProfilesTable.longitude} IS NOT NULL
-            AND ${traderProfilesTable.geocodedPostcode} = ${traderProfilesTable.postcode}
-            AND (3958.8 * acos(least(1.0, greatest(-1.0,
-              cos(radians(${anchor.latitude})) * cos(radians(${traderProfilesTable.latitude}))
-              * cos(radians(${traderProfilesTable.longitude}) - radians(${anchor.longitude}))
-              + sin(radians(${anchor.latitude})) * sin(radians(${traderProfilesTable.latitude}))
-            )))) <= ${clampedRadius}
-          )`,
-        );
-      }
+
+    // Resolve the anchor whenever one is provided — even without a radius —
+    // because it also powers the display-only per-result distance below
+    // (UK-wide searches with a location still show "X mi away" on cards).
+    let anchor: { latitude: number; longitude: number } | null = null;
+    const latNum = parseNum(lat);
+    const lngNum = parseNum(lng);
+    if (latNum != null && lngNum != null && Math.abs(latNum) <= 90 && Math.abs(lngNum) <= 180) {
+      anchor = { latitude: latNum, longitude: lngNum };
+    } else if (typeof near === "string" && near.trim()) {
+      anchor = await geocodeUkLocation(near);
     }
+
+    // Haversine great-circle distance in miles (Earth radius 3958.8 mi),
+    // acos-clamped against floating-point drift. ONE expression shared by the
+    // radius filter and the distanceMiles select so they can never disagree.
+    const trustedCoordsSql = sql`(
+      ${traderProfilesTable.latitude} IS NOT NULL
+      AND ${traderProfilesTable.longitude} IS NOT NULL
+      AND ${traderProfilesTable.geocodedPostcode} = ${traderProfilesTable.postcode}
+    )`;
+    const haversineMilesSql = (a: { latitude: number; longitude: number }) =>
+      sql`(3958.8 * acos(least(1.0, greatest(-1.0,
+        cos(radians(${a.latitude})) * cos(radians(${traderProfilesTable.latitude}))
+        * cos(radians(${traderProfilesTable.longitude}) - radians(${a.longitude}))
+        + sin(radians(${a.latitude})) * sin(radians(${traderProfilesTable.latitude}))
+      ))))`;
+
+    const radiusMilesNum = parseNum(radiusMiles);
+    if (radiusMilesNum != null && radiusMilesNum > 0 && anchor) {
+      const clampedRadius = Math.min(500, Math.max(1, radiusMilesNum));
+      conditions.push(
+        sql`(${trustedCoordsSql} AND ${haversineMilesSql(anchor)} <= ${clampedRadius})`,
+      );
+    }
+
+    // Display-only distance for each result. NULL when the request has no
+    // resolvable anchor or the trader has no trusted coords — the app hides
+    // the label rather than showing a wrong number. Never used for
+    // filtering or ordering.
+    const distanceMilesExpr = anchor
+      ? sql<number | null>`CASE WHEN ${trustedCoordsSql} THEN ${haversineMilesSql(anchor)} ELSE NULL END`
+      : sql<number | null>`NULL::double precision`;
 
     const where = conditions.length > 1 ? and(...conditions) : conditions[0];
 
@@ -243,6 +258,7 @@ router.get("/traders", async (req, res) => {
       .select({
         profile: traderProfilesTable,
         emailVerified: usersTable.emailVerified,
+        distanceMiles: distanceMilesExpr,
       })
       .from(traderProfilesTable)
       .innerJoin(usersTable, eq(usersTable.id, traderProfilesTable.userId))
@@ -265,7 +281,14 @@ router.get("/traders", async (req, res) => {
 
     res.json({
       traders: traders.map((r) =>
-        formatTrader(r.profile, r.emailVerified, responseTimes.get(r.profile.id) ?? null),
+        formatTrader(
+          r.profile,
+          r.emailVerified,
+          responseTimes.get(r.profile.id) ?? null,
+          typeof r.distanceMiles === "number" && Number.isFinite(r.distanceMiles)
+            ? r.distanceMiles
+            : null,
+        ),
       ),
       total,
       page: pageNum,
@@ -368,6 +391,9 @@ function formatTrader(
   t: TraderProfile,
   emailVerified: boolean,
   responseTimeMinutes: number | null,
+  // Display-only distance from the search anchor; only the /traders list
+  // computes it (featured + detail have no anchor and default to null).
+  distanceMiles: number | null = null,
 ) {
   // All verified traders (free Basic and paid Premium) get a full public
   // profile, including extra services and social links. Premium adds perks
@@ -411,6 +437,7 @@ function formatTrader(
     rating: t.rating,
     reviewCount: t.reviewCount,
     responseTimeMinutes,
+    distanceMiles,
     createdAt: t.createdAt.toISOString(),
   };
 }

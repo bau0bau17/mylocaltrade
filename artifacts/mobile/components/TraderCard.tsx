@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Feather, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
+import { distanceAwayLabel } from '@/constants/searchRadius';
 import type { TraderProfile } from '@workspace/api-client-react';
 
 const PLAN_STYLES = {
@@ -80,6 +81,9 @@ export function TraderCard({
   const router = useRouter();
   const matchingArea = findMatchingServiceArea(trader.serviceAreas, searchLocation);
   const locationLabel = matchingArea ? `Serves ${matchingArea}` : trader.town;
+  // Server-computed distance from the search anchor (null/absent when the
+  // search had no anchor, e.g. UK-wide without GPS — then nothing is shown).
+  const distanceLabel = distanceAwayLabel(trader.distanceMiles);
   // Any non-basic, non-empty plan is Premium. This also normalises legacy
   // "trader" rows that predate the unified "premium" plan id.
   const isPremiumPlan = !!trader.plan && trader.plan !== 'basic';
@@ -111,6 +115,7 @@ export function TraderCard({
     topRated ? 'top rated' : null,
     fastResponder ? 'replies fast' : null,
     locationLabel,
+    distanceLabel ? distanceLabel.replace(' mi ', ' miles ') : null,
     reviewsPhrase,
     tenureLabel ? `on MyLocalTrade ${tenureLabel.toLowerCase()}` : null,
   ]
@@ -184,7 +189,12 @@ export function TraderCard({
       <View style={styles.footer}>
         <View style={styles.footerItem}>
           <Feather name="map-pin" size={12} color={Colors.light.textMuted} />
-          <Text style={styles.footerText}>{locationLabel}</Text>
+          <Text style={styles.footerText}>
+            {locationLabel}
+            {distanceLabel ? (
+              <Text style={styles.footerDistance}>{` • ${distanceLabel}`}</Text>
+            ) : null}
+          </Text>
         </View>
         <View style={styles.footerItem}>
           <FontAwesome name="star" size={12} color={Colors.light.featured} />
@@ -351,5 +361,10 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: Colors.light.textSecondary,
+  },
+  // Distance is deliberately quieter than the town it follows: same size,
+  // muted colour, plain text — informational, never a badge.
+  footerDistance: {
+    color: Colors.light.textMuted,
   },
 });

@@ -488,11 +488,15 @@ export const ListTradersQueryParams = zod.object({
   lat: zod.coerce
     .number()
     .optional()
-    .describe("Search-anchor latitude (used with radiusMiles)."),
+    .describe(
+      "Search-anchor latitude — used for the radius filter and the display-only per-result distance.",
+    ),
   lng: zod.coerce
     .number()
     .optional()
-    .describe("Search-anchor longitude (used with radiusMiles)."),
+    .describe(
+      "Search-anchor longitude — used for the radius filter and the display-only per-result distance.",
+    ),
   near: zod.coerce
     .string()
     .optional()
@@ -643,6 +647,12 @@ export const ListTradersResponse = zod.object({
         .nullish()
         .describe(
           "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+        ),
+      distanceMiles: zod
+        .number()
+        .nullish()
+        .describe(
+          "Display-only great-circle distance in miles from the search's location anchor (lat\/lng, or the geocoded `near` string) to the trader's geocoded base postcode. Null when the request has no resolvable anchor or the trader has no trusted coordinates — clients hide the distance rather than showing a wrong number. Never affects filtering or ranking. Only GET \/traders computes it; other endpoints returning traders leave it null.",
         ),
       revalidationDueAt: zod.date().nullish(),
       revalidationRemindedAt: zod.date().nullish(),
@@ -843,6 +853,12 @@ export const GetFeaturedTradersResponse = zod.object({
         .describe(
           "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
         ),
+      distanceMiles: zod
+        .number()
+        .nullish()
+        .describe(
+          "Display-only great-circle distance in miles from the search's location anchor (lat\/lng, or the geocoded `near` string) to the trader's geocoded base postcode. Null when the request has no resolvable anchor or the trader has no trusted coordinates — clients hide the distance rather than showing a wrong number. Never affects filtering or ranking. Only GET \/traders computes it; other endpoints returning traders leave it null.",
+        ),
       revalidationDueAt: zod.date().nullish(),
       revalidationRemindedAt: zod.date().nullish(),
       revalidationOverdue: zod.boolean().optional(),
@@ -1038,6 +1054,12 @@ export const GetTraderResponse = zod.object({
     .describe(
       "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
     ),
+  distanceMiles: zod
+    .number()
+    .nullish()
+    .describe(
+      "Display-only great-circle distance in miles from the search's location anchor (lat\/lng, or the geocoded `near` string) to the trader's geocoded base postcode. Null when the request has no resolvable anchor or the trader has no trusted coordinates — clients hide the distance rather than showing a wrong number. Never affects filtering or ranking. Only GET \/traders computes it; other endpoints returning traders leave it null.",
+    ),
   revalidationDueAt: zod.date().nullish(),
   revalidationRemindedAt: zod.date().nullish(),
   revalidationOverdue: zod.boolean().optional(),
@@ -1223,6 +1245,12 @@ export const GetTraderProfileResponse = zod.object({
     .nullish()
     .describe(
       "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+    ),
+  distanceMiles: zod
+    .number()
+    .nullish()
+    .describe(
+      "Display-only great-circle distance in miles from the search's location anchor (lat\/lng, or the geocoded `near` string) to the trader's geocoded base postcode. Null when the request has no resolvable anchor or the trader has no trusted coordinates — clients hide the distance rather than showing a wrong number. Never affects filtering or ranking. Only GET \/traders computes it; other endpoints returning traders leave it null.",
     ),
   revalidationDueAt: zod.date().nullish(),
   revalidationRemindedAt: zod.date().nullish(),
@@ -1513,6 +1541,12 @@ export const UpdateTraderProfileResponse = zod.object({
     .nullish()
     .describe(
       "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+    ),
+  distanceMiles: zod
+    .number()
+    .nullish()
+    .describe(
+      "Display-only great-circle distance in miles from the search's location anchor (lat\/lng, or the geocoded `near` string) to the trader's geocoded base postcode. Null when the request has no resolvable anchor or the trader has no trusted coordinates — clients hide the distance rather than showing a wrong number. Never affects filtering or ranking. Only GET \/traders computes it; other endpoints returning traders leave it null.",
     ),
   revalidationDueAt: zod.date().nullish(),
   revalidationRemindedAt: zod.date().nullish(),
@@ -2203,6 +2237,12 @@ export const GetSavedTradersResponse = zod.object({
         .nullish()
         .describe(
           "Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.",
+        ),
+      distanceMiles: zod
+        .number()
+        .nullish()
+        .describe(
+          "Display-only great-circle distance in miles from the search's location anchor (lat\/lng, or the geocoded `near` string) to the trader's geocoded base postcode. Null when the request has no resolvable anchor or the trader has no trusted coordinates — clients hide the distance rather than showing a wrong number. Never affects filtering or ranking. Only GET \/traders computes it; other endpoints returning traders leave it null.",
         ),
       revalidationDueAt: zod.date().nullish(),
       revalidationRemindedAt: zod.date().nullish(),

@@ -231,19 +231,23 @@ export default function SearchScreen() {
     }
   };
 
-  // Radius anchor: the location box (auto-filled from GPS, or user-typed)
-  // wins, geocoded server-side; with the box cleared we fall back to the
-  // device's GPS coordinates. UK-wide — or no resolvable anchor at all (e.g.
-  // permission denied and box empty) — sends nothing, and the server then
-  // skips the distance filter entirely (today's behaviour, no extra prompts).
+  // Anchor for the radius filter AND the per-card "X mi away" distance: the
+  // location box (auto-filled from GPS, or user-typed) wins, geocoded
+  // server-side; with the box cleared we fall back to the device's GPS
+  // coordinates. The anchor is sent even for UK-wide searches so cards can
+  // still show distances; radiusMiles itself is only sent when a radius is
+  // selected. No resolvable anchor at all (e.g. permission denied and box
+  // empty) sends nothing — the server skips the filter and returns null
+  // distances, and cards simply hide the label (today's behaviour, no extra
+  // prompts).
   const trimmedLocation = locationQuery.trim();
   const radiusParams = (r: SearchRadius): Partial<ListTradersParams> => {
-    if (r === null) return {};
-    if (trimmedLocation) return { radiusMiles: r, near: trimmedLocation };
-    if (location.latitude != null && location.longitude != null) {
-      return { radiusMiles: r, lat: location.latitude, lng: location.longitude };
-    }
-    return {};
+    const anchor: Partial<ListTradersParams> = trimmedLocation
+      ? { near: trimmedLocation }
+      : location.latitude != null && location.longitude != null
+        ? { lat: location.latitude, lng: location.longitude }
+        : {};
+    return r === null ? anchor : { ...anchor, radiusMiles: r };
   };
 
   const searchParams: ListTradersParams = {

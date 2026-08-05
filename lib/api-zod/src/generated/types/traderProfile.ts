@@ -61,6 +61,8 @@ businessType is LIMITED_COMPANY.
   reviewCount: number;
   /** Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data. */
   responseTimeMinutes?: number | null;
+  /** Display-only great-circle distance in miles from the search's location anchor (lat/lng, or the geocoded `near` string) to the trader's geocoded base postcode. Null when the request has no resolvable anchor or the trader has no trusted coordinates — clients hide the distance rather than showing a wrong number. Never affects filtering or ranking. Only GET /traders computes it; other endpoints returning traders leave it null. */
+  distanceMiles?: number | null;
   revalidationDueAt?: Date | null;
   revalidationRemindedAt?: Date | null;
   revalidationOverdue?: boolean;

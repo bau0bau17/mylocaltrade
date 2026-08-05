@@ -30,11 +30,11 @@ export type ListTradersParams = {
    */
   radiusMiles?: number;
   /**
-   * Search-anchor latitude (used with radiusMiles).
+   * Search-anchor latitude — used for the radius filter and the display-only per-result distance.
    */
   lat?: number;
   /**
-   * Search-anchor longitude (used with radiusMiles).
+   * Search-anchor longitude — used for the radius filter and the display-only per-result distance.
    */
   lng?: number;
   /**

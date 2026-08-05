@@ -247,6 +247,67 @@ describe("GET /traders — search radius filter", () => {
   });
 });
 
+describe("GET /traders — distanceMiles (display-only)", () => {
+  type TraderRow = { id: number; distanceMiles: number | null };
+  const listTraders = async (query: Record<string, string | number>) => {
+    const res = await request(app)
+      .get("/api/traders")
+      .query({ category: TEST_CATEGORY, limit: 50, ...query });
+    expect(res.status).toBe(200);
+    return res.body.traders as TraderRow[];
+  };
+  const distanceOf = (traders: TraderRow[], id: number) =>
+    traders.find((t) => t.id === id)?.distanceMiles;
+
+  it("anchor WITHOUT a radius (UK-wide): real distances for trusted coords, null otherwise", async () => {
+    const traders = await listTraders({ lat: ANCHOR.lat, lng: ANCHOR.lng });
+    // No filter: everyone is still returned…
+    expect(traders.map((t) => t.id)).toEqual(
+      expect.arrayContaining([onAnchorId, nearbyId, farId, noCoordsId, staleCoordsId]),
+    );
+    // …with a real distance where coords are trusted…
+    expect(distanceOf(traders, onAnchorId)).toBeCloseTo(0, 1);
+    expect(distanceOf(traders, nearbyId)).toBeGreaterThan(6.5);
+    expect(distanceOf(traders, nearbyId)).toBeLessThan(9.5);
+    expect(distanceOf(traders, farId)).toBeGreaterThan(35);
+    expect(distanceOf(traders, farId)).toBeLessThan(45);
+    // …and null (never a wrong number) where they are not. The stale-coords
+    // trader's coords sit exactly ON the anchor — a non-null value here would
+    // mean untrusted coords leaked into the distance.
+    expect(distanceOf(traders, noCoordsId)).toBeNull();
+    expect(distanceOf(traders, staleCoordsId)).toBeNull();
+  });
+
+  it("distances stay consistent with an active radius filter", async () => {
+    const traders = await listTraders({ radiusMiles: 10, lat: ANCHOR.lat, lng: ANCHOR.lng });
+    expect(traders.length).toBeGreaterThan(0);
+    for (const t of traders) {
+      expect(t.distanceMiles).not.toBeNull();
+      expect(t.distanceMiles as number).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it("`near` anchor produces distances too (via the geocode cache)", async () => {
+    clearGeocodeMemoryCache();
+    const traders = await listTraders({ near: NEAR_TOWN });
+    expect(distanceOf(traders, onAnchorId)).toBeCloseTo(0, 1);
+    expect(distanceOf(traders, nearbyId)).toBeGreaterThan(6.5);
+  });
+
+  it("no anchor at all: every distance is null", async () => {
+    const traders = await listTraders({});
+    expect(traders.length).toBeGreaterThan(0);
+    for (const t of traders) expect(t.distanceMiles).toBeNull();
+  });
+
+  it("unresolvable `near`: null distances (hidden), never wrong ones", async () => {
+    clearGeocodeMemoryCache();
+    const traders = await listTraders({ near: NEAR_UNRESOLVED });
+    expect(traders.length).toBeGreaterThan(0);
+    for (const t of traders) expect(t.distanceMiles).toBeNull();
+  });
+});
+
 describe("geocodeUkLocation — failure semantics", () => {
   const okJson = (body: unknown) =>
     ({ status: 200, ok: true, json: async () => body }) as Awaited<ReturnType<FetchLike>>;

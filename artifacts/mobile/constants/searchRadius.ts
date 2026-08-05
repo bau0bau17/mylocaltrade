@@ -23,3 +23,22 @@ export function radiusRowLabel(radius: SearchRadius): string {
 export function isValidSearchRadius(value: unknown): value is SearchRadius {
   return SEARCH_RADIUS_OPTIONS.includes(value as SearchRadius);
 }
+
+/**
+ * Card label for a server-computed distance: "2.4 mi away" (one decimal,
+ * clamped to a 0.1 minimum so an on-anchor trader never reads "0.0 mi"),
+ * switching to whole miles from 100 up. Returns null for missing/invalid
+ * values — the card then hides the label entirely rather than guessing.
+ */
+export function distanceAwayLabel(distanceMiles: number | null | undefined): string | null {
+  if (
+    typeof distanceMiles !== 'number' ||
+    !Number.isFinite(distanceMiles) ||
+    distanceMiles < 0
+  ) {
+    return null;
+  }
+  const clamped = Math.max(0.1, distanceMiles);
+  const value = clamped >= 100 ? String(Math.round(clamped)) : clamped.toFixed(1);
+  return `${value} mi away`;
+}

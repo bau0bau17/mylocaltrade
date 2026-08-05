@@ -533,12 +533,16 @@ paths:
             type: number
         - name: lat
           in: query
-          description: Search-anchor latitude (used with radiusMiles).
+          description: >-
+            Search-anchor latitude — used for the radius filter and the
+            display-only per-result distance.
           schema:
             type: number
         - name: lng
           in: query
-          description: Search-anchor longitude (used with radiusMiles).
+          description: >-
+            Search-anchor longitude — used for the radius filter and the
+            display-only per-result distance.
           schema:
             type: number
         - name: near
@@ -3172,6 +3176,18 @@ components:
           type: integer
           nullable: true
           description: Median time (in minutes) from a customer's enquiry to the trader's first reply over the last 90 days. Null if not enough data.
+        distanceMiles:
+          type: number
+          format: double
+          nullable: true
+          description: >-
+            Display-only great-circle distance in miles from the search's
+            location anchor (lat/lng, or the geocoded `near` string) to the
+            trader's geocoded base postcode. Null when the request has no
+            resolvable anchor or the trader has no trusted coordinates —
+            clients hide the distance rather than showing a wrong number.
+            Never affects filtering or ranking. Only GET /traders computes
+            it; other endpoints returning traders leave it null.
         revalidationDueAt:
           type: string
           format: date-time
