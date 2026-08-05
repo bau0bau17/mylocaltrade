@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type CreateCheckoutRequestPlanId =
-  (typeof CreateCheckoutRequestPlanId)[keyof typeof CreateCheckoutRequestPlanId];
+export type DemoActivateRequestPlanId =
+  (typeof DemoActivateRequestPlanId)[keyof typeof DemoActivateRequestPlanId];
 
-export const CreateCheckoutRequestPlanId = {
+export const DemoActivateRequestPlanId = {
   basic: "basic",
   premium: "premium",
 } as const;

@@ -1,13 +1,17 @@
 ---
-name: Stripe is dormant, never-launched web billing
-description: Whether Stripe paths are live, what still depends on them, and what the prod data/secrets actually show.
+name: Stripe removed (Aug 2026) — legacy NULL columns only
+description: Stripe web billing code was fully removed; what intentionally remains, and what must not be reintroduced.
 ---
 
-Stripe in this project is **planned-but-never-launched web billing**, not a live or formerly-live provider. Verified (Aug 2026): no STRIPE_* secrets exist in dev **or** production; production has zero Stripe residue (no `sub_`/`cus_` ids, no demo rows — all subscription rows are RevenueCat-owned with NULL stripe columns). Apple IAP via RevenueCat is the only billing path that has ever run in prod.
+Stripe here was **planned-but-never-launched web billing**; all Stripe code (checkout, webhook, cancel/resume API calls, provider guards, npm dep) was removed in Aug 2026. Apple IAP via RevenueCat is the only billing provider that has ever run in prod (verified pre-removal: no STRIPE_* secrets dev **or** prod; zero Stripe-owned rows).
 
-**Why it's inert:** every Stripe path fails closed — webhook 403s when STRIPE_WEBHOOK_SECRET is unset (before any parsing), checkout throws at Stripe client construction without STRIPE_SECRET_KEY, demo-activate is hard-blocked on NODE_ENV=production, cancel/resume only call Stripe when a row has a Stripe id (none do). No client (mobile/admin/landing) calls `/subscriptions/checkout` at all.
+**Why:** the dead code carried real maintenance/security surface (an unauthenticated webhook route, raw-body mount, provider guards) for a provider with no data, no secrets, and no client callers.
+
+**What intentionally remains — do not "clean up" further without a decision:**
+- Stripe id columns in the users/subscriptions schemas: documented legacy, always NULL; admin deletion/anonymisation still nulls them. Dropping them is a deliberate future migration (all NULL in prod, but the schema push must be coordinated with a deploy).
+- Dev-only demo activation is a standalone endpoint gated per-request on NODE_ENV=production → 404; it never writes stripe columns. Promo codes apply only to this dev flow (App Store pricing can't be discounted by our codes).
+- Cancel/resume endpoints kept for the mobile billing screen but are purely local record updates.
 
 **How to apply:**
-- Don't treat Stripe code as reachable when reasoning about prod behaviour or security severity; but also don't delete it casually — the DEV demo flow (checkout demo mode → demo-activate, admin PromoCodes page) rides the stripe columns with fake ids.
-- The `stripeOwned` guards in revenuecat-sync protect hypothetical Stripe rows; with zero such rows they're vestigial but load-bearing for the dual-provider design while the code stays.
-- If removal is ever approved: scope = real-mode checkout, /webhooks/stripe, Stripe calls in cancel/resume, `stripe` dep, stripeOwned guards; keep/rework demo mode; schema-column drop is a separate, optional step (all NULL in prod, so a publish-time drop is safe).
+- Never reintroduce Stripe references in copy, config, provider enums, or deps. Billing provider value space is `apple` | `demo`.
+- Treat any "add a stripeOwned guard back" impulse as wrong: RevenueCat paths are guard-free on purpose (grants keyed off existing-row status only).

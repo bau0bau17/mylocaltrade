@@ -14,16 +14,16 @@ import type { AuthenticatedRequest } from "../lib/types";
 
 const router: IRouter = Router();
 
-// Promo codes are demo-mode-only until live Stripe Coupon integration ships.
-// Mirrors the gate in /subscriptions/checkout so the trader-facing endpoints
-// don't promise discounts that the checkout flow would then reject.
-const IS_DEMO_MODE = !process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== "production";
+// Promo codes are development/demo-only: live billing is Apple In-App
+// Purchase (RevenueCat), whose pricing is set in App Store Connect and cannot
+// be discounted by our own codes. They apply only to the dev-only
+// /subscriptions/demo-activate flow.
+const IS_DEMO_MODE = process.env.NODE_ENV !== "production";
 
 function rejectIfNotDemo(res: import("express").Response): boolean {
   if (IS_DEMO_MODE) return false;
   res.status(503).json({
-    error:
-      "Promo codes are temporarily unavailable. Please subscribe at the standard price; the discount will return shortly.",
+    error: "Promo codes are not currently available.",
   });
   return true;
 }

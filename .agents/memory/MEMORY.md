@@ -57,5 +57,5 @@
 - [Search screen state conventions](search-screen-state-conventions.md) — Search tab stays mounted: nav uses nonce params; filter sheet edits drafts (Apply commits, dismiss discards); Premium filter removed on purpose.
 - [Landing site prebuilt lockstep](landing-site-prebuilt-lockstep.md) — landing pages are compiled output (no source in repo); edit prerendered HTML + matching assets/*.js chunk with identical text or hydration shows stale copy.
 - [Apple-owned billing policy](apple-owned-billing-policy.md) — all refund/cancel copy defers to Apple (App Store); cooling-off UI+copy removed; backend cancellation-request endpoint/table dormant on purpose; never reintroduce refunds-from-us wording.
-- [Stripe dormant web billing](stripe-dormant-web-billing.md) — never launched: no STRIPE_* secrets dev/prod, zero Stripe rows in prod, all paths fail closed; dev demo flow rides stripe columns.
+- [Stripe removed Aug 2026](stripe-dormant-web-billing.md) — never launched & code fully removed; only legacy NULL stripe columns remain (drop = future migration); demo-activate is standalone dev-only.
 - [Search radius & geocoding](search-radius-geocoding.md) — sweep-owned trader coords (trusted iff geocodedPostcode==postcode), filter-only rule, cache semantics; prod MUST get the schema push before the new build or ALL trader queries break.

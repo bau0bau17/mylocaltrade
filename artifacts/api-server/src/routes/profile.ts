@@ -318,19 +318,16 @@ router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
       // Gallery size is plan-gated: Basic (free, verified) traders may keep up
       // to 3 photos; Premium unlocks effectively unlimited images.
       //
-      // For non-Stripe subscriptions the stored plan can lag reality: if the
-      // paid period has already ended we must treat the trader as Basic even
-      // if the DB row still says "premium". Stripe-owned rows are left to the
-      // Stripe webhook flow (same reasoning as the /status read path).
+      // The stored plan can lag reality: if the paid period has already ended
+      // we must treat the trader as Basic even if the DB row still says
+      // "premium" (same reasoning as the /status read path).
       const [sub] = await db
         .select()
         .from(subscriptionsTable)
         .where(eq(subscriptionsTable.userId, userId))
         .limit(1);
-      const isStripeOwned = !!sub && (!!sub.stripeSubscriptionId || !!sub.stripeCustomerId);
       const periodLapsed =
         !!sub &&
-        !isStripeOwned &&
         sub.currentPeriodEnd != null &&
         sub.currentPeriodEnd.getTime() <= Date.now();
       const premiumPlanIds = new Set(["premium", "trader"]);

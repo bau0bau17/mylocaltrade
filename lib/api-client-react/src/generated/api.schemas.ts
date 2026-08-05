@@ -541,41 +541,38 @@ export interface SubscriptionPlansResponse {
   plans: SubscriptionPlan[];
 }
 
-export type CreateCheckoutRequestPlanId =
-  (typeof CreateCheckoutRequestPlanId)[keyof typeof CreateCheckoutRequestPlanId];
+export type DemoActivateRequestPlanId =
+  (typeof DemoActivateRequestPlanId)[keyof typeof DemoActivateRequestPlanId];
 
-export const CreateCheckoutRequestPlanId = {
+export const DemoActivateRequestPlanId = {
   basic: "basic",
   premium: "premium",
 } as const;
 
-export interface CreateCheckoutRequest {
-  planId: CreateCheckoutRequestPlanId;
+/**
+ * Development-only. Live billing is Apple In-App Purchase via
+RevenueCat; this request activates a local demo subscription for
+testing (the endpoint is hard-blocked in production).
+
+ */
+export interface DemoActivateRequest {
+  planId: DemoActivateRequestPlanId;
+  /** Optional demo promo code to claim with the activation. */
+  promoCode?: string;
 }
 
 /**
- * Response from creating a Stripe checkout session.
-
-In demo mode (no STRIPE_SECRET_KEY configured), `url` is the literal
-sentinel `"DEMO_MODE"` and `demoActivationUrl` is set to a relative
-backend path the client can POST to in order to activate the
-subscription instantly without going through Stripe. In real mode
-`demoActivationUrl` is omitted and `url` is the live Stripe-hosted
-checkout URL the client should open.
-
+ * Promo redemption applied during demo activation, if any.
  */
-export interface CheckoutSessionResponse {
-  sessionId: string;
-  url: string;
-  /** Present only in demo mode. Relative path to POST to in order to activate the subscription. */
-  demoActivationUrl?: string | null;
-}
+export type DemoActivateResponsePromo = { [key: string]: unknown } | null;
 
 export interface DemoActivateResponse {
   success: boolean;
   plan?: string;
   status?: string;
   error?: string;
+  /** Promo redemption applied during demo activation, if any. */
+  promo?: DemoActivateResponsePromo;
 }
 
 export interface SubscriptionMutationResponse {
@@ -601,7 +598,6 @@ export type CoolingOffStateProvider =
 
 export const CoolingOffStateProvider = {
   apple: "apple",
-  stripe: "stripe",
   demo: "demo",
 } as const;
 
@@ -634,7 +630,6 @@ export type CancellationRequestResultProvider =
 
 export const CancellationRequestResultProvider = {
   apple: "apple",
-  stripe: "stripe",
   demo: "demo",
 } as const;
 
@@ -1739,19 +1734,6 @@ export type GetFeaturedTradersParams = {
   limit?: number;
 };
 
-export type DemoActivateSubscriptionParams = {
-  sessionId: string;
-  planId: DemoActivateSubscriptionPlanId;
-};
-
-export type DemoActivateSubscriptionPlanId =
-  (typeof DemoActivateSubscriptionPlanId)[keyof typeof DemoActivateSubscriptionPlanId];
-
-export const DemoActivateSubscriptionPlanId = {
-  basic: "basic",
-  premium: "premium",
-} as const;
-
 export type AdminListReviewsParams = {
   status?: AdminListReviewsStatus;
 };
@@ -1765,8 +1747,6 @@ export const AdminListReviewsStatus = {
   REJECTED: "REJECTED",
   FLAGGED: "FLAGGED",
 } as const;
-
-export type HandleStripeWebhookBody = { [key: string]: unknown };
 
 export type GetBookingSlotsParams = {
   /**

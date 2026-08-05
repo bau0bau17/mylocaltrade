@@ -6,6 +6,9 @@ export const subscriptionsTable = pgTable("subscriptions", {
   userId: integer("user_id").notNull().references(() => usersTable.id).unique(),
   planId: varchar("plan_id", { length: 20 }).notNull(),
   status: varchar("status", { length: 20 }).notNull().default("inactive"),
+  // LEGACY: web (Stripe) billing was removed before ever launching. These
+  // columns are intentionally kept (always NULL in production) until a future
+  // dedicated database cleanup migration drops them. Do not write to them.
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   currentPeriodStart: timestamp("current_period_start"),

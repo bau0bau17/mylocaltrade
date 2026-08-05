@@ -5,10 +5,13 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DemoActivateResponsePromo } from "./demoActivateResponsePromo";
 
 export interface DemoActivateResponse {
   success: boolean;
   plan?: string;
   status?: string;
   error?: string;
+  /** Promo redemption applied during demo activation, if any. */
+  promo?: DemoActivateResponsePromo;
 }

@@ -11,6 +11,5 @@ export type CancellationRequestResultProvider =
 
 export const CancellationRequestResultProvider = {
   apple: "apple",
-  stripe: "stripe",
   demo: "demo",
 } as const;

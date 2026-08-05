@@ -28,7 +28,6 @@ import type {
   CancelConversationRequest,
   CancellationRequestResult,
   CategoriesResponse,
-  CheckoutSessionResponse,
   CompaniesHouseSearchResponse,
   CompareOffersResponse,
   ConversationDetailResponse,
@@ -36,14 +35,13 @@ import type {
   ConversationMessage,
   CreateBookingRequest,
   CreateCancellationRequest,
-  CreateCheckoutRequest,
   CreateEnquiryRequest,
   CreateQuoteRequest,
   CreateReportRequest,
   CreateReviewRequest,
   DeleteTraderDocumentResponse,
+  DemoActivateRequest,
   DemoActivateResponse,
-  DemoActivateSubscriptionParams,
   EligibleEnquiriesResponse,
   Enquiry,
   EnquiryListResponse,
@@ -54,7 +52,6 @@ import type {
   GetAdminUserReportsParams,
   GetBookingSlotsParams,
   GetFeaturedTradersParams,
-  HandleStripeWebhookBody,
   HealthStatus,
   LeadReminderSettings,
   ListTradersParams,
@@ -293,9 +290,8 @@ export const useRegisterCustomer = <
 /**
  * Creates an inactive trader account and an associated trader profile,
 then emails a verification link. The trader account becomes
-publicly visible only after a successful subscription payment
-webhook (see /subscriptions/checkout). The response is a
-pending-registration acknowledgement, NOT a session.
+publicly visible once identity verification is approved. The
+response is a pending-registration acknowledgement, NOT a session.
 
  * @summary Register a new trader
  */
@@ -1924,92 +1920,6 @@ export function useGetSubscriptionPlans<
 }
 
 /**
- * @summary Create Stripe checkout session
- */
-export const getCreateCheckoutSessionUrl = () => {
-  return `/api/subscriptions/checkout`;
-};
-
-export const createCheckoutSession = async (
-  createCheckoutRequest: CreateCheckoutRequest,
-  options?: RequestInit,
-): Promise<CheckoutSessionResponse> => {
-  return customFetch<CheckoutSessionResponse>(getCreateCheckoutSessionUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createCheckoutRequest),
-  });
-};
-
-export const getCreateCheckoutSessionMutationOptions = <
-  TError = ErrorType<ErrorResponse>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createCheckoutSession>>,
-    TError,
-    { data: BodyType<CreateCheckoutRequest> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof createCheckoutSession>>,
-  TError,
-  { data: BodyType<CreateCheckoutRequest> },
-  TContext
-> => {
-  const mutationKey = ["createCheckoutSession"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof createCheckoutSession>>,
-    { data: BodyType<CreateCheckoutRequest> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return createCheckoutSession(data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type CreateCheckoutSessionMutationResult = NonNullable<
-  Awaited<ReturnType<typeof createCheckoutSession>>
->;
-export type CreateCheckoutSessionMutationBody = BodyType<CreateCheckoutRequest>;
-export type CreateCheckoutSessionMutationError = ErrorType<ErrorResponse>;
-
-/**
- * @summary Create Stripe checkout session
- */
-export const useCreateCheckoutSession = <
-  TError = ErrorType<ErrorResponse>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof createCheckoutSession>>,
-    TError,
-    { data: BodyType<CreateCheckoutRequest> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof createCheckoutSession>>,
-  TError,
-  { data: BodyType<CreateCheckoutRequest> },
-  TContext
-> => {
-  return useMutation(getCreateCheckoutSessionMutationOptions(options));
-};
-
-/**
  * @summary Get current subscription status
  */
 export const getGetSubscriptionStatusUrl = () => {
@@ -2183,42 +2093,27 @@ export const useCreateSubscriptionCancellationRequest = <
 };
 
 /**
- * Used only when the API is running without `STRIPE_SECRET_KEY`. The
-client receives a `demoActivationUrl` from `createCheckoutSession`
-and POSTs to this endpoint to flip the pending subscription into
-the `active` state immediately.
+ * Development/demo helper that activates a subscription directly,
+without any payment provider. Only available when the API is NOT
+running in production (`NODE_ENV !== "production"`); in production
+the endpoint responds 404. Requires a verified trader account.
 
- * @summary Activate subscription in demo mode (no Stripe)
+ * @summary Activate a Premium demo subscription (development only)
  */
-export const getDemoActivateSubscriptionUrl = (
-  params: DemoActivateSubscriptionParams,
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? "null" : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/api/subscriptions/demo-activate?${stringifiedParams}`
-    : `/api/subscriptions/demo-activate`;
+export const getDemoActivateSubscriptionUrl = () => {
+  return `/api/subscriptions/demo-activate`;
 };
 
 export const demoActivateSubscription = async (
-  params: DemoActivateSubscriptionParams,
+  demoActivateRequest: DemoActivateRequest,
   options?: RequestInit,
 ): Promise<DemoActivateResponse> => {
-  return customFetch<DemoActivateResponse>(
-    getDemoActivateSubscriptionUrl(params),
-    {
-      ...options,
-      method: "POST",
-    },
-  );
+  return customFetch<DemoActivateResponse>(getDemoActivateSubscriptionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(demoActivateRequest),
+  });
 };
 
 export const getDemoActivateSubscriptionMutationOptions = <
@@ -2228,14 +2123,14 @@ export const getDemoActivateSubscriptionMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof demoActivateSubscription>>,
     TError,
-    { params: DemoActivateSubscriptionParams },
+    { data: BodyType<DemoActivateRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof demoActivateSubscription>>,
   TError,
-  { params: DemoActivateSubscriptionParams },
+  { data: BodyType<DemoActivateRequest> },
   TContext
 > => {
   const mutationKey = ["demoActivateSubscription"];
@@ -2249,11 +2144,11 @@ export const getDemoActivateSubscriptionMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof demoActivateSubscription>>,
-    { params: DemoActivateSubscriptionParams }
+    { data: BodyType<DemoActivateRequest> }
   > = (props) => {
-    const { params } = props ?? {};
+    const { data } = props ?? {};
 
-    return demoActivateSubscription(params, requestOptions);
+    return demoActivateSubscription(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -2262,11 +2157,12 @@ export const getDemoActivateSubscriptionMutationOptions = <
 export type DemoActivateSubscriptionMutationResult = NonNullable<
   Awaited<ReturnType<typeof demoActivateSubscription>>
 >;
-
+export type DemoActivateSubscriptionMutationBody =
+  BodyType<DemoActivateRequest>;
 export type DemoActivateSubscriptionMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Activate subscription in demo mode (no Stripe)
+ * @summary Activate a Premium demo subscription (development only)
  */
 export const useDemoActivateSubscription = <
   TError = ErrorType<ErrorResponse>,
@@ -2275,14 +2171,14 @@ export const useDemoActivateSubscription = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof demoActivateSubscription>>,
     TError,
-    { params: DemoActivateSubscriptionParams },
+    { data: BodyType<DemoActivateRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof demoActivateSubscription>>,
   TError,
-  { params: DemoActivateSubscriptionParams },
+  { data: BodyType<DemoActivateRequest> },
   TContext
 > => {
   return useMutation(getDemoActivateSubscriptionMutationOptions(options));
@@ -3473,92 +3369,6 @@ export const useAdminModerateReview = <
   TContext
 > => {
   return useMutation(getAdminModerateReviewMutationOptions(options));
-};
-
-/**
- * @summary Handle Stripe webhook
- */
-export const getHandleStripeWebhookUrl = () => {
-  return `/api/webhooks/stripe`;
-};
-
-export const handleStripeWebhook = async (
-  handleStripeWebhookBody: HandleStripeWebhookBody,
-  options?: RequestInit,
-): Promise<SuccessResponse> => {
-  return customFetch<SuccessResponse>(getHandleStripeWebhookUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(handleStripeWebhookBody),
-  });
-};
-
-export const getHandleStripeWebhookMutationOptions = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof handleStripeWebhook>>,
-    TError,
-    { data: BodyType<HandleStripeWebhookBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof handleStripeWebhook>>,
-  TError,
-  { data: BodyType<HandleStripeWebhookBody> },
-  TContext
-> => {
-  const mutationKey = ["handleStripeWebhook"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof handleStripeWebhook>>,
-    { data: BodyType<HandleStripeWebhookBody> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return handleStripeWebhook(data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type HandleStripeWebhookMutationResult = NonNullable<
-  Awaited<ReturnType<typeof handleStripeWebhook>>
->;
-export type HandleStripeWebhookMutationBody = BodyType<HandleStripeWebhookBody>;
-export type HandleStripeWebhookMutationError = ErrorType<unknown>;
-
-/**
- * @summary Handle Stripe webhook
- */
-export const useHandleStripeWebhook = <
-  TError = ErrorType<unknown>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof handleStripeWebhook>>,
-    TError,
-    { data: BodyType<HandleStripeWebhookBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof handleStripeWebhook>>,
-  TError,
-  { data: BodyType<HandleStripeWebhookBody> },
-  TContext
-> => {
-  return useMutation(getHandleStripeWebhookMutationOptions(options));
 };
 
 /**

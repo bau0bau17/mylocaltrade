@@ -131,7 +131,7 @@ beforeAll(async () => {
     .insert(cancellationRequestsTable)
     .values({
       userId: traderUserId,
-      provider: "stripe",
+      provider: "apple",
       status: "OPEN",
     })
     .returning({ id: cancellationRequestsTable.id });

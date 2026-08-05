@@ -14,7 +14,6 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
-import { CreateCheckoutSessionBody } from "@workspace/api-zod";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
 import { getCoolingOffState } from "../lib/cooling-off";
@@ -28,8 +27,6 @@ import {
 import { getUncachableRevenueCatClient } from "../lib/revenueCatClient";
 
 const router: IRouter = Router();
-
-const IS_DEMO_MODE = !process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== "production";
 
 // Subscription model: Basic (free, limited) + a single paid Premium tier,
 // billed either Monthly or Yearly. Both premium cards map to the same stored
@@ -83,53 +80,36 @@ const PLANS = [
   },
 ];
 
-const STRIPE_PRICE_MAP: Record<string, string> = {
-  premium: process.env.STRIPE_PRICE_PREMIUM || "",
-};
-
 router.get("/subscriptions/plans", (_req, res) => {
   res.json({ plans: PLANS });
 });
 
-router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, res) => {
+// POST /api/subscriptions/demo-activate — development-only Premium demo
+// activation. Live billing is Apple In-App Purchase via RevenueCat; this
+// endpoint exists so local/dev environments (no App Store available) can flip
+// a verified trader to Premium for testing. It writes a plain local
+// subscription row — no external billing provider is involved.
+router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (req, res) => {
   try {
+    // Hard-block in production so this endpoint can never bypass payments.
+    // Returns 404 to avoid leaking the existence of the demo path to live
+    // clients. Evaluated per-request so tests can exercise the gate.
+    if (process.env.NODE_ENV === "production") {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+
     const { userId } = req as AuthenticatedRequest;
-    const body = CreateCheckoutSessionBody.parse(req.body);
+
+    const body = z
+      .object({
+        planId: z.enum(["basic", "premium"]),
+        promoCode: z.string().trim().min(1).max(50).optional(),
+      })
+      .parse(req.body ?? {});
     const planId = body.planId;
 
-    // Optional promo code piggy-backed on the same request body. Not part of
-    // CreateCheckoutSessionBody yet (would require an OpenAPI/codegen
-    // change) so we parse it separately.
-    const promoCodeRaw = z
-      .string()
-      .trim()
-      .min(1)
-      .max(50)
-      .optional()
-      .parse((req.body as { promoCode?: unknown })?.promoCode);
-
-    if (!["basic", "premium"].includes(planId)) {
-      res.status(400).json({ error: "Invalid plan selected" });
-      return;
-    }
-
-    // Promo codes are demo-mode only for now — the live Stripe Coupon flow
-    // is intentionally out of scope until Stripe is configured properly.
-    if (promoCodeRaw && !IS_DEMO_MODE) {
-      res.status(400).json({
-        error:
-          "Promo codes are temporarily unavailable. Please subscribe at the standard price; the discount will return shortly.",
-      });
-      return;
-    }
-
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-    if (!user) {
-      res.status(404).json({ error: "User not found" });
-      return;
-    }
-
-    // Phase 6: only verified traders may subscribe.
+    // Mirror the live purchase gate: only verified traders may subscribe.
     const [profile] = await db
       .select()
       .from(traderProfilesTable)
@@ -140,48 +120,43 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
       return;
     }
 
-    if (IS_DEMO_MODE) {
-      const demoSessionId = "demo_session_" + Date.now();
-      const demoCustomerId = user.stripeCustomerId || "demo_cus_" + userId;
+    // Optional promo claim happens inside the same transaction as the
+    // activation so slot accounting stays consistent. Wrapper object keeps
+    // TypeScript's control-flow analysis from narrowing the `let` to null
+    // after the closure.
+    const promoState: {
+      result: {
+        code: string;
+        discountGbp: number;
+        originalPriceGbp: number;
+        discountedPriceGbp: number;
+        expiresAt: Date;
+        validForDays: number;
+      } | null;
+    } = { result: null };
+    let promoErrorStatus = 0;
+    let promoErrorMsg: string | null = null;
 
-      // Claim the promo (if supplied) inside the same transaction that
-      // marks the subscription pending — keeps slot accounting consistent.
-      // We use a wrapper object so TypeScript's control-flow analysis doesn't
-      // narrow this `let` to `null` after the closure (assignments inside
-      // the transaction callback aren't tracked otherwise).
-      const promoState: {
-        result: {
-          code: string;
-          discountGbp: number;
-          originalPriceGbp: number;
-          discountedPriceGbp: number;
-          expiresAt: Date;
-          validForDays: number;
-        } | null;
-      } = { result: null };
-      let promoErrorStatus = 0;
-      let promoErrorMsg: string | null = null;
-
-      await db.transaction(async (tx) => {
-        await tx
-          .update(usersTable)
-          .set({ stripeCustomerId: demoCustomerId, stripeSubscriptionId: demoSessionId })
-          .where(eq(usersTable.id, userId));
-
-        const existingSub = await tx
+    await db
+      .transaction(async (tx) => {
+        const [existingSub] = await tx
           .select()
           .from(subscriptionsTable)
           .where(eq(subscriptionsTable.userId, userId))
           .limit(1);
 
-        if (existingSub.length > 0) {
+        if (existingSub) {
           await tx
             .update(subscriptionsTable)
             .set({
+              status: "active",
               planId,
-              status: "pending",
-              stripeCustomerId: demoCustomerId,
-              stripeSubscriptionId: demoSessionId,
+              currentPeriodStart: new Date(),
+              currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+              cancelAtPeriodEnd: false,
+              // Anchor the cooling-off window on the first purchase only;
+              // never reset it on re-activation.
+              originalPurchaseAt: existingSub.originalPurchaseAt ?? new Date(),
               updatedAt: new Date(),
             })
             .where(eq(subscriptionsTable.userId, userId));
@@ -189,16 +164,31 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
           await tx.insert(subscriptionsTable).values({
             userId,
             planId,
-            status: "pending",
-            stripeCustomerId: demoCustomerId,
-            stripeSubscriptionId: demoSessionId,
+            status: "active",
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            originalPurchaseAt: new Date(),
           });
         }
 
-        if (promoCodeRaw) {
+        await tx
+          .update(usersTable)
+          .set({ plan: planId })
+          .where(eq(usersTable.id, userId));
+
+        await tx
+          .update(traderProfilesTable)
+          .set({
+            plan: planId,
+            isFeatured: planId === "premium",
+            updatedAt: new Date(),
+          })
+          .where(eq(traderProfilesTable.userId, userId));
+
+        if (body.promoCode) {
           const result = await claimPromoForUser(tx as unknown as typeof db, {
             userId,
-            code: promoCodeRaw,
+            code: body.promoCode,
             planId,
           });
           if (!result.ok) {
@@ -217,178 +207,37 @@ router.post("/subscriptions/checkout", authMiddleware, traderOnly, async (req, r
             validForDays: result.validForDays,
           };
         }
-      }).catch((err) => {
+      })
+      .catch((err) => {
         if (err instanceof Error && err.message === "PROMO_FAILED") return;
         throw err;
       });
 
-      if (promoErrorMsg) {
-        res.status(promoErrorStatus || 400).json({ error: promoErrorMsg });
-        return;
-      }
-
-      res.json({
-        sessionId: demoSessionId,
-        url: "DEMO_MODE",
-        demoActivationUrl: `/api/subscriptions/demo-activate?sessionId=${demoSessionId}&planId=${planId}`,
-        promo: promoState.result,
-      });
+    if (promoErrorMsg) {
+      res.status(promoErrorStatus || 400).json({ error: promoErrorMsg });
       return;
     }
-
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(stripeSecretKey!);
-
-    let stripeCustomerId = user.stripeCustomerId;
-    if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: user.fullName,
-        metadata: { userId: String(userId) },
-      });
-      stripeCustomerId = customer.id;
-      await db.update(usersTable).set({ stripeCustomerId }).where(eq(usersTable.id, userId));
-    }
-
-    const priceId = STRIPE_PRICE_MAP[planId];
-    if (!priceId) {
-      res.status(400).json({ error: "Stripe price not configured for this plan" });
-      return;
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      customer: stripeCustomerId,
-      payment_method_types: ["card"],
-      mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
-      metadata: { planId, userId: String(userId) },
-      subscription_data: { metadata: { planId, userId: String(userId) } },
-      success_url: `${process.env.APP_URL || "https://mylocaltrade.co.uk"}/subscription/success`,
-      cancel_url: `${process.env.APP_URL || "https://mylocaltrade.co.uk"}/pricing`,
-    });
-
-    await db.transaction(async (tx) => {
-      const existingSub = await tx
-        .select()
-        .from(subscriptionsTable)
-        .where(eq(subscriptionsTable.userId, userId))
-        .limit(1);
-
-      if (existingSub.length > 0) {
-        await tx
-          .update(subscriptionsTable)
-          .set({
-            planId,
-            status: "pending",
-            stripeCustomerId,
-            updatedAt: new Date(),
-          })
-          .where(eq(subscriptionsTable.userId, userId));
-      } else {
-        await tx.insert(subscriptionsTable).values({
-          userId,
-          planId,
-          status: "pending",
-          stripeCustomerId,
-        });
-      }
-    });
-
-    res.json({
-      sessionId: session.id,
-      url: session.url || "",
-    });
-  } catch (error: unknown) {
-    if (error instanceof Error && error.name === "ZodError") {
-      res.status(400).json({ error: "Invalid checkout data" });
-      return;
-    }
-    req.log.error({ err: error }, "Create checkout failed");
-    res.status(500).json({ error: "Failed to create checkout session" });
-  }
-});
-
-router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (req, res) => {
-  try {
-    // Hard-block in production regardless of STRIPE_SECRET_KEY presence so this
-    // endpoint cannot be used to bypass payments. Returns 404 to avoid leaking
-    // the existence of the demo path to live clients.
-    if (process.env.NODE_ENV === "production" || !IS_DEMO_MODE) {
-      res.status(404).json({ error: "Not found" });
-      return;
-    }
-
-    const { userId } = req as AuthenticatedRequest;
-    const planId = req.query.planId as string;
-    const sessionId = req.query.sessionId as string;
-
-    if (!planId || !["basic", "premium"].includes(planId)) {
-      res.status(400).json({ error: "Invalid plan" });
-      return;
-    }
-
-    if (!sessionId) {
-      res.status(400).json({ error: "Missing session ID" });
-      return;
-    }
-
-    const [sub] = await db
-      .select()
-      .from(subscriptionsTable)
-      .where(eq(subscriptionsTable.userId, userId))
-      .limit(1);
-
-    if (!sub || sub.stripeSubscriptionId !== sessionId || sub.status !== "pending") {
-      res.status(400).json({ error: "Invalid or already processed session" });
-      return;
-    }
-
-    await db.transaction(async (tx) => {
-      await tx
-        .update(subscriptionsTable)
-        .set({
-          status: "active",
-          planId,
-          currentPeriodStart: new Date(),
-          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-          // Anchor the cooling-off window on the first purchase only; never reset.
-          originalPurchaseAt: sub.originalPurchaseAt ?? new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(subscriptionsTable.userId, userId));
-
-      await tx
-        .update(usersTable)
-        .set({ plan: planId })
-        .where(eq(usersTable.id, userId));
-
-      await tx
-        .update(traderProfilesTable)
-        .set({
-          plan: planId,
-          isFeatured: planId === "premium",
-          updatedAt: new Date(),
-        })
-        .where(eq(traderProfilesTable.userId, userId));
-    });
 
     await logAudit({ userId, action: "SUBSCRIPTION_ACTIVATED", details: { plan: planId, demo: true } });
     await logAudit({ userId, action: "PROFILE_WENT_LIVE", details: { plan: planId } });
 
-    res.json({ success: true, plan: planId, status: "active" });
+    res.json({ success: true, plan: planId, status: "active", promo: promoState.result });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid plan" });
+      return;
+    }
     req.log.error({ err: error }, "Demo activation failed");
     res.status(500).json({ error: "Demo activation failed" });
   }
 });
 
+
 // POST /api/subscriptions/revenuecat-sync — verify the trader's RevenueCat
 // entitlement (Apple In-App Purchase on iOS) and, if active, take the profile
-// live. This path is SEPARATE from web Stripe: it only ever ACTIVATES based on
-// a valid RevenueCat entitlement and never deactivates an existing subscription
-// (so a web Stripe subscriber who opens the iOS app is never clobbered).
-// Expiry / cancellation handling is a follow-up via RevenueCat webhooks.
+// live. This path only ever GRANTS based on a valid RevenueCat entitlement;
+// the destructive downgrade happens once RevenueCat confirms the entitlement
+// is gone (self-heal below) or via the EXPIRATION webhook.
 const REVENUECAT_ENTITLEMENT_ID =
   process.env.REVENUECAT_ENTITLEMENT_ID || "trader_subscription";
 const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
@@ -497,16 +346,13 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
     if (!isActive) {
       // RevenueCat reports no active entitlement. Self-heal the local record so
       // the app converges to Apple/RevenueCat's real state on focus and on
-      // "Restore purchases" — but NEVER touch a Stripe-owned row (web Stripe is
-      // the source of truth there). Only an active RC/demo row needs revoking.
+      // "Restore purchases". Only an active row needs revoking.
       const [existing] = await db
         .select()
         .from(subscriptionsTable)
         .where(eq(subscriptionsTable.userId, userId))
         .limit(1);
-      const existingStripeOwned =
-        !!existing && (!!existing.stripeSubscriptionId || !!existing.stripeCustomerId);
-      if (existing && !existingStripeOwned && existing.status === "active") {
+      if (existing && existing.status === "active") {
         await downgradeExpiredSubscription(userId);
         await logAudit({
           userId,
@@ -525,7 +371,6 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
 
     const periodEnd = expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    let stripeOwned = false;
     let newlyActivated = false;
 
     await db.transaction(async (tx) => {
@@ -535,16 +380,11 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
         .where(eq(subscriptionsTable.userId, userId))
         .limit(1);
 
-      // If a Stripe-managed subscription already owns this row, never touch it:
-      // overwriting plan/period/cancel fields would clobber the web Stripe state.
-      // We still make sure the profile is live below (it normally already is).
-      stripeOwned =
-        !!existing && (!!existing.stripeSubscriptionId || !!existing.stripeCustomerId);
       // Only a genuine inactive -> active transition should notify, so the
       // routine focus/restore syncs don't re-announce an already-live plan.
-      newlyActivated = !stripeOwned && (!existing || existing.status !== "active");
+      newlyActivated = !existing || existing.status !== "active";
 
-      if (existing && !stripeOwned) {
+      if (existing) {
         await tx
           .update(subscriptionsTable)
           .set({
@@ -569,28 +409,25 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
         });
       }
 
-      // Grant Premium perks. When Stripe owns the subscription row we leave it
-      // entirely intact (web Stripe is the source of truth there). Public
-      // listing is driven by verification, not subscription, so we never touch
-      // isActive here — losing Premium must never unlist a verified trader.
-      if (!stripeOwned) {
-        await tx
-          .update(usersTable)
-          .set({ plan: RC_PLAN_ID })
-          .where(eq(usersTable.id, userId));
-        await tx
-          .update(traderProfilesTable)
-          .set({ plan: RC_PLAN_ID, isFeatured: true, updatedAt: new Date() })
-          .where(eq(traderProfilesTable.userId, userId));
-      }
+      // Grant Premium perks. Public listing is driven by verification, not
+      // subscription, so we never touch isActive here — losing Premium must
+      // never unlist a verified trader.
+      await tx
+        .update(usersTable)
+        .set({ plan: RC_PLAN_ID })
+        .where(eq(usersTable.id, userId));
+      await tx
+        .update(traderProfilesTable)
+        .set({ plan: RC_PLAN_ID, isFeatured: true, updatedAt: new Date() })
+        .where(eq(traderProfilesTable.userId, userId));
     });
 
     await logAudit({
       userId,
       action: "SUBSCRIPTION_ACTIVATED",
-      details: { plan: RC_PLAN_ID, source: "revenuecat", productId: entitlement?.product_identifier, stripeOwned },
+      details: { plan: RC_PLAN_ID, source: "revenuecat", productId: entitlement?.product_identifier },
     });
-    await logAudit({ userId, action: "PROFILE_WENT_LIVE", details: { plan: RC_PLAN_ID, source: "revenuecat", stripeOwned } });
+    await logAudit({ userId, action: "PROFILE_WENT_LIVE", details: { plan: RC_PLAN_ID, source: "revenuecat" } });
 
     if (newlyActivated) {
       void sendPushToUser(userId, {
@@ -604,8 +441,7 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
       active: true,
       plan: RC_PLAN_ID,
       productId: entitlement?.product_identifier ?? null,
-      currentPeriodEnd: stripeOwned ? null : periodEnd.toISOString(),
-      stripeOwned,
+      currentPeriodEnd: periodEnd.toISOString(),
     });
   } catch (error) {
     req.log.error({ err: error }, "RevenueCat sync failed");
@@ -613,7 +449,10 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
   }
 });
 
-// POST /api/subscriptions/cancel — schedule cancellation at period end (mock + Stripe-ready)
+// POST /api/subscriptions/cancel — schedule cancellation at period end on the
+// LOCAL record only. Apple-managed subscriptions are cancelled with Apple (the
+// app hands off to the App Store); RevenueCat's CANCELLATION webhook mirrors
+// that into the same cancelAtPeriodEnd flag. This endpoint serves demo subs.
 router.post("/subscriptions/cancel", authMiddleware, traderOnly, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
@@ -629,18 +468,6 @@ router.post("/subscriptions/cancel", authMiddleware, traderOnly, async (req, res
     if (sub.cancelAtPeriodEnd) {
       res.json({ success: true, alreadyScheduled: true, cancelAtPeriodEnd: true, currentPeriodEnd: sub.currentPeriodEnd });
       return;
-    }
-
-    if (!IS_DEMO_MODE && sub.stripeSubscriptionId && process.env.STRIPE_SECRET_KEY) {
-      const Stripe = (await import("stripe")).default;
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-      try {
-        await stripe.subscriptions.update(sub.stripeSubscriptionId, { cancel_at_period_end: true });
-      } catch (e) {
-        req.log.error({ err: e }, "Stripe cancel failed");
-        res.status(502).json({ error: "Failed to cancel with payment provider." });
-        return;
-      }
     }
 
     await db
@@ -669,18 +496,6 @@ router.post("/subscriptions/resume", authMiddleware, traderOnly, async (req, res
     if (!sub || sub.status !== "active" || !sub.cancelAtPeriodEnd) {
       res.status(400).json({ error: "No scheduled cancellation to resume." });
       return;
-    }
-
-    if (!IS_DEMO_MODE && sub.stripeSubscriptionId && process.env.STRIPE_SECRET_KEY) {
-      const Stripe = (await import("stripe")).default;
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-      try {
-        await stripe.subscriptions.update(sub.stripeSubscriptionId, { cancel_at_period_end: false });
-      } catch (e) {
-        req.log.error({ err: e }, "Stripe resume failed");
-        res.status(502).json({ error: "Failed to resume with payment provider." });
-        return;
-      }
     }
 
     await db
@@ -737,19 +552,15 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
 
     // Effective subscription state. The stored row can lag reality when a
     // downgrade webhook (EXPIRATION) is never delivered — common with the
-    // RevenueCat sandbox / Apple Test Store. So for non-Stripe subscriptions we
-    // honour the paid period at read time: once currentPeriodEnd has passed the
-    // trader is no longer Premium, regardless of the stored status string. This
-    // is what makes the in-app Billing & Plan screen match Apple exactly.
-    // Stripe-owned rows are left untouched — Stripe's own webhooks are the
-    // source of truth there.
-    const isStripeOwned =
-      !!sub && (!!sub.stripeSubscriptionId || !!sub.stripeCustomerId);
+    // RevenueCat sandbox / Apple Test Store. So we honour the paid period at
+    // read time: once currentPeriodEnd has passed the trader is no longer
+    // Premium, regardless of the stored status string. This is what makes the
+    // in-app Billing & Plan screen match Apple exactly.
     const periodEndMs = sub?.currentPeriodEnd
       ? sub.currentPeriodEnd.getTime()
       : null;
     const periodLapsed =
-      !!sub && !isStripeOwned && periodEndMs != null && periodEndMs <= Date.now();
+      !!sub && periodEndMs != null && periodEndMs <= Date.now();
 
     // Read-only cooling-off snapshot. Anchored on the FIRST purchase date
     // (never reset by renewals); falls back to createdAt for rows predating the
@@ -758,11 +569,7 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
     const coolingOff = getCoolingOffState(
       sub ? sub.originalPurchaseAt ?? sub.createdAt : null,
     );
-    const coolingOffProvider = !sub
-      ? null
-      : isStripeOwned
-        ? ("stripe" as const)
-        : ("apple" as const);
+    const coolingOffProvider = !sub ? null : ("apple" as const);
 
     // IMPORTANT: this read path only REPORTS the effective (non-Premium) state
     // when the paid period has lapsed — it deliberately does NOT mutate the DB.
@@ -774,23 +581,9 @@ router.get("/subscriptions/status", authMiddleware, async (req, res) => {
     // during an Apple billing-grace window whose extended expiry we simply
     // haven't re-synced yet.
 
-    if (sub && isStripeOwned) {
-      // Stripe path — unchanged; reconciled by Stripe webhooks.
-      res.json({
-        plan: sub.planId,
-        status: sub.status,
-        currentPeriodStart: sub.currentPeriodStart || null,
-        currentPeriodEnd: sub.currentPeriodEnd || null,
-        cancelAtPeriodEnd: sub.cancelAtPeriodEnd || false,
-        promoRedemption: promo,
-        coolingOff: { ...coolingOff, provider: coolingOffProvider },
-      });
-      return;
-    }
-
     if (sub) {
-      // Non-Stripe (RevenueCat / demo). Premium only while the row is active AND
-      // the paid period has not lapsed; a lapsed sub reports as expired/Basic.
+      // RevenueCat / demo. Premium only while the row is active AND the paid
+      // period has not lapsed; a lapsed sub reports as expired/Basic.
       const stillPremium = sub.status === "active" && !periodLapsed;
       res.json({
         plan: stillPremium ? sub.planId : null,
@@ -829,7 +622,7 @@ const CreateCancellationRequestBody = z.object({
 // POST /api/subscriptions/cancellation-request — file a cooling-off /
 // cancellation request. This is a FILE-AND-RECORD action only: it stores a
 // structured request, writes an audit entry and notifies support. It NEVER
-// cancels the subscription, NEVER issues an Apple/Stripe refund, and NEVER
+// cancels the subscription, NEVER issues an Apple refund, and NEVER
 // touches plan, perks, verification, listing or featured status. Apple-owned
 // subscriptions are cancelled/refunded by Apple; the app only hands off and
 // records the request so support can assist.
@@ -875,9 +668,8 @@ router.post(
         return;
       }
 
-      const isStripeOwned =
-        !!sub.stripeSubscriptionId || !!sub.stripeCustomerId;
-      const provider: "apple" | "stripe" = isStripeOwned ? "stripe" : "apple";
+      // All live subscriptions are Apple-owned (RevenueCat / App Store).
+      const provider = "apple" as const;
       const anchor = sub.originalPurchaseAt ?? sub.createdAt;
       // Cooling-off eligibility is computed SERVER-SIDE — never trusted from the
       // client — from the first-purchase anchor.
@@ -981,175 +773,10 @@ router.post(
   },
 );
 
-const WEBHOOK_TOLERANCE_SECONDS = 300;
-
-function verifyWebhookSignature(payload: Buffer, signature: string, secret: string): boolean {
-  const parts = signature.split(",");
-  const timestamp = parts.find((s) => s.startsWith("t="))?.slice(2);
-  const v1Sig = parts.find((s) => s.startsWith("v1="))?.slice(3);
-  if (!timestamp || !v1Sig) return false;
-
-  const ts = parseInt(timestamp, 10);
-  if (isNaN(ts)) return false;
-  const ageSeconds = Math.floor(Date.now() / 1000) - ts;
-  if (ageSeconds > WEBHOOK_TOLERANCE_SECONDS || ageSeconds < -WEBHOOK_TOLERANCE_SECONDS) {
-    return false;
-  }
-
-  const signedPayload = `${timestamp}.${payload.toString("utf8")}`;
-  const expectedSig = crypto.createHmac("sha256", secret).update(signedPayload).digest("hex");
-  const expectedBuf = Buffer.from(expectedSig, "hex");
-
-  let v1Buf: Buffer;
-  try {
-    v1Buf = Buffer.from(v1Sig, "hex");
-  } catch {
-    return false;
-  }
-
-  if (v1Buf.length !== expectedBuf.length) return false;
-  return crypto.timingSafeEqual(v1Buf, expectedBuf);
-}
-
-async function activateSubscription(customerId: string, planId: string | null, subscriptionId: string | null) {
-  let activatedUserId: number | null = null;
-  let wentLive = false;
-  await db.transaction(async (tx) => {
-    const [user] = await tx
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.stripeCustomerId, customerId))
-      .limit(1);
-
-    if (!user) return;
-    activatedUserId = user.id;
-
-    await tx
-      .update(usersTable)
-      .set({
-        stripeSubscriptionId: subscriptionId,
-        plan: planId,
-      })
-      .where(eq(usersTable.id, user.id));
-
-    await tx
-      .update(traderProfilesTable)
-      .set({
-        plan: planId,
-        isFeatured: planId === "premium",
-        updatedAt: new Date(),
-      })
-      .where(eq(traderProfilesTable.userId, user.id));
-
-    const existingSub = await tx
-      .select()
-      .from(subscriptionsTable)
-      .where(eq(subscriptionsTable.userId, user.id))
-      .limit(1);
-
-    wentLive = existingSub.length === 0 || existingSub[0].status !== "active";
-
-    if (existingSub.length > 0) {
-      await tx
-        .update(subscriptionsTable)
-        .set({
-          status: "active",
-          planId: planId || existingSub[0].planId,
-          stripeSubscriptionId: subscriptionId,
-          cancelAtPeriodEnd: false,
-          // First-purchase anchor only; renewals/reactivations must not reset
-          // the cooling-off window.
-          originalPurchaseAt: existingSub[0].originalPurchaseAt ?? new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(subscriptionsTable.userId, user.id));
-    } else {
-      await tx.insert(subscriptionsTable).values({
-        userId: user.id,
-        planId: planId || "basic",
-        status: "active",
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: subscriptionId,
-        originalPurchaseAt: new Date(),
-      });
-    }
-  });
-  if (activatedUserId) {
-    await logAudit({ userId: activatedUserId, action: "SUBSCRIPTION_ACTIVATED", details: { plan: planId, stripe: true } });
-    if (wentLive) {
-      await logAudit({ userId: activatedUserId, action: "PROFILE_WENT_LIVE", details: { plan: planId } });
-      // Best-effort; runs outside a request so there is no req.log to use.
-      void sendPushToUser(activatedUserId, {
-        title: "Premium active",
-        body: "Your Premium subscription is now active. Your premium perks are live.",
-        data: { type: "subscription_update", status: "active" },
-      }).catch(() => {});
-    }
-  }
-}
-
-async function deactivateSubscription(customerId: string) {
-  let deactivatedUserId: number | null = null;
-  let wasActive = false;
-  await db.transaction(async (tx) => {
-    const [user] = await tx
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.stripeCustomerId, customerId))
-      .limit(1);
-
-    if (!user) return;
-    deactivatedUserId = user.id;
-
-    // Downgrade only: the trader stays publicly listed (free Basic) and stays
-    // logged in. We never set isActive=false or revoke sessions here — losing
-    // Premium just removes the paid perks (plan label + featured placement).
-    await tx
-      .update(usersTable)
-      .set({ plan: null })
-      .where(eq(usersTable.id, user.id));
-
-    await tx
-      .update(traderProfilesTable)
-      .set({
-        plan: null,
-        isFeatured: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(traderProfilesTable.userId, user.id));
-
-    const [existingSub] = await tx
-      .select({ status: subscriptionsTable.status })
-      .from(subscriptionsTable)
-      .where(eq(subscriptionsTable.userId, user.id))
-      .limit(1);
-    // Stripe can emit several terminal events (updated + deleted); only the
-    // genuine active -> cancelled transition should notify, never the repeats.
-    wasActive = existingSub?.status === "active";
-
-    await tx
-      .update(subscriptionsTable)
-      .set({ status: "cancelled", cancelAtPeriodEnd: false, updatedAt: new Date() })
-      .where(eq(subscriptionsTable.userId, user.id));
-  });
-  if (deactivatedUserId) {
-    await logAudit({ userId: deactivatedUserId, action: "SUBSCRIPTION_CANCELLED", details: { stripe: true } });
-    if (wasActive) {
-      // Best-effort; runs outside a request so there is no req.log to use.
-      void sendPushToUser(deactivatedUserId, {
-        title: "Premium ended",
-        body: "Your Premium subscription has ended. Your free Basic listing stays live.",
-        data: { type: "subscription_update", status: "cancelled" },
-      }).catch(() => {});
-    }
-  }
-}
-
-// Revoke Premium perks for a non-Stripe (RevenueCat / demo) subscriber and mark
-// the row ended. Mirrors the EXPIRATION webhook's revoke branch so the read-time
+// Revoke Premium perks for a lapsed (RevenueCat / demo) subscriber and mark the
+// row ended. Mirrors the EXPIRATION webhook's revoke branch so the read-time
 // expiry guard and the focus/restore sync path converge on the same end state:
 // the verified free listing stays live, only the paid perks are removed.
-// NEVER call this for a Stripe-owned row — web Stripe is the source of truth.
 async function downgradeExpiredSubscription(userId: number): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
@@ -1166,75 +793,6 @@ async function downgradeExpiredSubscription(userId: number): Promise<void> {
       .where(eq(subscriptionsTable.userId, userId));
   });
 }
-
-router.post("/webhooks/stripe", async (req, res) => {
-  try {
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-    if (!webhookSecret) {
-      req.log.warn("STRIPE_WEBHOOK_SECRET not set, rejecting webhook");
-      res.status(403).json({ error: "Webhook endpoint not configured" });
-      return;
-    }
-
-    const signature = req.headers["stripe-signature"];
-    if (!signature || typeof signature !== "string") {
-      res.status(400).json({ error: "Missing Stripe signature" });
-      return;
-    }
-
-    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(typeof req.body === "string" ? req.body : JSON.stringify(req.body));
-    if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
-      res.status(400).json({ error: "Invalid webhook signature" });
-      return;
-    }
-
-    const event = JSON.parse(rawBody.toString("utf8"));
-    const eventType: string = event?.type ?? "";
-
-    switch (eventType) {
-      case "checkout.session.completed": {
-        const session = event.data?.object;
-        const customerId: string | undefined = session?.customer;
-        const subscriptionId: string | undefined = session?.subscription;
-        const planId: string | null = session?.metadata?.planId ?? null;
-
-        if (customerId) {
-          await activateSubscription(customerId, planId, subscriptionId ?? null);
-        }
-        break;
-      }
-      case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        const subscription = event.data?.object;
-        const customerId: string | undefined = subscription?.customer;
-        const status: string | undefined = subscription?.status;
-
-        if (customerId && status === "active") {
-          const planId: string | null = subscription?.metadata?.planId ?? null;
-          await activateSubscription(customerId, planId, subscription?.id ?? null);
-        } else if (customerId && (status === "canceled" || status === "unpaid" || status === "past_due")) {
-          await deactivateSubscription(customerId);
-        }
-        break;
-      }
-      case "customer.subscription.deleted": {
-        const subscription = event.data?.object;
-        const customerId: string | undefined = subscription?.customer;
-
-        if (customerId) {
-          await deactivateSubscription(customerId);
-        }
-        break;
-      }
-    }
-
-    res.json({ success: true, message: "Webhook processed" });
-  } catch (error) {
-    req.log.error({ err: error }, "Stripe webhook failed");
-    res.status(500).json({ success: false, message: "Webhook processing failed" });
-  }
-});
 
 // Constant-time comparison of the webhook Authorization header against the
 // configured shared secret, avoiding length/timing leaks.
@@ -1348,7 +906,6 @@ router.post("/webhooks/revenuecat", async (req, res) => {
         ? new Date(purchasedAtMs)
         : new Date();
 
-    let stripeOwned = false;
     let applied = false;
     let newlyActivated = false;
     let newlyCancelled = false;
@@ -1359,12 +916,6 @@ router.post("/webhooks/revenuecat", async (req, res) => {
         .from(subscriptionsTable)
         .where(eq(subscriptionsTable.userId, userId))
         .limit(1);
-
-      // Never let an Apple (RevenueCat) event mutate a Stripe-owned row — web
-      // Stripe is the source of truth for those subscribers.
-      stripeOwned =
-        !!existing && (!!existing.stripeSubscriptionId || !!existing.stripeCustomerId);
-      if (stripeOwned) return;
 
       if (grant) {
         // Notify only on a real inactive -> active transition (skip renewals).
@@ -1433,7 +984,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
       }
     });
 
-    if (applied && !stripeOwned) {
+    if (applied) {
       await logAudit({
         userId,
         action: grant ? "SUBSCRIPTION_ACTIVATED" : "SUBSCRIPTION_CANCELLED",
@@ -1454,7 +1005,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
       }
     }
 
-    res.json({ success: true, type, applied, stripeOwned });
+    res.json({ success: true, type, applied });
   } catch (error) {
     req.log.error({ err: error }, "RevenueCat webhook failed");
     res.status(500).json({ success: false, message: "Webhook processing failed" });

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-MyLocalTrade is a pnpm monorepo for a local-trades marketplace. The production system consists primarily of an Express 5 API (`artifacts/api-server`), an Expo mobile client (`artifacts/mobile`), and a separately built React/Vite admin web app (`artifacts/admin`). The API uses PostgreSQL via Drizzle ORM, JWT bearer tokens for customer/trader/admin authentication, Stripe for billing, SMTP/Nodemailer for transactional email, Companies House lookups during trader onboarding, and object storage for trader document uploads.
+MyLocalTrade is a pnpm monorepo for a local-trades marketplace. The production system consists primarily of an Express 5 API (`artifacts/api-server`), an Expo mobile client (`artifacts/mobile`), and a separately built React/Vite admin web app (`artifacts/admin`). The API uses PostgreSQL via Drizzle ORM, JWT bearer tokens for customer/trader/admin authentication, RevenueCat (Apple In-App Purchase) for billing, SMTP/Nodemailer for transactional email, Companies House lookups during trader onboarding, and object storage for trader document uploads.
 
 This scan is production-focused. Assume `NODE_ENV=production`, platform TLS is present, and `artifacts/mockup-sandbox` is not deployed to production unless future evidence shows otherwise.
 
@@ -11,9 +11,9 @@ This scan is production-focused. Assume `NODE_ENV=production`, platform TLS is p
 - **User accounts and bearer tokens** — customer, trader, and admin credentials/tokens grant access to marketplace actions and privileged back-office workflows.
 - **Personal and business data** — names, email addresses, phone numbers, trader business details, messages, enquiries, reviews, saved-trader relationships, and onboarding metadata contain PII and marketplace-sensitive data.
 - **Trader verification artifacts** — uploaded identity/business documents and moderation decisions are sensitive and high impact if exposed or tampered with.
-- **Billing state** — Stripe customer/subscription identifiers and subscription status affect trader visibility and revenue.
+- **Billing state** — subscription rows synced from RevenueCat (Apple In-App Purchase) affect trader perks/featured placement and revenue. Legacy Stripe columns remain in the schema for historical reasons but are never written (Stripe integration removed Aug 2026).
 - **Operational trust signals** — transactional emails, verification links, review/reply notifications, and support emails are sent from trusted app-controlled infrastructure and can be abused for phishing or impersonation if content handling is unsafe.
-- **Application secrets and integrations** — JWT signing material, database credentials, SMTP credentials, Stripe secrets, object-storage credentials, and Companies House access must remain server-only.
+- **Application secrets and integrations** — JWT signing material, database credentials, SMTP credentials, RevenueCat webhook/API credentials, object-storage credentials, and Companies House access must remain server-only.
 
 ## Trust Boundaries
 
@@ -22,7 +22,7 @@ This scan is production-focused. Assume `NODE_ENV=production`, platform TLS is p
 - **Authenticated users → admin-only routes** — admin review/moderation/reporting/document-access functions must remain unreachable to customers and traders.
 - **API → PostgreSQL** — the API has broad read/write access to core marketplace records; injection or broken authorization at this layer can expose or corrupt all tenant data.
 - **API → object storage** — uploaded trader documents cross from untrusted users into long-lived storage; keys and preview/download flows must stay scoped.
-- **API → external services** — Stripe webhooks and checkout, SMTP delivery, push notifications, and Companies House lookups cross service boundaries that require signature validation, origin/recipient control, and safe handling of attacker-influenced content.
+- **API → external services** — RevenueCat webhooks, SMTP delivery, push notifications, and Companies House lookups cross service boundaries that require authentication of callbacks, origin/recipient control, and safe handling of attacker-influenced content.
 - **Production → dev-only features** — demo billing activation paths, mock OTP behavior, and `mockup-sandbox` code should be ignored unless they are reachable in production.
 
 ## Scan Anchors
@@ -30,7 +30,7 @@ This scan is production-focused. Assume `NODE_ENV=production`, platform TLS is p
 - Production entry points: `artifacts/api-server/src/app.ts`, `artifacts/api-server/src/routes/**/*.ts`, `artifacts/api-server/src/lib/auth.ts`, `artifacts/api-server/src/lib/email.ts`, `artifacts/api-server/src/lib/objectStorage.ts`, `artifacts/api-server/src/routes/subscriptions.ts`.
 - Admin surface: `artifacts/admin/src/lib/auth.tsx`, `artifacts/admin/src/lib/api.ts`, plus admin-facing API routes in `artifacts/api-server/src/routes/admin.ts`.
 - Highest-risk areas: auth/registration, admin moderation/document access, conversations/enquiries, transactional email rendering, uploads, and billing/webhooks.
-- Public surfaces: auth registration/login/resend, trader listing/detail, contact, health, Stripe webhook, Companies House lookup.
+- Public surfaces: auth registration/login/resend, trader listing/detail, contact, health, RevenueCat webhook, Companies House lookup.
 - Authenticated surfaces: profile, saved traders, enquiries, conversations, reviews, subscriptions, trader phone/documents.
 - Admin-only surfaces: `artifacts/api-server/src/routes/admin.ts` and the `artifacts/admin` app.
 - Usually out of scope: `artifacts/mockup-sandbox`, any `NODE_ENV !== production` branches, and demo-only subscription activation that is explicitly blocked in production.
@@ -41,8 +41,8 @@ This scan is production-focused. Assume `NODE_ENV=production`, platform TLS is p
 The following were investigated and found not vulnerable in the current codebase:
 - Admin route authorization — all `/admin/*` routes correctly protected by `adminOnly` / `superAdminOnly`.
 - Conversations/enquiries IDOR — conversation detail verifies caller is customer or trader party before returning data.
-- Demo-mode billing in production — `IS_DEMO_MODE` is `false` at build time; `/subscriptions/demo-activate` returns 404.
-- Stripe webhook signature — raw-body preservation and HMAC with timing-safe comparison are correct.
+- Demo-mode billing in production — `/subscriptions/demo-activate` checks `NODE_ENV === "production"` per-request and returns 404; no payment bypass. (The former Stripe checkout/webhook surface was removed entirely in Aug 2026.)
+- RevenueCat webhook auth — shared-secret Authorization header compared with `crypto.timingSafeEqual`; an unset secret fails closed (403).
 - Promo code double-claim — `SELECT … FOR UPDATE` + per-user unique constraint prevent concurrent abuse.
 - Rate limiting — all public endpoints have PostgreSQL-backed rate limits applied at the Express layer.
 - SQL injection — all queries use Drizzle parameterized helpers.
@@ -51,7 +51,7 @@ The following were investigated and found not vulnerable in the current codebase
 
 ### Spoofing
 
-The system issues JWT bearer tokens for customer, trader, and admin roles and also trusts Stripe webhook calls, Companies House responses, and SMTP-delivered messages to carry the app's identity. Protected API endpoints MUST validate bearer tokens server-side on every request, role checks MUST be enforced in route handlers instead of the client, and all third-party callbacks (especially billing webhooks) MUST be authenticated before changing account state.
+The system issues JWT bearer tokens for customer, trader, and admin roles and also trusts RevenueCat webhook calls, Companies House responses, and SMTP-delivered messages to carry the app's identity. Protected API endpoints MUST validate bearer tokens server-side on every request, role checks MUST be enforced in route handlers instead of the client, and all third-party callbacks (especially billing webhooks) MUST be authenticated before changing account state.
 
 Known open issue: email verification link tokens have no expiry — see vulnerability `email-verification-link-no-expiry`.
 

@@ -72,7 +72,7 @@ export default function PromoCodesPage() {
             <Tag className="w-5 h-5" /> Promo codes
           </h1>
           <p className="text-sm text-muted-foreground">
-            Limited-supply discount codes traders can apply at checkout. Active in demo mode only — Stripe Coupon integration is pending.
+            Limited-supply discount codes for demo Premium activations. Development and testing only — live billing is handled by Apple's App Store.
           </p>
         </div>
         <Button onClick={() => setShowCreate((v) => !v)} data-testid="button-new-promo">

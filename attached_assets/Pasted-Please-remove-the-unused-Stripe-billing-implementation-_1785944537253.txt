@@ -1,0 +1,51 @@
+Please remove the unused Stripe billing implementation and migrate the project to a RevenueCat + Apple In-App Purchase only architecture.
+
+Based on the audit:
+
+- Stripe has never been used in production.
+- There are no Stripe customers or subscriptions in the production database.
+- No Stripe secrets exist in production.
+- The webhook always fails closed.
+- The mobile app does not use Stripe.
+- All production subscriptions are RevenueCat/App Store subscriptions.
+
+The current Stripe implementation is only unused scaffolding for a web billing flow that was never launched.
+
+Please prepare a safe cleanup.
+
+Requirements
+
+- Remove the Stripe checkout endpoint.
+- Remove the Stripe webhook endpoint.
+- Remove Stripe cancel/resume logic.
+- Remove Stripe-specific guards (such as stripeOwned) if they are no longer needed after the cleanup.
+- Remove the Stripe npm dependency if nothing requires it afterwards.
+- Remove any unused Stripe configuration, environment variables, helper functions and documentation.
+- Remove any remaining customer-facing references to Stripe.
+- Replace the current development "fake Stripe activation" with a generic "Premium demo activation" that does not depend on Stripe concepts.
+
+Database
+
+Do NOT immediately drop the existing Stripe columns.
+
+Keep them for now as an inactive legacy schema unless they are proven completely unnecessary. We can remove them in a future database cleanup migration.
+
+Before removing anything, please verify that:
+
+- RevenueCat functionality remains unchanged.
+- Apple In-App Purchases continue working exactly as today.
+- Existing subscriptions continue working.
+- Restore Purchases still works.
+- Subscription renewals still work.
+- Billing & Plan screens remain unchanged.
+- Admin subscription management continues working correctly.
+
+Please provide a final report listing:
+
+- every Stripe component removed;
+- any legacy database columns intentionally kept;
+- any remaining Stripe references (if any) and why they still exist.
+
+Do not change any RevenueCat behaviour.
+
+Do not start a build, deployment or publish.

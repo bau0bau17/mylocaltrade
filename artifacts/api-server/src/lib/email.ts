@@ -1175,7 +1175,7 @@ export async function sendAdminCancellationRequestEmail(opts: {
   traderEmail: string;
   traderName: string;
   businessName?: string | null;
-  provider: "apple" | "stripe" | "demo";
+  provider: "apple" | "demo";
   withinCoolingOff: boolean;
   note?: string | null;
 }): Promise<void> {
@@ -1186,9 +1186,7 @@ export async function sendAdminCancellationRequestEmail(opts: {
   const providerLabel =
     opts.provider === "apple"
       ? "Apple (App Store / in-app purchase)"
-      : opts.provider === "stripe"
-        ? "Stripe (web)"
-        : "Demo";
+      : "Demo";
   const accent = opts.withinCoolingOff ? "#10B981" : "#F59E0B";
   const coolingLabel = opts.withinCoolingOff
     ? "Within 14-day cooling-off window"

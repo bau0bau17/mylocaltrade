@@ -26,10 +26,11 @@ export const CANCELLATION_REQUEST_STATUSES = [
 export type CancellationRequestStatus =
   (typeof CANCELLATION_REQUEST_STATUSES)[number];
 
-// Which provider owns the underlying subscription. This drives how support
-// actions the request: "apple" requests are cancelled/refunded by Apple (we
-// only record and assist), "stripe" requests are processed by our team.
-export const CANCELLATION_PROVIDERS = ["apple", "stripe", "demo"] as const;
+// Which provider owns the underlying subscription. "apple" requests are
+// cancelled/refunded by Apple (we only record and assist); "demo" covers
+// development-only demo activations. ("stripe" was removed along with the
+// never-launched web billing path — no rows were ever written with it.)
+export const CANCELLATION_PROVIDERS = ["apple", "demo"] as const;
 export type CancellationProvider = (typeof CANCELLATION_PROVIDERS)[number];
 
 // A structured record of a trader asking to cancel during (or around) their

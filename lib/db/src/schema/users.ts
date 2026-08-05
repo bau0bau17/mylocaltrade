@@ -82,6 +82,9 @@ export const usersTable = pgTable(
   phoneOtpExpiresAt: timestamp("phone_otp_expires_at"),
   phoneOtpAttempts: integer("phone_otp_attempts").notNull().default(0),
   phoneOtpLastSentAt: timestamp("phone_otp_last_sent_at"),
+  // LEGACY: web (Stripe) billing was removed before ever launching. These
+  // columns are intentionally kept (always NULL in production) until a future
+  // dedicated database cleanup migration drops them. Do not write to them.
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   plan: varchar("plan", { length: 20 }),

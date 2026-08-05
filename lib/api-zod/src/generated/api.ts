@@ -36,9 +36,8 @@ export const RegisterCustomerBody = zod.object({
 /**
  * Creates an inactive trader account and an associated trader profile,
 then emails a verification link. The trader account becomes
-publicly visible only after a successful subscription payment
-webhook (see /subscriptions/checkout). The response is a
-pending-registration acknowledgement, NOT a session.
+publicly visible once identity verification is approved. The
+response is a pending-registration acknowledgement, NOT a session.
 
  * @summary Register a new trader
  */
@@ -1623,28 +1622,6 @@ export const GetSubscriptionPlansResponse = zod.object({
 });
 
 /**
- * @summary Create Stripe checkout session
- */
-export const CreateCheckoutSessionBody = zod.object({
-  planId: zod.enum(["basic", "premium"]),
-});
-
-export const CreateCheckoutSessionResponse = zod
-  .object({
-    sessionId: zod.string(),
-    url: zod.string(),
-    demoActivationUrl: zod
-      .string()
-      .nullish()
-      .describe(
-        "Present only in demo mode. Relative path to POST to in order to activate the subscription.",
-      ),
-  })
-  .describe(
-    'Response from creating a Stripe checkout session.\n\nIn demo mode (no STRIPE_SECRET_KEY configured), `url` is the literal\nsentinel `\"DEMO_MODE\"` and `demoActivationUrl` is set to a relative\nbackend path the client can POST to in order to activate the\nsubscription instantly without going through Stripe. In real mode\n`demoActivationUrl` is omitted and `url` is the live Stripe-hosted\ncheckout URL the client should open.\n',
-  );
-
-/**
  * @summary Get current subscription status
  */
 export const GetSubscriptionStatusResponse = zod.object({
@@ -1658,7 +1635,7 @@ export const GetSubscriptionStatusResponse = zod.object({
       originalPurchaseAt: zod.date().nullish(),
       endsAt: zod.date().nullish(),
       daysRemaining: zod.number(),
-      provider: zod.enum(["apple", "stripe", "demo"]).nullish(),
+      provider: zod.enum(["apple", "demo"]).nullish(),
     })
     .optional()
     .describe(
@@ -1687,28 +1664,39 @@ export const CreateSubscriptionCancellationRequestResponse = zod.object({
   ok: zod.boolean(),
   requestId: zod.number().optional(),
   withinCoolingOff: zod.boolean().optional(),
-  provider: zod.enum(["apple", "stripe", "demo"]).optional(),
+  provider: zod.enum(["apple", "demo"]).optional(),
   alreadyOpen: zod.boolean().optional(),
 });
 
 /**
- * Used only when the API is running without `STRIPE_SECRET_KEY`. The
-client receives a `demoActivationUrl` from `createCheckoutSession`
-and POSTs to this endpoint to flip the pending subscription into
-the `active` state immediately.
+ * Development/demo helper that activates a subscription directly,
+without any payment provider. Only available when the API is NOT
+running in production (`NODE_ENV !== "production"`); in production
+the endpoint responds 404. Requires a verified trader account.
 
- * @summary Activate subscription in demo mode (no Stripe)
+ * @summary Activate a Premium demo subscription (development only)
  */
-export const DemoActivateSubscriptionQueryParams = zod.object({
-  sessionId: zod.coerce.string(),
-  planId: zod.enum(["basic", "premium"]),
-});
+export const DemoActivateSubscriptionBody = zod
+  .object({
+    planId: zod.enum(["basic", "premium"]),
+    promoCode: zod
+      .string()
+      .optional()
+      .describe("Optional demo promo code to claim with the activation."),
+  })
+  .describe(
+    "Development-only. Live billing is Apple In-App Purchase via\nRevenueCat; this request activates a local demo subscription for\ntesting (the endpoint is hard-blocked in production).\n",
+  );
 
 export const DemoActivateSubscriptionResponse = zod.object({
   success: zod.boolean(),
   plan: zod.string().optional(),
   status: zod.string().optional(),
   error: zod.string().optional(),
+  promo: zod
+    .record(zod.string(), zod.unknown())
+    .nullish()
+    .describe("Promo redemption applied during demo activation, if any."),
 });
 
 /**
@@ -2086,16 +2074,6 @@ export const AdminModerateReviewResponse = zod.object({
   moderatedAt: zod.date().nullish(),
   moderationNotes: zod.string().nullish(),
   createdAt: zod.date(),
-});
-
-/**
- * @summary Handle Stripe webhook
- */
-export const HandleStripeWebhookBody = zod.object({}).passthrough();
-
-export const HandleStripeWebhookResponse = zod.object({
-  success: zod.boolean(),
-  message: zod.string().optional(),
 });
 
 /**

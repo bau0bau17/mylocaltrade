@@ -12,6 +12,5 @@ export type CoolingOffStateProvider =
 
 export const CoolingOffStateProvider = {
   apple: "apple",
-  stripe: "stripe",
   demo: "demo",
 } as const;

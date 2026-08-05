@@ -2433,7 +2433,7 @@ router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async 
 // GET /api/admin/cancellation-requests — support queue of cooling-off /
 // cancellation requests filed from the app. Read-only listing; resolving a
 // request never cancels a subscription or issues a refund (those are handled
-// by Apple/Stripe externally and recorded here).
+// by Apple externally and recorded here).
 router.get("/admin/cancellation-requests", authMiddleware, adminOnly, async (req, res) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;

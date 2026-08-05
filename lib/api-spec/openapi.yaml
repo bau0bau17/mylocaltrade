@@ -96,9 +96,8 @@ paths:
       description: |
         Creates an inactive trader account and an associated trader profile,
         then emails a verification link. The trader account becomes
-        publicly visible only after a successful subscription payment
-        webhook (see /subscriptions/checkout). The response is a
-        pending-registration acknowledgement, NOT a session.
+        publicly visible once identity verification is approved. The
+        response is a pending-registration acknowledgement, NOT a session.
       requestBody:
         required: true
         content:
@@ -713,33 +712,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/SubscriptionPlansResponse"
 
-  /subscriptions/checkout:
-    post:
-      operationId: createCheckoutSession
-      tags: [subscriptions]
-      summary: Create Stripe checkout session
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCheckoutRequest"
-      responses:
-        "200":
-          description: Checkout session
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CheckoutSessionResponse"
-        "401":
-          description: Not authenticated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /subscriptions/status:
     get:
       operationId: getSubscriptionStatus
@@ -809,25 +781,20 @@ paths:
     post:
       operationId: demoActivateSubscription
       tags: [subscriptions]
-      summary: Activate subscription in demo mode (no Stripe)
+      summary: Activate a Premium demo subscription (development only)
       description: |
-        Used only when the API is running without `STRIPE_SECRET_KEY`. The
-        client receives a `demoActivationUrl` from `createCheckoutSession`
-        and POSTs to this endpoint to flip the pending subscription into
-        the `active` state immediately.
+        Development/demo helper that activates a subscription directly,
+        without any payment provider. Only available when the API is NOT
+        running in production (`NODE_ENV !== "production"`); in production
+        the endpoint responds 404. Requires a verified trader account.
       security:
         - bearerAuth: []
-      parameters:
-        - name: sessionId
-          in: query
-          required: true
-          schema: { type: string }
-        - name: planId
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [basic, premium]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DemoActivateRequest"
       responses:
         "200":
           description: Demo subscription activated
@@ -836,7 +803,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/DemoActivateResponse"
         "400":
-          description: Invalid or already-processed session
+          description: Invalid plan, or promo code inactive / not applicable
           content:
             application/json:
               schema:
@@ -848,7 +815,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Demo activation not available in production
+          description: Not a verified trader
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not available in production, or promo code not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Promo code already redeemed or all slots claimed
           content:
             application/json:
               schema:
@@ -1306,25 +1285,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /webhooks/stripe:
-    post:
-      operationId: handleStripeWebhook
-      tags: [subscriptions]
-      summary: Handle Stripe webhook
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        "200":
-          description: Webhook processed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SuccessResponse"
 
   /saved-traders:
     get:
@@ -3382,38 +3342,21 @@ components:
       required:
         - plans
 
-    CreateCheckoutRequest:
+    DemoActivateRequest:
       type: object
+      description: |
+        Development-only. Live billing is Apple In-App Purchase via
+        RevenueCat; this request activates a local demo subscription for
+        testing (the endpoint is hard-blocked in production).
       properties:
         planId:
           type: string
           enum: [basic, premium]
+        promoCode:
+          type: string
+          description: Optional demo promo code to claim with the activation.
       required:
         - planId
-
-    CheckoutSessionResponse:
-      type: object
-      description: |
-        Response from creating a Stripe checkout session.
-
-        In demo mode (no STRIPE_SECRET_KEY configured), `url` is the literal
-        sentinel `"DEMO_MODE"` and `demoActivationUrl` is set to a relative
-        backend path the client can POST to in order to activate the
-        subscription instantly without going through Stripe. In real mode
-        `demoActivationUrl` is omitted and `url` is the live Stripe-hosted
-        checkout URL the client should open.
-      properties:
-        sessionId:
-          type: string
-        url:
-          type: string
-        demoActivationUrl:
-          type: string
-          nullable: true
-          description: Present only in demo mode. Relative path to POST to in order to activate the subscription.
-      required:
-        - sessionId
-        - url
 
     DemoActivateResponse:
       type: object
@@ -3426,6 +3369,11 @@ components:
           type: string
         error:
           type: string
+        promo:
+          type: object
+          nullable: true
+          description: Promo redemption applied during demo activation, if any.
+          additionalProperties: true
       required:
         - success
 
@@ -3484,7 +3432,7 @@ components:
           type: integer
         provider:
           type: string
-          enum: [apple, stripe, demo]
+          enum: [apple, demo]
           nullable: true
       required:
         - isWithinWindow
@@ -3508,7 +3456,7 @@ components:
           type: boolean
         provider:
           type: string
-          enum: [apple, stripe, demo]
+          enum: [apple, demo]
         alreadyOpen:
           type: boolean
       required:

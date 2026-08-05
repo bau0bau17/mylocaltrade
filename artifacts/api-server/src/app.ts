@@ -210,11 +210,6 @@ const phoneOtpIpLimiter = rateLimit({
   store: createPgStore("phone-otp-ip"),
 });
 
-app.use(
-  "/api/webhooks/stripe",
-  express.raw({ type: "application/json" }),
-);
-
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 

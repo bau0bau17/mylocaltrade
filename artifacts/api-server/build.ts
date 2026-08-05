@@ -32,7 +32,6 @@ const allowlist = [
   "pg",
   "pino",
   "pino-http",
-  "stripe",
   "uuid",
   "ws",
   "xlsx",

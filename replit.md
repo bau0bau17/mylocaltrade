@@ -68,9 +68,9 @@ Express 5 API server with full REST API for MyLocalTrade.
   - `GET /api/profile` — trader's own profile (auth)
   - `PUT /api/profile` — update trader profile (auth)
   - `GET /api/subscriptions/plans` — subscription plans
-  - `POST /api/subscriptions/checkout` — create checkout session (auth, demo mode fallback)
   - `GET /api/subscriptions/status` — subscription status (auth)
-  - `POST /api/subscriptions/webhook` — Stripe webhook
+  - `POST /api/subscriptions/revenuecat-sync` — verify RevenueCat entitlement & activate (auth, trader-only)
+  - `POST /api/webhooks/revenuecat` — RevenueCat subscription lifecycle webhook
   - `GET /api/saved-traders` — saved traders (auth)
   - `POST /api/saved-traders/:traderId` — save trader (auth)
   - `DELETE /api/saved-traders/:traderId` — unsave trader (auth)
@@ -79,8 +79,8 @@ Express 5 API server with full REST API for MyLocalTrade.
   - `GET /api/categories` — trade categories
 - Auth: JWT-based (`src/lib/auth.ts`), middleware via `authMiddleware`
 - Depends on: `@workspace/db`, `@workspace/api-zod`
-- Demo mode: When `STRIPE_SECRET_KEY` is not set, checkout returns a demo session; activation requires a separate POST to `/api/subscriptions/demo-activate`
-  - `POST /api/subscriptions/demo-activate` — demo-only activation (auth, trader-only, blocked when Stripe is configured)
+- Billing: Apple In-App Purchase via RevenueCat only — there is no web billing. Legacy `stripe_*` DB columns are retained (unused, always NULL) until a future cleanup migration.
+- Demo mode (development only): `POST /api/subscriptions/demo-activate` — activates a local Premium demo subscription (auth, trader-only, 404 in production; accepts optional `promoCode`)
 
 ### `artifacts/mobile` (`@workspace/mobile`)
 
