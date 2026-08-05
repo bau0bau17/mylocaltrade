@@ -8,6 +8,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { createPgStore } from "./lib/pg-rate-limit-store";
+import { buildAllowedOrigins, isOriginAllowed } from "./lib/cors";
 
 const app: Express = express();
 
@@ -52,24 +53,26 @@ app.use(
   }),
 );
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : null;
+// Strict-equality CORS allow-list (see lib/cors.ts). In production the list
+// is mandatory (ALLOWED_ORIGINS, or derived from REPLIT_DOMAINS) and this
+// throws at startup when absent; only dev/test may fall back to permissive.
+const allowedOrigins = buildAllowedOrigins();
+if (allowedOrigins === null) {
+  logger.warn(
+    "ALLOWED_ORIGINS is not set — CORS reflects any origin. This is a dev/test-only fallback; production requires an explicit allow-list.",
+  );
+}
 
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) {
+        // Non-browser clients (mobile app, curl, server-to-server) send no
+        // Origin header; CORS does not apply to them.
         callback(null, true);
         return;
       }
-      if (!allowedOrigins) {
-        callback(null, true);
-        return;
-      }
-      const isAllowed =
-        allowedOrigins.some((o) => origin === o || origin.endsWith(o));
-      if (isAllowed) {
+      if (isOriginAllowed(origin, allowedOrigins)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: origin '${origin}' not allowed`));
