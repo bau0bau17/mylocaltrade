@@ -1218,8 +1218,13 @@ router.get("/admin/audit-report", authMiddleware, superAdminOnly, async (req, re
       const escape = (v: unknown): string => {
         if (v === null || v === undefined) return "";
         const s = typeof v === "string" ? v : JSON.stringify(v);
-        if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-        return s;
+        // Neutralise spreadsheet formula triggers (=, +, -, @, tab, CR) with a
+        // leading single-quote so trader-controlled text (businessName, notes,
+        // email) can't execute as a formula when the CSV is opened in
+        // Excel/LibreOffice Calc (formula injection / DDE).
+        const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+        if (/[",\n\r]/.test(safe)) return `"${safe.replace(/"/g, '""')}"`;
+        return safe;
       };
       const header = "id,createdAt,action,userId,userEmail,businessName,performedBy,notes,details";
       const lines = rows.map((r) =>

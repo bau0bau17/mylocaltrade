@@ -15,3 +15,5 @@ Each artifact tsconfig lists `references: [{ path: "../../lib/db" }, ...]`. With
 
 The API-client codegen is a classic trap: editing `lib/api-spec/openapi.yaml` then running `pnpm --filter @workspace/api-spec run codegen` (orval) writes generated **source** into `lib/api-client-react/src/generated` AND `lib/api-zod/src/generated`. Both of those packages are `composite` (emitDeclarationOnly → `dist`), so a new OpenAPI field won't appear to `artifacts/mobile` (or other consumers) until you rebuild them:
 `pnpm exec tsc -b lib/api-client-react/tsconfig.json lib/api-zod/tsconfig.json --force`. Full order for an OpenAPI change: edit yaml → codegen → `tsc -b` those two libs `--force` → typecheck mobile. (Server-side schema edits under `lib/db` need the same `tsc -b` on `lib/db` for api-server.)
+
+**Post-merge variant:** platform task-merges hit this too — a merged task that touched `lib/db/src` (e.g. new users column) leaves `dist` stale, so api-server tsc fails on the "missing" property in files YOUR diff never touched. First move on post-merge type errors in untouched files: `npx tsc -b lib/db/tsconfig.json --force` (or the relevant lib), not code edits.
