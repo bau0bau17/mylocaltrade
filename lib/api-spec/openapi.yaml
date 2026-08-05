@@ -521,6 +521,33 @@ paths:
           description: Filter to traders whose main category or additional services match a known specialism keyword (e.g. "solar", "heat pump", "ev charger").
           schema:
             type: string
+        - name: radiusMiles
+          in: query
+          description: >-
+            Only include traders whose geocoded base location is within this
+            many miles of the search anchor (lat/lng when provided, otherwise
+            the geocoded `near` string). Omit for UK-wide results. Acts purely
+            as a filter — never changes ranking. Silently ignored when no
+            anchor can be resolved.
+          schema:
+            type: number
+        - name: lat
+          in: query
+          description: Search-anchor latitude (used with radiusMiles).
+          schema:
+            type: number
+        - name: lng
+          in: query
+          description: Search-anchor longitude (used with radiusMiles).
+          schema:
+            type: number
+        - name: near
+          in: query
+          description: >-
+            Search anchor as a UK place name, postcode or outcode. Geocoded
+            server-side when lat/lng are not provided.
+          schema:
+            type: string
         - name: sort
           in: query
           description: Result ordering. Default surfaces verified+featured first.

@@ -26,6 +26,22 @@ export type ListTradersParams = {
    */
   specialism?: string;
   /**
+   * Only include traders whose geocoded base location is within this many miles of the search anchor (lat/lng when provided, otherwise the geocoded `near` string). Omit for UK-wide results. Acts purely as a filter — never changes ranking. Silently ignored when no anchor can be resolved.
+   */
+  radiusMiles?: number;
+  /**
+   * Search-anchor latitude (used with radiusMiles).
+   */
+  lat?: number;
+  /**
+   * Search-anchor longitude (used with radiusMiles).
+   */
+  lng?: number;
+  /**
+   * Search anchor as a UK place name, postcode or outcode. Geocoded server-side when lat/lng are not provided.
+   */
+  near?: string;
+  /**
    * Result ordering. Default surfaces verified+featured first.
    */
   sort?: ListTradersSort;

@@ -10,6 +10,11 @@ export type LocationState = {
   label: string;
   city: string | null;
   postalCode: string | null;
+  /** Device GPS coordinates. Null on web, when permission is denied, or when
+   *  only a legacy (pre-coordinates) cache entry is available. Used as the
+   *  search-radius anchor when the location box is empty. */
+  latitude: number | null;
+  longitude: number | null;
   isLoading: boolean;
   permissionDenied: boolean;
   refresh: () => void;
@@ -19,6 +24,9 @@ type CachedLocation = {
   label: string;
   city: string | null;
   postalCode: string | null;
+  // Optional: cache entries written before search-radius support have none.
+  latitude?: number | null;
+  longitude?: number | null;
   timestamp: number;
 };
 
@@ -33,6 +41,7 @@ export function useLocation(): LocationState {
   const [label, setLabel] = useState('Detecting location...');
   const [city, setCity] = useState<string | null>(null);
   const [postalCode, setPostalCode] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
 
@@ -41,6 +50,7 @@ export function useLocation(): LocationState {
       setLabel('United Kingdom');
       setCity(null);
       setPostalCode(null);
+      setCoords(null);
       setIsLoading(false);
       return;
     }
@@ -54,6 +64,11 @@ export function useLocation(): LocationState {
             setLabel(data.label);
             setCity(data.city);
             setPostalCode(data.postalCode);
+            setCoords(
+              data.latitude != null && data.longitude != null
+                ? { latitude: data.latitude, longitude: data.longitude }
+                : null,
+            );
             setIsLoading(false);
             return;
           }
@@ -66,6 +81,7 @@ export function useLocation(): LocationState {
       if (status !== 'granted') {
         setPermissionDenied(true);
         setLabel('Location unavailable');
+        setCoords(null);
         setIsLoading(false);
         return;
       }
@@ -92,11 +108,17 @@ export function useLocation(): LocationState {
       setCity(resolvedCity);
       setPostalCode(resolvedPostal);
       setLabel(resolvedLabel);
+      setCoords({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
 
       const cacheData: CachedLocation = {
         label: resolvedLabel,
         city: resolvedCity,
         postalCode: resolvedPostal,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
         timestamp: Date.now(),
       };
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
@@ -117,5 +139,14 @@ export function useLocation(): LocationState {
     resolve(true);
   }, [resolve]);
 
-  return { label, city, postalCode, isLoading, permissionDenied, refresh };
+  return {
+    label,
+    city,
+    postalCode,
+    latitude: coords?.latitude ?? null,
+    longitude: coords?.longitude ?? null,
+    isLoading,
+    permissionDenied,
+    refresh,
+  };
 }

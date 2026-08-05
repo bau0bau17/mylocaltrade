@@ -479,6 +479,26 @@ export const ListTradersQueryParams = zod.object({
     .describe(
       'Filter to traders whose main category or additional services match a known specialism keyword (e.g. \"solar\", \"heat pump\", \"ev charger\").',
     ),
+  radiusMiles: zod.coerce
+    .number()
+    .optional()
+    .describe(
+      "Only include traders whose geocoded base location is within this many miles of the search anchor (lat\/lng when provided, otherwise the geocoded `near` string). Omit for UK-wide results. Acts purely as a filter — never changes ranking. Silently ignored when no anchor can be resolved.",
+    ),
+  lat: zod.coerce
+    .number()
+    .optional()
+    .describe("Search-anchor latitude (used with radiusMiles)."),
+  lng: zod.coerce
+    .number()
+    .optional()
+    .describe("Search-anchor longitude (used with radiusMiles)."),
+  near: zod.coerce
+    .string()
+    .optional()
+    .describe(
+      "Search anchor as a UK place name, postcode or outcode. Geocoded server-side when lat\/lng are not provided.",
+    ),
   sort: zod
     .enum(["recommended", "rating", "reviews", "newest"])
     .default(listTradersQuerySortDefault)

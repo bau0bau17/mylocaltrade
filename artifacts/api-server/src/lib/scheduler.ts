@@ -15,6 +15,7 @@ import {
 import { sweepLeadReminders } from "./lead-reminders";
 import { sweepExpiredMutes } from "./mute-sweep";
 import { sweepOrphanUploads } from "./upload-sweep";
+import { sweepTraderGeocoding } from "./trader-geocoding";
 import { sweepBookingReminders } from "./booking-reminders";
 import { sendPushToUser } from "./push-notifications";
 import {
@@ -29,6 +30,7 @@ const MUTE_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 const BOOKING_REMINDER_INTERVAL_MS = 5 * 60 * 1000;
 const REVALIDATION_SWEEP_INTERVAL_MS = 6 * HOUR_MS;
 const ORPHAN_UPLOAD_SWEEP_INTERVAL_MS = 6 * HOUR_MS;
+const TRADER_GEOCODE_INTERVAL_MS = 5 * 60 * 1000;
 const REVALIDATION_GRACE_DAYS = Math.round(REVALIDATION_GRACE_MS / (24 * 60 * 60 * 1000));
 
 /**
@@ -246,6 +248,7 @@ let muteSweepTimer: NodeJS.Timeout | null = null;
 let revalidationTimer: NodeJS.Timeout | null = null;
 let orphanUploadTimer: NodeJS.Timeout | null = null;
 let bookingReminderTimer: NodeJS.Timeout | null = null;
+let traderGeocodeTimer: NodeJS.Timeout | null = null;
 
 export function startScheduler(): void {
   if (scheduledTimer) return;
@@ -354,6 +357,32 @@ export function startScheduler(): void {
     }
   }, ORPHAN_UPLOAD_SWEEP_INTERVAL_MS);
   orphanUploadTimer.unref?.();
+
+  // Trader geocoding sweep: resolves base-postcode coordinates used by the
+  // customer search-radius filter. The initial run backfills existing rows
+  // shortly after boot (including right after a deploy that adds the
+  // columns); the frequent interval keeps latency low for new signups and
+  // postcode edits, and is nearly free when there is nothing to do.
+  setTimeout(async () => {
+    try {
+      const result = await sweepTraderGeocoding();
+      logger.info({ ...result }, "Trader geocoding sweep (initial)");
+    } catch (err) {
+      logger.error({ err }, "Trader geocoding sweep (initial) failed");
+    }
+  }, initialDelayMs);
+
+  traderGeocodeTimer = setInterval(async () => {
+    try {
+      const result = await sweepTraderGeocoding();
+      if (result.geocoded > 0 || result.unresolved > 0) {
+        logger.info({ ...result }, "Trader geocoding sweep");
+      }
+    } catch (err) {
+      logger.error({ err }, "Trader geocoding sweep failed");
+    }
+  }, TRADER_GEOCODE_INTERVAL_MS);
+  traderGeocodeTimer.unref?.();
 }
 
 export function stopScheduler(): void {
@@ -380,5 +409,9 @@ export function stopScheduler(): void {
   if (bookingReminderTimer) {
     clearInterval(bookingReminderTimer);
     bookingReminderTimer = null;
+  }
+  if (traderGeocodeTimer) {
+    clearInterval(traderGeocodeTimer);
+    traderGeocodeTimer = null;
   }
 }

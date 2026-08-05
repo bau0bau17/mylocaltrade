@@ -1,0 +1,104 @@
+I'd like to introduce a search radius feature for customers to improve the search experience and make results more relevant.
+
+Please review the existing search/location flow first and implement this only if it integrates naturally with the current UX.
+
+Goals
+
+Allow customers to control how far they are willing to search for traders, while keeping the Home screen clean and simple.
+
+Home screen
+
+Do not add a permanent slider or extra controls.
+
+Instead, underneath the current location (or as part of the location row), display something like:
+
+📍 Milton Keynes
+Within 20 miles ▾
+
+Tapping "Within 20 miles" should open a bottom sheet.
+
+Radius selector
+
+Use a bottom sheet with fixed options:
+
+- 5 miles
+- 10 miles
+- 20 miles (default)
+- 30 miles
+- 50 miles
+- UK-wide
+
+Do not use a continuous slider.
+
+The fixed options are simpler, faster and easier to understand.
+
+Remember the user's last selection.
+
+Search behaviour
+
+The selected radius should become part of the search criteria.
+
+Results should only include traders within the selected distance, unless "UK-wide" is selected.
+
+Distance should be calculated from the customer's selected location.
+
+Ranking
+
+Distance should NOT become the only ranking factor.
+
+Please keep the existing ranking logic and only use radius as a filter.
+
+Within the selected radius, continue ranking traders using the existing relevance logic, including things such as:
+
+- service/category match
+- verification
+- rating
+- reviews
+- existing quality/relevance score
+
+Distance should simply exclude traders outside the chosen radius.
+
+Search screen
+
+Show the currently selected radius inside the Filters sheet.
+
+It should behave like the other filters.
+
+Changing the radius should only affect results after pressing "Show results", consistent with the existing draft-filter behaviour.
+
+UX
+
+The default should be:
+
+Within 20 miles
+
+If location permissions are denied, continue using the manually selected location exactly as today.
+
+Do not add additional prompts.
+
+Persistence
+
+Remember the user's chosen radius between app launches.
+
+Resetting filters should restore the default radius of 20 miles.
+
+Do not reset the user's chosen location.
+
+Future-proofing
+
+Please implement this in a reusable way so additional radius options can easily be added later if required.
+
+Final report
+
+After implementation, please report:
+
+1. UX decisions.
+2. Default radius.
+3. Files changed.
+4. How radius filtering integrates with the existing search logic.
+5. How ranking behaves within the selected radius.
+6. How persistence is implemented.
+7. Typecheck/tests.
+8. Confirmation that APIs, booking, chat, trader profiles and other unrelated functionality were not changed.
+
+Do not start a build, deployment or publish.

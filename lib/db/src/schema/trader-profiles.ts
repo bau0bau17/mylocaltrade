@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, varchar, json, real } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, varchar, json, real, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -66,6 +66,16 @@ export const traderProfilesTable = pgTable("trader_profiles", {
   businessAddress: text("business_address"),
   town: varchar("town", { length: 100 }).notNull(),
   postcode: varchar("postcode", { length: 20 }).notNull(),
+  // --- Geocoded base location (search-radius filtering) ---
+  // Derived from `postcode` by the periodic geocoding sweep (postcodes.io).
+  // Coordinates are only trusted while geocodedPostcode matches the current
+  // postcode — editing the postcode automatically re-queues the row for the
+  // sweep. A row with geocodedPostcode set but null coordinates is a known-
+  // unresolvable postcode: it stays out of radius-filtered searches (but is
+  // unaffected when no radius is applied) until the postcode changes.
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  geocodedPostcode: varchar("geocoded_postcode", { length: 20 }),
   serviceAreas: json("service_areas").$type<string[]>().default([]),
   businessDescription: text("business_description"),
   website: varchar("website", { length: 255 }),

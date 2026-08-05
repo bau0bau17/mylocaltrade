@@ -1,0 +1,12 @@
+---
+name: Search radius & geocoding
+description: How the customer search radius works — sweep-owned trader coords, geocode cache semantics, filter-only rule, prod deploy ordering
+---
+
+- Radius is a pure FILTER on the public trader list (haversine SQL pushed into the shared `conditions` array so the list and count queries always agree). It must NEVER become a ranking factor — the orderBy logic stays untouched.
+- Trader coordinates are SWEEP-OWNED (scheduler + postcodes.io bulk lookups of the base postcode). Trusted iff `geocodedPostcode === postcode`; a postcode edit on ANY route auto-requeues the row — deliberately NO write-path hooks (postcode writes are scattered across onboarding/profile/admin/change-requests; hook-hunting is the known duplicated-rule trap). `geocodedPostcode` set with null coords = definitive not-found; no retry until the postcode changes.
+- geocode_cache (customer `near` anchors): negative rows ONLY for definitive 404s; transient network failures are never cached and never mark trader rows. In-memory Map (cap ~500) in front; `clearGeocodeMemoryCache()` is the test seam.
+- Anchor precedence server-side: explicit lat/lng > geocoded `near` string > skip the filter entirely (degrade to UK-wide, never a misleading empty list). Traders without trusted coords are excluded ONLY while a radius is active.
+- Mobile: `SearchRadius = number | null` (null = UK-wide); options list + labels live in ONE constants file — add future options there only. Committed value in SearchRadiusContext (AsyncStorage `search_radius_miles`, validated on load) because the Search tab stays mounted; the Search filter sheet edits a draft. Reset restores the 20-mile default and never touches location. Anchor from the app: location text box wins (`near=`), else device GPS coords, else nothing.
+- **Prod deploy ordering:** the schema (latitude/longitude/geocoded_postcode + geocode_cache) MUST be pushed to the production DB before/with the new server build — drizzle selects whole rows, so missing columns break EVERY trader query, not just radius ones. After that the boot sweep backfills coords automatically; old servers safely ignore the new query params.
+- **Why postcodes.io:** UK-only marketplace; free, keyless, official Open Government data; bulk endpoint (≤100) for the sweep.

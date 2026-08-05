@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl, useWindowDimensions, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,9 @@ import { CategoryCard } from '@/components/CategoryCard';
 import { TraderCard } from '@/components/TraderCard';
 import { HomeFooter } from '@/components/HomeFooter';
 import { useLocation } from '@/hooks/useLocation';
+import { useSearchRadius } from '@/contexts/SearchRadiusContext';
+import { radiusRowLabel } from '@/constants/searchRadius';
+import { RadiusSheet } from '@/components/RadiusSheet';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { usePremiumMonthlyPriceLabel } from '@/hooks/usePremiumMonthlyPriceLabel';
 import { useAuth } from '@/contexts/AuthContext';
@@ -71,6 +74,8 @@ export default function HomeScreen() {
   // and tiles keep comfortable tap targets (Plus/Max-class widths, tablets).
   const categoryColumns = width >= 430 ? 5 : 4;
   const location = useLocation();
+  const { radius, setRadius } = useSearchRadius();
+  const [radiusSheetVisible, setRadiusSheetVisible] = useState(false);
   const { isAuthenticated, isCustomer, isTrader } = useAuth();
   const { hasTraderSubscription } = useSubscription();
   const showCustomerSections = isAuthenticated && isCustomer;
@@ -144,6 +149,24 @@ export default function HomeScreen() {
             </Pressable>
           )}
         </Pressable>
+
+        {/* Search radius, tucked under the location row (no permanent slider
+            or extra controls — tapping opens the options sheet). Hidden while
+            the location is loading/unavailable: with no resolvable anchor the
+            radius has no effect, so showing it would mislead. */}
+        {!location.isLoading && !location.permissionDenied && (location.city || location.postalCode) ? (
+          <Pressable
+            style={styles.radiusRow}
+            onPress={() => setRadiusSheetVisible(true)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={`Search radius: ${radiusRowLabel(radius)}`}
+          >
+            <Feather name="crosshair" size={12} color={Colors.light.secondary} />
+            <Text style={styles.radiusRowText}>{radiusRowLabel(radius)}</Text>
+            <Feather name="chevron-down" size={13} color={Colors.light.textSecondary} />
+          </Pressable>
+        ) : null}
 
         {/* One clean search entry point. Advanced filters live ONLY on the
             Search screen, so no filter icon here. The `reset` nonce tells
@@ -381,6 +404,16 @@ export default function HomeScreen() {
 
         <HomeFooter />
       </ScrollView>
+
+      <RadiusSheet
+        visible={radiusSheetVisible}
+        selected={radius}
+        onSelect={(value) => {
+          setRadius(value);
+          setRadiusSheetVisible(false);
+        }}
+        onClose={() => setRadiusSheetVisible(false)}
+      />
     </View>
   );
 }
@@ -474,6 +507,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.light.primary,
     letterSpacing: 0.3,
+  },
+  radiusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    marginTop: -6,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  radiusRowText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.textSecondaryStrong,
+    letterSpacing: 0.2,
   },
   searchBar: {
     backgroundColor: Colors.light.card,

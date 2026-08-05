@@ -30,6 +30,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SubscriptionProvider } from "@/lib/revenuecat";
+import { SearchRadiusProvider } from "@/contexts/SearchRadiusContext";
 import {
   setBaseUrl,
   setAuthTokenGetter,
@@ -260,11 +261,13 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <SubscriptionProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
-                  <RootLayoutNav />
-                </KeyboardProvider>
-              </GestureHandlerRootView>
+              <SearchRadiusProvider>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                  <KeyboardProvider>
+                    <RootLayoutNav />
+                  </KeyboardProvider>
+                </GestureHandlerRootView>
+              </SearchRadiusProvider>
             </SubscriptionProvider>
           </AuthProvider>
         </QueryClientProvider>

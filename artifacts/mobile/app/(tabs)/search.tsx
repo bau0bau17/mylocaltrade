@@ -16,6 +16,14 @@ import { useLocation } from '@/hooks/useLocation';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import type { FeatherIconName } from '@/types/feather-icons';
 import { SPECIALISMS, type SpecialismKey } from '@/constants/specialisms';
+import { useSearchRadius } from '@/contexts/SearchRadiusContext';
+import {
+  DEFAULT_SEARCH_RADIUS,
+  SEARCH_RADIUS_OPTIONS,
+  radiusChipLabel,
+  radiusRowLabel,
+  type SearchRadius,
+} from '@/constants/searchRadius';
 
 const SORT_LABELS: Record<'recommended' | 'rating' | 'reviews' | 'newest', string> = {
   recommended: 'Recommended',
@@ -107,6 +115,9 @@ export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const location = useLocation();
+  // Committed radius is GLOBAL (shared with Home, persisted between
+  // launches); the sheet edits a local draft like every other filter.
+  const { radius, setRadius } = useSearchRadius();
 
   const [searchQuery, setSearchQuery] = useState(params.category as string || '');
   const [locationQuery, setLocationQuery] = useState('');
@@ -124,6 +135,7 @@ export default function SearchScreen() {
   const [draftSort, setDraftSort] = useState<typeof sort>('recommended');
   const [draftVerifiedOnly, setDraftVerifiedOnly] = useState(false);
   const [draftSpecialism, setDraftSpecialism] = useState<SpecialismKey | null>(null);
+  const [draftRadius, setDraftRadius] = useState<SearchRadius>(DEFAULT_SEARCH_RADIUS);
 
   // ---- Navigation param sync ----------------------------------------------
   // This tab screen stays MOUNTED between visits, so `useState(initial)` only
@@ -164,6 +176,8 @@ export default function SearchScreen() {
     setVerifiedOnly(false);
     setSpecialismFilter(null);
     setSort('recommended');
+    // Resetting filters restores the default radius — never the location.
+    setRadius(DEFAULT_SEARCH_RADIUS);
   };
 
   const activeFilters: { key: string; label: string; onRemove: () => void }[] = [
@@ -175,6 +189,9 @@ export default function SearchScreen() {
       : []),
     ...(activeSpecialism
       ? [{ key: 'specialism', label: activeSpecialism.label, onRemove: () => setSpecialismFilter(null) }]
+      : []),
+    ...(radius !== DEFAULT_SEARCH_RADIUS
+      ? [{ key: 'radius', label: radiusRowLabel(radius), onRemove: () => setRadius(DEFAULT_SEARCH_RADIUS) }]
       : []),
   ];
   const activeCount = activeFilters.length;
@@ -214,12 +231,28 @@ export default function SearchScreen() {
     }
   };
 
+  // Radius anchor: the location box (auto-filled from GPS, or user-typed)
+  // wins, geocoded server-side; with the box cleared we fall back to the
+  // device's GPS coordinates. UK-wide — or no resolvable anchor at all (e.g.
+  // permission denied and box empty) — sends nothing, and the server then
+  // skips the distance filter entirely (today's behaviour, no extra prompts).
+  const trimmedLocation = locationQuery.trim();
+  const radiusParams = (r: SearchRadius): Partial<ListTradersParams> => {
+    if (r === null) return {};
+    if (trimmedLocation) return { radiusMiles: r, near: trimmedLocation };
+    if (location.latitude != null && location.longitude != null) {
+      return { radiusMiles: r, lat: location.latitude, lng: location.longitude };
+    }
+    return {};
+  };
+
   const searchParams: ListTradersParams = {
     search: searchQuery,
     location: locationQuery,
     sort,
     ...(verifiedOnly ? { verified: true } : {}),
     ...(activeSpecialism ? { specialism: activeSpecialism.keywords[0] } : {}),
+    ...radiusParams(radius),
   };
   const { data, isLoading, refetch } = useListTraders(searchParams, {
     query: {
@@ -242,6 +275,7 @@ export default function SearchScreen() {
     sort: draftSort,
     ...(draftVerifiedOnly ? { verified: true } : {}),
     ...(draftActiveSpecialism ? { specialism: draftActiveSpecialism.keywords[0] } : {}),
+    ...radiusParams(draftRadius),
   };
   const draftPreviewEnabled = showFilters && (hasSearched || !!draftActiveSpecialism);
   const { data: draftData, isLoading: draftLoading } = useListTraders(draftParams, {
@@ -262,12 +296,14 @@ export default function SearchScreen() {
     setDraftSort(sort);
     setDraftVerifiedOnly(verifiedOnly);
     setDraftSpecialism(specialismFilter);
+    setDraftRadius(radius);
     setShowFilters(true);
   };
   const applyFilters = () => {
     setSort(draftSort);
     setVerifiedOnly(draftVerifiedOnly);
     setSpecialismFilter(draftSpecialism);
+    setRadius(draftRadius);
     setShowFilters(false);
     // A specialism works as a browse filter even without a typed query —
     // committing one shows results (existing behaviour, now Apply-gated).
@@ -279,11 +315,13 @@ export default function SearchScreen() {
     setDraftSort('recommended');
     setDraftVerifiedOnly(false);
     setDraftSpecialism(null);
+    setDraftRadius(DEFAULT_SEARCH_RADIUS);
   };
   const draftCount =
     (draftSort !== 'recommended' ? 1 : 0) +
     (draftVerifiedOnly ? 1 : 0) +
-    (draftSpecialism ? 1 : 0);
+    (draftSpecialism ? 1 : 0) +
+    (draftRadius !== DEFAULT_SEARCH_RADIUS ? 1 : 0);
 
   const applyRecentSearch = (query: string) => {
     setSearchQuery(query);
@@ -451,8 +489,8 @@ export default function SearchScreen() {
               </View>
               <Text style={styles.emptyTitle}>No traders found</Text>
               <Text style={styles.emptySubtitle}>
-                {verifiedOnly || specialismFilter !== null
-                  ? 'No traders match these filters. Try clearing them, or widen your location.'
+                {verifiedOnly || specialismFilter !== null || radius !== DEFAULT_SEARCH_RADIUS
+                  ? 'No traders match these filters. Try widening your search radius or clearing them.'
                   : 'Try adjusting your search or location.'}
               </Text>
               {activeCount > 0 && (
@@ -530,6 +568,18 @@ export default function SearchScreen() {
                     onPress={() =>
                       setDraftSpecialism((prev) => (prev === spec.key ? null : spec.key))
                     }
+                  />
+                ))}
+              </View>
+
+              <Text style={styles.sheetSection}>Search radius</Text>
+              <View style={styles.sheetGroup}>
+                {SEARCH_RADIUS_OPTIONS.map((value) => (
+                  <FilterChip
+                    key={String(value)}
+                    label={radiusChipLabel(value)}
+                    active={draftRadius === value}
+                    onPress={() => setDraftRadius(value)}
                   />
                 ))}
               </View>

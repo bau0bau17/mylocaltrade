@@ -11,6 +11,9 @@ import { evaluateBusinessProfileComplete } from "./trader-status";
  * Legacy text is never required when structured hours exist.
  */
 
+// Note: no `as const` — the evaluator's parameter derives from the DB row
+// type, whose JSON array fields are mutable string[] (readonly tuples fail
+// to typecheck against them).
 const base = {
   businessDescription: "x".repeat(100),
   businessAddress: "1 High Street",
@@ -21,7 +24,7 @@ const base = {
   mainCategory: "plumbing",
   businessType: "SOLE_TRADER",
   companyNumber: null,
-} as const;
+};
 
 const structuredHours = {
   mon: { enabled: true, start: "08:00", end: "18:00" },

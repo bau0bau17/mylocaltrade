@@ -13,6 +13,7 @@ import { eq, and, ilike, or, desc, sql, inArray, type SQL } from "drizzle-orm";
 import { computeResponseTimes } from "../lib/response-times";
 import { expandServiceTerms } from "../lib/service-categories";
 import { isTraderPubliclyListed, publicTraderSqlConditions } from "../lib/trader-status";
+import { geocodeUkLocation } from "../lib/geocode";
 
 const router: IRouter = Router();
 
@@ -27,6 +28,10 @@ router.get("/traders", async (req, res) => {
       plan,
       specialism,
       sort,
+      radiusMiles,
+      lat,
+      lng,
+      near,
       page = "1",
       limit = "20",
     } = req.query;
@@ -151,6 +156,50 @@ router.get("/traders", async (req, res) => {
           )`,
         )!
       );
+    }
+
+    // --- Search radius --------------------------------------------------
+    // A pure FILTER, never a ranking factor: traders outside the radius are
+    // excluded and the ordering logic below stays untouched. Anchor
+    // precedence: explicit lat/lng from the app, else a geocodable `near`
+    // string (place name / postcode / outcode). Traders without trusted
+    // coords (geocodedPostcode must match their current postcode) are
+    // excluded while a radius is active — their distance is unknowable. If
+    // no anchor can be resolved (unknown place, geocoder down), the filter
+    // is skipped entirely so results degrade to UK-wide rather than
+    // returning a misleading empty list.
+    const parseNum = (v: unknown): number | null => {
+      if (typeof v !== "string" || v.trim() === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const radiusMilesNum = parseNum(radiusMiles);
+    if (radiusMilesNum != null && radiusMilesNum > 0) {
+      const clampedRadius = Math.min(500, Math.max(1, radiusMilesNum));
+      let anchor: { latitude: number; longitude: number } | null = null;
+      const latNum = parseNum(lat);
+      const lngNum = parseNum(lng);
+      if (latNum != null && lngNum != null && Math.abs(latNum) <= 90 && Math.abs(lngNum) <= 180) {
+        anchor = { latitude: latNum, longitude: lngNum };
+      } else if (typeof near === "string" && near.trim()) {
+        anchor = await geocodeUkLocation(near);
+      }
+      if (anchor) {
+        // Haversine great-circle distance in miles (Earth radius 3958.8 mi),
+        // acos-clamped against floating-point drift.
+        conditions.push(
+          sql`(
+            ${traderProfilesTable.latitude} IS NOT NULL
+            AND ${traderProfilesTable.longitude} IS NOT NULL
+            AND ${traderProfilesTable.geocodedPostcode} = ${traderProfilesTable.postcode}
+            AND (3958.8 * acos(least(1.0, greatest(-1.0,
+              cos(radians(${anchor.latitude})) * cos(radians(${traderProfilesTable.latitude}))
+              * cos(radians(${traderProfilesTable.longitude}) - radians(${anchor.longitude}))
+              + sin(radians(${anchor.latitude})) * sin(radians(${traderProfilesTable.latitude}))
+            )))) <= ${clampedRadius}
+          )`,
+        );
+      }
     }
 
     const where = conditions.length > 1 ? and(...conditions) : conditions[0];
