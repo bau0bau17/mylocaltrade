@@ -34,12 +34,26 @@ This scan is production-focused. Assume `NODE_ENV=production`, platform TLS is p
 - Authenticated surfaces: profile, saved traders, enquiries, conversations, reviews, subscriptions, trader phone/documents.
 - Admin-only surfaces: `artifacts/api-server/src/routes/admin.ts` and the `artifacts/admin` app.
 - Usually out of scope: `artifacts/mockup-sandbox`, any `NODE_ENV !== production` branches, and demo-only subscription activation that is explicitly blocked in production.
+- `artifacts/mobile/server/serve.js` landing page server: SAST HIGH path-traversal is a confirmed false positive (four independent controls block traversal). Do not re-investigate unless the file changes.
+
+## Confirmed Clean (Task #108)
+
+The following were investigated and found not vulnerable in the current codebase:
+- Admin route authorization — all `/admin/*` routes correctly protected by `adminOnly` / `superAdminOnly`.
+- Conversations/enquiries IDOR — conversation detail verifies caller is customer or trader party before returning data.
+- Demo-mode billing in production — `IS_DEMO_MODE` is `false` at build time; `/subscriptions/demo-activate` returns 404.
+- Stripe webhook signature — raw-body preservation and HMAC with timing-safe comparison are correct.
+- Promo code double-claim — `SELECT … FOR UPDATE` + per-user unique constraint prevent concurrent abuse.
+- Rate limiting — all public endpoints have PostgreSQL-backed rate limits applied at the Express layer.
+- SQL injection — all queries use Drizzle parameterized helpers.
 
 ## Threat Categories
 
 ### Spoofing
 
-The system issues JWT bearer tokens for customer, trader, and admin roles and also trusts Stripe webhook calls, Companies House responses, and SMTP-delivered messages to carry the app’s identity. Protected API endpoints MUST validate bearer tokens server-side on every request, role checks MUST be enforced in route handlers instead of the client, and all third-party callbacks (especially billing webhooks) MUST be authenticated before changing account state.
+The system issues JWT bearer tokens for customer, trader, and admin roles and also trusts Stripe webhook calls, Companies House responses, and SMTP-delivered messages to carry the app's identity. Protected API endpoints MUST validate bearer tokens server-side on every request, role checks MUST be enforced in route handlers instead of the client, and all third-party callbacks (especially billing webhooks) MUST be authenticated before changing account state.
+
+Known open issue: email verification link tokens have no expiry — see vulnerability `email-verification-link-no-expiry`.
 
 ### Tampering
 
@@ -49,6 +63,8 @@ Untrusted users can submit registration data, profile fields, contact messages, 
 
 The application stores PII, trader verification data, internal moderation state, and conversation content. API responses, file previews/downloads, logs, and email notifications MUST only disclose data to authorized principals, and administrative/reporting routes MUST not leak sensitive records to lower-privileged users. Error handling and logging MUST avoid exposing secrets, message bodies, or verification tokens beyond what operators genuinely need.
 
+Known open issue: login endpoint leaks account existence for deleted/unverified accounts via status-code differences — see vulnerability `login-account-enumeration`.
+
 ### Denial of Service
 
 Public endpoints such as login, registration, resend-verification, contact, and any webhook or message creation flows can be abused to consume CPU, database capacity, email quota, or third-party API quota. Production endpoints MUST apply rate limits, body-size limits, and bounded external requests, and attacker-controlled inputs MUST not trigger unexpectedly expensive regex/template/rendering/upload behavior.
@@ -56,3 +72,5 @@ Public endpoints such as login, registration, resend-verification, contact, and 
 ### Elevation of Privilege
 
 This project has meaningful privilege separation between public users, authenticated customers, traders, and admins. Every route that reads or mutates user, trader, billing, conversation, moderation, or document data MUST enforce object-level ownership and role checks on the server. User-controlled content MUST never reach privileged sinks such as SQL, email templates, file paths, signed URLs, or admin-only actions without context-appropriate escaping and validation.
+
+Known open issue: trader-controlled fields (businessName, notes) can carry CSV formula-injection payloads into the super-admin audit-report export — see vulnerability `csv-formula-injection-admin-audit-report`.
