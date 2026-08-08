@@ -1,12 +1,14 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from 'expo-router';
 import Colors from '@/constants/colors';
 import { EnquiryCard } from '@/components/EnquiryCard';
+import { JobReferenceSearch } from '@/components/JobReferenceSearch';
 import { useGetEnquiries, useGetNewLeadCount, getGetEnquiriesQueryKey } from '@workspace/api-client-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { matchesJobReference } from '@/lib/job-reference-search';
 
 export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
@@ -20,6 +22,19 @@ export default function LeadsScreen() {
     query: { queryKey: ['/api/enquiries/new-count'], enabled: isTrader },
   });
   const newCount = newCountData?.newCount ?? 0;
+
+  // Small job-number filter (e.g. "MLT-000123" or just "000123"). Filtering is
+  // client-side over the already-loaded list; clearing the box restores it.
+  const [jobQuery, setJobQuery] = useState('');
+  const trimmedJobQuery = jobQuery.trim();
+  const enquiries = data?.enquiries ?? [];
+  const filteredEnquiries = useMemo(
+    () =>
+      trimmedJobQuery
+        ? enquiries.filter((e) => matchesJobReference(e.jobReference, trimmedJobQuery))
+        : enquiries,
+    [enquiries, trimmedJobQuery],
+  );
 
   // Refresh badge whenever the user returns to the screen — opening a lead
   // stamps `traderViewedAt` server-side, so the count should drop on return.
@@ -61,8 +76,14 @@ export default function LeadsScreen() {
         </View>
       ) : null}
 
+      {enquiries.length > 0 ? (
+        <View style={styles.searchWrap}>
+          <JobReferenceSearch value={jobQuery} onChange={setJobQuery} />
+        </View>
+      ) : null}
+
       <FlatList
-        data={data?.enquiries || []}
+        data={filteredEnquiries}
         keyExtractor={item => item.id.toString()}
         renderItem={({ item }) => <EnquiryCard enquiry={item} />}
         contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 20 }}
@@ -70,10 +91,19 @@ export default function LeadsScreen() {
           <RefreshControl refreshing={isRefetching} onRefresh={handleRefresh} />
         }
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No leads yet</Text>
-            <Text style={styles.emptySubtitle}>When customers send you enquiries, they will appear here.</Text>
-          </View>
+          trimmedJobQuery ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No jobs match</Text>
+              <Text style={styles.emptySubtitle}>
+                No lead matches “{trimmedJobQuery}”. Check the job number and try again.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>No leads yet</Text>
+              <Text style={styles.emptySubtitle}>When customers send you enquiries, they will appear here.</Text>
+            </View>
+          )
         }
       />
     </View>
@@ -89,6 +119,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   header: {
     padding: 20,

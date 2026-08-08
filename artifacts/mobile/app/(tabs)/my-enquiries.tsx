@@ -11,8 +11,10 @@ import {
   useGetEligibleEnquiriesForReview,
 } from '@workspace/api-client-react';
 import { EnquiryCard } from '@/components/EnquiryCard';
+import { JobReferenceSearch } from '@/components/JobReferenceSearch';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { matchesJobReference } from '@/lib/job-reference-search';
 
 export default function MyEnquiriesScreen() {
   const insets = useSafeAreaInsets();
@@ -33,6 +35,18 @@ export default function MyEnquiriesScreen() {
   const eligibleIds = React.useMemo(
     () => new Set((eligibleData?.enquiries ?? []).map((e) => e.enquiryId)),
     [eligibleData],
+  );
+  // Small job-number filter (e.g. "MLT-000123" or just "000123"). Filtering is
+  // client-side over the already-loaded list; clearing the box restores it.
+  const [jobQuery, setJobQuery] = React.useState('');
+  const trimmedJobQuery = jobQuery.trim();
+  const enquiries = data?.enquiries ?? [];
+  const filteredEnquiries = React.useMemo(
+    () =>
+      trimmedJobQuery
+        ? enquiries.filter((e) => matchesJobReference(e.jobReference, trimmedJobQuery))
+        : enquiries,
+    [enquiries, trimmedJobQuery],
   );
 
   if (isAdmin) {
@@ -56,8 +70,12 @@ export default function MyEnquiriesScreen() {
           <ActivityIndicator size="large" color={Colors.light.primary} />
         </View>
       ) : data?.enquiries && data.enquiries.length > 0 ? (
+        <>
+        <View style={styles.searchWrap}>
+          <JobReferenceSearch value={jobQuery} onChange={setJobQuery} />
+        </View>
         <FlatList
-          data={data.enquiries}
+          data={filteredEnquiries}
           keyExtractor={(item) => String(item.id)}
           ListHeaderComponent={
             <Pressable
@@ -104,7 +122,17 @@ export default function MyEnquiriesScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />
           }
+          ListEmptyComponent={
+            <View style={styles.noMatchWrap}>
+              <Feather name="search" size={20} color={Colors.light.textMuted} />
+              <Text style={styles.noMatchTitle}>No jobs match</Text>
+              <Text style={styles.noMatchText}>
+                No enquiry matches “{trimmedJobQuery}”. Check the job number and try again.
+              </Text>
+            </View>
+          }
         />
+        </>
       ) : (
         <ScrollView
           contentContainerStyle={{ flexGrow: 1 }}
@@ -203,4 +231,8 @@ const styles = StyleSheet.create({
   },
   compareBtnText: { fontSize: 14, fontWeight: '700', color: '#fff', letterSpacing: 0.2 },
   emptyCta: { marginTop: 20, marginHorizontal: 0, paddingHorizontal: 24, alignSelf: 'center' },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 12 },
+  noMatchWrap: { alignItems: 'center', paddingHorizontal: 32, paddingVertical: 32, gap: 6 },
+  noMatchTitle: { fontSize: 15, fontWeight: '600', color: Colors.light.text },
+  noMatchText: { fontSize: 13, color: Colors.light.textSecondary, textAlign: 'center', lineHeight: 19 },
 });

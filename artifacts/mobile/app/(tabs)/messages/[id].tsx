@@ -319,6 +319,8 @@ export default function ConversationThreadScreen() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [photoViewer, setPhotoViewer] = useState<number | null>(null);
+  // Full-screen viewer for the other party's profile photo in the header.
+  const [profilePhotoOpen, setProfilePhotoOpen] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quoteMode, setQuoteMode] = useState<"create" | "revise">("create");
   const [quoteAmount, setQuoteAmount] = useState("");
@@ -983,14 +985,22 @@ export default function ConversationThreadScreen() {
           // Personal photo of the trader handling this conversation — shown to
           // the customer only, next to the business name. Served through the
           // authenticated avatar endpoint (membership-scoped), so pass the
-          // bearer token with the image request.
-          <Image
-            source={{
-              uri: avatarImageUrl(conv.traderAvatarUrl)!,
-              headers: { Authorization: `Bearer ${token}` },
-            }}
-            style={styles.headerAvatar}
-          />
+          // bearer token with the image request. Tapping it opens the photo
+          // full-screen in the shared viewer below.
+          <Pressable
+            onPress={() => setProfilePhotoOpen(true)}
+            hitSlop={6}
+            accessibilityRole="imagebutton"
+            accessibilityLabel="View profile photo"
+          >
+            <Image
+              source={{
+                uri: avatarImageUrl(conv.traderAvatarUrl)!,
+                headers: { Authorization: `Bearer ${token}` },
+              }}
+              style={styles.headerAvatar}
+            />
+          </Pressable>
         ) : null}
         <View style={{ flex: 1 }}>
           <Text style={styles.headerName} numberOfLines={1}>
@@ -1144,28 +1154,24 @@ export default function ConversationThreadScreen() {
             (isTrader && item.senderRole === "trader") ||
             (!isTrader && item.senderRole === "customer") ||
             item.senderUserId === user?.id;
-          // The first enquiry message ends with a "[N photo(s) attached]"
-          // placeholder written server-side. When the photos exist, make it
-          // actionable: a tappable chip that opens the existing photo viewer.
+          // The first message of the conversation is the original enquiry; the
+          // server appends a "[N photo(s) attached]" placeholder to it when the
+          // enquiry carried photos. Those photos already render as tappable
+          // thumbnails in the "Photos from the enquiry" section, so strip the
+          // placeholder from that one message only — later chat messages are
+          // never altered, even if they happen to contain the same text.
+          const isOriginalEnquiryMessage = messages.length > 0 && item.id === messages[0].id;
           const hasPhotoPlaceholder =
-            enquiryAttachments.length > 0 && /\[\d+ photos? attached\]/.test(item.body);
+            isOriginalEnquiryMessage &&
+            enquiryAttachments.length > 0 &&
+            /\[\d+ photos? attached\]/.test(item.body);
+          const displayBody = hasPhotoPlaceholder
+            ? item.body.replace(/\s*\[\d+ photos? attached\]\s*/g, "\n").trim()
+            : item.body;
           return (
             <View style={[styles.bubbleWrap, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
               <View style={[styles.bubble, mine ? styles.bubbleMineBg : styles.bubbleTheirsBg]}>
-                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.body}</Text>
-                {hasPhotoPlaceholder ? (
-                  <Pressable
-                    style={styles.viewPhotosChip}
-                    onPress={() => setPhotoViewer(0)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${enquiryAttachments.length} attached photo${enquiryAttachments.length === 1 ? "" : "s"}`}
-                  >
-                    <Feather name="image" size={13} color={Colors.light.primary} />
-                    <Text style={styles.viewPhotosChipText}>
-                      View photo{enquiryAttachments.length === 1 ? "" : "s"}
-                    </Text>
-                  </Pressable>
-                ) : null}
+                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{displayBody}</Text>
                 <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
                   {fmtTime(item.createdAt)}
                 </Text>
@@ -1933,6 +1939,35 @@ export default function ConversationThreadScreen() {
       </Modal>
 
       <Modal
+        visible={profilePhotoOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setProfilePhotoOpen(false)}
+      >
+        <View style={styles.photoViewerBackdrop}>
+          <Text style={styles.profilePhotoTitle}>Profile photo</Text>
+          <Pressable
+            style={styles.photoViewerClose}
+            onPress={() => setProfilePhotoOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close profile photo"
+          >
+            <Feather name="x" size={26} color="#fff" />
+          </Pressable>
+          {conv.traderAvatarUrl ? (
+            <Image
+              source={{
+                uri: avatarImageUrl(conv.traderAvatarUrl)!,
+                headers: { Authorization: `Bearer ${token}` },
+              }}
+              style={styles.photoViewerImage}
+              resizeMode="contain"
+            />
+          ) : null}
+        </View>
+      </Modal>
+
+      <Modal
         visible={bookingOpen}
         transparent
         animationType="fade"
@@ -2483,6 +2518,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.12)",
   },
+  // Title row of the profile-photo viewer; inset from both edges so it never
+  // overlaps the absolute-positioned close button.
+  profilePhotoTitle: {
+    position: "absolute",
+    top: 58,
+    left: 76,
+    right: 76,
+    zIndex: 1,
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   photoViewerImage: { width: "100%", height: "80%" },
   photoViewerNav: {
     position: "absolute",
@@ -2527,18 +2575,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
   },
   bubbleText: { fontSize: 14, color: Colors.light.text, lineHeight: 20 },
-  viewPhotosChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    alignSelf: "flex-start",
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: Colors.light.primaryMuted,
-  },
-  viewPhotosChipText: { fontSize: 12, fontWeight: "700", color: Colors.light.primary },
   bubbleTextMine: { color: Colors.light.white },
   bubbleTime: {
     fontSize: 10,

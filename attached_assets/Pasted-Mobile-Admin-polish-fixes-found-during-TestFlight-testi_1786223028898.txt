@@ -1,0 +1,171 @@
+Mobile + Admin polish fixes found during TestFlight testing.
+
+Please keep this task tightly scoped. Inspect the existing implementation first and reuse existing components/patterns wherever possible.
+
+DO NOT refactor unrelated code, redesign existing flows, or add unnecessary new architecture.
+
+I have attached screenshots showing each issue.
+
+1. REMOVE DUPLICATE ORIGINAL ENQUIRY PHOTO UI
+
+In the mobile conversation, photos attached by the customer to the ORIGINAL enquiry are currently displayed twice:
+
+- correctly as thumbnail(s) under “PHOTOS FROM THE ENQUIRY”
+- again inside the original enquiry message as “[1 photo attached]” + a “View photo” button
+
+This is redundant.
+
+Please make the thumbnail/gallery section the single visual representation of ORIGINAL ENQUIRY photos.
+
+Required behaviour:
+- Keep the thumbnail(s) under “PHOTOS FROM THE ENQUIRY”.
+- Remove the redundant “View photo” button from the original enquiry message.
+- Remove the redundant “[1 photo attached]” text when those photos are already displayed in the enquiry photo section.
+- Tapping a thumbnail should open that photo in the existing full-screen image viewer.
+- Multiple enquiry photos should work the same way.
+- Apply the same behaviour to both customer and trader conversation views.
+
+IMPORTANT:
+Do NOT change normal photo attachments that customer/trader may send later as regular chat messages. This change is only for photos attached to the ORIGINAL enquiry.
+
+
+2. CONVERSATION HEADER PROFILE PHOTO — TAP TO ENLARGE
+
+The profile/avatar photo displayed in the conversation header is currently too small to properly view.
+
+Make the avatar tappable wherever a real profile photo is available.
+
+On tap:
+- Open a simple full-screen image viewer.
+- Show title/header: “Profile photo”.
+- Include normal Back/Close behaviour.
+- Centre and scale the image correctly without distortion.
+- Allow the user to properly see the customer/trader photo.
+
+Please reuse an existing image viewer/modal if one already exists rather than creating an unnecessary new profile flow.
+
+
+3. ADMIN DASHBOARD — FULL CONVERSATION READABILITY + SCROLLING
+
+In the admin workflow where the full conversation is opened, for example when reviewing a job/review before approval, some conversation text is displayed in very light grey on a white background and is difficult to read.
+
+See attached screenshot, including Job MLT-000007.
+
+Please:
+- Make all main conversation text properly dark/black and clearly readable against the white background.
+- Keep secondary metadata/timestamps readable as well.
+- Apply the correct text styling consistently throughout the entire conversation, not only the first message.
+- Fix the shared styling so future conversations also display correctly.
+
+Also make the conversation content vertically scrollable.
+
+For long conversations:
+- Admin must be able to scroll from the beginning to the very end.
+- Content must not be clipped at the bottom.
+- Keep the modal header/title and Close/X control usable.
+- The conversation/body area should scroll cleanly inside the modal.
+
+Please test with Job MLT-000007 because this currently demonstrates the problem.
+
+
+4. SEARCH BY JOB NUMBER — CUSTOMER + TRADER
+
+Add a small search control to the relevant Enquiries / Leads / Jobs list screens for BOTH:
+
+- Customer
+- Trader
+
+For now this search should ONLY search by MyLocalTrade Job Reference.
+
+Do not turn this into a larger/general search feature.
+
+It should find the job when the user enters either:
+
+MLT-000007
+
+or simply:
+
+000007
+
+Requirements:
+- Case-insensitive.
+- Partial/reference-friendly where sensible.
+- Show/filter the matching job(s) using the existing architecture.
+- Clearing the search should immediately restore the normal full list.
+- Reuse the existing API/data where possible.
+- Do not create a new endpoint unless genuinely required.
+
+Keep the UI simple and consistent with the existing MyLocalTrade design.
+
+
+5. BILLING & PLAN — EXCESSIVE EMPTY SPACE AT TOP
+
+On the mobile Billing & Plan screen there is a very large empty vertical area between the page header and the CURRENT PLAN card.
+
+See attached screenshot with the area marked in red.
+
+Please find and fix the actual layout cause.
+
+Check for things such as:
+- Safe-area handling
+- ScrollView/content container padding
+- Header spacing
+- Container margin/padding
+- Duplicate spacer/header offsets
+
+IMPORTANT:
+Do not hide the problem using a hard-coded negative margin.
+
+The Current Plan section should start with normal spacing consistent with the other mobile screens.
+
+Please verify the layout on:
+- Different iPhone screen sizes/safe areas
+- Monthly plan
+- Yearly plan
+- Active/inactive subscription state where applicable
+
+
+REGRESSION / SCOPE REQUIREMENTS
+
+Please keep this implementation limited to the five items above.
+
+Do NOT redesign or change the existing:
+- conversation flow
+- quote flow
+- hire flow
+- appointment flow
+- completion flow
+- subscription/business logic
+- admin approval logic
+
+Regression-check after implementation:
+
+- Customer conversation
+- Trader conversation
+- Original enquiry photos
+- Normal chat photo attachments
+- Quote state
+- Hired state
+- Appointment state
+- Completed state
+- Admin full-conversation/review modal
+- Customer job/enquiry list
+- Trader leads/jobs list
+- Job-number search
+- Billing & Plan layout
+
+Run the existing relevant tests/checks.
+
+Fix only regressions introduced by this task.
+
+When completed:
+- commit the changes
+- push them to origin/main
+
+Then report:
+
+1. Commit hash
+2. Files changed
+3. Tests/checks run and results
+4. Whether any backend/database/schema change is required
+5. Whether the production backend needs to be republished

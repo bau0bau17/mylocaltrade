@@ -163,18 +163,18 @@ function JobModerationDialog({ review }: { review: AdminReview }) {
             </Button>
           </div>
         ) : (
-          <ScrollArea className="flex-1 -mr-4 pr-4">
+          <ScrollArea className="min-h-0 flex-1 -mr-4 pr-4">
             <div className="space-y-4 text-sm">
               <div className="space-y-1">
                 <div className="font-medium">
                   {job.data.conversation.traderBusinessName} · {job.data.conversation.customerName}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-slate-500">
                   {job.data.jobReference ? `${job.data.jobReference} · ` : ""}
                   {job.data.conversation.serviceRequired ?? "Job"}
                   {job.data.conversation.postcode ? ` · ${job.data.conversation.postcode}` : ""}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-slate-500">
                   Hired{" "}
                   {job.data.conversation.customerAcceptedAt
                     ? formatDateTime(job.data.conversation.customerAcceptedAt)
@@ -187,14 +187,14 @@ function JobModerationDialog({ review }: { review: AdminReview }) {
 
               {job.data.enquiry && (
                 <div className="rounded-md bg-muted/30 p-3 space-y-1">
-                  <div className="text-xs font-medium text-foreground/80">Original enquiry</div>
+                  <div className="text-xs font-medium text-slate-700">Original enquiry</div>
                   <p className="whitespace-pre-line">{job.data.enquiry.message}</p>
                 </div>
               )}
 
               {job.data.attachments.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-xs font-medium text-foreground/80">
+                  <div className="text-xs font-medium text-slate-700">
                     Customer photos ({job.data.attachments.length})
                   </div>
                   <div className="grid grid-cols-3 gap-2">
@@ -212,7 +212,7 @@ function JobModerationDialog({ review }: { review: AdminReview }) {
               )}
 
               <div className="space-y-2">
-                <div className="text-xs font-medium text-foreground/80">
+                <div className="text-xs font-medium text-slate-700">
                   Conversation ({job.data.messages.length})
                 </div>
                 {job.data.messages.map((m) => (
@@ -220,17 +220,17 @@ function JobModerationDialog({ review }: { review: AdminReview }) {
                     key={m.id}
                     className={`rounded-md p-2 text-xs ${
                       m.systemMessage
-                        ? "bg-muted/40 text-muted-foreground italic text-center"
+                        ? "bg-muted/40 text-slate-600 italic text-center"
                         : m.senderRole === "trader"
-                          ? "bg-primary/5"
-                          : "bg-muted/30"
+                          ? "bg-primary/5 text-slate-900"
+                          : "bg-muted/30 text-slate-900"
                     }`}
                   >
                     {!m.systemMessage && (
                       <div className="font-medium mb-0.5 capitalize">{m.senderRole}</div>
                     )}
                     <div className="whitespace-pre-line">{m.body}</div>
-                    <div className="text-[10px] text-muted-foreground mt-1">
+                    <div className="text-[10px] text-slate-500 mt-1">
                       {formatDateTime(m.createdAt)}
                     </div>
                   </div>

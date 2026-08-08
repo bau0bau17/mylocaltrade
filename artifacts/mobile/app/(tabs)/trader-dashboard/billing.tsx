@@ -13,13 +13,14 @@ import {
 } from '@workspace/api-client-react';
 import { useSubscription } from '@/lib/revenuecat';
 import { getYearlySavings } from '@/lib/pricing';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 export default function BillingScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
 
-  const { data: status, isLoading, refetch, isRefetching } = useGetSubscriptionStatus({
+  const { data: status, isLoading, refetch } = useGetSubscriptionStatus({
     query: { queryKey: ['/api/subscriptions/status'] },
   });
   const { data: plansData } = useGetSubscriptionPlans();
@@ -33,6 +34,12 @@ export default function BillingScreen() {
   // provider rebuilds that object every render, so depending on it would make
   // this focus effect run on every render and spin an infinite refresh loop.
   const { isSupported: subSupported, refresh: subRefresh } = subscription;
+  // Pull-to-refresh keeps its own gesture-local spinner state (shared app
+  // convention — see usePullToRefresh). Driving the RefreshControl from
+  // react-query's `isRefetching` held the iOS spinner's content inset open on
+  // every visit (the focus effect below refetches each time), which rendered
+  // as a large empty gap between the header and the Current Plan card.
+  const { refreshing, onRefresh } = usePullToRefresh(refetch, ...(subSupported ? [subRefresh] : []));
   useFocusEffect(useCallback(() => {
     refetch();
     if (subSupported) subRefresh();
@@ -136,7 +143,7 @@ export default function BillingScreen() {
     <ScrollView
       style={s.container}
       contentContainerStyle={{ paddingTop: 12, paddingBottom: tabBarHeight + insets.bottom + 32, paddingHorizontal: 20 }}
-      refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.light.primary} />}
     >
       <View style={s.card}>
         <View style={s.planHeader}>
