@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
+import { getActiveMembership } from "../lib/company-membership";
 import { traderProfilesTable, usersTable, subscriptionsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
@@ -52,11 +53,11 @@ router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
 
-    const [trader] = await db
-      .select()
-      .from(traderProfilesTable)
-      .where(eq(traderProfilesTable.userId, userId))
-      .limit(1);
+    // Company Teams: members READ the company profile they act for; edits
+    // remain owner-only (the PUT below resolves by OWNED profile, so
+    // employees fail closed there).
+    const membership = await getActiveMembership(userId);
+    const trader = membership?.profile;
 
     if (!trader) {
       res.status(404).json({ error: "Trader profile not found" });

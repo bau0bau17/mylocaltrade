@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
+import { getActiveMembership } from "../lib/company-membership";
 import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable, quotesTable } from "@workspace/db/schema";
 import { eq, desc, and, isNull, isNotNull, inArray, sql, gte } from "drizzle-orm";
 import { deriveStage } from "../lib/conversation-stage";
@@ -292,15 +293,12 @@ router.get("/enquiries/new-count", authMiddleware, async (req, res) => {
       res.json({ newCount: 0 });
       return;
     }
-    const [profile] = await db
-      .select({ id: traderProfilesTable.id })
-      .from(traderProfilesTable)
-      .where(eq(traderProfilesTable.userId, userId))
-      .limit(1);
-    if (!profile) {
+    const membership = await getActiveMembership(userId);
+    if (!membership) {
       res.json({ newCount: 0 });
       return;
     }
+    const profile = { id: membership.traderProfileId };
     const [row] = await db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(conversationsTable)
@@ -484,16 +482,13 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
     let enquiries;
 
     if (userRole === "trader") {
-      const [profile] = await db
-        .select()
-        .from(traderProfilesTable)
-        .where(eq(traderProfilesTable.userId, userId))
-        .limit(1);
+      const membership = await getActiveMembership(userId);
 
-      if (!profile) {
+      if (!membership) {
         res.json({ enquiries: [], total: 0 });
         return;
       }
+      const profile = membership.profile;
 
       enquiries = await db
         .select({

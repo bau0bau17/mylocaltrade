@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
+import { getActiveMembership } from "../lib/company-membership";
 import {
   reviewsTable,
   enquiriesTable,
@@ -287,15 +288,12 @@ router.get("/traders/:id/reviews", async (req, res) => {
 router.get("/trader/reviews", authMiddleware, traderOnly, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
-    const [profile] = await db
-      .select({ id: traderProfilesTable.id })
-      .from(traderProfilesTable)
-      .where(eq(traderProfilesTable.userId, userId))
-      .limit(1);
-    if (!profile) {
+    const membership = await getActiveMembership(userId);
+    if (!membership) {
       res.json({ reviews: [], totalCount: 0, averageRating: null });
       return;
     }
+    const profile = { id: membership.traderProfileId };
     const rows = await db
       .select({ review: reviewsTable, customerName: usersTable.fullName })
       .from(reviewsTable)

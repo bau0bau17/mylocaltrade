@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
+import { getActiveMembership } from "../lib/company-membership";
 import {
   userReportsTable,
   traderProfilesTable,
@@ -102,11 +103,8 @@ router.post("/reports", authMiddleware, async (req, res) => {
         res.status(400).json({ error: "A conversation is required to report a customer" });
         return;
       }
-      const [traderProfile] = await db
-        .select({ id: traderProfilesTable.id })
-        .from(traderProfilesTable)
-        .where(eq(traderProfilesTable.userId, userId))
-        .limit(1);
+      const membership = await getActiveMembership(userId);
+      const traderProfile = membership ? { id: membership.traderProfileId } : undefined;
       const [conv] = await db
         .select({
           id: conversationsTable.id,

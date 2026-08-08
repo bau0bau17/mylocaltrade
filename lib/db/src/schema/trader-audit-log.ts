@@ -76,6 +76,15 @@ export const TRADER_AUDIT_ACTIONS = [
   "PROFILE_CHANGE_REJECTED",
   "PROFILE_CHANGE_INFO_REQUESTED",
   "PROFILE_CHANGE_CANCELLED",
+  // --- Company Teams (multi-member businesses). userId = the company owner
+  // (the audit anchor), performedBy = the acting member. ---
+  "MEMBER_INVITED",
+  "MEMBER_INVITE_RESENT",
+  "MEMBER_INVITE_CANCELLED",
+  "MEMBER_INVITE_ACCEPTED",
+  "MEMBER_REMOVED",
+  "JOB_CLAIMED",
+  "JOB_REASSIGNED",
 ] as const;
 export type TraderAuditAction = (typeof TRADER_AUDIT_ACTIONS)[number];
 

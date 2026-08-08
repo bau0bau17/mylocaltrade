@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
+import { getActiveMembership } from "../lib/company-membership";
 import {
   conversationsTable,
   messagesTable,
@@ -154,12 +155,10 @@ function serializeMessage(m: MessageRow) {
 
 async function getActorContext(userId: number, userRole: string) {
   if (userRole === "trader") {
-    const [profile] = await db
-      .select({ id: traderProfilesTable.id })
-      .from(traderProfilesTable)
-      .where(eq(traderProfilesTable.userId, userId))
-      .limit(1);
-    return { role: "trader" as const, traderProfileId: profile?.id ?? null };
+    // Company Teams: resolve the profile the caller ACTS FOR (owner or, with
+    // the flag on, an active member) — not merely the profile they own.
+    const membership = await getActiveMembership(userId);
+    return { role: "trader" as const, traderProfileId: membership?.traderProfileId ?? null };
   }
   return { role: userRole as "customer" | "admin", traderProfileId: null };
 }

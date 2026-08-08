@@ -52,6 +52,14 @@ export const conversationsTable = pgTable(
     // Stamped when the customer confirms completion (mirrors customerCompletedAt)
     // — the single moment that unlocks review submission.
     reviewUnlockedAt: timestamp("review_unlocked_at"),
+    // --- Company Teams (additive; Phase 0) ---
+    // The company member currently responsible for this job. traderUserId
+    // keeps its existing meaning (the profile owner) and is NOT repurposed.
+    // While COMPANY_TEAMS_ENABLED is off, a boot-time backfill mirrors this
+    // from traderUserId; once shared leads ship it becomes "claimed by the
+    // first member to message or quote" (NULL = unclaimed).
+    assignedTraderUserId: integer("assigned_trader_user_id").references(() => usersTable.id),
+    assignedAt: timestamp("assigned_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -60,6 +68,7 @@ export const conversationsTable = pgTable(
     traderIdx: index("conv_trader_idx").on(t.traderProfileId, t.lastMessageAt),
     statusIdx: index("conv_status_idx").on(t.status),
     jobReferenceIdx: uniqueIndex("conv_job_reference_unique_idx").on(t.jobReference),
+    assignedTraderIdx: index("conv_assigned_trader_idx").on(t.assignedTraderUserId),
   }),
 );
 

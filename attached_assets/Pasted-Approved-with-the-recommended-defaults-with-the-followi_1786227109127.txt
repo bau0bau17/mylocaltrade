@@ -1,0 +1,78 @@
+Approved with the recommended defaults, with the following clarifications and implementation controls.
+
+PRODUCT DECISIONS
+
+1. A user may belong to only one company in v1: approved.
+
+2. Invitations are limited to new email addresses in v1: approved. Existing customer-account conversion can be designed separately later.
+
+3. Roles: Owner and Employee only. Defer Manager.
+
+4. Business profile, services, working hours, logo, subscription and team management remain owner-only.
+
+5. Employees may read jobs claimed by colleagues but cannot message, quote, book, complete or otherwise act on those jobs unless the owner reassigns the job to them.
+
+6. Review replies remain owner-only.
+
+7. New-lead notifications go to all active company members. Do not create duplicate customer-facing notifications.
+
+8. The owner may reassign a job after hire. Reassignment must:
+- be recorded in the audit log;
+- update the assigned person consistently;
+- create a clear system message visible to the customer;
+- update the conversation header to the newly assigned person;
+- not reset or duplicate the existing quote, booking or job state.
+
+9. When a member is removed or deactivated, their active/open jobs are reassigned to the owner automatically. Record this in the audit log and preserve the complete conversation and job history.
+
+10. Defer “work done by [first name]” on public reviews.
+
+11. Use a maximum of 10 active members per company in v1, with no billing or RevenueCat changes. Please keep this limit configurable rather than scattering a hard-coded value throughout the codebase.
+
+JOB CLAIMING CLARIFICATION
+
+A job must be claimed atomically by the first company member who performs a customer-facing action:
+
+- sends the first outbound message; or
+- submits the company quote.
+
+Merely viewing or opening a lead must not claim it.
+
+After the job is claimed:
+
+- the assigned member may continue acting;
+- other employees have read-only access;
+- the owner may reassign it;
+- another employee must not be able to submit a duplicate quote or send customer-facing messages unless reassigned.
+
+The customer should see:
+
+- the company logo and company name before assignment;
+- the assigned person’s name and personal profile photo, together with the company name, after assignment.
+
+IMPLEMENTATION CONTROL
+
+Do not implement all four phases in one uninterrupted task.
+
+Start with the first Foundation/Phase 0 implementation phase only:
+
+- additive, backward-compatible database foundations;
+- membership/permission helper;
+- feature flag defaulting to OFF;
+- migration/backfill design for existing single-login traders;
+- refactoring only the permission checks included in this phase;
+- tests proving existing users and flows remain unchanged while the flag is OFF.
+
+The migration must be additive and safe for the currently deployed mobile version. Turning the feature flag off should disable the new behaviour, although the additive database structures may remain.
+
+After completing this first phase:
+
+- run the complete relevant test suites;
+- perform a focused security review of the membership helper;
+- commit and push to origin/main;
+- report the commit hash, migrations, files changed and checks run;
+- explain the rollback procedure;
+- confirm that the current production app remains compatible;
+- STOP and wait for approval before implementing invitations, team UI or shared-job behaviour.
+
+Do not deploy or republish production automatically.

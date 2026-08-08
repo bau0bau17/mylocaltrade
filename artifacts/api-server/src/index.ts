@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { bootstrapAdminFromEnv } from "./lib/admin-bootstrap";
+import { ensureCompanyTeamsBackfill } from "./lib/company-backfill";
 import { backfillJobReferences } from "./lib/job-reference-backfill";
 import { backfillRequestGroups } from "./lib/request-group-backfill";
 import { normalizeLegacyEmails } from "./lib/email-normalization-backfill";
@@ -36,6 +37,7 @@ async function start(): Promise<void> {
     assertOpenLinkBaseAtStartup();
     startScheduler();
     void bootstrapAdminFromEnv();
+    void ensureCompanyTeamsBackfill();
     void backfillJobReferences();
     void backfillRequestGroups();
   });

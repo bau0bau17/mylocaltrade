@@ -80,3 +80,6 @@ ADMIN_BOOTSTRAP_EMAIL = "lucian.sabau@serviceproviderltd.co.uk"
 [nix]
 channel = "stable-25_05"
 packages = ["zip"]
+
+[objectStorage]
+defaultBucketID = "replit-objstore-5515aada-a453-4808-bfcb-fd2f2b5f8755"

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
+import { getActiveMembership } from "../lib/company-membership";
 import {
   quotesTable,
   conversationsTable,
@@ -33,12 +34,9 @@ type ConversationRow = typeof conversationsTable.$inferSelect;
 type QuoteRow = typeof quotesTable.$inferSelect;
 
 async function traderProfileIdFor(userId: number): Promise<number | null> {
-  const [profile] = await db
-    .select({ id: traderProfilesTable.id })
-    .from(traderProfilesTable)
-    .where(eq(traderProfilesTable.userId, userId))
-    .limit(1);
-  return profile?.id ?? null;
+  // Company Teams: the profile the caller acts for (owner or active member).
+  const membership = await getActiveMembership(userId);
+  return membership?.traderProfileId ?? null;
 }
 
 // Quotes only make sense while the job can still proceed. Returns an error

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
+import { getActiveMembership } from "../lib/company-membership";
 import {
   bookingsTable,
   conversationsTable,
@@ -57,17 +58,10 @@ async function participantRole(
   userId: number,
 ): Promise<"customer" | "trader" | null> {
   if (conv.customerId === userId) return "customer";
-  const [profile] = await db
-    .select({ id: traderProfilesTable.id })
-    .from(traderProfilesTable)
-    .where(
-      and(
-        eq(traderProfilesTable.id, conv.traderProfileId),
-        eq(traderProfilesTable.userId, userId),
-      ),
-    )
-    .limit(1);
-  return profile ? "trader" : null;
+  // Company Teams: any active member of the conversation's company counts as
+  // its trader participant (owner-only while the flag is off).
+  const membership = await getActiveMembership(userId);
+  return membership?.traderProfileId === conv.traderProfileId ? "trader" : null;
 }
 
 // Bookings only make sense while the hired job is still live.
