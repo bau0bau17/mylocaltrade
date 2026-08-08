@@ -1,0 +1,96 @@
+Phase 0 is approved.
+
+Proceed with Phase 1 only: employee invitations and team management. Do not implement shared job claiming, assignment behaviour or notification fan-out yet.
+
+Use the approved plan and the Phase 0 membership foundation.
+
+PHASE 1 REQUIREMENTS
+
+Owner:
+
+- Add a “Team” section in Account Settings, visible only to the company owner.
+- View active employees and pending invitations.
+- Invite an employee using a new email address.
+- Resend or cancel a pending invitation.
+- Remove/deactivate an employee.
+- Employees must never access billing, subscription, company-logo controls or team management.
+- Do not implement ownership transfer in this phase.
+
+Invitations:
+
+- Brand-new email addresses only in v1.
+- Normalize email addresses consistently.
+- Reject an email already connected to any MyLocalTrade account.
+- Prevent duplicate active/pending invitations.
+- Invitation tokens must remain hashed, single-use and securely generated.
+- Invitations should expire after 7 days.
+- Cancelled, expired or previously accepted invitations must fail safely.
+- Active members plus valid pending invitations must respect the configurable 10-member limit.
+- Reuse the existing email and app-link infrastructure where possible.
+- If secure invitation delivery requires infrastructure that does not currently exist, stop and report the missing requirement rather than creating an insecure workaround.
+
+Employee acceptance:
+
+- The invited person creates their own login and personal profile.
+- Acceptance must connect them only to the inviting company.
+- A user can belong to only one company.
+- Accepting the invitation must be atomic and safe against repeated taps or concurrent requests.
+- The employee must not receive owner permissions.
+
+Removal/security:
+
+- Removing an employee must immediately prevent access to company data, including through an existing authenticated session.
+- Preserve their historical authorship on messages, quotes and other records.
+- Do not delete historical activity.
+- The owner cannot remove or deactivate themselves through the employee-removal flow.
+- No removed membership may be restored by the startup backfill.
+
+Admin:
+
+- Add the planned Members view so Admin can see company owner, active employees, pending invitations, status and relevant dates.
+- Admin visibility must not expose raw invitation tokens or sensitive authentication data.
+
+Audit events:
+
+- Employee invited
+- Invitation resent
+- Invitation cancelled
+- Invitation accepted
+- Employee removed/deactivated
+
+Keep full metadata internally, but show only human-readable action and date/time in the normal Admin audit-log UI.
+
+FEATURE FLAG
+
+Keep all team functionality behind the existing feature flag and keep the production default OFF.
+
+When the flag is OFF:
+
+- Team UI must not appear.
+- Invitation endpoints must fail closed.
+- Existing single-login traders must behave exactly as before.
+
+SCOPE
+
+Do not implement in this phase:
+
+- Shared job claiming
+- Assigned-person customer UI
+- Employee job actions
+- Notification fan-out
+- Manager role
+- Ownership transfer
+- Existing customer-account conversion
+- Billing or RevenueCat changes
+- Public review attribution
+
+After implementation:
+
+- Run the complete API suite with the flag OFF and ON.
+- Run Admin tests and Admin/mobile typechecks.
+- Security-review invitation tokens, acceptance, member removal and permission enforcement.
+- Verify the 10-member limit and all invitation edge cases.
+- Commit and push to origin/main.
+- Report commit hash, files changed, tests, migrations, email/deep-link behaviour and any deployment requirements.
+- Do not publish or deploy production.
+- STOP after Phase 1 and wait for approval before implementing shared jobs.

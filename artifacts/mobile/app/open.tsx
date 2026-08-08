@@ -14,11 +14,12 @@ import { setPendingDeepLink } from "@/lib/pending-deep-link";
 // the user to login — the login screen continues to the destination after a
 // successful sign-in instead of dumping them on the account tab.
 export default function OpenRedirect() {
-  const params = useLocalSearchParams<{ c?: string; t?: string }>();
+  const params = useLocalSearchParams<{ c?: string; t?: string; j?: string }>();
   const { token, isLoading } = useAuth();
 
   const c = typeof params.c === "string" ? params.c : undefined;
   const t = typeof params.t === "string" ? params.t : undefined;
+  const j = typeof params.j === "string" ? params.j : undefined;
 
   let destination: string | null = null;
   if (c && /^[0-9]+$/.test(c)) {
@@ -32,6 +33,17 @@ export default function OpenRedirect() {
   // Wait for the stored session to load before deciding — otherwise a
   // logged-in user would be bounced to login on every cold-start deep link.
   if (isLoading) return null;
+
+  // Team invitation (/open?j=<token>): unlike every other destination this is
+  // a logged-OUT flow — the invited person has no account yet. The join
+  // screen itself handles the already-signed-in case, so no login bounce.
+  if (j && /^[A-Za-z0-9_-]{16,200}$/.test(j)) {
+    return (
+      <Redirect
+        href={{ pathname: "/(tabs)/auth/join-team", params: { token: j } }}
+      />
+    );
+  }
 
   if (!destination) return <Redirect href="/" />;
 

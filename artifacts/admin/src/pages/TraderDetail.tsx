@@ -242,6 +242,34 @@ export default function TraderDetail({ userId }: Props) {
     },
   });
 
+  // Company Teams: owner + employees + invitation pipeline. Separate query so
+  // a failure here never blocks the main detail card.
+  const teamQuery = useQuery<{
+    teamsEnabled: boolean;
+    members: {
+      id: number;
+      userId: number;
+      fullName: string;
+      email: string;
+      role: string;
+      status: string;
+      joinedAt: string;
+      revokedAt: string | null;
+    }[];
+    invites: {
+      id: number;
+      email: string;
+      status: string;
+      expiresAt: string;
+      createdAt: string;
+      acceptedAt: string | null;
+      cancelledAt: string | null;
+    }[];
+  }>({
+    queryKey: [...detailKey, "members"],
+    queryFn: () => api(`/api/admin/traders/${userId}/members`),
+  });
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -456,6 +484,12 @@ export default function TraderDetail({ userId }: Props) {
           <TabsTrigger value="checks" data-testid="tab-checks">Checks</TabsTrigger>
           <TabsTrigger value="documents" data-testid="tab-documents">
             Documents ({documents.length})
+          </TabsTrigger>
+          <TabsTrigger value="team" data-testid="tab-team">
+            Team
+            {Array.isArray(teamQuery.data?.members)
+              ? ` (${teamQuery.data.members.filter((m) => m.status === "ACTIVE").length})`
+              : ""}
           </TabsTrigger>
           {currentUser?.isSuperAdmin && (
             <TabsTrigger value="audit" data-testid="tab-audit">
@@ -878,6 +912,84 @@ export default function TraderDetail({ userId }: Props) {
           </Card>
         </TabsContent>
 
+        <TabsContent value="team" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Team members</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {teamQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : teamQuery.error || !Array.isArray(teamQuery.data?.members) ? (
+                <p className="text-sm text-destructive">Failed to load team members.</p>
+              ) : teamQuery.data.members.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No membership records.</p>
+              ) : (
+                <ul className="divide-y" data-testid="team-members-list">
+                  {teamQuery.data.members.map((m) => (
+                    <li key={m.id} className="py-2.5 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium">
+                          {m.fullName}
+                          <span className="ml-2 text-[11px] rounded px-1.5 py-0.5 bg-muted align-middle">
+                            {m.role === "OWNER" ? "Owner" : "Employee"}
+                          </span>
+                          {m.status !== "ACTIVE" && (
+                            <span className="ml-1.5 text-[11px] rounded px-1.5 py-0.5 bg-destructive/15 text-destructive align-middle">
+                              Removed
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{m.email}</div>
+                      </div>
+                      <div className="text-xs text-muted-foreground whitespace-nowrap text-right">
+                        <div>Joined {formatDateTime(m.joinedAt)}</div>
+                        {m.revokedAt && <div>Removed {formatDateTime(m.revokedAt)}</div>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Invitations</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {teamQuery.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading…</p>
+              ) : teamQuery.error || !Array.isArray(teamQuery.data?.invites) ? (
+                <p className="text-sm text-destructive">Failed to load invitations.</p>
+              ) : teamQuery.data.invites.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No invitations.</p>
+              ) : (
+                <ul className="divide-y" data-testid="team-invites-list">
+                  {teamQuery.data.invites.map((inv) => (
+                    <li key={inv.id} className="py-2.5 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium">{inv.email}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {inv.status === "PENDING"
+                            ? `Pending — expires ${formatDateTime(inv.expiresAt)}`
+                            : inv.status === "ACCEPTED"
+                              ? `Accepted ${inv.acceptedAt ? formatDateTime(inv.acceptedAt) : ""}`
+                              : inv.status === "CANCELLED"
+                                ? `Cancelled ${inv.cancelledAt ? formatDateTime(inv.cancelledAt) : ""}`
+                                : "Expired"}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground whitespace-nowrap">
+                        Invited {formatDateTime(inv.createdAt)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {currentUser?.isSuperAdmin && (
         <TabsContent value="audit" className="mt-4">
           <Card>
@@ -905,7 +1017,12 @@ export default function TraderDetail({ userId }: Props) {
                               {sectionLabel ? ` — ${sectionLabel}` : ""}
                             </div>
                             {e.notes && <div className="text-xs text-muted-foreground mt-0.5">{e.notes}</div>}
-                            {e.details && Object.keys(e.details).length > 0 && (
+                            {/* Team events: the Team tab is the readable view;
+                                the audit line shows action + time only (full
+                                metadata stays stored). */}
+                            {e.details &&
+                              Object.keys(e.details).length > 0 &&
+                              !e.action.startsWith("MEMBER_") && (
                               <pre className="text-[11px] bg-muted/60 rounded p-2 mt-1 overflow-x-auto">
                                 {JSON.stringify(e.details, null, 2)}
                               </pre>

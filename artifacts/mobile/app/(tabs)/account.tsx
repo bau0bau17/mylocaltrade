@@ -243,6 +243,24 @@ export default function AccountScreen() {
     },
   });
 
+  // Company Teams: which menu rows this trader gets. Flag off (the default)
+  // → { enabled: false } and the menu is exactly the classic single-login
+  // layout. Owners additionally get the Team row; employees get a reduced
+  // menu (no business profile / billing / team — those are owner-only).
+  const { data: teamContext } = useQuery({
+    queryKey: ['company', 'team-context'],
+    enabled: isAuthenticated && isTrader && !!adminToken,
+    queryFn: async (): Promise<{ enabled: boolean; role: string | null }> => {
+      const res = await fetch(`${getApiUrl()}/api/company/team-context`, {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      if (!res.ok) return { enabled: false, role: null };
+      return res.json();
+    },
+  });
+  const isEmployee = teamContext?.enabled === true && teamContext.role === 'EMPLOYEE';
+  const showTeamRow = teamContext?.enabled === true && teamContext.role === 'OWNER';
+
   const { data: reminderSettings } = useGetLeadReminderSettings({
     query: {
       queryKey: getGetLeadReminderSettingsQueryKey(),
@@ -432,18 +450,33 @@ export default function AccountScreen() {
         <>
           <Text style={styles.sectionLabel}>Trader Dashboard</Text>
           <View style={[styles.group, { marginHorizontal: 16 }]}>
-            <MenuRow icon="check-circle" label="Onboarding & Verification" sub="Track your verification progress" onPress={() => router.push('/trader-dashboard')} accent pill={onboardingPill} />
-            <View style={styles.separator} />
-            <MenuRow icon="user" label="Edit Profile" onPress={() => router.push('/trader-dashboard/edit-profile')} />
-            <View style={styles.separator} />
-            <MenuRow icon="tool" label="My Services" onPress={() => router.push('/trader-dashboard/services')} />
-            <View style={styles.separator} />
-            <MenuRow icon="image" label="Gallery" onPress={() => router.push('/trader-dashboard/gallery')} />
-            <View style={styles.separator} />
-            <MenuRow icon="message-square" label="Enquiries & Leads" sub="New customer enquiries and job requests" onPress={() => router.push('/trader-dashboard/leads')} />
-            <View style={styles.separator} />
-            <View style={styles.separator} />
-            <MenuRow icon="credit-card" label="Billing & Plan" onPress={() => router.push('/trader-dashboard/billing')} accent />
+            {isEmployee ? (
+              // Employees: shared work surfaces only. Business profile,
+              // services, gallery, billing and team management are owner-only
+              // (the API enforces this too — these rows just avoid dead ends).
+              <MenuRow icon="message-square" label="Enquiries & Leads" sub="New customer enquiries and job requests" onPress={() => router.push('/trader-dashboard/leads')} />
+            ) : (
+              <>
+                <MenuRow icon="check-circle" label="Onboarding & Verification" sub="Track your verification progress" onPress={() => router.push('/trader-dashboard')} accent pill={onboardingPill} />
+                <View style={styles.separator} />
+                <MenuRow icon="user" label="Edit Profile" onPress={() => router.push('/trader-dashboard/edit-profile')} />
+                <View style={styles.separator} />
+                <MenuRow icon="tool" label="My Services" onPress={() => router.push('/trader-dashboard/services')} />
+                <View style={styles.separator} />
+                <MenuRow icon="image" label="Gallery" onPress={() => router.push('/trader-dashboard/gallery')} />
+                <View style={styles.separator} />
+                <MenuRow icon="message-square" label="Enquiries & Leads" sub="New customer enquiries and job requests" onPress={() => router.push('/trader-dashboard/leads')} />
+                {showTeamRow ? (
+                  <>
+                    <View style={styles.separator} />
+                    <MenuRow icon="users" label="Team" sub="Invite and manage your team members" onPress={() => router.push('/trader-dashboard/team')} />
+                  </>
+                ) : null}
+                <View style={styles.separator} />
+                <View style={styles.separator} />
+                <MenuRow icon="credit-card" label="Billing & Plan" onPress={() => router.push('/trader-dashboard/billing')} accent />
+              </>
+            )}
           </View>
         </>
       ) : isAdmin ? null : (
@@ -482,7 +515,9 @@ export default function AccountScreen() {
             thumbColor={Colors.light.white}
           />
         </View>
-        {isTrader ? (
+        {isTrader && !isEmployee ? (
+          // Lead-reminder settings live on the business profile (owner-only
+          // in Phase 1); employees keep the plain push toggle above.
           <>
             <View style={styles.separator} />
             <View style={styles.reminderRow}>

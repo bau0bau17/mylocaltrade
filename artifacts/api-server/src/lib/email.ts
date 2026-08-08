@@ -1628,3 +1628,57 @@ export async function sendAdminAccountDeletionAlertEmail(opts: {
     tag: "account-deletion-admin",
   });
 }
+
+// ---------------------------------------------------------------------------
+// Company Teams — employee invitation
+// ---------------------------------------------------------------------------
+
+/**
+ * Invite someone to join a trader's business as a team member.
+ *
+ * The link carries the RAW single-use invite token (only its SHA-256 hash is
+ * stored server-side) through the /open?j= deep-link bounce page into the
+ * app's join screen. Account-setup mail → category "verification": no
+ * unsubscribe header, same policy as OTP/verification email.
+ */
+export async function sendCompanyInviteEmail(opts: {
+  toEmail: string;
+  businessName: string;
+  inviterName: string;
+  token: string;
+  expiresInDays: number;
+}): Promise<void> {
+  const safeBusiness = escapeHtml(opts.businessName);
+  const safeInviter = escapeHtml(opts.inviterName);
+  const joinUrl = `${getOpenLinkBase()}/open?j=${encodeURIComponent(opts.token)}`;
+  const html = emailShell({
+    title: `Join ${safeBusiness} on MyLocalTrade`,
+    preheader: `${safeInviter} has invited you to join ${safeBusiness}'s team.`,
+    bodyHtml: `
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi,</p>
+      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
+        <strong style="color: #00B4D8;">${safeInviter}</strong> has invited you to join
+        <strong style="color: #00B4D8;">${safeBusiness}</strong> as a team member on MyLocalTrade.
+      </p>
+      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
+        Tap the button below on your phone to create your own login and start seeing the
+        business's enquiries and messages.
+      </p>
+      <div style="text-align: center; margin-bottom: 8px;">
+        <a href="${joinUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
+          Join the team
+        </a>
+      </div>
+      <p style="color: #6B7280; font-size: 12px; line-height: 1.6; margin: 24px 0 0; text-align: center;">
+        This invitation expires in ${opts.expiresInDays} days and can only be used once.
+        If you weren't expecting it, you can safely ignore this email.
+      </p>`,
+  });
+  await dispatchEmail({
+    category: "verification",
+    to: { email: opts.toEmail },
+    subject: `${sanitizeHeaderValue(opts.inviterName)} invited you to join ${sanitizeHeaderValue(opts.businessName)} on MyLocalTrade`,
+    html,
+    tag: "company-invite",
+  });
+}

@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { traderDocumentsTable, traderProfilesTable, TRADER_DOCUMENT_TYPES, type TraderDocumentType } from "@workspace/db/schema";
+import { traderDocumentsTable, traderProfilesTable, companyMembersTable, TRADER_DOCUMENT_TYPES, type TraderDocumentType } from "@workspace/db/schema";
+import type { Request, Response, NextFunction } from "express";
+import { OWNER_ONLY_RESPONSE } from "../lib/company-membership";
 import { and, eq, desc } from "drizzle-orm";
 import { z } from "zod";
 import { authMiddleware, traderOnly } from "../lib/auth";
@@ -176,7 +178,53 @@ export async function reconcileDocumentsState(userId: number) {
 }
 
 // GET /api/trader/documents — list current user's documents + evaluation
-router.get("/trader/documents", authMiddleware, traderOnly, async (req, res) => {
+/**
+ * Company Teams: verification documents are an OWNER-only surface.
+ *
+ * These routes are keyed by the caller's userId (documents belong to the
+ * profile owner), which historically made "role=trader" sufficient. Invited
+ * employees are role=trader too but must never manage documents — neither
+ * while ACTIVE nor after being REVOKED (removal must permanently end all
+ * company-surface access, including with an existing session token).
+ *
+ * Rule: a caller who owns a trader profile passes (the legacy owner path). A
+ * caller with NO owned profile but ANY company_members row is an invite-
+ * created employee → 403. A trader with neither (brand-new account mid-
+ * onboarding, before the business profile step) keeps legacy behaviour.
+ *
+ * Deliberately NOT feature-flag gated: employee rows only exist once teams
+ * ran, and those users must stay locked out even if the flag is later
+ * switched off.
+ */
+async function documentsOwnerGate(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId } = req as AuthenticatedRequest;
+    const [profile] = await db
+      .select({ id: traderProfilesTable.id })
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    if (profile) {
+      next();
+      return;
+    }
+    const [membership] = await db
+      .select({ id: companyMembersTable.id })
+      .from(companyMembersTable)
+      .where(eq(companyMembersTable.userId, userId))
+      .limit(1);
+    if (membership) {
+      res.status(403).json(OWNER_ONLY_RESPONSE);
+      return;
+    }
+    next();
+  } catch (error) {
+    req.log.error({ err: error }, "documents owner gate failed");
+    res.status(500).json({ error: "Failed to load documents" });
+  }
+}
+
+router.get("/trader/documents", authMiddleware, traderOnly, documentsOwnerGate, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const docs = await db
@@ -206,7 +254,7 @@ router.get("/trader/documents", authMiddleware, traderOnly, async (req, res) => 
 });
 
 // POST /api/trader/documents/upload-url — request a presigned PUT URL
-router.post("/trader/documents/upload-url", authMiddleware, traderOnly, async (req, res) => {
+router.post("/trader/documents/upload-url", authMiddleware, traderOnly, documentsOwnerGate, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const body = RequestUploadBody.parse(req.body);
@@ -237,7 +285,7 @@ router.post("/trader/documents/upload-url", authMiddleware, traderOnly, async (r
 });
 
 // POST /api/trader/documents — register a successfully uploaded object
-router.post("/trader/documents", authMiddleware, traderOnly, async (req, res) => {
+router.post("/trader/documents", authMiddleware, traderOnly, documentsOwnerGate, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const body = RegisterDocumentBody.parse(req.body);
@@ -320,7 +368,7 @@ router.post("/trader/documents", authMiddleware, traderOnly, async (req, res) =>
 });
 
 // DELETE /api/trader/documents/:id — remove a pending or rejected document
-router.delete("/trader/documents/:id", authMiddleware, traderOnly, async (req, res) => {
+router.delete("/trader/documents/:id", authMiddleware, traderOnly, documentsOwnerGate, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const id = Number.parseInt(String(req.params.id), 10);
@@ -361,7 +409,7 @@ router.delete("/trader/documents/:id", authMiddleware, traderOnly, async (req, r
 });
 
 // GET /api/trader/documents/:id/file — proxy-download the file (auth required, owner only)
-router.get("/trader/documents/:id/file", authMiddleware, traderOnly, async (req, res) => {
+router.get("/trader/documents/:id/file", authMiddleware, traderOnly, documentsOwnerGate, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const id = Number.parseInt(String(req.params.id), 10);

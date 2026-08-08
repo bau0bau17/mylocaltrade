@@ -178,6 +178,12 @@ const server = http.createServer((req, res) => {
   if (pathname === "/open") {
     const raw = url.searchParams.get("c");
     const id = raw && /^[0-9]+$/.test(raw) ? raw : null;
+    // Company-team invitation: /open?j=<token> carries the single-use invite
+    // token (base64url) into the app's join screen. Charset-checked only —
+    // the API validates the token itself; nothing is logged here.
+    const joinRaw = url.searchParams.get("j");
+    const joinToken =
+      joinRaw && /^[A-Za-z0-9_-]{16,200}$/.test(joinRaw) ? joinRaw : null;
     // Named in-app targets (allowlisted): /open?t=support → contact form.
     const target = url.searchParams.get("t");
     const NAMED_TARGETS = {
@@ -188,7 +194,9 @@ const server = http.createServer((req, res) => {
     };
     const deepLink = id
       ? `mylocaltrade://messages/${id}`
-      : (target && NAMED_TARGETS[target]) || "mylocaltrade://";
+      : joinToken
+        ? `mylocaltrade://auth/join-team?token=${encodeURIComponent(joinToken)}`
+        : (target && NAMED_TARGETS[target]) || "mylocaltrade://";
     const html = openRedirectTemplate.replace(
       /DEEP_LINK_PLACEHOLDER/g,
       deepLink,

@@ -128,6 +128,18 @@ const apiLimiter = rateLimit({
   store: createPgStore("api"),
 });
 
+// Company Teams: the public invitation lookup/accept endpoints take a raw
+// invite token from anyone on the internet — throttle guessing attempts hard
+// (tokens are 256-bit, this is defence in depth).
+const companyInviteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: "Too many attempts. Please try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createPgStore("company-invite"),
+});
+
 // Phase 8: extra per-endpoint limits on top of the global limiter.
 const contactLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -229,6 +241,8 @@ app.use("/api/reports", reportsLimiter);
 app.use("/api/trader/documents/upload-url", documentUploadLimiter);
 app.use("/api/customer/uploads/upload-url", customerUploadLimiter);
 app.use("/api/subscriptions/cancellation-request", cancellationRequestLimiter);
+app.use("/api/company/invites/lookup", companyInviteLimiter);
+app.use("/api/company/invites/accept", companyInviteLimiter);
 app.use("/api", apiLimiter);
 
 // Public, unauthenticated logo endpoint used by transactional emails. Brevo

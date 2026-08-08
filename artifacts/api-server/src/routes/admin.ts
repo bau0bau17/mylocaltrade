@@ -18,6 +18,8 @@ import {
   quotesTable,
   bookingsTable,
   profileChangeRequestsTable,
+  companyMembersTable,
+  companyInvitesTable,
 } from "@workspace/db/schema";
 import { pushTokensTable } from "@workspace/db/schema";
 import { alias } from "drizzle-orm/pg-core";
@@ -43,6 +45,7 @@ import {
   listRecentAttemptsForConversation,
   CONTACT_BYPASS_THRESHOLD,
 } from "../lib/contact-block-tracker";
+import { companyTeamsEnabled } from "../lib/company-membership";
 import {
   sendDocumentRejectedEmail,
   sendTraderApprovedEmail,
@@ -502,6 +505,97 @@ router.get("/admin/traders/:userId", authMiddleware, adminOnly, async (req, res)
     res.status(500).json({ error: "Failed to load trader" });
   }
 });
+
+// GET /api/admin/traders/:userId/members — Company Teams: the owner, every
+// membership row (ACTIVE and REVOKED — history stays visible) and the
+// invitation pipeline for this business. Same sensitivity as the trader
+// detail card, so plain adminOnly. Token hashes are never selected; invite
+// rows expose status + dates only.
+router.get(
+  "/admin/traders/:userId/members",
+  authMiddleware,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const userId = Number.parseInt(String(req.params.userId), 10);
+      if (!Number.isFinite(userId)) {
+        res.status(400).json({ error: "Invalid user id" });
+        return;
+      }
+
+      const [profile] = await db
+        .select({ id: traderProfilesTable.id })
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.userId, userId))
+        .limit(1);
+      if (!profile) {
+        res.status(404).json({ error: "Trader not found" });
+        return;
+      }
+
+      const memberRows = await db
+        .select({
+          member: companyMembersTable,
+          fullName: usersTable.fullName,
+          email: usersTable.email,
+        })
+        .from(companyMembersTable)
+        .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
+        .where(eq(companyMembersTable.traderProfileId, profile.id))
+        .orderBy(
+          sql`case when ${companyMembersTable.role} = 'OWNER' then 0 else 1 end`,
+          sql`case when ${companyMembersTable.status} = 'ACTIVE' then 0 else 1 end`,
+          companyMembersTable.createdAt,
+        );
+
+      const inviteRows = await db
+        .select({
+          id: companyInvitesTable.id,
+          email: companyInvitesTable.email,
+          status: companyInvitesTable.status,
+          invitedByUserId: companyInvitesTable.invitedByUserId,
+          acceptedByUserId: companyInvitesTable.acceptedByUserId,
+          expiresAt: companyInvitesTable.expiresAt,
+          acceptedAt: companyInvitesTable.acceptedAt,
+          cancelledAt: companyInvitesTable.cancelledAt,
+          createdAt: companyInvitesTable.createdAt,
+        })
+        .from(companyInvitesTable)
+        .where(eq(companyInvitesTable.traderProfileId, profile.id))
+        .orderBy(desc(companyInvitesTable.createdAt))
+        .limit(100);
+
+      res.json({
+        teamsEnabled: companyTeamsEnabled(),
+        members: memberRows.map((r) => ({
+          id: r.member.id,
+          userId: r.member.userId,
+          fullName: r.fullName,
+          email: r.email,
+          role: r.member.role,
+          status: r.member.status,
+          joinedAt: r.member.createdAt.toISOString(),
+          revokedAt: r.member.revokedAt?.toISOString() ?? null,
+        })),
+        invites: inviteRows.map((r) => ({
+          ...r,
+          // Lazy expiry: PENDING rows past their date read as EXPIRED.
+          status:
+            r.status === "PENDING" && r.expiresAt.getTime() <= Date.now()
+              ? "EXPIRED"
+              : r.status,
+          expiresAt: r.expiresAt.toISOString(),
+          acceptedAt: r.acceptedAt?.toISOString() ?? null,
+          cancelledAt: r.cancelledAt?.toISOString() ?? null,
+          createdAt: r.createdAt.toISOString(),
+        })),
+      });
+    } catch (error) {
+      req.log.error({ err: error }, "Admin get trader members failed");
+      res.status(500).json({ error: "Failed to load team members" });
+    }
+  },
+);
 
 // GET /api/admin/documents/:id/view-url — short-lived signed URL for in-browser preview
 //

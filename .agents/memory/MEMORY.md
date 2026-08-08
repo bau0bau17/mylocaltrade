@@ -61,4 +61,4 @@
 - [Apple-owned billing policy](apple-owned-billing-policy.md) — all refund/cancel copy defers to Apple (App Store); cooling-off UI+copy removed; backend cancellation-request endpoint/table dormant on purpose; never reintroduce refunds-from-us wording.
 - [Stripe removed Aug 2026](stripe-dormant-web-billing.md) — never launched & code fully removed; only legacy NULL stripe columns remain (drop = future migration); demo-activate is standalone dev-only.
 - [Search radius & geocoding](search-radius-geocoding.md) — sweep-owned trader coords (trusted iff geocodedPostcode==postcode), filter-only rule, cache semantics; prod MUST get the schema push before the new build or ALL trader queries break.
-- [Company membership choke point](company-membership-choke-point.md) — getActiveMembership() is the sole resolver; owner-only routes stay owned-profile-keyed (employees fail closed); flag OFF until claiming ships.
+- [Company membership choke point](company-membership-choke-point.md) — getActiveMembership() sole resolver; owner-only = profile-keyed, but userId-keyed surfaces (docs) need the explicit employee gate; flag OFF until claiming ships.

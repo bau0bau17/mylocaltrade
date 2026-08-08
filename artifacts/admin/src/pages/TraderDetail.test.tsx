@@ -315,7 +315,9 @@ describe("TraderDetail — Checks tab", () => {
     await openChecksTab(user);
 
     const initialGetCalls = apiMock.mock.calls.filter(
-      ([, opts]) => !(opts as { method?: string } | undefined)?.method,
+      ([path, opts]) =>
+        path === `/api/admin/traders/${USER_ID}` &&
+        !(opts as { method?: string } | undefined)?.method,
     ).length;
 
     await user.click(screen.getByTestId("button-run-register-check"));
@@ -338,5 +340,63 @@ describe("TraderDetail — Checks tab", () => {
       ).length;
       expect(getCalls).toBeGreaterThan(initialGetCalls);
     });
+  });
+
+  it("shows team members and invitations in the Team tab", async () => {
+    const detail = buildResponse();
+    apiMock.mockImplementation((path: string) => {
+      if (path === `/api/admin/traders/${USER_ID}/members`) {
+        return Promise.resolve({
+          teamsEnabled: false,
+          members: [
+            {
+              id: 1,
+              userId: USER_ID,
+              fullName: "Owner One",
+              email: "owner@example.com",
+              role: "OWNER",
+              status: "ACTIVE",
+              joinedAt: "2026-05-01T10:00:00.000Z",
+              revokedAt: null,
+            },
+            {
+              id: 2,
+              userId: 999,
+              fullName: "Emp Loyee",
+              email: "emp@example.com",
+              role: "EMPLOYEE",
+              status: "REVOKED",
+              joinedAt: "2026-05-02T10:00:00.000Z",
+              revokedAt: "2026-06-01T10:00:00.000Z",
+            },
+          ],
+          invites: [
+            {
+              id: 5,
+              email: "new-invitee@example.com",
+              status: "PENDING",
+              expiresAt: "2026-08-15T10:00:00.000Z",
+              createdAt: "2026-08-08T10:00:00.000Z",
+              acceptedAt: null,
+              cancelledAt: null,
+            },
+          ],
+        });
+      }
+      return Promise.resolve(detail);
+    });
+
+    const user = userEvent.setup();
+    renderDetail();
+
+    const teamTab = await screen.findByTestId("tab-team");
+    // Count reflects ACTIVE members only.
+    await waitFor(() => expect(teamTab).toHaveTextContent("Team (1)"));
+    await user.click(teamTab);
+
+    expect(await screen.findByText("Owner One")).toBeInTheDocument();
+    expect(screen.getByText("Emp Loyee")).toBeInTheDocument();
+    expect(screen.getByText("emp@example.com")).toBeInTheDocument();
+    expect(screen.getByText("new-invitee@example.com")).toBeInTheDocument();
   });
 });
