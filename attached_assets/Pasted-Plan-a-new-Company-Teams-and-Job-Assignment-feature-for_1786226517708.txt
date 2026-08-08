@@ -1,0 +1,139 @@
+Plan a new “Company Teams and Job Assignment” feature for MyLocalTrade.
+
+PLANNING ONLY
+
+Do not edit code, create migrations, commit or push anything yet.
+
+First inspect the existing database schema, authentication, trader accounts, business profiles, verification, quotes, conversations, notifications, subscriptions and audit logs.
+
+CURRENT ARCHITECTURE FINDING
+
+A trader business currently has one login only. The Owner/Director/Employee onboarding field describes the person completing verification but does not create actual company roles or separate employee accounts.
+
+PRODUCT GOAL
+
+A business owner must be able to invite employees, with each employee having:
+
+- Their own login
+- Their own name and personal profile photo
+- Membership of the owner’s company
+- Access determined by their company role
+- Their own identity recorded when taking actions
+
+The company must retain one shared:
+
+- Business profile
+- Business logo
+- Public trader profile
+- Subscription
+- Leads/jobs workspace
+- Customer-facing company identity
+
+CORE REQUIREMENTS TO PLAN
+
+1. Company and membership model
+
+- Existing trader businesses should become companies without breaking current accounts.
+- The existing trader should become the company owner.
+- Support at minimum Owner and Employee roles.
+- Explain whether an Admin/Manager role should be included now or later.
+- A user must not silently belong to multiple companies unless deliberately supported.
+
+2. Invitations and account access
+
+- Owner can invite an employee securely.
+- Define invite creation, acceptance, expiry, cancellation and resend behaviour.
+- Define what happens if the invited email already has a MyLocalTrade account.
+- Owner can remove or deactivate a member.
+- Removed members must immediately lose company access.
+
+3. Permissions
+
+- Only Owner can edit the company logo.
+- Only Owner can manage members and company-sensitive settings.
+- Specify who can edit the business profile, services, availability and subscription.
+- Enforce permissions server-side, not only by hiding mobile controls.
+- Existing single-account traders must continue working normally.
+
+4. Leads, quotes and job claiming
+
+- Eligible company members may see shared company leads.
+- The first member who submits the company quote becomes the assigned person for that job.
+- Quote claiming must be atomic to prevent two employees from claiming simultaneously.
+- Only one company quote should exist for the same enquiry/conversation.
+- Other members should see “Quote submitted by [name]” or “Job claimed by [name]”.
+- Define whether the owner can reassign a job and how reassignment is recorded.
+- Define what happens if the assigned employee is removed or deactivated.
+
+5. Customer-facing identity
+
+- Search cards and public profiles continue showing the company logo.
+- Conversation headers show the assigned person’s name and personal profile photo.
+- The company name should remain visible so the customer understands which business the person represents.
+- Personal photos must follow the existing conversation privacy rules.
+- Define the customer experience before a company member has claimed the job.
+
+6. Job lifecycle
+
+Preserve assignment consistently through:
+
+- Quote
+- Hire
+- Appointment
+- In-progress work
+- Completion
+- Review
+- Dispute/admin inspection
+
+Explain which actions may be performed by the assigned employee, owner and other company members.
+
+7. Notifications and visibility
+
+- Define which members receive new-lead notifications.
+- After a job is claimed, define which notifications go to the assigned person, owner and other employees.
+- Avoid duplicate notifications to the customer.
+- Define whether other company members can read and/or participate in the conversation.
+
+8. Audit and security
+
+Record human-readable audit events for:
+
+- Member invited/accepted/removed
+- Role changed
+- Job claimed/reassigned
+- Quote submitted
+- Sensitive company-setting changes
+
+Keep detailed metadata internally without exposing raw payloads in the normal Admin audit-log UI.
+
+9. Subscription and limits
+
+- Determine whether employees are included in the existing company subscription.
+- Recommend whether member/seat limits are needed now.
+- Do not change billing behaviour without explicitly identifying the impact.
+
+10. Migration and compatibility
+
+- Provide a safe migration path for all existing trader accounts.
+- Avoid breaking existing quotes, conversations, jobs, reviews or subscriptions.
+- Explain rollback considerations.
+- Identify any production backend deployment, database migration, mobile build or Admin deployment required.
+
+DELIVERABLE
+
+Return a detailed implementation plan only, containing:
+
+1. Current architecture findings
+2. Proposed database/schema changes
+3. Backend/API changes
+4. Mobile and Admin UI changes
+5. Permission matrix for Owner and Employee
+6. Job-claiming and reassignment rules
+7. Migration/backfill approach
+8. Concurrency and security risks
+9. Testing and regression plan
+10. Recommended implementation phases
+11. Estimated complexity and highest-risk areas
+12. Any product decisions that require confirmation before implementation
+
+Do not implement anything until I approve the plan.
