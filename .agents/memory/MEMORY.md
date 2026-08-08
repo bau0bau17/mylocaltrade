@@ -22,6 +22,7 @@
 - [promo-video typecheck pre-broken](promo-video-typecheck-pre-broken.md) — `artifacts/promo-video` fails `tsc` (no DOM lib + framer-motion Variant types); workspace-wide typecheck/build fails there regardless of your change.
 - [wouter query string](wouter-query-string.md) — wouter v3 useLocation() is pathname-only; read query params via useSearch() (parsing the location string drops incoming ?filters and resets to default).
 - [Admin portal identity space](admin-portal-identity-space.md) — admin rows are a separate identity space; per-space partial unique email indexes; kind-scoped lookups; never convert rows between spaces.
+- [Admin white-dialog text colors](admin-white-dialog-text-colors.md) — admin is dark-themed; on forced-white dialogs, muted-foreground/foreground-based classes render light-on-white; use explicit slate classes.
 - [Admin account bootstrap](admin-account-bootstrap.md) — no admin self-signup; admins are promoted. First prod admin via secret-gated startup bootstrap (ADMIN_BOOTSTRAP_EMAIL), since prod DB is read-only & every admin route is adminOnly.
 - [Production public base URL](prod-public-base-url.md) — email/link host must prefer REPLIT_DOMAINS; REPLIT_DEV_DOMAIN is dev-only & absent in deployment, so links silently fall back to localhost in prod.
 - [Email deliverability (Brevo)](email-deliverability.md) — spam/unverified = DNS auth (SPF/DKIM/DMARC), not code; deferred code boost = plain-text part; NO List-Unsubscribe on OTP/verification mail.
@@ -34,7 +35,7 @@
 - [Email OTP verification](email-otp-verification.md) — in-app code is primary, link is fallback; share ONE finalize helper; unauthenticated verify must collapse all non-lockout failures to one generic 400 (+dummy bcrypt) to avoid enumeration.
 - [Email case-insensitivity](email-case-insensitivity.md) — all email lookups lower()-compare; prod has a legacy case-variant duplicate pair, so lookups need exact-casing-first ordering & NO unique lower(email) index.
 - [Deletion email release](deletion-email-release.md) — every terminal deletion path must free the email (users + trader_profiles mirror, `.invalid` placeholder), keep audits; reopen check scans ALL case-variants; TOCTOU guard in releasePriorEmail.
-- [Pull-to-refresh conventions](pull-to-refresh-conventions.md) — RefreshControl must cover empty-state branches too; scope refresh to the screen's refetch fns, not all active queries.
+- [Pull-to-refresh conventions](pull-to-refresh-conventions.md) — cover empty states; scope refetch fns; never drive RefreshControl from isRefetching (focus refetch holds the iOS inset open = blank top gap).
 - [Legal versioning & re-acceptance](legal-versioning-reacceptance.md) — versions live server-side; re-acceptance is trader-only (users table has no version fields); legal copy must stay stage-accurate (contact hidden pre-hire, RCS trader-only).
 - [Trader phone OTP — Twilio Verify](trader-phone-otp-twilio.md) — SMS via Twilio Verify (email fallback); phoneOtpHash=null ⇒ Twilio owns code; backend-only (mobile fetch, keep response shape); per-number rate limit lives in the handler on canonical E.164, not middleware.
 - [Customer phone verification gate](customer-phone-gate.md) — first-contact 403 PHONE_VERIFICATION_REQUIRED gate; Twilio helpers must all be kind-aware; new send-otp paths need explicit IP limiter entry.

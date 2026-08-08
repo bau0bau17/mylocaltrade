@@ -5,8 +5,9 @@ description: How pull-to-refresh is wired across the Expo app and the traps that
 
 Shared hook `usePullToRefresh(...refetchFns)` — pass the screen's own query `refetch` functions to scope the refresh; with no args it falls back to `queryClient.refetchQueries({ type: 'active' })` (only acceptable for screens with many nested queries, e.g. account and trader profile).
 
-**Why:** review failed twice on the same gaps:
+**Why:** review failed twice on the same gaps, and a third trap shipped to TestFlight:
 1. Attaching `RefreshControl` only to the data-branch FlatList leaves empty states unrefreshable — wrap the empty-state View in a `ScrollView` with `refreshControl` and `contentContainerStyle={{ flexGrow: 1 }}` (or use `ListEmptyComponent`).
 2. Global `refetchQueries({type:'active'})` refetches other mounted tabs' queries — scope per screen where practical.
+3. NEVER drive `RefreshControl` from react-query's `isRefetching` on a screen whose `useFocusEffect` refetches its own query: every visit programmatically flips `refreshing=true`, and on iOS that holds the spinner's content inset open — it renders as a large permanent blank gap at the top of the ScrollView (no spinner visible). This was the "empty space above the Current Plan card" TestFlight bug on the billing screen. The hook's gesture-local `refreshing` state exists precisely so background refetches never touch the control.
 
 **How to apply:** any new data screen gets `RefreshControl` (tintColor `Colors.light.primary`) on both the populated and empty branches, with scoped refetch fns. Deliberately excluded: edit forms (edit-profile, business-profile, services, gallery — useEffect syncs would clobber in-progress edits), static/legal pages, auth forms.
