@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { Feather, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { distanceAwayLabel } from '@/constants/searchRadius';
+import { objectImageUrl } from '@/lib/api-url';
 import type { TraderProfile } from '@workspace/api-client-react';
 
 const PLAN_STYLES = {
@@ -79,6 +80,10 @@ export function TraderCard({
   searchLocation?: string | null;
 }) {
   const router = useRouter();
+  // Business logo (public brand asset, served via the gallery-file route).
+  // Falls back to the initials tile when no logo is set or the image fails.
+  const [logoFailed, setLogoFailed] = useState(false);
+  const logoUri = logoFailed ? undefined : objectImageUrl(trader.logoUrl);
   const matchingArea = findMatchingServiceArea(trader.serviceAreas, searchLocation);
   const locationLabel = matchingArea ? `Serves ${matchingArea}` : trader.town;
   // Server-computed distance from the search anchor (null/absent when the
@@ -131,9 +136,18 @@ export function TraderCard({
       accessibilityHint="View trader profile"
     >
       <View style={styles.header}>
-        <View style={styles.avatarPlaceholder}>
-          <Text style={styles.avatarLetter}>{trader.businessName.charAt(0)}</Text>
-        </View>
+        {logoUri ? (
+          <Image
+            source={{ uri: logoUri }}
+            style={styles.logoImage}
+            resizeMode="cover"
+            onError={() => setLogoFailed(true)}
+          />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarLetter}>{trader.businessName.charAt(0)}</Text>
+          </View>
+        )}
         <View style={styles.headerInfo}>
           <View style={styles.nameRow}>
             <Text style={[styles.businessName, styles.nameShrink]} numberOfLines={2}>{trader.businessName}</Text>
@@ -242,6 +256,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+  },
+  // Same footprint as the initials tile so the card layout is identical
+  // whether or not a business logo exists.
+  logoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
   },
   avatarLetter: {
     fontSize: 18,

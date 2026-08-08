@@ -36,6 +36,10 @@ export default function TraderProfileScreen() {
   const { data: trader, isLoading, error } = useGetTrader(Number(id));
   const specialisms = detectSpecialisms(trader?.mainCategory, trader?.additionalServices);
   const [verifiedHelpVisible, setVerifiedHelpVisible] = useState(false);
+  // Business logo in the profile header (public brand asset via the
+  // gallery-file route); initials tile remains the fallback when no logo is
+  // set or the image fails to load.
+  const [logoFailed, setLogoFailed] = useState(false);
 
   // Only fetch the saved list when the user is logged in as a customer.
   const { data: savedData } = useGetSavedTraders({
@@ -155,9 +159,19 @@ export default function TraderProfileScreen() {
               )}
             </Pressable>
           </View>
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>{trader.businessName.charAt(0)}</Text>
-          </View>
+          {!logoFailed && objectImageUrl(trader.logoUrl) ? (
+            <Image
+              source={{ uri: objectImageUrl(trader.logoUrl)! }}
+              style={styles.logoAvatar}
+              resizeMode="cover"
+              onError={() => setLogoFailed(true)}
+              accessibilityLabel={`${trader.businessName} logo`}
+            />
+          ) : (
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatarText}>{trader.businessName.charAt(0)}</Text>
+            </View>
+          )}
           <Text style={styles.businessName}>{trader.businessName}</Text>
           <View style={styles.badges}>
             <View style={styles.categoryBadge}>
@@ -643,6 +657,17 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: Colors.light.primary,
+  },
+  // Same footprint as avatarContainer so the header layout is unchanged
+  // whether or not a business logo exists.
+  logoAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
   },
   businessName: {
     fontSize: 22,
