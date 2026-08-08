@@ -1,0 +1,79 @@
+Phase 1 is provisionally approved. Before Phase 2, perform one tightly scoped invitation-link security and fallback review.
+
+Inspect first. Do not redesign the team feature or start job claiming.
+
+RAW TOKEN PROTECTION
+
+The invitation token travels through `/open?j=<token>`. Verify that the raw token is never persisted or exposed in:
+
+- Database records
+- Audit metadata
+- Server/request logs
+- Error logs
+- Analytics
+- Crash reporting
+- Admin portal
+- Browser referrer headers
+- Rendered page content after it has been captured
+- Debug output
+
+The landing/open route should remove the sensitive query value from the visible browser URL as soon as safely possible.
+
+Do not load third-party analytics or unnecessary third-party resources on a page containing the invitation token.
+
+LINK-SCANNER SAFETY
+
+Email security scanners and link-preview bots may open invitation links automatically.
+
+A GET request to `/open?j=...` must never:
+
+- accept the invitation;
+- consume the token;
+- create the employee;
+- invalidate the invitation.
+
+Acceptance must happen only through the explicit authenticated/validated POST action initiated by the invitee.
+
+LINK AND FALLBACK BEHAVIOUR
+
+Verify:
+
+- App installed → opens the correct Join a team screen.
+- App not installed → displays a safe web fallback instead of an error, redirect loop or blank page.
+- Invalid, expired, cancelled and already-used links display safe human-readable states.
+- No open-redirect vulnerability exists.
+- The raw token is not exposed in fallback links.
+- The future App Store destination can be configured without changing invitation security.
+- Do not publish a public TestFlight link.
+
+ACCEPTANCE SECURITY
+
+Confirm:
+
+- The invited email cannot be changed during acceptance.
+- Existing-account emails remain rejected in v1.
+- Token comparison and lookup are secure.
+- Rate limits cover invite validation and acceptance.
+- Password validation reuses the existing account rules.
+- The session is created only after membership acceptance completes successfully.
+- Concurrent or repeated acceptance remains safe.
+- A removed employee cannot reuse the original invitation.
+- Feature flag OFF continues to fail closed.
+
+TESTING
+
+Add or confirm focused tests for:
+
+- GET/link-scanner requests not consuming tokens
+- URL/log/audit token leakage
+- Repeated and concurrent acceptance
+- Invalid/expired/cancelled/used tokens
+- Feature flag OFF
+- Open-redirect attempts
+- Removed-member token reuse
+
+Fix only confirmed issues from this review.
+
+Then run the relevant API, mobile, Admin and website checks. If changes are required, commit and push them to origin/main. If no changes are required, report the evidence and tests supporting that conclusion.
+
+Do not deploy production and do not begin Phase 2. Stop and report.

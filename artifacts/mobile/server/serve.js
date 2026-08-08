@@ -203,7 +203,12 @@ const server = http.createServer((req, res) => {
     );
     res.writeHead(200, {
       "content-type": "text/html; charset=utf-8",
+      // The URL may carry a single-use invitation token: never cache the
+      // response, and never let the token leak via the Referer header when
+      // the visitor follows the fallback link (belt-and-braces with the
+      // template's <meta name="referrer">).
       "cache-control": "no-store",
+      "referrer-policy": "no-referrer",
     });
     res.end(html);
     return;

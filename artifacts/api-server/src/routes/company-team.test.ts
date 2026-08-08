@@ -884,3 +884,128 @@ describe("verification documents are owner-only", () => {
     expect(bare.status).toBe(200);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Invitation-link security review (post-Phase-1 audit)
+// ---------------------------------------------------------------------------
+
+import { sql as sqlq } from "drizzle-orm";
+
+describe("invitation link security", () => {
+  const lookup = (token: string) =>
+    request(app).post("/api/company/invites/lookup").send({ token });
+  const accept = (token: string, fullName = "Alex Employee", password = "Password123!") =>
+    request(app).post("/api/company/invites/accept").send({ token, fullName, password });
+
+  beforeAll(async () => {
+    // These tests add lookup/accept traffic on top of the earlier suites;
+    // reset this limiter's window so the run stays deterministic.
+    await db.execute(sqlq`delete from rate_limit_hits where key like '%company-invite%'`);
+  });
+
+  it("lookups are read-only: scanner-style repeated validation never consumes the token", async () => {
+    setFlag(true);
+    const raw = `scanner-${SUFFIX}-000000000000`;
+    const email = emailFor("scanner");
+    const inviteId = await insertInvite({
+      profileId: ctx.companyProfileId,
+      email,
+      rawToken: raw,
+      invitedBy: ctx.ownerUserId,
+    });
+
+    // A mail scanner / preview bot may "open" the link many times. Lookup is
+    // the only unauthenticated read the app performs — it must not mutate.
+    for (let i = 0; i < 3; i++) {
+      const res = await lookup(raw);
+      expect(res.status).toBe(200);
+      expect(res.body.email).toBe(email.toLowerCase());
+    }
+    expect((await getInvite(inviteId)).status).toBe("PENDING");
+
+    // The real invitee still gets in afterwards.
+    const res = await accept(raw, "Scanned Survivor");
+    expect(res.status).toBe(201);
+    createdUserIds.push(res.body.user.id);
+  });
+
+  it("raw tokens never appear in invite rows, audit details, or the accept response", async () => {
+    setFlag(true);
+    const raw = `leak-probe-${SUFFIX}-0000000000`;
+    const email = emailFor("leak-probe");
+    const inviteId = await insertInvite({
+      profileId: ctx.companyProfileId,
+      email,
+      rawToken: raw,
+      invitedBy: ctx.ownerUserId,
+    });
+
+    const acceptRes = await accept(raw, "Leak Probe");
+    expect(acceptRes.status).toBe(201);
+    createdUserIds.push(acceptRes.body.user.id);
+
+    // The response carries a session JWT — never the invitation token.
+    expect(JSON.stringify(acceptRes.body)).not.toContain(raw);
+
+    // Stored row: SHA-256 hex only, raw token nowhere in the record.
+    const inviteRow = await getInvite(inviteId);
+    expect(inviteRow.tokenHash).toBe(sha256Hex(raw));
+    expect(inviteRow.tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(inviteRow)).not.toContain(raw);
+
+    // No MEMBER_* audit row for this company ever captures a token.
+    const actions = [
+      "MEMBER_INVITED",
+      "MEMBER_INVITE_RESENT",
+      "MEMBER_INVITE_CANCELLED",
+      "MEMBER_INVITE_ACCEPTED",
+      "MEMBER_REMOVED",
+    ];
+    for (const action of actions) {
+      for (const row of await auditRows(action, ctx.ownerUserId)) {
+        expect(JSON.stringify(row.details ?? {})).not.toContain(raw);
+      }
+    }
+  });
+
+  it("a removed employee's original invitation link is permanently dead", async () => {
+    setFlag(true);
+    const raw = `remove-reuse-${SUFFIX}-00000000`;
+    const email = emailFor("remove-reuse");
+    await insertInvite({
+      profileId: ctx.companyProfileId,
+      email,
+      rawToken: raw,
+      invitedBy: ctx.ownerUserId,
+    });
+
+    const acceptRes = await accept(raw, "Brief Tenure");
+    expect(acceptRes.status).toBe(201);
+    const newUserId = acceptRes.body.user.id as number;
+    createdUserIds.push(newUserId);
+
+    const [memberRow] = await db
+      .select()
+      .from(companyMembersTable)
+      .where(eq(companyMembersTable.userId, newUserId));
+    const removeRes = await request(app)
+      .post(`/api/company/members/${memberRow.id}/remove`)
+      .set("Authorization", `Bearer ${ctx.ownerToken}`);
+    expect(removeRes.status).toBe(200);
+
+    // The original emailed link is dead in both directions, with the same
+    // generic bodies as any other invalid invite (no state oracle).
+    const lk = await lookup(raw);
+    expect(lk.status).toBe(404);
+    const re = await accept(raw, "Second Attempt");
+    expect(re.status).toBe(400);
+    expect(re.body).toEqual({ error: "This invitation is no longer valid." });
+
+    // And no duplicate account appeared for the invited address.
+    const users = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, email.toLowerCase()));
+    expect(users.length).toBe(1);
+  });
+});
