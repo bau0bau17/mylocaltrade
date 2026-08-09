@@ -2663,7 +2663,7 @@ export const GetConversationsResponse = zod.object({
         .string()
         .nullish()
         .describe(
-          "Company logo object path, shown as the customer-facing identity\nbefore a member claims the job. Only populated on the conversation\ndetail response while teams are enabled; load via the public\ngallery-file endpoint.\n",
+          "Business logo object path of the trader company; load via the\npublic gallery-file endpoint. Populated on customer-facing\nresponses only: always on the customer's conversation list rows\n(independent of Company Teams), and on the conversation detail\nresponse while teams are enabled (customer-facing identity before\na member claims the job). Trader-side list rows are always null.\n",
         ),
       viewerCanAct: zod
         .boolean()
@@ -2805,7 +2805,7 @@ export const GetConversationResponse = zod.object({
       .string()
       .nullish()
       .describe(
-        "Company logo object path, shown as the customer-facing identity\nbefore a member claims the job. Only populated on the conversation\ndetail response while teams are enabled; load via the public\ngallery-file endpoint.\n",
+        "Business logo object path of the trader company; load via the\npublic gallery-file endpoint. Populated on customer-facing\nresponses only: always on the customer's conversation list rows\n(independent of Company Teams), and on the conversation detail\nresponse while teams are enabled (customer-facing identity before\na member claims the job). Trader-side list rows are always null.\n",
       ),
     viewerCanAct: zod
       .boolean()

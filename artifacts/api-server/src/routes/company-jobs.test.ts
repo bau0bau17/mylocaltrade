@@ -799,6 +799,26 @@ describe("assigned-person identity (flag ON)", () => {
     expect(conv.viewerCanAct == null).toBe(true);
   });
 
+  it("conversations list: customer rows carry the business logo, trader rows never do", async () => {
+    const convId = await seedLead();
+
+    const asCustomer = await request(app)
+      .get(`/api/conversations`)
+      .set("Authorization", `Bearer ${customerToken}`);
+    expect(asCustomer.status).toBe(200);
+    const customerRow = (asCustomer.body.conversations as Array<{ id: number; traderLogoUrl: string | null }>)
+      .find((c) => c.id === convId);
+    expect(customerRow?.traderLogoUrl).toBe(LOGO_PATH());
+
+    const asMember = await request(app)
+      .get(`/api/conversations`)
+      .set("Authorization", `Bearer ${empOneToken}`);
+    expect(asMember.status).toBe(200);
+    const memberRow = (asMember.body.conversations as Array<{ id: number; traderLogoUrl: string | null }>)
+      .find((c) => c.id === convId);
+    expect(memberRow?.traderLogoUrl).toBeNull();
+  });
+
   it("post-claim: personal identity of the assignee, viewerCanAct steers members", async () => {
     const convId = await seedLead();
     const claim = await sendMsg(convId, empOneToken);
@@ -934,6 +954,28 @@ describe("flag OFF regression", () => {
 
     const asOwner = (await getDetail(convId, ownerBToken)).body.conversation;
     expect(asOwner.viewerCanAct).toBe(true);
+  });
+
+  it("customer list rows still carry the business logo with teams disabled", async () => {
+    // The logo is public business identity, independent of the teams flag —
+    // only the DETAIL route's logo field stays flag-gated (legacy shape).
+    const convId = await seedLead({ assignedTo: ownerA });
+
+    const asCustomer = await request(app)
+      .get(`/api/conversations`)
+      .set("Authorization", `Bearer ${customerToken}`);
+    expect(asCustomer.status).toBe(200);
+    const row = (asCustomer.body.conversations as Array<{ id: number; traderLogoUrl: string | null }>)
+      .find((c) => c.id === convId);
+    expect(row?.traderLogoUrl).toBe(LOGO_PATH());
+
+    const asOwnerList = await request(app)
+      .get(`/api/conversations`)
+      .set("Authorization", `Bearer ${ownerAToken}`);
+    expect(asOwnerList.status).toBe(200);
+    const ownerRow = (asOwnerList.body.conversations as Array<{ id: number; traderLogoUrl: string | null }>)
+      .find((c) => c.id === convId);
+    expect(ownerRow?.traderLogoUrl).toBeNull();
   });
 });
 

@@ -74,10 +74,12 @@ trader-side "Claimed by …" banners. Null while unclaimed or with
 teams disabled.
  */
   assignedTraderName?: string | null;
-  /** Company logo object path, shown as the customer-facing identity
-before a member claims the job. Only populated on the conversation
-detail response while teams are enabled; load via the public
-gallery-file endpoint.
+  /** Business logo object path of the trader company; load via the
+public gallery-file endpoint. Populated on customer-facing
+responses only: always on the customer's conversation list rows
+(independent of Company Teams), and on the conversation detail
+response while teams are enabled (customer-facing identity before
+a member claims the job). Trader-side list rows are always null.
  */
   traderLogoUrl?: string | null;
   /** Trader-side viewers only: whether the caller may act on this job

@@ -6,6 +6,7 @@ import {
   StyleSheet,
   FlatList,
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
 } from "react-native";
@@ -17,6 +18,7 @@ import Colors from "@/constants/colors";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { JobReferenceSearch } from "@/components/JobReferenceSearch";
 import { matchesLeadSearch } from "@/lib/job-reference-search";
+import { objectImageUrl } from "@/lib/api-url";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useGetConversations,
@@ -172,6 +174,9 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
   // name — client-side over the already-loaded list; clearing restores it.
   const conversations: ConversationSummary[] = data?.conversations ?? [];
   const [jobQuery, setJobQuery] = React.useState("");
+  // Conversation ids whose business logo failed to load — those rows fall
+  // back to the initials tile (customer list only; trader rows never get one).
+  const [failedLogos, setFailedLogos] = React.useState<Set<number>>(new Set());
   const trimmedJobQuery = jobQuery.trim();
   const filteredConversations = React.useMemo(
     () =>
@@ -307,6 +312,13 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
           const jobLine = [item.serviceRequired, item.jobReference]
             .filter(Boolean)
             .join(" · ");
+          // Customer rows show the trader company's business logo in place of
+          // the initials tile; no logo (or a failed load) keeps the initials.
+          // Trader-side rows show the customer, so they never use it.
+          const logoUri =
+            !isTrader && !failedLogos.has(item.id)
+              ? objectImageUrl(item.traderLogoUrl)
+              : undefined;
           const stageLabel = stagePillLabel(item.stage, item.status);
           const statusSpoken = stageLabel.toLowerCase();
           const unreadPhrase = unread
@@ -354,9 +366,19 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
               accessibilityHint="Open conversation"
             >
               <View style={[styles.avatar, unread && styles.avatarUnread, muted && styles.avatarMuted]}>
-                <Text style={[styles.avatarText, muted && styles.mutedDim]}>
-                  {otherName?.charAt(0)?.toUpperCase() ?? "?"}
-                </Text>
+                {logoUri ? (
+                  <Image
+                    source={{ uri: logoUri }}
+                    style={[styles.avatarLogo, muted && styles.avatarLogoMuted]}
+                    onError={() =>
+                      setFailedLogos((prev) => new Set(prev).add(item.id))
+                    }
+                  />
+                ) : (
+                  <Text style={[styles.avatarText, muted && styles.mutedDim]}>
+                    {otherName?.charAt(0)?.toUpperCase() ?? "?"}
+                  </Text>
+                )}
                 {unread ? (
                   <View style={[styles.badge, muted && styles.badgeMuted]}>
                     <Text style={styles.badgeText}>{item.unreadCount}</Text>
@@ -549,6 +571,8 @@ const styles = StyleSheet.create({
   },
   avatarUnread: { backgroundColor: Colors.light.primary },
   avatarText: { color: Colors.light.text, fontWeight: "700", fontSize: 18 },
+  avatarLogo: { width: 48, height: 48, borderRadius: 14 },
+  avatarLogoMuted: { opacity: 0.55 },
   badge: {
     position: "absolute",
     top: -4,

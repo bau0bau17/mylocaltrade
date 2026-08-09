@@ -117,8 +117,9 @@ function serializeConversation(
     unreadCount: number;
     viewerRole: "customer" | "trader";
     hasReview?: boolean | null;
-    // Company Teams (Phase 2) — all additive, flag-aware:
-    // company logo for the pre-claim customer header (flag ON only).
+    // Business logo of the trader company. Customer-facing surfaces only:
+    // list rows (customer viewer) and the chat header (detail route, teams
+    // flag ON, pre-claim). Trader-side list rows always get null.
     traderLogoUrl?: string | null;
     // Full name of the assigned member for headers/banners (flag ON only).
     assignedTraderName?: string | null;
@@ -292,6 +293,7 @@ router.get("/conversations", authMiddleware, async (req, res) => {
         customerName: usersTable.fullName,
         traderBusinessName: traderProfilesTable.businessName,
         traderVerificationStatus: traderProfilesTable.verificationStatus,
+        traderLogoUrl: traderProfilesTable.logoUrl,
         assignedTraderName: assignedUsers.fullName,
       })
       .from(conversationsTable)
@@ -302,7 +304,7 @@ router.get("/conversations", authMiddleware, async (req, res) => {
       .orderBy(desc(conversationsTable.lastMessageAt));
 
     const teamsOn = companyTeamsEnabled();
-    const conversations = rows.map(({ conv, customerName, traderBusinessName, traderVerificationStatus, assignedTraderName }) =>
+    const conversations = rows.map(({ conv, customerName, traderBusinessName, traderVerificationStatus, traderLogoUrl, assignedTraderName }) =>
       serializeConversation(conv, {
         customerName,
         customerId: conv.customerId,
@@ -310,6 +312,11 @@ router.get("/conversations", authMiddleware, async (req, res) => {
         traderVerified: traderVerificationStatus === "VERIFIED",
         unreadCount: actor.role === "customer" ? conv.customerUnreadCount : conv.traderUnreadCount,
         viewerRole: actor.role === "customer" ? "customer" : "trader",
+        // Business logo for the customer's conversation rows. Logos are public
+        // business identity (served by the public gallery-file route), so this
+        // is independent of the Company Teams flag. Trader-side rows show the
+        // customer, not the company — they stay null (legacy shape).
+        traderLogoUrl: actor.role === "customer" ? traderLogoUrl : null,
         assignedTraderName: teamsOn ? assignedTraderName : null,
         viewerCanAct:
           actor.role === "trader" ? traderViewerCanAct(conv, userId) : null,
