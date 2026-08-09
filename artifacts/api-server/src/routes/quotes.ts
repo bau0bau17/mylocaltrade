@@ -12,6 +12,7 @@ import {
   jobClaimedByOtherBody,
   logJobClaimed,
   logCompanyQuoteSubmitted,
+  requireAssignedInTx,
 } from "../lib/job-assignment";
 import {
   quotesTable,
@@ -19,7 +20,7 @@ import {
   traderProfilesTable,
   enquiriesTable,
 } from "@workspace/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { sendPushToUser } from "../lib/push-notifications";
@@ -69,16 +70,27 @@ function validateValidUntil(validUntil: Date | null | undefined, res: Parameters
 }
 
 // Advance the trader-side pipeline status + linked enquiry the same way the
-// manual "QUOTED" status update does, so review eligibility unlocks.
-async function markConversationQuoted(conv: ConversationRow) {
-  if (conv.traderStatus !== "COMPLETED") {
-    await db
-      .update(conversationsTable)
-      .set({ traderStatus: "QUOTED", updatedAt: new Date() })
-      .where(eq(conversationsTable.id, conv.id));
-  }
+// manual "QUOTED" status update does, so review eligibility unlocks. Runs
+// INSIDE the quote transaction (which already holds the conversation row
+// lock via the assignment guard), so it can never land after a concurrent
+// reassignment/cancel has been committed. The COMPLETED check is done in SQL
+// — not on the caller's pre-transaction snapshot — so a job that reached
+// COMPLETED concurrently never regresses to QUOTED.
+async function markConversationQuoted(
+  executor: Pick<typeof db, "update">,
+  conv: ConversationRow,
+) {
+  await executor
+    .update(conversationsTable)
+    .set({ traderStatus: "QUOTED", updatedAt: new Date() })
+    .where(
+      and(
+        eq(conversationsTable.id, conv.id),
+        ne(conversationsTable.traderStatus, "COMPLETED"),
+      ),
+    );
   if (conv.enquiryId) {
-    await db
+    await executor
       .update(enquiriesTable)
       .set({ status: "responded" })
       .where(and(eq(enquiriesTable.id, conv.enquiryId), eq(enquiriesTable.status, "pending")));
@@ -193,6 +205,7 @@ router.post("/conversations/:id/quotes", authMiddleware, async (req, res) => {
           status: "PENDING",
         })
         .returning();
+      await markConversationQuoted(tx, conv);
       return inserted;
     });
 
@@ -207,7 +220,6 @@ router.post("/conversations/:id/quotes", authMiddleware, async (req, res) => {
       summary: `${formatPence(quote.amountPence)}, ${priceTypeLabel(quote.priceType)}`,
     });
 
-    await markConversationQuoted(conv);
     await postSystemMessage(id, `Quote sent: ${quoteSummaryLine(quote)}.`, "customer");
 
     void sendPushToUser(conv.customerId, {
@@ -276,6 +288,9 @@ router.post("/quotes/:id/revise", authMiddleware, async (req, res) => {
     // reissues an expired quote. The conditional UPDATE makes the swap
     // race-safe: only one revision can win.
     const created = await db.transaction(async (tx) => {
+      // Re-verify assignment under the conversation row lock — a
+      // reassignment may have committed since the canActOnJob pre-check.
+      await requireAssignedInTx(tx, row.quote.conversationId, userId);
       const superseded = await tx
         .update(quotesTable)
         .set({ status: "REVISED", updatedAt: new Date() })
@@ -299,6 +314,7 @@ router.post("/quotes/:id/revise", authMiddleware, async (req, res) => {
           revisionOfQuoteId: id,
         })
         .returning();
+      await markConversationQuoted(tx, row.conv);
       return next;
     });
     if (!created) {
@@ -306,7 +322,6 @@ router.post("/quotes/:id/revise", authMiddleware, async (req, res) => {
       return;
     }
 
-    await markConversationQuoted(row.conv);
     await postSystemMessage(
       row.quote.conversationId,
       `Quote revised: ${quoteSummaryLine(created)}.`,
@@ -322,6 +337,10 @@ router.post("/quotes/:id/revise", authMiddleware, async (req, res) => {
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "Invalid quote", details: error.issues });
+      return;
+    }
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
     }
     if (isPendingQuoteConflict(error)) {
@@ -358,11 +377,16 @@ router.post("/quotes/:id/withdraw", authMiddleware, async (req, res) => {
     }
 
     const now = new Date();
-    const [updated] = await db
-      .update(quotesTable)
-      .set({ status: "WITHDRAWN", withdrawnAt: now, updatedAt: now })
-      .where(and(eq(quotesTable.id, id), eq(quotesTable.status, "PENDING")))
-      .returning();
+    const [updated] = await db.transaction(async (tx) => {
+      // Re-verify assignment under the conversation row lock — a
+      // reassignment may have committed since the canActOnJob pre-check.
+      await requireAssignedInTx(tx, row.quote.conversationId, userId);
+      return await tx
+        .update(quotesTable)
+        .set({ status: "WITHDRAWN", withdrawnAt: now, updatedAt: now })
+        .where(and(eq(quotesTable.id, id), eq(quotesTable.status, "PENDING")))
+        .returning();
+    });
     if (!updated) {
       res.status(409).json({ error: "Only pending quotes can be withdrawn." });
       return;
@@ -381,6 +405,10 @@ router.post("/quotes/:id/withdraw", authMiddleware, async (req, res) => {
 
     res.json({ quote: serializeQuote(updated) });
   } catch (error) {
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
+      return;
+    }
     req.log.error({ err: error }, "Withdraw quote failed");
     res.status(500).json({ error: "Failed to withdraw quote" });
   }

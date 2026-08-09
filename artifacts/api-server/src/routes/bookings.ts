@@ -5,7 +5,12 @@ import {
   getActiveMembership,
   traderSideRecipientUserIds,
 } from "../lib/company-membership";
-import { canActOnJob, jobClaimedByOtherBody } from "../lib/job-assignment";
+import {
+  canActOnJob,
+  JobClaimedByOtherError,
+  jobClaimedByOtherBody,
+  requireAssignedInTx,
+} from "../lib/job-assignment";
 import {
   bookingsTable,
   conversationsTable,
@@ -178,6 +183,10 @@ router.post("/conversations/:id/bookings", authMiddleware, async (req, res) => {
     // concurrent proposals: the loser's INSERT throws 23505 → 409.
     const now = new Date();
     const { created, superseded } = await db.transaction(async (tx) => {
+      // Re-verify assignment under the conversation row lock — a
+      // reassignment/removal handover may have committed since the
+      // canActOnJob pre-check above.
+      if (role === "trader") await requireAssignedInTx(tx, id, userId);
       const supersededRows = await tx
         .update(bookingsTable)
         .set({ status: "SUPERSEDED", updatedAt: now })
@@ -230,6 +239,10 @@ router.post("/conversations/:id/bookings", authMiddleware, async (req, res) => {
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "Invalid booking", details: error.issues });
+      return;
+    }
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
     }
     if (
@@ -311,12 +324,17 @@ router.post("/bookings/:id/confirm", authMiddleware, async (req, res) => {
     }
 
     // Conditional UPDATE = race-safe: only confirms while still PROPOSED.
+    // For trader-side confirmers the in-tx guard re-verifies (under the
+    // conversation row lock) that they still hold the job.
     const now = new Date();
-    const [updated] = await db
-      .update(bookingsTable)
-      .set({ status: "CONFIRMED", confirmedAt: now, confirmedByUserId: userId, updatedAt: now })
-      .where(and(eq(bookingsTable.id, id), eq(bookingsTable.status, "PROPOSED")))
-      .returning();
+    const [updated] = await db.transaction(async (tx) => {
+      if (role === "trader") await requireAssignedInTx(tx, row.conv.id, userId);
+      return await tx
+        .update(bookingsTable)
+        .set({ status: "CONFIRMED", confirmedAt: now, confirmedByUserId: userId, updatedAt: now })
+        .where(and(eq(bookingsTable.id, id), eq(bookingsTable.status, "PROPOSED")))
+        .returning();
+    });
     if (!updated) {
       res.status(409).json({ error: "This appointment is no longer awaiting confirmation." });
       return;
@@ -348,6 +366,10 @@ router.post("/bookings/:id/confirm", authMiddleware, async (req, res) => {
 
     res.json({ booking: serializeBooking(updated) });
   } catch (error) {
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
+      return;
+    }
     req.log.error({ err: error }, "Confirm booking failed");
     res.status(500).json({ error: "Failed to confirm the appointment" });
   }
@@ -389,16 +411,20 @@ router.post("/bookings/:id/cancel", authMiddleware, async (req, res) => {
     }
 
     const now = new Date();
-    const [updated] = await db
-      .update(bookingsTable)
-      .set({ status: "CANCELLED", cancelledAt: now, cancelledByRole: role, updatedAt: now })
-      .where(
-        and(
-          eq(bookingsTable.id, id),
-          inArray(bookingsTable.status, ["PROPOSED", "CONFIRMED"]),
-        ),
-      )
-      .returning();
+    const [updated] = await db.transaction(async (tx) => {
+      // Trader-side cancellers must still hold the job at commit time.
+      if (role === "trader") await requireAssignedInTx(tx, row.conv.id, userId);
+      return await tx
+        .update(bookingsTable)
+        .set({ status: "CANCELLED", cancelledAt: now, cancelledByRole: role, updatedAt: now })
+        .where(
+          and(
+            eq(bookingsTable.id, id),
+            inArray(bookingsTable.status, ["PROPOSED", "CONFIRMED"]),
+          ),
+        )
+        .returning();
+    });
     if (!updated) {
       res.status(409).json({ error: "This appointment has already been cancelled or replaced." });
       return;
@@ -429,6 +455,10 @@ router.post("/bookings/:id/cancel", authMiddleware, async (req, res) => {
 
     res.json({ booking: serializeBooking(updated) });
   } catch (error) {
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
+      return;
+    }
     req.log.error({ err: error }, "Cancel booking failed");
     res.status(500).json({ error: "Failed to cancel the appointment" });
   }

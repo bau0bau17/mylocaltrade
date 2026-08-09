@@ -5,6 +5,7 @@ import {
   getActiveMembership,
   companyTeamsEnabled,
   traderSideRecipientUserIds,
+  activeCompanyMemberUserIds,
 } from "../lib/company-membership";
 import {
   claimOrRequireAssigned,
@@ -12,6 +13,11 @@ import {
   JobClaimedByOtherError,
   jobClaimedByOtherBody,
   logJobClaimed,
+  requireAssignedInTx,
+  reassignJobTx,
+  ReassignmentError,
+  logJobReassigned,
+  jobIsActive,
 } from "../lib/job-assignment";
 import {
   conversationsTable,
@@ -65,6 +71,10 @@ const CancelConversationBody = z.object({
   reason: z.string().trim().min(3).max(500),
 });
 
+const ReassignConversationBody = z.object({
+  toUserId: z.number().int().positive(),
+});
+
 const TraderStatusBody = z.object({
   traderStatus: z.enum(["NEW", "CONTACTED", "QUOTED", "COMPLETED"]),
 });
@@ -115,6 +125,9 @@ function serializeConversation(
     // Whether the TRADER viewer may act on this job (claimed by them or still
     // unclaimed). Customers always get null. Flag OFF → always true.
     viewerCanAct?: boolean | null;
+    // Phase 3: whether the viewer may REASSIGN this job — owner only, flag ON,
+    // live job with a current assignee. Customers get null; flag OFF → false.
+    viewerCanReassign?: boolean | null;
   },
 ) {
   const mutedAt =
@@ -166,6 +179,8 @@ function serializeConversation(
     traderLogoUrl: extras.traderLogoUrl ?? null,
     viewerCanAct:
       extras.viewerRole === "trader" ? (extras.viewerCanAct ?? true) : null,
+    viewerCanReassign:
+      extras.viewerRole === "trader" ? (extras.viewerCanReassign ?? false) : null,
     createdAt: c.createdAt.toISOString(),
   };
 }
@@ -200,9 +215,17 @@ async function getActorContext(userId: number, userRole: string) {
     // Company Teams: resolve the profile the caller ACTS FOR (owner or, with
     // the flag on, an active member) — not merely the profile they own.
     const membership = await getActiveMembership(userId);
-    return { role: "trader" as const, traderProfileId: membership?.traderProfileId ?? null };
+    return {
+      role: "trader" as const,
+      traderProfileId: membership?.traderProfileId ?? null,
+      membershipRole: membership?.role ?? null,
+    };
   }
-  return { role: userRole as "customer" | "admin", traderProfileId: null };
+  return {
+    role: userRole as "customer" | "admin",
+    traderProfileId: null,
+    membershipRole: null,
+  };
 }
 
 // GET /api/conversations/unread-count — total unread across my conversations
@@ -514,6 +537,15 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         assignedTraderName,
         traderLogoUrl,
         viewerCanAct: isTrader ? traderViewerCanAct(row.conv, userId) : null,
+        // Owner-only reassignment control (Phase 3): live job, has a current
+        // assignee, viewer is the company OWNER, flag ON. The serializer
+        // forces false/null for everyone else.
+        viewerCanReassign:
+          isTrader &&
+          companyTeamsEnabled() &&
+          actor.membershipRole === "OWNER" &&
+          row.conv.assignedTraderUserId != null &&
+          jobIsActive(row.conv),
       }),
       messages: messages.map(serializeMessage),
       enquiryAttachments,
@@ -794,20 +826,177 @@ router.post("/conversations/:id/close", authMiddleware, async (req, res) => {
       }
     }
 
-    await db
-      .update(conversationsTable)
-      .set({
-        status: "CLOSED",
-        closedAt: new Date(),
-        closedByRole: isCustomer ? "customer" : "trader",
-        updatedAt: new Date(),
-      })
-      .where(eq(conversationsTable.id, id));
+    await db.transaction(async (tx) => {
+      // Re-verify assignment under the row lock — a reassignment may have
+      // committed since the canActOnJob pre-check above.
+      if (isTrader) await requireAssignedInTx(tx, id, userId);
+      await tx
+        .update(conversationsTable)
+        .set({
+          status: "CLOSED",
+          closedAt: new Date(),
+          closedByRole: isCustomer ? "customer" : "trader",
+          updatedAt: new Date(),
+        })
+        .where(eq(conversationsTable.id, id));
+    });
 
     res.json({ ok: true });
   } catch (error) {
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
+      return;
+    }
     req.log.error({ err: error }, "Close conversation failed");
     res.status(500).json({ error: "Failed to close conversation" });
+  }
+});
+
+// POST /api/conversations/:id/reassign — Company Teams Phase 3. OWNER only,
+// flag ON only (fails closed as 404 when off). Moves a LIVE job to another
+// ACTIVE member of the same company (or back to the owner). Everything the
+// customer already has — messages, quotes, hire state, appointments, history,
+// review eligibility — is untouched; only the assignee (and assignedAt)
+// changes. The customer sees ONE system message and gets one notification.
+router.post("/conversations/:id/reassign", authMiddleware, async (req, res) => {
+  try {
+    if (!companyTeamsEnabled()) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const id = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(id)) {
+      res.status(400).json({ error: "Invalid conversation id" });
+      return;
+    }
+    const body = ReassignConversationBody.parse(req.body);
+    const { userId, userRole } = req as AuthenticatedRequest;
+    if (userRole !== "trader") {
+      res.status(403).json({ error: "Only the business owner can reassign jobs.", code: "OWNER_ONLY" });
+      return;
+    }
+    const membership = await getActiveMembership(userId);
+    if (!membership || membership.role !== "OWNER") {
+      // Employees (and traders with no active membership) can never reassign.
+      res.status(403).json({ error: "Only the business owner can reassign jobs.", code: "OWNER_ONLY" });
+      return;
+    }
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, id))
+      .limit(1);
+    // Same-404 policy as the other conversation routes: unknown ids and other
+    // companies' jobs are indistinguishable.
+    if (!conv || conv.traderProfileId !== membership.traderProfileId) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    if (!jobIsActive(conv)) {
+      res.status(409).json({ error: "Only active jobs can be reassigned.", code: "JOB_NOT_ACTIVE" });
+      return;
+    }
+    // Target must be an ACTIVE member of THIS company (owner included).
+    // Pending invitees, removed members, other companies' staff and arbitrary
+    // user ids all fail this one membership check.
+    const memberIds = await activeCompanyMemberUserIds(conv.traderProfileId);
+    if (!memberIds.includes(body.toUserId)) {
+      res.status(400).json({ error: "Choose an active member of your team.", code: "INVALID_ASSIGNEE" });
+      return;
+    }
+
+    // Atomic flip under the conversation row lock; stage + current assignee
+    // are re-checked inside. Throws ReassignmentError on ALREADY_ASSIGNED
+    // (also the idempotent answer for retries/double-taps) or JOB_NOT_ACTIVE.
+    const { prevAssignedUserId } = await reassignJobTx({
+      conversationId: id,
+      toUserId: body.toUserId,
+    });
+
+    // ---- Side effects: only the committed winner ever reaches here ----
+    const [tp] = await db
+      .select({ businessName: traderProfilesTable.businessName })
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.id, conv.traderProfileId))
+      .limit(1);
+    const businessName = tp?.businessName ?? "the company";
+    const [assignee] = await db
+      .select({ fullName: usersTable.fullName })
+      .from(usersTable)
+      .where(eq(usersTable.id, body.toUserId))
+      .limit(1);
+    const assigneeName = assignee?.fullName ?? "A team member";
+    const assigneeFirstName = assigneeName.trim().split(/\s+/)[0];
+
+    // Exactly ONE customer-visible system message (no roles, no internal ids).
+    await postSystemMessage(
+      id,
+      `Your job is now being handled by ${assigneeFirstName} from ${businessName}.`,
+      "customer",
+    );
+
+    const ref = jobReferenceOf(conv);
+    void (async () => {
+      // Customer: one notification.
+      await sendPushToUser(conv.customerId, {
+        title: "Your job has a new contact",
+        body: `${assigneeFirstName} from ${businessName} is now handling your job.`,
+        data: { type: "job_reassigned", conversationId: id },
+      }).catch((err) => req.log.warn({ err }, "Reassign push failed"));
+      // New assignee — skip when the owner reassigned to themselves.
+      if (body.toUserId !== userId) {
+        await sendPushToUser(body.toUserId, {
+          title: "Job assigned to you",
+          body: `You're now handling ${ref ? `job ${ref}` : "a job"}${conv.serviceRequired ? ` — ${conv.serviceRequired}` : ""}.`,
+          data: { type: "job_reassigned", conversationId: id },
+        }).catch((err) => req.log.warn({ err }, "Reassign push failed"));
+      }
+      // Previous assignee: internal heads-up, only while still an active
+      // member and never when they are the actor or the new assignee.
+      if (
+        prevAssignedUserId != null &&
+        prevAssignedUserId !== body.toUserId &&
+        prevAssignedUserId !== userId &&
+        memberIds.includes(prevAssignedUserId)
+      ) {
+        await sendPushToUser(prevAssignedUserId, {
+          title: "Job reassigned",
+          body: `${ref ? `Job ${ref}` : "A job"} is now being handled by ${assigneeName}.`,
+          data: { type: "job_reassigned", conversationId: id },
+        }).catch((err) => req.log.warn({ err }, "Reassign push failed"));
+      }
+    })();
+
+    void logJobReassigned({
+      conv,
+      actorUserId: userId,
+      fromUserId: prevAssignedUserId,
+      toUserId: body.toUserId,
+    }).catch((err) => req.log.warn({ err }, "Reassign audit failed"));
+
+    res.json({ ok: true, assignedTraderUserId: body.toUserId });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: "Invalid reassignment request", details: error.issues });
+      return;
+    }
+    if (error instanceof ReassignmentError) {
+      if (error.code === "ALREADY_ASSIGNED") {
+        res.status(409).json({
+          error: "This job is already assigned to that team member.",
+          code: "ALREADY_ASSIGNED",
+        });
+      } else if (error.code === "INVALID_ASSIGNEE") {
+        // The target's membership was revoked between the route's pre-check
+        // and the transaction's locked re-check.
+        res.status(400).json({ error: "Choose an active member of your team.", code: "INVALID_ASSIGNEE" });
+      } else {
+        res.status(409).json({ error: "Only active jobs can be reassigned.", code: "JOB_NOT_ACTIVE" });
+      }
+      return;
+    }
+    req.log.error({ err: error }, "Reassign conversation failed");
+    res.status(500).json({ error: "Failed to reassign the job" });
   }
 });
 
@@ -840,26 +1029,43 @@ router.patch("/conversations/:id/trader-status", authMiddleware, async (req, res
       res.status(404).json({ error: "Conversation not found" });
       return;
     }
-
-    await db
-      .update(conversationsTable)
-      .set({ traderStatus: body.traderStatus, updatedAt: new Date() })
-      .where(eq(conversationsTable.id, id));
-
-    // Any trader engagement (CONTACTED/QUOTED/COMPLETED) advances the linked
-    // enquiry past "pending" so the existing review-eligibility logic — which
-    // gates on enquiry.status !== "pending" — unlocks for the customer.
-    if (body.traderStatus !== "NEW" && conv.enquiryId) {
-      await db
-        .update(enquiriesTable)
-        .set({ status: "responded" })
-        .where(and(eq(enquiriesTable.id, conv.enquiryId), eq(enquiriesTable.status, "pending")));
+    // Claimed job: only the assigned member may drive the pipeline status —
+    // it feeds review eligibility, so a non-assigned colleague must not be
+    // able to flip it (flag OFF this always passes; legacy unchanged).
+    const act = await canActOnJob(conv, userId);
+    if (!act.ok) {
+      res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+      return;
     }
+
+    await db.transaction(async (tx) => {
+      // Re-verify under the conversation row lock — a reassignment or
+      // removal handover may have committed since the pre-check above.
+      await requireAssignedInTx(tx, id, userId);
+      await tx
+        .update(conversationsTable)
+        .set({ traderStatus: body.traderStatus, updatedAt: new Date() })
+        .where(eq(conversationsTable.id, id));
+
+      // Any trader engagement (CONTACTED/QUOTED/COMPLETED) advances the linked
+      // enquiry past "pending" so the existing review-eligibility logic — which
+      // gates on enquiry.status !== "pending" — unlocks for the customer.
+      if (body.traderStatus !== "NEW" && conv.enquiryId) {
+        await tx
+          .update(enquiriesTable)
+          .set({ status: "responded" })
+          .where(and(eq(enquiriesTable.id, conv.enquiryId), eq(enquiriesTable.status, "pending")));
+      }
+    });
 
     res.json({ ok: true, traderStatus: body.traderStatus });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "Invalid status", details: error.issues });
+      return;
+    }
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
     }
     req.log.error({ err: error }, "Update trader status failed");
@@ -1146,11 +1352,15 @@ router.post("/conversations/:id/trader-mark-done", authMiddleware, async (req, r
       const now = new Date();
       // Atomic transition — only the request that flips NULL→now sends the
       // notifications below (guards against concurrent double-taps).
-      const updated = await db
-        .update(conversationsTable)
-        .set({ traderMarkedDoneAt: now, updatedAt: now })
-        .where(and(eq(conversationsTable.id, id), isNull(conversationsTable.traderMarkedDoneAt)))
-        .returning({ id: conversationsTable.id });
+      const updated = await db.transaction(async (tx) => {
+        // Re-verify assignment under the row lock (reassignment may race).
+        await requireAssignedInTx(tx, id, userId);
+        return await tx
+          .update(conversationsTable)
+          .set({ traderMarkedDoneAt: now, updatedAt: now })
+          .where(and(eq(conversationsTable.id, id), isNull(conversationsTable.traderMarkedDoneAt)))
+          .returning({ id: conversationsTable.id });
+      });
       if (updated.length === 0) {
         res.json({ ok: true });
         return;
@@ -1203,6 +1413,10 @@ router.post("/conversations/:id/trader-mark-done", authMiddleware, async (req, r
 
     res.json({ ok: true });
   } catch (error) {
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
+      return;
+    }
     req.log.error({ err: error }, "Trader mark done failed");
     res.status(500).json({ error: "Failed to mark the work as done" });
   }
@@ -1263,18 +1477,22 @@ router.post("/conversations/:id/cancel", authMiddleware, async (req, res) => {
 
     const now = new Date();
     const cancelledByRole = isCustomer ? "customer" : "trader";
-    await db
-      .update(conversationsTable)
-      .set({
-        cancelledAt: now,
-        cancelledByRole,
-        cancellationReason: body.reason,
-        status: "CLOSED",
-        closedAt: now,
-        closedByRole: cancelledByRole,
-        updatedAt: now,
-      })
-      .where(eq(conversationsTable.id, id));
+    await db.transaction(async (tx) => {
+      // Re-verify assignment under the row lock (reassignment may race).
+      if (isTrader) await requireAssignedInTx(tx, id, userId);
+      await tx
+        .update(conversationsTable)
+        .set({
+          cancelledAt: now,
+          cancelledByRole,
+          cancellationReason: body.reason,
+          status: "CLOSED",
+          closedAt: now,
+          closedByRole: cancelledByRole,
+          updatedAt: now,
+        })
+        .where(eq(conversationsTable.id, id));
+    });
     await postSystemMessage(
       id,
       `The ${cancelledByRole} cancelled this job. Reason: ${body.reason}`,
@@ -1286,6 +1504,10 @@ router.post("/conversations/:id/cancel", authMiddleware, async (req, res) => {
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "A short reason is required to cancel.", details: error.issues });
+      return;
+    }
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
     }
     req.log.error({ err: error }, "Cancel job failed");

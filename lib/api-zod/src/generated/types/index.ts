@@ -109,6 +109,8 @@ export * from "./quote";
 export * from "./quotePriceType";
 export * from "./quoteResponse";
 export * from "./quoteStatus";
+export * from "./reassignConversationRequest";
+export * from "./reassignConversationResponse";
 export * from "./registerCustomerRequest";
 export * from "./registerPendingResponse";
 export * from "./registerPushTokenRequest";

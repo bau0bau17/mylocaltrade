@@ -89,6 +89,9 @@ export const TRADER_AUDIT_ACTIONS = [
   // company-level objects.
   "QUOTE_SUBMITTED_BY_MEMBER",
   "JOB_REASSIGNED",
+  // Member removal handed the member's live jobs to the owner (one row per
+  // removal operation; details carry the affected conversation ids).
+  "JOBS_HANDED_TO_OWNER_ON_MEMBER_REMOVAL",
 ] as const;
 export type TraderAuditAction = (typeof TRADER_AUDIT_ACTIONS)[number];
 

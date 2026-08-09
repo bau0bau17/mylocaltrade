@@ -19,12 +19,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import { confirmAction } from "@/lib/confirm";
-import { avatarImageUrl, objectImageUrl } from "@/lib/api-url";
+import { avatarImageUrl, getApiUrl, objectImageUrl } from "@/lib/api-url";
 import { isPhoneVerificationRequired, promptPhoneVerification } from "@/lib/phone-gate";
 
 // Server returns 409 with this machine-readable code when the customer tries
@@ -59,6 +59,7 @@ import {
   useCompleteConversationJob,
   useTraderMarkConversationDone,
   useCancelConversationJob,
+  useReassignConversation,
   useCreateQuote,
   useReviseQuote,
   useWithdrawQuote,
@@ -366,20 +367,6 @@ export default function ConversationThreadScreen() {
     },
   );
 
-  if (isAdmin) {
-    return (
-      <View style={[styles.centered, { paddingTop: insets.top + 80 }]}>
-        <Text style={styles.errorText}>Not available for admins</Text>
-        <Text style={[styles.errorText, { fontSize: 13, opacity: 0.8 }]}>
-          Admin accounts can't open customer/trader conversations.
-        </Text>
-        <Pressable style={styles.cta} onPress={() => router.replace('/(tabs)/account')}>
-          <Text style={styles.ctaText}>Back to Account</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
   const conv = data?.conversation;
   const messages = data?.messages ?? [];
   const enquiryAttachments = data?.enquiryAttachments ?? [];
@@ -429,6 +416,69 @@ export default function ConversationThreadScreen() {
       `${name ?? assignedName ?? "A teammate"} got there first — this job is now theirs.`,
     );
     return true;
+  };
+
+  // ---- Company Teams Phase 3: owner reassignment ---------------------------
+  // Server-driven: viewerCanReassign is true only for the company OWNER on a
+  // live, currently-assigned job with teams enabled. Employees, customers and
+  // flag-off builds never see any of this UI.
+  const canReassign = isTrader && conv?.viewerCanReassign === true;
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const { token: reassignToken } = useAuth();
+  type ReassignMember = {
+    id: number;
+    userId: number;
+    fullName: string;
+    role: "OWNER" | "EMPLOYEE";
+  };
+  // Member list for the picker — fetched only while the sheet is open (the
+  // endpoint is owner-only; viewerCanReassign already guarantees that).
+  const reassignTeamQuery = useQuery({
+    queryKey: ["company", "team", "reassign-picker"],
+    enabled: reassignOpen && !!reassignToken,
+    retry: false,
+    queryFn: async (): Promise<{ members: ReassignMember[] }> => {
+      const res = await fetch(`${getApiUrl()}/api/company/team`, {
+        headers: { Authorization: `Bearer ${reassignToken}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string })?.error ?? "Couldn't load your team.");
+      }
+      return res.json();
+    },
+  });
+  const reassignMutation = useReassignConversation({
+    mutation: {
+      onSuccess: () => {
+        setReassignOpen(false);
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+        Alert.alert("Job reassigned", "The customer has been told who's taking over.");
+      },
+      onError: (err: unknown) => {
+        // The job may have moved under us (finished, cancelled, or another
+        // reassignment won) — refresh so the screen reflects reality.
+        qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+        const data = (err as { data?: { error?: string } })?.data;
+        Alert.alert("Could not reassign", data?.error ?? "Please try again.");
+      },
+    },
+  });
+  const confirmReassign = (member: ReassignMember) => {
+    if (reassignMutation.isPending) return;
+    Alert.alert(
+      `Reassign to ${member.fullName}?`,
+      "They'll take over this job immediately and the customer will be notified.",
+      [
+        { text: "Go back", style: "cancel" },
+        {
+          text: "Reassign",
+          onPress: () =>
+            reassignMutation.mutate({ id: conversationId, data: { toUserId: member.userId } }),
+        },
+      ],
+    );
   };
 
   // "Add to calendar" prompt: shown once per confirmed booking+time (both the
@@ -1010,6 +1060,22 @@ export default function ConversationThreadScreen() {
     }
   };
 
+  // NOTE: every early return must stay BELOW all hooks (rules of hooks) —
+  // this admin guard included.
+  if (isAdmin) {
+    return (
+      <View style={[styles.centered, { paddingTop: insets.top + 80 }]}>
+        <Text style={styles.errorText}>Not available for admins</Text>
+        <Text style={[styles.errorText, { fontSize: 13, opacity: 0.8 }]}>
+          Admin accounts can't open customer/trader conversations.
+        </Text>
+        <Pressable style={styles.cta} onPress={() => router.replace('/(tabs)/account')}>
+          <Text style={styles.ctaText}>Back to Account</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: Colors.light.background }}>
@@ -1157,6 +1223,9 @@ export default function ConversationThreadScreen() {
                       style: "destructive" as const,
                     },
                   ]
+                : []),
+              ...(canReassign
+                ? [{ text: "Reassign this job…", onPress: () => setReassignOpen(true) }]
                 : []),
               ...(!closed && !claimedByOther
                 ? [{ text: "Close conversation", onPress: onClose, style: "destructive" as const }]
@@ -1745,6 +1814,16 @@ export default function ConversationThreadScreen() {
           <Text style={styles.closedText}>
             {assignedName ?? "A teammate"} is handling this job — it's read-only for you.
           </Text>
+          {canReassign ? (
+            <Pressable
+              style={styles.reassignBtn}
+              onPress={() => setReassignOpen(true)}
+              disabled={reassignMutation.isPending}
+            >
+              <Feather name="repeat" size={14} color={Colors.light.primary} />
+              <Text style={styles.reassignBtnText}>Reassign this job</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
@@ -1829,6 +1908,75 @@ export default function ConversationThreadScreen() {
                 ) : (
                   <Text style={styles.modalBtnDangerText}>Cancel job</Text>
                 )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={reassignOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReassignOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Reassign this job</Text>
+            <Text style={styles.modalSub}>
+              {assignedName ? `Currently handled by ${assignedName}. ` : ""}
+              Choose who takes over — the customer will be told.
+            </Text>
+            {reassignTeamQuery.isLoading ? (
+              <ActivityIndicator
+                size="small"
+                color={Colors.light.primary}
+                style={{ marginVertical: 16 }}
+              />
+            ) : reassignTeamQuery.isError ? (
+              <Text style={styles.reassignEmptyText}>
+                Couldn't load your team. Please try again.
+              </Text>
+            ) : (
+              (() => {
+                const options = (reassignTeamQuery.data?.members ?? []).filter(
+                  (m) => m.userId !== conv?.assignedTraderUserId,
+                );
+                if (options.length === 0) {
+                  return (
+                    <Text style={styles.reassignEmptyText}>
+                      No other active team members to hand this job to.
+                    </Text>
+                  );
+                }
+                return options.map((m) => (
+                  <Pressable
+                    key={m.userId}
+                    style={styles.reassignOption}
+                    onPress={() => confirmReassign(m)}
+                    disabled={reassignMutation.isPending}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.reassignOptionName}>{m.fullName}</Text>
+                      <Text style={styles.reassignOptionRole}>
+                        {m.role === "OWNER" ? "Owner (you)" : "Team member"}
+                      </Text>
+                    </View>
+                    {reassignMutation.isPending ? (
+                      <ActivityIndicator size="small" color={Colors.light.textSecondary} />
+                    ) : (
+                      <Feather name="chevron-right" size={16} color={Colors.light.textSecondary} />
+                    )}
+                  </Pressable>
+                ));
+              })()
+            )}
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnGhost]}
+                onPress={() => setReassignOpen(false)}
+              >
+                <Text style={styles.modalBtnGhostText}>Cancel</Text>
               </Pressable>
             </View>
           </View>
@@ -2752,6 +2900,52 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: Colors.light.textSecondary,
+    textAlign: "center",
+    paddingVertical: 14,
+  },
+  reassignBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    alignSelf: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    marginBottom: 6,
+  },
+  reassignBtnText: {
+    color: Colors.light.primary,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  reassignOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
+    marginBottom: 8,
+  },
+  reassignOptionName: {
+    color: Colors.light.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  reassignOptionRole: {
+    color: Colors.light.textSecondary,
+    fontSize: 12,
+    marginTop: 1,
+  },
+  reassignEmptyText: {
+    color: Colors.light.textSecondary,
+    fontSize: 13,
     textAlign: "center",
     paddingVertical: 14,
   },

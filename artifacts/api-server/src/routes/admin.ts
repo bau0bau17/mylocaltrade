@@ -2097,6 +2097,18 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
       ? await listRecentAttemptsForConversation(id, 20)
       : [];
 
+    // Company Teams: who inside the company is currently handling this job
+    // (null for legacy rows / unclaimed leads). Read-only admin visibility.
+    const [assignedUser] =
+      row.conv.assignedTraderUserId != null
+        ? await db
+            .select({ fullName: usersTable.fullName })
+            .from(usersTable)
+            .where(eq(usersTable.id, row.conv.assignedTraderUserId))
+            .limit(1)
+        : [undefined];
+    const assignedTraderName = assignedUser?.fullName ?? null;
+
     // Account-level bypass totals + suspension state for both participants,
     // so admins can suspend repeat offenders straight from the report view.
     const participantIds = Array.from(new Set([row.conv.customerId, row.conv.traderUserId]));
@@ -2142,6 +2154,11 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
         traderStatus: row.conv.traderStatus,
         createdAt: row.conv.createdAt.toISOString(),
         lastMessageAt: row.conv.lastMessageAt.toISOString(),
+        // Company Teams: current assignee (person handling the job), their
+        // company, and when the assignment was made.
+        assignedTraderUserId: row.conv.assignedTraderUserId,
+        assignedTraderName,
+        assignedAt: row.conv.assignedAt?.toISOString() ?? null,
       },
       messagesAccessible: canReadMessages,
       quotes: quotes.map((q) => serializeQuote(q)),

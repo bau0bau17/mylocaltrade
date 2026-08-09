@@ -22,6 +22,12 @@ import {
   type CompanyMembership,
 } from "../lib/company-membership";
 import { sendCompanyInviteEmail } from "../lib/email";
+import {
+  handoverActiveJobsToOwner,
+  logJobsHandedToOwner,
+} from "../lib/job-assignment";
+import { postSystemMessage } from "../lib/system-messages";
+import { sendPushToUser } from "../lib/push-notifications";
 
 // ---------------------------------------------------------------------------
 // Company Teams — Phase 1: employee invitations & team management.
@@ -620,18 +626,39 @@ router.post(
         return;
       }
 
-      const updated = await db
-        .update(companyMembersTable)
-        .set({
-          status: "REVOKED",
-          revokedAt: new Date(),
-          revokedByUserId: ctx.userId,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(eq(companyMembersTable.id, member.id), eq(companyMembersTable.status, "ACTIVE")),
-        )
-        .returning();
+      // Phase 3: revoke + hand the member's LIVE jobs to the owner in ONE
+      // transaction. The conditional ACTIVE→REVOKED flip guarantees at-most-
+      // once execution (a retry matches zero rows and changes nothing), and
+      // the atomic pairing means a crash can never leave an active job
+      // assigned to an inactive member. Completed/cancelled jobs keep their
+      // historical assignee; authorship of past messages/quotes is untouched.
+      const ownerUserId = ctx.membership.profile.userId;
+      const { updated, handedOver } = await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(companyMembersTable)
+          .set({
+            status: "REVOKED",
+            revokedAt: new Date(),
+            revokedByUserId: ctx.userId,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(companyMembersTable.id, member.id), eq(companyMembersTable.status, "ACTIVE")),
+          )
+          .returning();
+        if (updated.length === 0) {
+          return {
+            updated,
+            handedOver: [] as Awaited<ReturnType<typeof handoverActiveJobsToOwner>>,
+          };
+        }
+        const handedOver = await handoverActiveJobsToOwner(tx, {
+          traderProfileId: ctx.membership.traderProfileId,
+          fromUserId: member.userId,
+          ownerUserId,
+        });
+        return { updated, handedOver };
+      });
       if (updated.length === 0) {
         res.status(409).json({ error: "This member has already been removed." });
         return;
@@ -642,11 +669,51 @@ router.post(
       // backfill only ever inserts OWNER rows (ON CONFLICT DO NOTHING), so a
       // revoked employee can never be resurrected by it.
       await db.insert(traderAuditLogTable).values({
-        userId: ctx.membership.profile.userId,
+        userId: ownerUserId,
         action: "MEMBER_REMOVED",
         performedBy: ctx.userId,
         details: { companyMemberId: member.id, memberUserId: member.userId },
       });
+      // One audit row per removal OPERATION (not per job); the tx above ran
+      // at most once, so retries can never duplicate it.
+      void logJobsHandedToOwner({
+        traderProfileId: ctx.membership.traderProfileId,
+        conversations: handedOver,
+        removedUserId: member.userId,
+        ownerUserId,
+        actorUserId: ctx.userId,
+      }).catch((err) => req.log.warn({ err }, "Handover audit failed"));
+
+      // Customer-facing handover: ONE system message + one notification per
+      // affected live job. The owner initiated the removal (no notification
+      // to self) and the removed member is no longer active (none either).
+      if (handedOver.length > 0) {
+        const businessName = ctx.membership.profile.businessName;
+        const [ownerRow] = await db
+          .select({ fullName: usersTable.fullName })
+          .from(usersTable)
+          .where(eq(usersTable.id, ownerUserId))
+          .limit(1);
+        const ownerFirstName = (ownerRow?.fullName ?? "The owner").trim().split(/\s+/)[0];
+        void (async () => {
+          for (const conv of handedOver) {
+            try {
+              await postSystemMessage(
+                conv.id,
+                `Your job is now being handled by ${ownerFirstName} from ${businessName}.`,
+                "customer",
+              );
+              await sendPushToUser(conv.customerId, {
+                title: "Your job has a new contact",
+                body: `${ownerFirstName} from ${businessName} is now handling your job.`,
+                data: { type: "job_reassigned", conversationId: conv.id },
+              });
+            } catch (err) {
+              req.log.warn({ err, conversationId: conv.id }, "Handover notification failed");
+            }
+          }
+        })();
+      }
 
       res.json({ ok: true });
     } catch (error) {

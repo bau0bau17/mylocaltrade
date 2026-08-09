@@ -1,0 +1,193 @@
+Phase 2 is approved.
+
+Proceed with Phase 3 only: owner reassignment, safe member removal/job handover, final Admin visibility and end-to-end hardening.
+
+Keep COMPANY_TEAMS_ENABLED OFF by default. Do not deploy production.
+
+OWNER REASSIGNMENT
+
+The company owner may reassign an active job to:
+
+- themselves; or
+- any active Employee belonging to the same company.
+
+Employees cannot reassign jobs.
+
+Allow reassignment after quote/hire and during an active job, while preserving the existing lifecycle.
+
+Do not allow reassignment to:
+
+- a pending invite;
+- a removed/deactivated member;
+- another company’s member;
+- an arbitrary user ID;
+- the same currently assigned person;
+- a completed or cancelled job.
+
+Reassignment must not:
+
+- create or duplicate a quote;
+- change the original quote author;
+- reset hire, booking, appointment or completion state;
+- delete messages or audit history;
+- create a new conversation;
+- expose personal profile photos outside the existing privacy rules.
+
+PERMISSIONS AFTER REASSIGNMENT
+
+After reassignment:
+
+- the new assignee immediately gains the existing assigned-person permissions;
+- the previous assignee immediately becomes read-only;
+- the owner retains owner visibility;
+- the conversation header updates to the new assignee;
+- the company name remains visible;
+- existing conversation and job history remains unchanged.
+
+CUSTOMER COMMUNICATION
+
+Create one clear customer-visible system message, for example:
+
+“Your job is now being handled by [First name] from [Company name].”
+
+Do not expose internal role, membership or user IDs.
+
+Send:
+
+- one customer notification;
+- one notification to the new assignee;
+- an internal notification to the previous assignee when they remain an active member;
+- owner notification only where required, with recipient deduplication.
+
+Do not create duplicate system messages or notifications during retries.
+
+MEMBER REMOVAL / DEACTIVATION
+
+When an employee is removed or deactivated:
+
+- all active/open jobs currently assigned to that employee must be reassigned automatically to the owner;
+- completed and cancelled jobs retain the historical assigned person;
+- historical message/quote/action authorship must remain unchanged;
+- the removed employee loses access immediately;
+- job handover and membership removal must not leave an active job assigned to an inactive member.
+
+Define “active/open” using the existing canonical job states rather than duplicating status strings.
+
+For customer-visible active jobs, create the appropriate single reassignment system message and notification.
+
+The removal flow must be atomic or otherwise designed so partial handover cannot leave inconsistent permissions.
+
+RACE SAFETY
+
+Review and test races between:
+
+- owner reassignment and an outgoing message;
+- owner reassignment and quote submission/revision;
+- member removal and an outgoing message;
+- member removal and booking/completion actions;
+- two simultaneous reassignment requests;
+- reassignment retries.
+
+Expected rule:
+
+- whichever transaction commits first determines the valid state;
+- no action from a non-assigned or removed member may persist after reassignment/removal has taken effect;
+- no duplicate message, quote, audit event or notification may be created.
+
+OWNER UI
+
+Add a small reassignment control in the appropriate owner job/conversation screen.
+
+Requirements:
+
+- show the current assigned person;
+- list only active company members;
+- require confirmation;
+- show success/failure clearly;
+- refresh the conversation/job state immediately;
+- keep employees’ screens read-only unless they are the assignee.
+
+Do not add reassignment controls to customer or employee accounts.
+
+ADMIN
+
+In the relevant Trader/Job/Conversation view, show:
+
+- current assigned person;
+- company;
+- assignment timestamp;
+- reassignment history using human-readable audit events.
+
+Do not expose raw audit payloads, internal IDs or invitation security data.
+
+AUDIT
+
+Record human-readable events for:
+
+- JOB REASSIGNED
+- JOBS HANDED TO OWNER ON MEMBER REMOVAL
+
+Keep previous assignee, new assignee, acting owner, company and conversation/job references internally.
+
+Retries must not create duplicate audit rows for the same reassignment operation.
+
+FEATURE FLAG
+
+Flag OFF:
+
+- existing solo-trader behaviour remains unchanged;
+- team/reassignment UI is hidden;
+- team endpoints fail closed;
+- existing mobile builds remain compatible.
+
+Flag ON:
+
+- only the owner can reassign;
+- only active same-company members can become assignees;
+- removed members remain locked out.
+
+FINAL END-TO-END REGRESSION
+
+Test the complete company-team lifecycle:
+
+1. Owner invites employee
+2. Employee accepts
+3. Both see an unclaimed lead
+4. First message claims it
+5. Competing action loses safely
+6. Customer sees assigned identity
+7. Owner reassigns the job
+8. Previous employee becomes read-only
+9. New employee continues the same job
+10. Owner removes the employee
+11. Active jobs transfer safely to owner
+12. Completed history remains attributed correctly
+
+Also test:
+
+- quote-first claiming;
+- owner claiming;
+- assignment after hire;
+- completed/cancelled reassignment denial;
+- cross-company probes;
+- removed-member session access;
+- notification deduplication;
+- feature flag OFF and ON;
+- current solo-trader flows;
+- existing quote, booking, appointment, completion and review flows.
+
+Run complete API suites with the flag OFF and ON, Admin tests, all relevant typechecks and a focused authorization/concurrency review.
+
+Commit and push to origin/main, then report:
+
+1. Commit hash
+2. Files changed
+3. Reassignment and removal transaction design
+4. Race-test results
+5. Notifications and system messages
+6. Admin/mobile surfaces changed
+7. Full test results
+8. Deployment and rollout requirements
+9. Recommended final TestFlight acceptance checklist
+
+Do not publish production or enable the flag. STOP after Phase 3.

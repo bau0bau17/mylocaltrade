@@ -1613,6 +1613,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/OkResponse"
 
+  /conversations/{id}/reassign:
+    post:
+      operationId: reassignConversation
+      tags: [conversations]
+      summary: "Company Teams: owner reassigns a live job to another active member"
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReassignConversationRequest"
+      responses:
+        "200":
+          description: Reassigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReassignConversationResponse"
+
   /conversations/{id}/trader-status:
     patch:
       operationId: updateConversationTraderStatus
@@ -3787,6 +3814,15 @@ components:
             (it is unclaimed, or claimed by them). False drives the read-only
             "claimed by a colleague" experience. Always null for customers;
             always true with teams disabled.
+        viewerCanReassign:
+          type: boolean
+          nullable: true
+          description: |
+            Trader-side viewers only: whether the caller may REASSIGN this job
+            to another team member (company owner, teams enabled, live job
+            with a current assignee). Only meaningful on the conversation
+            detail endpoint; always null for customers and false with teams
+            disabled.
         createdAt:
           type: string
           format: date-time
@@ -3804,6 +3840,29 @@ components:
         - muted
         - lastMessageAt
         - createdAt
+
+    ReassignConversationRequest:
+      type: object
+      properties:
+        toUserId:
+          type: integer
+          description: |
+            User id of the ACTIVE company member to hand the job to. The
+            owner may pass their own id to take the job back themselves.
+      required:
+        - toUserId
+
+    ReassignConversationResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        assignedTraderUserId:
+          type: integer
+          description: The member now handling the job.
+      required:
+        - ok
+        - assignedTraderUserId
 
     UnreadCountResponse:
       type: object

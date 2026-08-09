@@ -924,7 +924,27 @@ gallery-file endpoint.
 always true with teams disabled.
  */
   viewerCanAct?: boolean | null;
+  /** Trader-side viewers only: whether the caller may REASSIGN this job
+to another team member (company owner, teams enabled, live job
+with a current assignee). Only meaningful on the conversation
+detail endpoint; always null for customers and false with teams
+disabled.
+ */
+  viewerCanReassign?: boolean | null;
   createdAt: string;
+}
+
+export interface ReassignConversationRequest {
+  /** User id of the ACTIVE company member to hand the job to. The
+owner may pass their own id to take the job back themselves.
+ */
+  toUserId: number;
+}
+
+export interface ReassignConversationResponse {
+  ok: boolean;
+  /** The member now handling the job. */
+  assignedTraderUserId: number;
 }
 
 export interface UnreadCountResponse {

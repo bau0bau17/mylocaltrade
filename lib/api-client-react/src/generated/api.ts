@@ -67,6 +67,8 @@ import type {
   PostAccountDeletionRequest200,
   PostAccountDeletionRequestBody,
   QuoteResponse,
+  ReassignConversationRequest,
+  ReassignConversationResponse,
   RegisterCustomerRequest,
   RegisterPendingResponse,
   RegisterPushTokenRequest,
@@ -4408,6 +4410,97 @@ export const useCloseConversation = <
   TContext
 > => {
   return useMutation(getCloseConversationMutationOptions(options));
+};
+
+/**
+ * @summary Company Teams: owner reassigns a live job to another active member
+ */
+export const getReassignConversationUrl = (id: number) => {
+  return `/api/conversations/${id}/reassign`;
+};
+
+export const reassignConversation = async (
+  id: number,
+  reassignConversationRequest: ReassignConversationRequest,
+  options?: RequestInit,
+): Promise<ReassignConversationResponse> => {
+  return customFetch<ReassignConversationResponse>(
+    getReassignConversationUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(reassignConversationRequest),
+    },
+  );
+};
+
+export const getReassignConversationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reassignConversation>>,
+    TError,
+    { id: number; data: BodyType<ReassignConversationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reassignConversation>>,
+  TError,
+  { id: number; data: BodyType<ReassignConversationRequest> },
+  TContext
+> => {
+  const mutationKey = ["reassignConversation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reassignConversation>>,
+    { id: number; data: BodyType<ReassignConversationRequest> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return reassignConversation(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReassignConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reassignConversation>>
+>;
+export type ReassignConversationMutationBody =
+  BodyType<ReassignConversationRequest>;
+export type ReassignConversationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Company Teams: owner reassigns a live job to another active member
+ */
+export const useReassignConversation = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reassignConversation>>,
+    TError,
+    { id: number; data: BodyType<ReassignConversationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reassignConversation>>,
+  TError,
+  { id: number; data: BodyType<ReassignConversationRequest> },
+  TContext
+> => {
+  return useMutation(getReassignConversationMutationOptions(options));
 };
 
 /**

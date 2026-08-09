@@ -86,5 +86,12 @@ gallery-file endpoint.
 always true with teams disabled.
  */
   viewerCanAct?: boolean | null;
+  /** Trader-side viewers only: whether the caller may REASSIGN this job
+to another team member (company owner, teams enabled, live job
+with a current assignee). Only meaningful on the conversation
+detail endpoint; always null for customers and false with teams
+disabled.
+ */
+  viewerCanReassign?: boolean | null;
   createdAt: Date;
 }

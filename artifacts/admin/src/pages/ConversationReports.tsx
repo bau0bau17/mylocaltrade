@@ -106,6 +106,11 @@ interface AdminConvResponse {
     traderStatus: string;
     createdAt: string;
     lastMessageAt: string;
+    // Company Teams: person currently handling the job (null = legacy or
+    // unclaimed lead), plus when the assignment was made.
+    assignedTraderUserId?: number | null;
+    assignedTraderName?: string | null;
+    assignedAt?: string | null;
   };
   messagesAccessible: boolean;
   messages: AdminConvMessage[];
@@ -359,6 +364,28 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
         ))}
       </div>
     ) : null;
+  // Company Teams: who inside the company is handling the job right now.
+  // Shown only when an assignee exists (legacy conversations have none).
+  const assignedPanel = data.conversation.assignedTraderName ? (
+    <div
+      className="border rounded-md bg-muted/30 p-3 space-y-1"
+      data-testid={`assigned-panel-${conversationId}`}
+    >
+      <div className="flex items-center gap-2 font-semibold text-sm">
+        <ShieldAlert className="w-4 h-4 text-muted-foreground" />
+        Handled by
+      </div>
+      <p className="text-sm">
+        {data.conversation.assignedTraderName}
+        <span className="text-muted-foreground"> · {data.conversation.traderBusinessName}</span>
+      </p>
+      {data.conversation.assignedAt ? (
+        <p className="text-xs text-muted-foreground">
+          Assigned {formatDateTime(data.conversation.assignedAt)}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
   const bypass = data.contactBypass;
   const bypassPanel =
     bypass && bypass.total > 0 ? (
@@ -423,6 +450,7 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
     return (
       <div className="space-y-3">
         {participantsPanel}
+        {assignedPanel}
         {bookingPanel}
         {bypassPanel}
         <Alert>
@@ -437,6 +465,7 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
   return (
     <div className="space-y-3">
       {participantsPanel}
+      {assignedPanel}
       {bookingPanel}
       {bypassPanel}
       {quotes.length > 0 ? (

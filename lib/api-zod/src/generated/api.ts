@@ -2671,6 +2671,12 @@ export const GetConversationsResponse = zod.object({
         .describe(
           'Trader-side viewers only: whether the caller may act on this job\n(it is unclaimed, or claimed by them). False drives the read-only\n\"claimed by a colleague\" experience. Always null for customers;\nalways true with teams disabled.\n',
         ),
+      viewerCanReassign: zod
+        .boolean()
+        .nullish()
+        .describe(
+          "Trader-side viewers only: whether the caller may REASSIGN this job\nto another team member (company owner, teams enabled, live job\nwith a current assignee). Only meaningful on the conversation\ndetail endpoint; always null for customers and false with teams\ndisabled.\n",
+        ),
       createdAt: zod.date(),
     }),
   ),
@@ -2806,6 +2812,12 @@ export const GetConversationResponse = zod.object({
       .nullish()
       .describe(
         'Trader-side viewers only: whether the caller may act on this job\n(it is unclaimed, or claimed by them). False drives the read-only\n\"claimed by a colleague\" experience. Always null for customers;\nalways true with teams disabled.\n',
+      ),
+    viewerCanReassign: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Trader-side viewers only: whether the caller may REASSIGN this job\nto another team member (company owner, teams enabled, live job\nwith a current assignee). Only meaningful on the conversation\ndetail endpoint; always null for customers and false with teams\ndisabled.\n",
       ),
     createdAt: zod.date(),
   }),
@@ -2949,6 +2961,28 @@ export const CloseConversationParams = zod.object({
 
 export const CloseConversationResponse = zod.object({
   ok: zod.boolean(),
+});
+
+/**
+ * @summary Company Teams: owner reassigns a live job to another active member
+ */
+export const ReassignConversationParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ReassignConversationBody = zod.object({
+  toUserId: zod
+    .number()
+    .describe(
+      "User id of the ACTIVE company member to hand the job to. The\nowner may pass their own id to take the job back themselves.\n",
+    ),
+});
+
+export const ReassignConversationResponse = zod.object({
+  ok: zod.boolean(),
+  assignedTraderUserId: zod
+    .number()
+    .describe("The member now handling the job."),
 });
 
 /**

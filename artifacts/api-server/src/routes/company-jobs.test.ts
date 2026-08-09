@@ -1,11 +1,13 @@
 import { describe, it, beforeAll, afterAll, beforeEach, expect, vi } from "vitest";
 import { Readable } from "stream";
+import crypto from "node:crypto";
 import request from "supertest";
 import { db } from "@workspace/db";
 import {
   usersTable,
   traderProfilesTable,
   companyMembersTable,
+  companyInvitesTable,
   conversationsTable,
   messagesTable,
   quotesTable,
@@ -74,6 +76,7 @@ const createdUserIds: number[] = [];
 const createdProfileIds: number[] = [];
 const createdEnquiryIds: number[] = [];
 const createdConversationIds: number[] = [];
+const createdInviteIds: number[] = [];
 
 async function createUser(
   role: "customer" | "trader",
@@ -379,6 +382,9 @@ afterAll(async () => {
   }
   if (createdEnquiryIds.length) {
     await db.delete(enquiriesTable).where(inArray(enquiriesTable.id, createdEnquiryIds));
+  }
+  if (createdInviteIds.length) {
+    await db.delete(companyInvitesTable).where(inArray(companyInvitesTable.id, createdInviteIds));
   }
   if (createdUserIds.length) {
     await db
@@ -928,5 +934,662 @@ describe("flag OFF regression", () => {
 
     const asOwner = (await getDetail(convId, ownerBToken)).body.conversation;
     expect(asOwner.viewerCanAct).toBe(true);
+  });
+});
+
+// ===========================================================================
+// Phase 3 — owner reassignment, safe member removal with job handover
+// ===========================================================================
+
+function reassign(convId: number, token: string, toUserId: number) {
+  return request(app)
+    .post(`/api/conversations/${convId}/reassign`)
+    .set("Authorization", `Bearer ${token}`)
+    .send({ toUserId });
+}
+
+function removeMember(memberId: number, token: string) {
+  return request(app)
+    .post(`/api/company/members/${memberId}/remove`)
+    .set("Authorization", `Bearer ${token}`)
+    .send({});
+}
+
+async function systemMessages(convId: number) {
+  return db
+    .select()
+    .from(messagesTable)
+    .where(
+      and(eq(messagesTable.conversationId, convId), eq(messagesTable.senderRole, "system")),
+    );
+}
+
+/** Only the reassignment/handover system messages (quote/hire milestones share the table). */
+async function handoverMessages(convId: number) {
+  const all = await systemMessages(convId);
+  return all.filter((m) => m.body.startsWith("Your job is now being handled by"));
+}
+
+const forReassign =
+  (convId: number) =>
+  (p: Record<string, unknown>): boolean => {
+    const d = p["data"] as Record<string, unknown> | undefined;
+    return d?.["type"] === "job_reassigned" && d?.["conversationId"] === convId;
+  };
+
+async function membershipIdOf(profileId: number, userId: number): Promise<number> {
+  const [row] = await db
+    .select({ id: companyMembersTable.id })
+    .from(companyMembersTable)
+    .where(
+      and(
+        eq(companyMembersTable.traderProfileId, profileId),
+        eq(companyMembersTable.userId, userId),
+      ),
+    )
+    .limit(1);
+  return row.id;
+}
+
+async function fullNameOf(userId: number): Promise<string> {
+  const [row] = await db
+    .select({ fullName: usersTable.fullName })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  return row.fullName;
+}
+
+async function businessNameOf(profileId: number): Promise<string> {
+  const [row] = await db
+    .select({ businessName: traderProfilesTable.businessName })
+    .from(traderProfilesTable)
+    .where(eq(traderProfilesTable.id, profileId))
+    .limit(1);
+  return row.businessName;
+}
+
+/** The aggregate handover audit stores conversationIds as an ARRAY — auditsFor can't see it. */
+async function handoverAuditsFor(convId: number): Promise<AuditRow[]> {
+  const rows = await db
+    .select()
+    .from(traderAuditLogTable)
+    .where(
+      and(
+        eq(traderAuditLogTable.action, "JOBS_HANDED_TO_OWNER_ON_MEMBER_REMOVAL"),
+        inArray(traderAuditLogTable.userId, createdUserIds),
+      ),
+    );
+  return rows.filter((r) =>
+    (
+      (r.details as Record<string, unknown> | null)?.["conversationIds"] as number[] | undefined
+    )?.includes(convId),
+  );
+}
+
+async function waitForHandoverAudits(convId: number, expectAtLeast = 1): Promise<AuditRow[]> {
+  const deadline = Date.now() + 4000;
+  for (;;) {
+    const rows = await handoverAuditsFor(convId);
+    if (rows.length >= expectAtLeast || Date.now() > deadline) {
+      if (rows.length >= expectAtLeast) {
+        // Settle window so a duplicate write (the bug we test against) would land.
+        await new Promise((r) => setTimeout(r, 250));
+        return handoverAuditsFor(convId);
+      }
+      return rows;
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Owner reassignment
+// ---------------------------------------------------------------------------
+describe("owner reassignment (flag ON)", () => {
+  it("happy path: job moves, all state preserved, one sysmsg, right pushes, one audit", async () => {
+    const convId = await seedLead();
+    // Realistic history: empOne claims via API and quotes.
+    expect((await sendMsg(convId, empOneToken)).status).toBe(201);
+    expect((await sendQuote(convId, empOneToken)).status).toBeLessThan(300);
+    const before = await getConv(convId);
+
+    pushMock.mockClear();
+    const res = await reassign(convId, ownerAToken, empTwo);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, assignedTraderUserId: empTwo });
+
+    const after = await getConv(convId);
+    expect(after.assignedTraderUserId).toBe(empTwo);
+    expect(after.assignedAt).not.toBeNull();
+    // Everything the customer already has is untouched.
+    expect(after.customerId).toBe(before.customerId);
+    expect(after.enquiryId).toBe(before.enquiryId);
+    expect(after.status).toBe(before.status);
+    expect(after.customerAcceptedAt).toEqual(before.customerAcceptedAt);
+    expect(after.cancelledAt).toBeNull();
+    expect(await quotesCount(convId)).toBe(1);
+    expect(await traderMessagesCount(convId)).toBe(1);
+    // Authorship of past messages does not change hands.
+    const traderMsgs = await db
+      .select()
+      .from(messagesTable)
+      .where(
+        and(eq(messagesTable.conversationId, convId), eq(messagesTable.senderRole, "trader")),
+      );
+    expect(traderMsgs[0].senderUserId).toBe(empOne);
+
+    // Exactly ONE customer-facing system message: first name + company name.
+    const empTwoFirst = (await fullNameOf(empTwo)).trim().split(/\s+/)[0];
+    const sys = await handoverMessages(convId);
+    expect(sys).toHaveLength(1);
+    expect(sys[0].body).toBe(
+      `Your job is now being handled by ${empTwoFirst} from ${await businessNameOf(profileA)}.`,
+    );
+    expect(after.customerUnreadCount).toBe(before.customerUnreadCount + 1);
+
+    // Pushes: customer + new assignee + previous assignee — never the actor.
+    const recipients = await waitForPushes(3, forReassign(convId));
+    expect(new Set(recipients)).toEqual(new Set([customer, empTwo, empOne]));
+    expect(recipients).toHaveLength(3);
+
+    // Exactly one audit row, anchored to the owner, from → to recorded.
+    const audits = await waitForAudits(convId, "JOB_REASSIGNED");
+    expect(audits).toHaveLength(1);
+    expect(audits[0].userId).toBe(ownerA);
+    expect(audits[0].performedBy).toBe(ownerA);
+    const d = audits[0].details as Record<string, unknown>;
+    expect(d["fromUserId"]).toBe(empOne);
+    expect(d["toUserId"]).toBe(empTwo);
+
+    // Permission flip is immediate: previous assignee is read-only, new one acts.
+    const asPrev = await sendMsg(convId, empOneToken, "Just checking back in on this one");
+    expect(asPrev.status).toBe(409);
+    expect(asPrev.body.code).toBe("JOB_CLAIMED_BY_OTHER");
+    expect((await sendMsg(convId, empTwoToken, "Hi, I'm taking over this job now")).status).toBe(
+      201,
+    );
+  });
+
+  it("owner takes a job over themselves: prev assignee informed, no self-push", async () => {
+    const convId = await seedLead({ assignedTo: empOne });
+    pushMock.mockClear();
+    expect((await reassign(convId, ownerAToken, ownerA)).status).toBe(200);
+    expect((await getConv(convId)).assignedTraderUserId).toBe(ownerA);
+
+    const recipients = await waitForPushes(2, forReassign(convId));
+    expect(new Set(recipients)).toEqual(new Set([customer, empOne]));
+    expect(recipients).toHaveLength(2);
+
+    // The owner now acts freely; the previous assignee is read-only.
+    expect((await sendMsg(convId, ownerAToken, "Hello, the owner here taking over")).status).toBe(
+      201,
+    );
+    expect((await sendMsg(convId, empOneToken, "Wait, this was my job")).status).toBe(409);
+  });
+
+  it("an unclaimed lead can be handed straight to a member (from unassigned)", async () => {
+    const convId = await seedLead();
+    pushMock.mockClear();
+    expect((await reassign(convId, ownerAToken, empOne)).status).toBe(200);
+    expect((await getConv(convId)).assignedTraderUserId).toBe(empOne);
+
+    // No previous assignee: exactly customer + new assignee are told.
+    const recipients = await waitForPushes(2, forReassign(convId));
+    expect(new Set(recipients)).toEqual(new Set([customer, empOne]));
+    const audits = await waitForAudits(convId, "JOB_REASSIGNED");
+    expect((audits[0].details as Record<string, unknown>)["fromUserId"]).toBeNull();
+  });
+
+  it("employees (even the assignee) and customers can never reassign", async () => {
+    const convId = await seedLead({ assignedTo: empOne });
+    for (const [token, who] of [
+      [empOneToken, "assignee"],
+      [empTwoToken, "colleague"],
+      [customerToken, "customer"],
+    ] as const) {
+      const res = await reassign(convId, token, empTwo);
+      expect(res.status, `403 expected for ${who}`).toBe(403);
+      expect(res.body.code).toBe("OWNER_ONLY");
+    }
+    // Zero side effects from any rejected attempt.
+    expect((await getConv(convId)).assignedTraderUserId).toBe(empOne);
+    expect(await handoverMessages(convId)).toHaveLength(0);
+    expect(await auditsFor(convId, "JOB_REASSIGNED")).toHaveLength(0);
+  });
+
+  it("pending/removed/other-company/arbitrary targets are all INVALID_ASSIGNEE", async () => {
+    const convId = await seedLead({ assignedTo: empOne });
+    for (const target of [removedEmp, empB, customer, 99999999]) {
+      const res = await reassign(convId, ownerAToken, target);
+      expect(res.status, `target ${target}`).toBe(400);
+      expect(res.body.code).toBe("INVALID_ASSIGNEE");
+    }
+    const malformed = await request(app)
+      .post(`/api/conversations/${convId}/reassign`)
+      .set("Authorization", `Bearer ${ownerAToken}`)
+      .send({ toUserId: "not-a-number" });
+    expect(malformed.status).toBe(400);
+
+    expect((await getConv(convId)).assignedTraderUserId).toBe(empOne);
+    expect(await handoverMessages(convId)).toHaveLength(0);
+    expect(await auditsFor(convId, "JOB_REASSIGNED")).toHaveLength(0);
+  });
+
+  it("other companies' jobs and unknown ids are indistinguishable 404s", async () => {
+    const convB = await seedLead({ company: "B", assignedTo: empB });
+    expect((await reassign(convB, ownerAToken, empTwo)).status).toBe(404);
+    expect((await reassign(99999999, ownerAToken, empTwo)).status).toBe(404);
+    expect((await getConv(convB)).assignedTraderUserId).toBe(empB);
+  });
+
+  it("completed, cancelled and closed jobs cannot change hands", async () => {
+    const done = await seedLead({ assignedTo: empOne, hired: true });
+    await db
+      .update(conversationsTable)
+      .set({ customerCompletedAt: new Date() })
+      .where(eq(conversationsTable.id, done));
+    const cancelled = await seedLead({ assignedTo: empOne });
+    await db
+      .update(conversationsTable)
+      .set({ cancelledAt: new Date() })
+      .where(eq(conversationsTable.id, cancelled));
+    const closed = await seedLead({ assignedTo: empOne });
+    await db
+      .update(conversationsTable)
+      .set({ status: "CLOSED" })
+      .where(eq(conversationsTable.id, closed));
+
+    for (const convId of [done, cancelled, closed]) {
+      const res = await reassign(convId, ownerAToken, empTwo);
+      expect(res.status, `conversation ${convId}`).toBe(409);
+      expect(res.body.code).toBe("JOB_NOT_ACTIVE");
+      expect((await getConv(convId)).assignedTraderUserId).toBe(empOne);
+      expect(await handoverMessages(convId)).toHaveLength(0);
+    }
+  });
+
+  it("same-target retry / double-tap is a side-effect-free 409", async () => {
+    const convId = await seedLead({ assignedTo: empOne });
+    expect((await reassign(convId, ownerAToken, empTwo)).status).toBe(200);
+
+    const retry = await reassign(convId, ownerAToken, empTwo);
+    expect(retry.status).toBe(409);
+    expect(retry.body.code).toBe("ALREADY_ASSIGNED");
+
+    expect((await getConv(convId)).assignedTraderUserId).toBe(empTwo);
+    expect(await handoverMessages(convId)).toHaveLength(1);
+    expect(await waitForAudits(convId, "JOB_REASSIGNED")).toHaveLength(1);
+  });
+
+  it("viewerCanReassign: owner-only, live+assigned-only, absent for customers", async () => {
+    const convId = await seedLead({ assignedTo: empOne });
+    expect((await getDetail(convId, ownerAToken)).body.conversation.viewerCanReassign).toBe(true);
+    expect((await getDetail(convId, empOneToken)).body.conversation.viewerCanReassign).toBe(false);
+    expect((await getDetail(convId, empTwoToken)).body.conversation.viewerCanReassign).toBe(false);
+    expect(
+      (await getDetail(convId, customerToken)).body.conversation.viewerCanReassign == null,
+    ).toBe(true);
+
+    const unclaimed = await seedLead();
+    expect((await getDetail(unclaimed, ownerAToken)).body.conversation.viewerCanReassign).toBe(
+      false,
+    );
+
+    const done = await seedLead({ assignedTo: empOne, hired: true });
+    await db
+      .update(conversationsTable)
+      .set({ customerCompletedAt: new Date() })
+      .where(eq(conversationsTable.id, done));
+    expect((await getDetail(done, ownerAToken)).body.conversation.viewerCanReassign).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reassignment races — first commit wins, losers leave nothing behind
+// ---------------------------------------------------------------------------
+describe("reassignment races (flag ON)", () => {
+  it("parallel double-tap: one winner, one 409, one sysmsg, one audit", async () => {
+    const convId = await seedLead({ assignedTo: empOne });
+    const [a, b] = await Promise.all([
+      reassign(convId, ownerAToken, empTwo),
+      reassign(convId, ownerAToken, empTwo),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const loser = a.status === 409 ? a : b;
+    expect(loser.body.code).toBe("ALREADY_ASSIGNED");
+
+    expect((await getConv(convId)).assignedTraderUserId).toBe(empTwo);
+    expect(await handoverMessages(convId)).toHaveLength(1);
+    expect(await waitForAudits(convId, "JOB_REASSIGNED")).toHaveLength(1);
+  });
+
+  it("reassign vs the assignee's message: consistent outcome either way", async () => {
+    const convId = await seedLead({ assignedTo: empOne });
+    const [re, msg] = await Promise.all([
+      reassign(convId, ownerAToken, empTwo),
+      sendMsg(convId, empOneToken, "Racing my own reassignment here"),
+    ]);
+    // The reassignment always lands (a message never blocks it)...
+    expect(re.status).toBe(200);
+    expect((await getConv(convId)).assignedTraderUserId).toBe(empTwo);
+    // ...and the message either genuinely won (persisted) or cleanly lost (nothing).
+    expect([201, 409]).toContain(msg.status);
+    expect(await traderMessagesCount(convId)).toBe(msg.status === 201 ? 1 : 0);
+  });
+
+  it("reassign vs cancel: first commit wins, the loser rolls back cleanly", async () => {
+    const convId = await seedLead({ assignedTo: empOne });
+    const [re, ca] = await Promise.all([
+      reassign(convId, ownerAToken, empTwo),
+      request(app)
+        .post(`/api/conversations/${convId}/cancel`)
+        .set("Authorization", `Bearer ${empOneToken}`)
+        .send({ reason: "No longer available for this work" }),
+    ]);
+    const conv = await getConv(convId);
+    if (re.status === 200) {
+      // Reassignment won — the ex-assignee's cancel must have been rejected.
+      expect(ca.status).toBe(409);
+      expect(conv.assignedTraderUserId).toBe(empTwo);
+      expect(conv.cancelledAt).toBeNull();
+    } else {
+      // Cancel won — the reassignment saw a dead job.
+      expect(re.status).toBe(409);
+      expect(re.body.code).toBe("JOB_NOT_ACTIVE");
+      expect(ca.status).toBeLessThan(300);
+      expect(conv.cancelledAt).not.toBeNull();
+      expect(conv.assignedTraderUserId).toBe(empOne);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Member removal hands live jobs to the owner
+// ---------------------------------------------------------------------------
+describe("member removal hands live jobs to the owner (flag ON)", () => {
+  it("live jobs move atomically; finished jobs keep history; customers are told once each", async () => {
+    // Disposable employee so the shared fixtures survive this test.
+    const tempEmp = await createUser("trader", "tempHandover", { fullName: "Tamsin Handover" });
+    await insertMembership({ profileId: profileA, userId: tempEmp });
+    const tempToken = generateToken(tempEmp, "trader");
+    const memberId = await membershipIdOf(profileA, tempEmp);
+
+    // Live claimed lead + live hired job → must move. Completed + cancelled → must not.
+    const liveLead = await seedLead();
+    expect((await sendMsg(liveLead, tempToken)).status).toBe(201);
+    const hiredJob = await seedLead({ customerId: customerTwo, assignedTo: tempEmp, hired: true });
+    const doneJob = await seedLead({ assignedTo: tempEmp, hired: true });
+    await db
+      .update(conversationsTable)
+      .set({ customerCompletedAt: new Date() })
+      .where(eq(conversationsTable.id, doneJob));
+    const cancelledJob = await seedLead({ assignedTo: tempEmp });
+    await db
+      .update(conversationsTable)
+      .set({ cancelledAt: new Date() })
+      .where(eq(conversationsTable.id, cancelledJob));
+
+    pushMock.mockClear();
+    expect((await removeMember(memberId, ownerAToken)).status).toBe(200);
+
+    expect((await getConv(liveLead)).assignedTraderUserId).toBe(ownerA);
+    expect((await getConv(hiredJob)).assignedTraderUserId).toBe(ownerA);
+    expect((await getConv(doneJob)).assignedTraderUserId).toBe(tempEmp);
+    expect((await getConv(cancelledJob)).assignedTraderUserId).toBe(tempEmp);
+
+    // Authorship of the removed member's messages is untouched.
+    const msgs = await db
+      .select()
+      .from(messagesTable)
+      .where(
+        and(eq(messagesTable.conversationId, liveLead), eq(messagesTable.senderRole, "trader")),
+      );
+    expect(msgs[0].senderUserId).toBe(tempEmp);
+
+    // One push per affected customer; neither the owner (actor) nor the removed
+    // member. Waiting on the pushes also settles the fire-and-forget loop that
+    // posts each customer message BEFORE its push.
+    const recipients = await waitForPushes(
+      2,
+      (p) => (p["data"] as Record<string, unknown> | undefined)?.["type"] === "job_reassigned",
+    );
+    expect(new Set(recipients)).toEqual(new Set([customer, customerTwo]));
+    expect(recipients).toHaveLength(2);
+
+    // One customer system message per LIVE job, none for finished ones.
+    const ownerFirst = (await fullNameOf(ownerA)).trim().split(/\s+/)[0];
+    const bizName = await businessNameOf(profileA);
+    for (const convId of [liveLead, hiredJob]) {
+      const sys = await handoverMessages(convId);
+      expect(sys, `conversation ${convId}`).toHaveLength(1);
+      expect(sys[0].body).toBe(`Your job is now being handled by ${ownerFirst} from ${bizName}.`);
+    }
+    expect(await handoverMessages(doneJob)).toHaveLength(0);
+    expect(await handoverMessages(cancelledJob)).toHaveLength(0);
+
+    // ONE aggregate audit row for the whole removal, listing exactly the moved jobs.
+    const handovers = await waitForHandoverAudits(liveLead);
+    expect(handovers).toHaveLength(1);
+    const details = handovers[0].details as Record<string, unknown>;
+    expect(new Set(details["conversationIds"] as number[])).toEqual(
+      new Set([liveLead, hiredJob]),
+    );
+    expect(details["fromUserId"]).toBe(tempEmp);
+    expect(details["toUserId"]).toBe(ownerA);
+
+    // The removed member is locked out immediately.
+    expect((await sendMsg(liveLead, tempToken, "Am I still on this job")).status,
+    ).toBeGreaterThanOrEqual(403);
+
+    // Removing again: clean 409, no duplicate handover side effects.
+    expect((await removeMember(memberId, ownerAToken)).status).toBe(409);
+    expect(await handoverAuditsFor(liveLead)).toHaveLength(1);
+    expect(await handoverMessages(liveLead)).toHaveLength(1);
+  });
+
+  it("removal with no live jobs: no handover audit, no messages, no pushes", async () => {
+    const tempEmp = await createUser("trader", "tempQuiet", { fullName: "Quinn Quiet" });
+    await insertMembership({ profileId: profileA, userId: tempEmp });
+    const memberId = await membershipIdOf(profileA, tempEmp);
+    const doneJob = await seedLead({ assignedTo: tempEmp, hired: true });
+    await db
+      .update(conversationsTable)
+      .set({ customerCompletedAt: new Date() })
+      .where(eq(conversationsTable.id, doneJob));
+
+    pushMock.mockClear();
+    expect((await removeMember(memberId, ownerAToken)).status).toBe(200);
+
+    expect((await getConv(doneJob)).assignedTraderUserId).toBe(tempEmp);
+    expect(await handoverMessages(doneJob)).toHaveLength(0);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(
+      pushedUserIds(
+        (p) => (p["data"] as Record<string, unknown> | undefined)?.["type"] === "job_reassigned",
+      ),
+    ).toHaveLength(0);
+    expect(await handoverAuditsFor(doneJob)).toHaveLength(0);
+  });
+
+  it("removal racing the departing member's write never corrupts the job", async () => {
+    const tempEmp = await createUser("trader", "tempRace", { fullName: "Riley Race" });
+    await insertMembership({ profileId: profileA, userId: tempEmp });
+    const tempToken = generateToken(tempEmp, "trader");
+    const memberId = await membershipIdOf(profileA, tempEmp);
+    const convId = await seedLead({ assignedTo: tempEmp });
+
+    const [rem, msg] = await Promise.all([
+      removeMember(memberId, ownerAToken),
+      sendMsg(convId, tempToken, "Sending one last update before I go"),
+    ]);
+    expect(rem.status).toBe(200);
+    expect([201, 403, 404, 409]).toContain(msg.status);
+    // Whatever the interleaving: the job ends with the owner…
+    expect((await getConv(convId)).assignedTraderUserId).toBe(ownerA);
+    // …and a message exists only if it genuinely won the race.
+    expect(await traderMessagesCount(convId)).toBe(msg.status === 201 ? 1 : 0);
+  });
+
+  it("reassign racing the target's removal never leaves the job with a revoked member", async () => {
+    const tempEmp = await createUser("trader", "tempReassignRace", { fullName: "Sasha Swap" });
+    await insertMembership({ profileId: profileA, userId: tempEmp });
+    const memberId = await membershipIdOf(profileA, tempEmp);
+    const convId = await seedLead({ assignedTo: empOne });
+
+    const [rem, rea] = await Promise.all([
+      removeMember(memberId, ownerAToken),
+      reassign(convId, ownerAToken, tempEmp),
+    ]);
+    expect(rem.status).toBe(200);
+    // The reassign either won — in which case the removal's handover (which
+    // runs strictly after its membership flip) swept the job on to the owner
+    // — or it lost the in-transaction membership re-check (400). Under no
+    // interleaving may a live job end up assigned to the revoked member.
+    expect([200, 400]).toContain(rea.status);
+    const conv = await getConv(convId);
+    expect(conv.assignedTraderUserId).toBe(rea.status === 200 ? ownerA : empOne);
+    expect(conv.assignedTraderUserId).not.toBe(tempEmp);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3 flag OFF — fail closed
+// ---------------------------------------------------------------------------
+describe("Phase 3 flag OFF — fail closed", () => {
+  beforeEach(() => {
+    setFlag(false);
+  });
+
+  it("reassign 404s and the detail payload exposes no reassign affordance", async () => {
+    const convId = await seedLead({ company: "B", assignedTo: ownerB });
+    expect((await reassign(convId, ownerBToken, ownerB)).status).toBe(404);
+    const detail = (await getDetail(convId, ownerBToken)).body.conversation;
+    expect(detail.viewerCanReassign ?? false).toBe(false);
+    expect(await handoverMessages(convId)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// End-to-end regression: the full company lifecycle in 12 steps
+// ---------------------------------------------------------------------------
+describe("end-to-end regression (flag ON)", () => {
+  it("invite → accept → claim → quote → hire → reassign ×2 → finish → immutable → remove", async () => {
+    // 1. Owner B invites a brand-new employee through the real endpoint.
+    const email = emailFor("e2e-newstarter");
+    const invited = await request(app)
+      .post("/api/company/invites")
+      .set("Authorization", `Bearer ${ownerBToken}`)
+      .send({ email });
+    expect(invited.status).toBeLessThan(300);
+    const [inviteRow] = await db
+      .select()
+      .from(companyInvitesTable)
+      .where(
+        and(
+          eq(companyInvitesTable.traderProfileId, profileB),
+          eq(companyInvitesTable.email, email.toLowerCase()),
+        ),
+      )
+      .limit(1);
+    expect(inviteRow).toBeDefined();
+    createdInviteIds.push(inviteRow.id);
+
+    // 2. Accept via the real endpoint. The raw token normally only exists in
+    //    the email, so plant a known one on the real invite row first.
+    const raw = `e2e-raw-token-${SUFFIX}`;
+    await db
+      .update(companyInvitesTable)
+      .set({ tokenHash: crypto.createHash("sha256").update(raw).digest("hex") })
+      .where(eq(companyInvitesTable.id, inviteRow.id));
+    const accepted = await request(app)
+      .post("/api/company/invites/accept")
+      .send({ token: raw, fullName: "Ellis Newstarter", password: "Password123!" });
+    expect(accepted.status).toBe(201);
+    const empNew = accepted.body.user.id as number;
+    createdUserIds.push(empNew);
+    const empNewToken = accepted.body.token as string;
+
+    // 3. A customer enquiry creates an UNASSIGNED company lead.
+    const enq = await request(app)
+      .post("/api/enquiries")
+      .set("Authorization", `Bearer ${customerTwoToken}`)
+      .send({
+        traderId: profileB,
+        message: "Please quote for a full bathroom refit",
+        serviceRequired: "Bathroom fitting",
+      });
+    expect(enq.status).toBeLessThan(300);
+    createdEnquiryIds.push(enq.body.id);
+    const convId = enq.body.conversationId as number;
+    createdConversationIds.push(convId);
+    expect((await getConv(convId)).assignedTraderUserId).toBeNull();
+
+    // 4. The new employee's first reply claims the job.
+    expect((await sendMsg(convId, empNewToken)).status).toBe(201);
+    expect((await getConv(convId)).assignedTraderUserId).toBe(empNew);
+
+    // 5. They quote through the normal endpoint.
+    const quoted = await sendQuote(convId, empNewToken);
+    expect(quoted.status).toBeLessThan(300);
+    const quoteId = quoted.body.quote.id as number;
+
+    // 6. The customer accepts the quote — the job is hired.
+    const hire = await request(app)
+      .post(`/api/quotes/${quoteId}/accept`)
+      .set("Authorization", `Bearer ${customerTwoToken}`)
+      .send({});
+    expect(hire.status).toBeLessThan(300);
+    expect((await getConv(convId)).customerAcceptedAt).not.toBeNull();
+
+    // 7. Owner pulls the HIRED job to themselves — hire state + quote untouched.
+    expect((await reassign(convId, ownerBToken, ownerB)).status).toBe(200);
+    const midway = await getConv(convId);
+    expect(midway.assignedTraderUserId).toBe(ownerB);
+    expect(midway.customerAcceptedAt).not.toBeNull();
+    expect(await quotesCount(convId)).toBe(1);
+
+    // 8. …and hands it back to the employee.
+    expect((await reassign(convId, ownerBToken, empNew)).status).toBe(200);
+    expect((await getConv(convId)).assignedTraderUserId).toBe(empNew);
+
+    // 9. The employee finishes the work.
+    expect(
+      (
+        await request(app)
+          .post(`/api/conversations/${convId}/trader-mark-done`)
+          .set("Authorization", `Bearer ${empNewToken}`)
+          .send({})
+      ).status,
+    ).toBeLessThan(300);
+
+    // 10. The customer confirms completion.
+    expect(
+      (
+        await request(app)
+          .post(`/api/conversations/${convId}/complete`)
+          .set("Authorization", `Bearer ${customerTwoToken}`)
+          .send({})
+      ).status,
+    ).toBeLessThan(300);
+    expect((await getConv(convId)).customerCompletedAt).not.toBeNull();
+
+    // 11. Finished jobs are immutable — no more reassignment.
+    const late = await reassign(convId, ownerBToken, ownerB);
+    expect(late.status).toBe(409);
+    expect(late.body.code).toBe("JOB_NOT_ACTIVE");
+
+    // 12. Removing the employee keeps the finished job's history intact.
+    const memberId = await membershipIdOf(profileB, empNew);
+    expect((await removeMember(memberId, ownerBToken)).status).toBe(200);
+    expect((await getConv(convId)).assignedTraderUserId).toBe(empNew);
+    expect(await handoverAuditsFor(convId)).toHaveLength(0);
+    expect(
+      (await sendMsg(convId, empNewToken, "Checking in after removal")).status,
+    ).toBeGreaterThanOrEqual(403);
+
+    // Two reassignments → exactly two customer messages + two audit rows.
+    expect(await handoverMessages(convId)).toHaveLength(2);
+    expect(await waitForAudits(convId, "JOB_REASSIGNED", 2)).toHaveLength(2);
   });
 });
