@@ -315,6 +315,32 @@ export function isPlaceholderEmail(email: string): boolean {
   return email.trim().toLowerCase().endsWith(".invalid");
 }
 
+/**
+ * True for addresses under RFC 2606/6761-reserved test domains
+ * (`example.com/org/net`, and the `.test` / `.example` / `.invalid` /
+ * `.localhost` TLDs). Automated tests and seed fixtures use such addresses;
+ * they can never belong to a real recipient. Refusing them inside the shared
+ * dispatcher protects the Brevo account's daily sending quota and sender
+ * reputation: a single test-suite run once burned the whole free-plan daily
+ * limit, after which Brevo silently accepted-and-dropped every production
+ * email (including password resets) for the rest of the day.
+ */
+export function isNonDeliverableTestAddress(email: string): boolean {
+  const trimmed = email.trim().toLowerCase();
+  const at = trimmed.lastIndexOf("@");
+  if (at < 0) return true; // not routable at all
+  const domain = trimmed.slice(at + 1).replace(/\.+$/, "");
+  if (/(^|\.)(test|example|invalid|localhost)$/.test(domain)) return true;
+  return (
+    domain === "example.com" ||
+    domain === "example.org" ||
+    domain === "example.net" ||
+    domain.endsWith(".example.com") ||
+    domain.endsWith(".example.org") ||
+    domain.endsWith(".example.net")
+  );
+}
+
 async function dispatchEmail(opts: DispatchOpts): Promise<"brevo" | "smtp" | "none" | "skipped"> {
   // Central safety net: no transactional email may ever be dispatched to a
   // wiped placeholder address, regardless of which flow triggered the send
@@ -322,6 +348,15 @@ async function dispatchEmail(opts: DispatchOpts): Promise<"brevo" | "smtp" | "no
   if (isPlaceholderEmail(opts.to.email)) {
     console.warn(
       `[email] [skipped-placeholder:${opts.category}] ${opts.tag} suppressed for placeholder address ${opts.to.email}`,
+    );
+    return "skipped";
+  }
+  // Reserved test/example domains (RFC 2606/6761) can never be real
+  // recipients. Tests and fixtures use them; forwarding them to the provider
+  // only burns the shared daily quota and damages sender reputation.
+  if (isNonDeliverableTestAddress(opts.to.email)) {
+    console.warn(
+      `[email] [skipped-test-domain:${opts.category}] ${opts.tag} suppressed for reserved test address ${opts.to.email}`,
     );
     return "skipped";
   }
