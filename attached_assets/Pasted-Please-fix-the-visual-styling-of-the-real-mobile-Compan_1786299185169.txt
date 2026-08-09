@@ -1,0 +1,27 @@
+Please fix the visual styling of the real mobile Company Team screen shown in the attached screenshot.
+
+The two large white cards do not match the rest of MyLocalTrade’s dark navy design, look visually disconnected, and create poor contrast for some of the light text.
+
+Requirements:
+
+1. Inspect the existing mobile theme tokens and comparable dark cards already used elsewhere in the app before editing. Reuse the established design system—do not invent a separate Team colour palette.
+2. Replace the pure-white backgrounds of:
+   - the “Invite a team member” card;
+   - pending invitation cards, if present;
+   - every Team member card.
+3. Use the app’s existing dark card/surface colour, slightly distinguishable from the main navy page background.
+4. Add only the same subtle border/shadow treatment already used by other cards in the app. A low-opacity turquoise/cyan accent border is acceptable only if it matches existing components.
+5. Restyle the email input so it belongs inside the dark card:
+   - themed dark input background;
+   - clearly visible border;
+   - readable placeholder and entered text;
+   - proper focus and disabled states.
+6. Keep the turquoise send button, avatar accent and Owner/Employee badges, but ensure they have accessible contrast against the new dark surfaces.
+7. Use the existing primary and secondary text colours. All headings, descriptions, email addresses, seat count and explanatory copy must remain clearly readable.
+8. Apply the same design consistently to all Team states: owner, employee, pending invitations, empty state, full seat capacity, errors and disabled controls.
+9. Do not change navigation, spacing structure, functionality, API behaviour, permissions, Company Teams logic or any backend files.
+10. Do not modify the global theme or unrelated screens. This is a focused styling correction for the real Team screen and its local reusable components.
+11. Verify visually on an iPhone-sized viewport and confirm there are no remaining hardcoded white card backgrounds on this screen.
+12. Run the mobile TypeScript check and relevant tests, then commit and push the focused change. Report the files changed and the commit hash.
+
+The desired result is a cohesive dark navy Team screen that visibly belongs to the existing MyLocalTrade app, with clear hierarchy and readable text—not white panels placed over a dark page.
