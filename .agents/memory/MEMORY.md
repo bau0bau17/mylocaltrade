@@ -17,7 +17,7 @@
 - [Trader business-type gating](trader-business-type-gating.md) — LTD-only company-number rule duplicated in 3 places; nullable businessType + stale client = silent completion-gate fail, docs stay locked.
 - [Onboarding completion source of truth](onboarding-completion-source-of-truth.md) — advance steps only on server's completion verdict (returned in save response), never on HTTP 200; else silent dead-end.
 - [No destructive tests on live data](no-destructive-tests-on-live-data.md) — never replay a write PUT against a real user row; no row-level undo. Use throwaway/rollback or snapshot SELECT * first.
-- [Local Mac dev + GitHub sync](local-mac-dev-and-github-sync.md) — user RUNS Expo/Metro on their own Mac, not Replit; deliver fixes via `git checkout origin/replit-agent -- <files>` then `expo start -c`; Replit terminal can't push to GitHub.
+- [Local Mac dev + GitHub sync](local-mac-dev-and-github-sync.md) — user runs Metro + EAS builds + TestFlight HIMSELF on his Mac (pulls origin/main); agent only commits+gitPush to main; NEVER start builds or toggle flags.
 - [Dependency security overrides](dependency-security-overrides.md) — patch transitive CVEs via pnpm-workspace overrides; get exact patched ranges from npm bulk advisory endpoint (qs/ws/uuid "latest patch" can still be vulnerable).
 - [promo-video typecheck pre-broken](promo-video-typecheck-pre-broken.md) — `artifacts/promo-video` fails `tsc` (no DOM lib + framer-motion Variant types); workspace-wide typecheck/build fails there regardless of your change.
 - [wouter query string](wouter-query-string.md) — wouter v3 useLocation() is pathname-only; read query params via useSearch() (parsing the location string drops incoming ?filters and resets to default).

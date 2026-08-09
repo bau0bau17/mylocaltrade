@@ -15,6 +15,11 @@ The user (MyLocalTrade) edits/builds on Replit but actually RUNS Expo/Metro + iO
 - User's requested workflow: commit + push straight to `origin/main`; they pull `main` normally on the Mac. Do NOT tell them to `git checkout origin/replit-agent -- <files>` anymore (explicitly banned by user).
 - The sections below about master/replit-agent divergence and UI-only pushes are historical context only.
 
+## Build & release ownership (explicit user instruction, Aug 2026)
+- The user does Git sync, EAS builds and TestFlight submissions **manually from the Mac**. Never start an EAS build, never submit, and never toggle feature flags (dev included) unprompted — the user explicitly declined both when offered ("Nu porni tu buildul EAS și nu modifica flagurile din development").
+- **Why:** they treat builds/flags as their release control point; agent's job ends at commit + verified push to `origin/main`.
+- **Diagnostic shortcut:** a screenshot of a flag-gated screen showing LIVE data (e.g. Teams — flag ON only in prod) can only come from a build talking to prod, i.e. a TestFlight/EAS build. If it shows pre-fix UI, the JS was baked before the fix — Mac pulls/Metro cache clears won't help; only the next build will.
+
 ## Replit-side git is locked for main agent
 `git branch -m`, and other writes are blocked: "Destructive git operations are not allowed in the main agent." Don't attempt rename/merge/checkout from the agent shell — only read-only git (status, log, ls-remote, rev-list, fetch) works.
 
