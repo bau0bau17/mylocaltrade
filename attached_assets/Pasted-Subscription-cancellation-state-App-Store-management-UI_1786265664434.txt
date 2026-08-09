@@ -1,0 +1,189 @@
+Subscription cancellation state + App Store management UI fixes.
+
+Please keep this task focused. Inspect the existing RevenueCat/App Store subscription integration first before changing UI.
+
+See attached screenshots.
+
+CURRENT PROBLEM
+
+After cancelling the Premium Monthly subscription in the App Store subscription sheet, the app still shows the subscription as simply ACTIVE / Renews on 10 Aug 2026 in parts of the app.
+
+However, in the App Store sheet it correctly shows the subscription as Cancelled and says it ends on 9/10 Aug.
+
+The app should distinguish between:
+
+1. Active and renewing
+2. Active until expiry but cancelled / will not renew
+3. Expired / no active Premium entitlement
+
+Apple subscriptions normally remain active until the end of the paid period after cancellation, so the user should keep Premium features until the expiry date, but the UI must clearly show that it has been cancelled and will not renew.
+
+
+REQUIRED BEHAVIOUR
+
+1. Billing & Plan screen
+
+When the subscription is active and renewing:
+- Show badge: ACTIVE
+- Show text: Renews on [date]
+
+When the subscription has been cancelled but is still active until the paid expiry date:
+- Do NOT show only ACTIVE as if it will renew.
+- Do NOT show “Renews on [date]”.
+- Show clear text such as:
+  “Premium active until [date]”
+  “Cancelled — will not renew”
+- Badge can be CANCELLED or ACTIVE UNTIL [date], whichever fits the current design best.
+- The user should still have Premium features until the expiry date.
+
+When the subscription has expired:
+- Move the trader back to Basic/free state.
+- Hide Premium-only active status.
+- Ensure search/listing/profile behaviour follows the existing Basic plan rules.
+
+
+2. Refresh subscription status after returning from App Store
+
+When the user taps “Manage subscription” or “Continue in App Store” and returns to the app, the app should refresh the RevenueCat/App Store subscription state automatically.
+
+Please handle:
+- returning to foreground / app active
+- screen focus on Billing & Plan
+- after opening the App Store subscription management sheet
+- after pressing restore purchases
+
+The user should not need to close/reopen the app to see the updated cancellation status.
+
+Please use the existing RevenueCat integration correctly, for example by fetching the latest CustomerInfo / invalidating stale state where appropriate.
+
+Do not add polling loops or unnecessary background work.
+
+
+3. Delete account screen subscription warning
+
+Currently the Delete account screen shows:
+
+“You have an active App Store subscription”
+
+even after the user has cancelled the subscription in App Store.
+
+This should be updated.
+
+If the subscription is active AND still renewing:
+- Show the warning:
+  “You have an active App Store subscription”
+  and keep the “Manage in App Store” action.
+
+If the subscription is cancelled and will not renew:
+- Do NOT show the strong warning that implies future charges.
+- Either hide that warning completely, or replace it with a softer message such as:
+  “Your Premium subscription has been cancelled and remains active until [date]. There will be no further App Store charges unless you renew it.”
+- My preference: hide the warning completely once Apple confirms it is cancelled / will not renew.
+
+If the subscription is expired:
+- Do not show the subscription warning.
+
+
+4. Cancel Premium subscription confirmation card
+
+The in-app confirmation card before opening App Store is good, but after Apple confirms cancellation, the app should not keep showing actions/copy that imply the subscription is still renewing.
+
+Please make sure the state after cancellation is consistent across:
+- Billing & Plan
+- Delete account
+- Account/subscription areas
+- any Premium badge/status surfaces
+
+
+5. Restore purchases / Change plans / Request refund clarification
+
+The Apple sheet shown in the screenshot includes:
+- Restore past purchases
+- Change plans
+- Request a refund
+
+Please confirm whether these are coming from Apple’s native App Store subscription management sheet / StoreKit and not custom MyLocalTrade UI.
+
+The app should follow standard App Store behaviour:
+- users manage/cancel subscriptions through Apple
+- users request refunds through Apple/App Store
+- restore purchases should remain available where required/appropriate
+- do not build a custom refund system in MyLocalTrade
+
+
+IMPORTANT
+
+Do not remove Premium access immediately after cancellation.
+
+Cancellation means:
+- no future renewal
+- Premium remains available until the paid expiry date
+- after expiry, the app should downgrade to Basic/free
+
+Do not change:
+- subscription products
+- App Store product IDs
+- RevenueCat project configuration
+- pricing
+- plan business rules
+- database schema unless genuinely required
+
+This should mostly be a state/status/display + refresh fix.
+
+
+TEST CASES
+
+Please test these states:
+
+1. Active monthly subscription, still renewing
+Expected:
+- Billing shows ACTIVE
+- Text says Renews on [date]
+- Delete account shows active App Store subscription warning
+
+2. Cancelled subscription, still active until expiry
+Expected:
+- Billing shows Cancelled / Active until [date]
+- Text says will not renew
+- Premium features remain available until expiry
+- Delete account no longer shows the strong “active subscription” warning
+
+3. Expired subscription
+Expected:
+- User/trader returns to Basic/free
+- Premium status disappears
+- Premium-only features follow existing Basic limits
+
+4. Restore purchases
+Expected:
+- Fetches latest subscription status
+- UI updates correctly
+
+5. App returns from App Store subscription management
+Expected:
+- Subscription status refreshes automatically
+- No need to restart the app
+
+
+REGRESSION CHECKS
+
+Please check:
+- Billing & Plan screen
+- App Store manage subscription flow
+- Cancel Premium flow
+- Restore purchases
+- Delete account screen
+- Trader Premium status
+- Profile live/basic behaviour
+- RevenueCat customer info handling
+- sandbox cancellation state
+
+Run relevant tests/typechecks.
+
+After implementation:
+- commit and push to origin/main
+- report commit hash
+- files changed
+- tests/checks run
+- whether backend/database changes are required
+- whether production backend/admin/mobile rebuild is required
