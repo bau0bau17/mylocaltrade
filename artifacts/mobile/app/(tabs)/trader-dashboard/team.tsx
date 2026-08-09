@@ -45,6 +45,7 @@ export default function TeamScreen() {
   const qc = useQueryClient();
 
   const [inviteEmail, setInviteEmail] = useState('');
+  const [emailFocused, setEmailFocused] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const authHeaders = { Authorization: `Bearer ${token}` };
@@ -193,11 +194,17 @@ export default function TeamScreen() {
         </Text>
         <View style={styles.inviteRow}>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              emailFocused && styles.inputFocused,
+              (inviteMutation.isPending || seatsFull) && styles.inputDisabled,
+            ]}
             value={inviteEmail}
             onChangeText={setInviteEmail}
+            onFocus={() => setEmailFocused(true)}
+            onBlur={() => setEmailFocused(false)}
             placeholder="name@example.com"
-            placeholderTextColor={Colors.light.tabIconDefault}
+            placeholderTextColor={Colors.light.textSecondary}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -215,7 +222,7 @@ export default function TeamScreen() {
             )}
           </Pressable>
         </View>
-        <Text style={[styles.seatsLine, seatsFull && { color: '#B45309' }]}>
+        <Text style={[styles.seatsLine, seatsFull && { color: Colors.light.warning }]}>
           {data.seats.used} of {data.seats.max} seats used
           {seatsFull ? ' — remove a member or cancel an invitation to free one up' : ''}
         </Text>
@@ -235,7 +242,7 @@ export default function TeamScreen() {
                   <View style={styles.row}>
                     <View style={styles.rowText}>
                       <Text style={styles.rowTitle} numberOfLines={1}>{invite.email}</Text>
-                      <Text style={[styles.rowSub, expired && { color: '#B45309' }]}>
+                      <Text style={[styles.rowSub, expired && { color: Colors.light.warning }]}>
                         {expired
                           ? 'Expired — resend to issue a fresh link'
                           : `Expires in ${Math.max(days, 1)} day${days === 1 ? '' : 's'}`}
@@ -315,7 +322,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
   center: { alignItems: 'center', justifyContent: 'center' },
   inviteCard: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.light.card,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.light.border,
@@ -323,19 +330,21 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   inviteTitle: { fontSize: 16, fontWeight: '700', color: Colors.light.text, marginBottom: 4 },
-  inviteSub: { fontSize: 13, color: Colors.light.tabIconDefault, lineHeight: 18, marginBottom: 12 },
+  inviteSub: { fontSize: 13, color: Colors.light.textSecondary, lineHeight: 18, marginBottom: 12 },
   inviteRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: Colors.light.borderLight,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 15,
     color: Colors.light.text,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.light.background,
   },
+  inputFocused: { borderColor: Colors.light.primary },
+  inputDisabled: { opacity: 0.55 },
   inviteBtn: {
     backgroundColor: Colors.light.primary,
     borderRadius: 10,
@@ -344,7 +353,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  seatsLine: { fontSize: 12, color: Colors.light.tabIconDefault, marginTop: 10 },
+  seatsLine: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 10 },
   sectionLabel: {
     fontSize: 13,
     fontWeight: '600',
@@ -356,7 +365,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   group: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.light.card,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.light.border,
@@ -366,7 +375,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12 },
   rowText: { flex: 1, marginRight: 8 },
   rowTitle: { fontSize: 15, fontWeight: '600', color: Colors.light.text },
-  rowSub: { fontSize: 12.5, color: Colors.light.tabIconDefault, marginTop: 2 },
+  rowSub: { fontSize: 12.5, color: Colors.light.textSecondary, marginTop: 2 },
   avatar: {
     width: 34,
     height: 34,
@@ -393,23 +402,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: Colors.light.borderLight,
     marginLeft: 6,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.light.cardElevated,
   },
   smallBtnText: { fontSize: 12.5, fontWeight: '600', color: Colors.light.text },
   smallBtnDanger: { borderColor: 'rgba(239, 68, 68, 0.4)' },
-  smallBtnDangerText: { color: '#B91C1C' },
+  smallBtnDangerText: { color: Colors.light.error },
   footNote: {
     fontSize: 12,
-    color: Colors.light.tabIconDefault,
+    color: Colors.light.textSecondary,
     lineHeight: 18,
     marginTop: 16,
     marginHorizontal: 4,
   },
   card: {
     marginHorizontal: 16,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.light.card,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.light.border,
@@ -417,5 +426,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardTitle: { fontSize: 17, fontWeight: '700', color: Colors.light.text, marginBottom: 6, textAlign: 'center' },
-  cardBody: { fontSize: 14, color: Colors.light.tabIconDefault, textAlign: 'center', lineHeight: 20 },
+  cardBody: { fontSize: 14, color: Colors.light.textSecondary, textAlign: 'center', lineHeight: 20 },
 });
