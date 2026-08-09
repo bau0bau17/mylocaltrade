@@ -1,0 +1,39 @@
+Please implement company logos in the real customer-side mobile Messages conversation list shown in the attached screenshot.
+
+Current behaviour:
+Every customer conversation row shows a generated initials tile even when that trader business has uploaded a company logo.
+
+Required behaviour:
+For customers viewing “Messages — Conversations with traders”, each row must show that conversation’s trader company logo when one exists. Fall back to the existing business initial tile only when no logo is uploaded or the image fails to load.
+
+Architecture and privacy requirements:
+
+1. Inspect the real GET /api/conversations list route, ConversationSummary contract and mobile Messages list before editing.
+2. Add/reuse `traderLogoUrl` on each conversation-list summary. The list query already joins trader_profiles, so select `traderProfilesTable.logoUrl` in that existing query—do not add an N+1 query per conversation.
+3. A business logo is a public company-brand asset and must be returned for conversation-list rows independently of the Company Teams feature flag. It is not a Teams-only field.
+4. Update the OpenAPI description so `traderLogoUrl` is documented as available in list responses as well as appropriate detail responses, then regenerate the typed client normally.
+5. Customer-side Messages list:
+   - if `traderLogoUrl` exists, render the company logo inside the existing 48×48 avatar footprint;
+   - use the existing `objectImageUrl()` helper and the same public gallery-file delivery pattern already used by TraderCard and the public trader profile;
+   - preserve the current rounded shape, border and card spacing;
+   - use a suitable image resize mode that presents different business-logo aspect ratios cleanly;
+   - if loading fails, replace it with the existing business initial tile.
+6. Track image-load failure per company/logo row, not as one shared failure state that could hide every logo. A small focused ConversationAvatar component is acceptable.
+7. Keep unread-count badges, unread emphasis, muted state and bell overlay fully visible and correctly positioned over either the logo or initials fallback.
+8. On muted rows, apply the same visual dimming consistently without making the logo unreadable.
+9. Trader-side Messages (“Conversations with customers”) must remain unchanged and continue showing the customer initial. Do not expose customer photos.
+10. Do not display the assigned employee’s personal avatar in the conversation list. Personal photos remain restricted to the authorised conversation detail/header after assignment. This list is company identity only.
+11. Do not change conversation search, sorting, status pills, job references, previews, navigation, assignment logic or any Company Teams permissions.
+12. Add focused coverage proving:
+    - the list API returns the correct business logo path;
+    - it works with Company Teams both OFF and ON;
+    - one company cannot receive another company’s logo;
+    - customer list uses the logo when available;
+    - missing/broken logos fall back to initials;
+    - trader-side rows remain unchanged.
+13. Run API tests with Teams OFF and ON, regenerate and typecheck the API client, run the mobile TypeScript check and perform a security/privacy review.
+14. Commit and push the complete focused change. Report files changed, tests and commit hash.
+15. Do not republish the backend, start EAS, submit TestFlight or modify production flags. The user handles releases manually.
+
+Expected result:
+Each customer conversation is immediately recognisable by the trader company’s uploaded logo, while the existing initials tile remains a reliable fallback.
