@@ -15,6 +15,8 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { JobReferenceSearch } from "@/components/JobReferenceSearch";
+import { matchesLeadSearch } from "@/lib/job-reference-search";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useGetConversations,
@@ -165,6 +167,31 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
     }, [refetch]),
   );
 
+  // Conversation search: matches job reference (MLT-000123 / 000123 / "mlt 12",
+  // case/dash/zero-padding tolerant), job/category title and the other party's
+  // name — client-side over the already-loaded list; clearing restores it.
+  const conversations: ConversationSummary[] = data?.conversations ?? [];
+  const [jobQuery, setJobQuery] = React.useState("");
+  const trimmedJobQuery = jobQuery.trim();
+  const filteredConversations = React.useMemo(
+    () =>
+      trimmedJobQuery
+        ? conversations.filter((c) =>
+            matchesLeadSearch(
+              {
+                jobReference: c.jobReference,
+                serviceRequired: c.serviceRequired,
+                // The "name" field is whoever the other party is on this side.
+                customerName: isTrader ? c.customerName : c.traderBusinessName,
+              },
+              trimmedJobQuery,
+            ),
+          )
+        : conversations,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data, trimmedJobQuery, isTrader],
+  );
+
   if (isLoading && !isRefetching) {
     return (
       <View style={styles.centered}>
@@ -198,8 +225,6 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
     );
   }
 
-  const conversations: ConversationSummary[] = data?.conversations ?? [];
-
   return (
     <View style={styles.container}>
       <ScreenHeader
@@ -208,8 +233,24 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
         subtitle={isTrader ? "Conversations with customers" : "Conversations with traders"}
       />
 
+      {conversations.length > 0 ? (
+        <View style={styles.searchWrap}>
+          <JobReferenceSearch
+            value={jobQuery}
+            onChange={setJobQuery}
+            placeholder={
+              isTrader
+                ? "Search name, job title or MLT number"
+                : "Search trader, job title or MLT number"
+            }
+            autoCapitalize="none"
+            accessibilityLabel="Search conversations"
+          />
+        </View>
+      ) : null}
+
       <FlatList
-        data={conversations}
+        data={filteredConversations}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 24 }}
         refreshControl={
@@ -220,6 +261,17 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
           />
         }
         ListEmptyComponent={
+          trimmedJobQuery ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Feather name="search" size={28} color={Colors.light.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>No conversations match</Text>
+              <Text style={styles.emptySub}>
+                Nothing matches “{trimmedJobQuery}”. Try a name, job title or MLT number.
+              </Text>
+            </View>
+          ) : (
           <View style={styles.empty}>
             <View style={styles.emptyIcon}>
               <Feather name="message-circle" size={28} color={Colors.light.primary} />
@@ -241,6 +293,7 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
               </Pressable>
             )}
           </View>
+          )
         }
         renderItem={({ item }) => {
           const otherName = isTrader ? item.customerName : item.traderBusinessName;
@@ -419,6 +472,7 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   empty: { alignItems: "center", padding: 32, marginTop: 40 },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 12 },
   // Logged-out state: anchored in the upper portion of the screen under the
   // compact header, rather than floating in the vertical centre.
   loggedOutBody: {

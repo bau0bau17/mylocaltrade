@@ -14,7 +14,7 @@ import { EnquiryCard } from '@/components/EnquiryCard';
 import { JobReferenceSearch } from '@/components/JobReferenceSearch';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
-import { matchesJobReference } from '@/lib/job-reference-search';
+import { matchesLeadSearch } from '@/lib/job-reference-search';
 
 export default function MyEnquiriesScreen() {
   const insets = useSafeAreaInsets();
@@ -36,15 +36,27 @@ export default function MyEnquiriesScreen() {
     () => new Set((eligibleData?.enquiries ?? []).map((e) => e.enquiryId)),
     [eligibleData],
   );
-  // Small job-number filter (e.g. "MLT-000123" or just "000123"). Filtering is
-  // client-side over the already-loaded list; clearing the box restores it.
+  // Enquiry search: matches job reference (MLT-000123 / 000123 / "mlt 12",
+  // case/dash/zero-padding tolerant), job/category title, trader name or
+  // description — client-side over the already-loaded list; clearing restores it.
   const [jobQuery, setJobQuery] = React.useState('');
   const trimmedJobQuery = jobQuery.trim();
   const enquiries = data?.enquiries ?? [];
   const filteredEnquiries = React.useMemo(
     () =>
       trimmedJobQuery
-        ? enquiries.filter((e) => matchesJobReference(e.jobReference, trimmedJobQuery))
+        ? enquiries.filter((e) =>
+            matchesLeadSearch(
+              {
+                jobReference: e.jobReference,
+                serviceRequired: e.serviceRequired,
+                // Customer side: the relevant "name" is the trader's business.
+                customerName: e.traderBusinessName,
+                message: e.message,
+              },
+              trimmedJobQuery,
+            ),
+          )
         : enquiries,
     [enquiries, trimmedJobQuery],
   );
@@ -72,7 +84,13 @@ export default function MyEnquiriesScreen() {
       ) : data?.enquiries && data.enquiries.length > 0 ? (
         <>
         <View style={styles.searchWrap}>
-          <JobReferenceSearch value={jobQuery} onChange={setJobQuery} />
+          <JobReferenceSearch
+            value={jobQuery}
+            onChange={setJobQuery}
+            placeholder="Search trader, job title or MLT number"
+            autoCapitalize="none"
+            accessibilityLabel="Search enquiries"
+          />
         </View>
         <FlatList
           data={filteredEnquiries}
@@ -127,7 +145,7 @@ export default function MyEnquiriesScreen() {
               <Feather name="search" size={20} color={Colors.light.textMuted} />
               <Text style={styles.noMatchTitle}>No jobs match</Text>
               <Text style={styles.noMatchText}>
-                No enquiry matches “{trimmedJobQuery}”. Check the job number and try again.
+                No enquiry matches “{trimmedJobQuery}”. Try a trader name, job title or MLT number.
               </Text>
             </View>
           }

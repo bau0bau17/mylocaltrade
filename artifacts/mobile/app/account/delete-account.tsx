@@ -12,14 +12,14 @@ import {
   Modal,
   RefreshControl,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
-import { getGetMeQueryKey } from '@workspace/api-client-react';
+import { getGetMeQueryKey, useGetSubscriptionStatus } from '@workspace/api-client-react';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useSubscription } from '@/lib/revenuecat';
 
@@ -436,6 +436,29 @@ function RequestDeletionView({
 }) {
   const insets = useSafeAreaInsets();
   const subscription = useSubscription();
+  // Depend on the stable members, NOT the whole `subscription` object (the
+  // provider rebuilds it every render — see the Billing screen).
+  const { hasTraderSubscription, willRenew } = subscription;
+  // Same server-side state Billing & Plan reads, so this screen can never
+  // disagree with it: EITHER the device entitlement's willRenew=false OR the
+  // server's cancelAtPeriodEnd (webhook/sync) marks the subscription as
+  // cancelled and hides the renewing-subscription warning.
+  const { data: subStatus, refetch: refetchSubStatus } = useGetSubscriptionStatus({
+    query: {
+      queryKey: ['/api/subscriptions/status'],
+      enabled: hasTraderSubscription,
+    },
+  });
+  useFocusEffect(
+    useCallback(() => {
+      if (hasTraderSubscription) void refetchSubStatus();
+    }, [hasTraderSubscription, refetchSubStatus]),
+  );
+  // Renewing = active entitlement AND neither source reports a cancellation.
+  // Cancelled-but-active-until-expiry and expired both hide the warning
+  // entirely (user preference — no future charges are coming).
+  const showRenewingSubWarning =
+    hasTraderSubscription && willRenew !== false && !subStatus?.cancelAtPeriodEnd;
   const [password, setPassword] = useState('');
   const [reason, setReason] = useState('');
   const [confirm, setConfirm] = useState(false);
@@ -507,11 +530,7 @@ function RequestDeletionView({
           </View>
         </View>
 
-        {/* Only warn about future charges while the subscription will actually
-            renew. Once Apple confirms cancellation (willRenew === false) there
-            are no further charges, so the warning is hidden entirely; an
-            expired subscription has no active entitlement at all. */}
-        {subscription.hasTraderSubscription && subscription.willRenew !== false ? (
+        {showRenewingSubWarning ? (
           <View style={styles.subCard}>
             <Feather name="credit-card" size={22} color={Colors.light.primary} />
             <View style={{ flex: 1 }}>
