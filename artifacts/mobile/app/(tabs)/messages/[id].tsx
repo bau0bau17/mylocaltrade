@@ -9,6 +9,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Modal,
@@ -201,6 +202,32 @@ export default function ConversationThreadScreen() {
     );
   const { isTrader, isAdmin, user, token } = useAuth();
   const listRef = useRef<FlatList>(null);
+
+  // Keyboard-aware layout: the composer sits between the message trail and the
+  // quote/appointment/contact/status cards. While the keyboard is up, those
+  // cards are collapsed so the composer lands directly above the keyboard —
+  // otherwise their fixed height pushes the input off-screen. iOS "will"
+  // events keep the collapse in sync with the keyboard animation; Android
+  // only fires "did" events.
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => {
+        setKeyboardOpen(true);
+        // Keep the latest messages visible right above the composer.
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      },
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardOpen(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   // Poll while the app is foregrounded so new replies appear without leaving
   // the thread (there's no realtime channel; push may be denied/muted).
@@ -1291,6 +1318,7 @@ export default function ConversationThreadScreen() {
 
       <FlatList
         ref={listRef}
+        style={{ flex: 1 }}
         data={messages}
         keyExtractor={(m) => String(m.id)}
         contentContainerStyle={{
@@ -1380,6 +1408,68 @@ export default function ConversationThreadScreen() {
           </View>
         }
       />
+
+      {closed ? (
+        <View style={[styles.composer, { paddingBottom: 12 }]}>
+          <Text style={styles.closedText}>This conversation is {conv.status.toLowerCase()}.</Text>
+        </View>
+      ) : claimedByOther ? (
+        <View style={[styles.composer, { paddingBottom: 12 }]}>
+          <Text style={styles.closedText}>
+            {assignedName ?? "A teammate"} is handling this job — it's read-only for you.
+          </Text>
+          {canReassign ? (
+            <Pressable
+              style={styles.reassignBtn}
+              onPress={() => setReassignOpen(true)}
+              disabled={reassignMutation.isPending}
+            >
+              <Feather name="repeat" size={14} color={Colors.light.primary} />
+              <Text style={styles.reassignBtnText}>Reassign this job</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
+        <View style={[styles.composer, { paddingBottom: 8 }]}>
+          {violationText ? (
+            <View style={styles.violationBanner}>
+              <Feather name="alert-triangle" size={14} color={Colors.light.error} />
+              <Text style={styles.violationText}>{violationText}</Text>
+            </View>
+          ) : null}
+          <View style={styles.composerRow}>
+            <TextInput
+              style={[styles.input, violationText ? styles.inputBlocked : null]}
+              value={text}
+              onChangeText={setText}
+              placeholder="Write a message…"
+              placeholderTextColor={Colors.light.textMuted}
+              multiline
+              maxLength={4000}
+            />
+            <Pressable
+              style={[
+                styles.sendBtn,
+                (!text.trim() || sendMutation.isPending || !!violation) && styles.sendBtnDisabled,
+              ]}
+              disabled={!text.trim() || sendMutation.isPending || !!violation}
+              onPress={onSend}
+            >
+              {sendMutation.isPending ? (
+                <ActivityIndicator size="small" color={Colors.light.white} />
+              ) : (
+                <Feather name="send" size={18} color={Colors.light.white} />
+              )}
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* Info cards live below the composer; collapsed while typing so the
+          composer sits directly above the keyboard. The wrapper carries the
+          bottom safe-area inset now that the composer is no longer last. */}
+      {!keyboardOpen ? (
+        <View style={{ paddingBottom: insets.bottom }}>
 
       {currentQuote && conv.stage !== "CANCELLED" ? (
         <View style={styles.quoteCard}>
@@ -1805,61 +1895,8 @@ export default function ConversationThreadScreen() {
         </View>
       ) : null}
 
-      {closed ? (
-        <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
-          <Text style={styles.closedText}>This conversation is {conv.status.toLowerCase()}.</Text>
         </View>
-      ) : claimedByOther ? (
-        <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
-          <Text style={styles.closedText}>
-            {assignedName ?? "A teammate"} is handling this job — it's read-only for you.
-          </Text>
-          {canReassign ? (
-            <Pressable
-              style={styles.reassignBtn}
-              onPress={() => setReassignOpen(true)}
-              disabled={reassignMutation.isPending}
-            >
-              <Feather name="repeat" size={14} color={Colors.light.primary} />
-              <Text style={styles.reassignBtnText}>Reassign this job</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : (
-        <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
-          {violationText ? (
-            <View style={styles.violationBanner}>
-              <Feather name="alert-triangle" size={14} color={Colors.light.error} />
-              <Text style={styles.violationText}>{violationText}</Text>
-            </View>
-          ) : null}
-          <View style={styles.composerRow}>
-            <TextInput
-              style={[styles.input, violationText ? styles.inputBlocked : null]}
-              value={text}
-              onChangeText={setText}
-              placeholder="Write a message…"
-              placeholderTextColor={Colors.light.textMuted}
-              multiline
-              maxLength={4000}
-            />
-            <Pressable
-              style={[
-                styles.sendBtn,
-                (!text.trim() || sendMutation.isPending || !!violation) && styles.sendBtnDisabled,
-              ]}
-              disabled={!text.trim() || sendMutation.isPending || !!violation}
-              onPress={onSend}
-            >
-              {sendMutation.isPending ? (
-                <ActivityIndicator size="small" color={Colors.light.white} />
-              ) : (
-                <Feather name="send" size={18} color={Colors.light.white} />
-              )}
-            </Pressable>
-          </View>
-        </View>
-      )}
+      ) : null}
 
       <Modal
         visible={cancelOpen}
