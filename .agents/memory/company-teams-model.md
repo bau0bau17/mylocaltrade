@@ -14,3 +14,5 @@ Company Teams (Phases 0–3, Aug 2026) ended the single-login era. Current model
 **Why:** an earlier memory ("single-login company model") claimed no teams architecture exists; acting on it after Phases 0–3 shipped would misdiagnose employee requests as new-architecture projects and reintroduce owner-only assumptions.
 
 **How to apply:** for any employees/team/assigned-person request, assume the membership architecture EXISTS and route through getActiveMembership + the ownership choke points; scope checks per surface (userId-keyed surfaces need the explicit employee gate).
+
+**Update (2026-08-09):** Teams flag turned ON in production (TestFlight testing). Employee invites require a brand-new email (409 EMAIL_IN_USE otherwise). Account screen gating comes from GET /api/company/team-context (NOT flag-gated; returns {enabled,role}).
