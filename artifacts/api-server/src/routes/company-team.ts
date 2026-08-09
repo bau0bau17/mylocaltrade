@@ -25,9 +25,8 @@ import { sendCompanyInviteEmail } from "../lib/email";
 import {
   handoverActiveJobsToOwner,
   logJobsHandedToOwner,
+  notifyJobsHandedToOwner,
 } from "../lib/job-assignment";
-import { postSystemMessage } from "../lib/system-messages";
-import { sendPushToUser } from "../lib/push-notifications";
 
 // ---------------------------------------------------------------------------
 // Company Teams — Phase 1: employee invitations & team management.
@@ -685,35 +684,16 @@ router.post(
       }).catch((err) => req.log.warn({ err }, "Handover audit failed"));
 
       // Customer-facing handover: ONE system message + one notification per
-      // affected live job. The owner initiated the removal (no notification
-      // to self) and the removed member is no longer active (none either).
-      if (handedOver.length > 0) {
-        const businessName = ctx.membership.profile.businessName;
-        const [ownerRow] = await db
-          .select({ fullName: usersTable.fullName })
-          .from(usersTable)
-          .where(eq(usersTable.id, ownerUserId))
-          .limit(1);
-        const ownerFirstName = (ownerRow?.fullName ?? "The owner").trim().split(/\s+/)[0];
-        void (async () => {
-          for (const conv of handedOver) {
-            try {
-              await postSystemMessage(
-                conv.id,
-                `Your job is now being handled by ${ownerFirstName} from ${businessName}.`,
-                "customer",
-              );
-              await sendPushToUser(conv.customerId, {
-                title: "Your job has a new contact",
-                body: `${ownerFirstName} from ${businessName} is now handling your job.`,
-                data: { type: "job_reassigned", conversationId: conv.id },
-              });
-            } catch (err) {
-              req.log.warn({ err, conversationId: conv.id }, "Handover notification failed");
-            }
-          }
-        })();
-      }
+      // affected live job (shared with the account-deletion handover paths).
+      // The owner initiated the removal (no notification to self) and the
+      // removed member is no longer active (none either).
+      void notifyJobsHandedToOwner({
+        conversations: handedOver,
+        ownerUserId,
+        businessName: ctx.membership.profile.businessName,
+        onError: (err, conversationId) =>
+          req.log.warn({ err, conversationId }, "Handover notification failed"),
+      }).catch((err) => req.log.warn({ err }, "Handover notifications failed"));
 
       res.json({ ok: true });
     } catch (error) {

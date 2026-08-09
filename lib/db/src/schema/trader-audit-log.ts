@@ -92,6 +92,10 @@ export const TRADER_AUDIT_ACTIONS = [
   // Member removal handed the member's live jobs to the owner (one row per
   // removal operation; details carry the affected conversation ids).
   "JOBS_HANDED_TO_OWNER_ON_MEMBER_REMOVAL",
+  // An employee's account entered/finished the deletion lifecycle while they
+  // still held live jobs — those were handed to the owner (one row per
+  // handover operation; details carry the affected conversation ids).
+  "JOBS_HANDED_TO_OWNER_ON_ACCOUNT_DELETION",
 ] as const;
 export type TraderAuditAction = (typeof TRADER_AUDIT_ACTIONS)[number];
 

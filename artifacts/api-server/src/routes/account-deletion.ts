@@ -7,7 +7,7 @@ import {
   traderAuditLogTable,
   pushTokensTable,
 } from "@workspace/db/schema";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   authMiddleware,
@@ -22,6 +22,13 @@ import {
   sendAccountDeletionCancelledEmail,
   sendAdminAccountDeletionAlertEmail,
 } from "../lib/email";
+import {
+  findActiveEmployeeMembership,
+  handoverActiveJobsToOwner,
+  logJobsHandedToOwner,
+  notifyJobsHandedToOwner,
+} from "../lib/job-assignment";
+import { sendPushToUser } from "../lib/push-notifications";
 
 const router: IRouter = Router();
 
@@ -142,7 +149,11 @@ router.post("/account/deletion-request", authMiddleware, async (req, res) => {
     // value so we can mint a fresh token for THIS device — the user must
     // remain signed in here to be able to cancel the request from the same
     // screen without contacting support.
-    const newTokenVersion = await db.transaction(async (tx) => {
+    const txResult = await db.transaction(async (tx) => {
+      // Conditional transition guard (NULL → REQUESTED): a concurrent double
+      // submit matches zero rows here and changes nothing, which also makes
+      // the company-job handover below — and its customer-facing side
+      // effects — at-most-once by construction.
       const [updated] = await tx
         .update(usersTable)
         .set({
@@ -156,8 +167,9 @@ router.post("/account/deletion-request", authMiddleware, async (req, res) => {
           tokenVersion: sql`${usersTable.tokenVersion} + 1`,
           updatedAt: now,
         })
-        .where(eq(usersTable.id, userId))
+        .where(and(eq(usersTable.id, userId), isNull(usersTable.deletionStatus)))
         .returning({ tokenVersion: usersTable.tokenVersion });
+      if (!updated) return null;
       await tx.delete(pushTokensTable).where(eq(pushTokensTable.userId, userId));
       if (user.role === "trader") {
         await tx
@@ -165,9 +177,43 @@ router.post("/account/deletion-request", authMiddleware, async (req, res) => {
           .set({ isActive: false, updatedAt: now })
           .where(eq(traderProfilesTable.userId, userId));
       }
-      return updated.tokenVersion;
+      // Company Teams: from this moment the account is locked out (token
+      // version bumped, the auth middleware refuses deletion-flagged users),
+      // so any LIVE job assigned to an employee must move to the owner NOW —
+      // not days later when an admin finalises the deletion. The membership
+      // row itself stays ACTIVE so a cancelled request restores the member
+      // cleanly; the terminal admin routes revoke it. Deliberately
+      // flag-independent, like the handover helper itself: sweeping zero
+      // rows is harmless, stranding a live job on a dead account is not.
+      // Completed/cancelled jobs keep their historical assignee.
+      let handedOver: Awaited<ReturnType<typeof handoverActiveJobsToOwner>> = [];
+      const membership =
+        user.role === "trader" ? await findActiveEmployeeMembership(tx, userId) : null;
+      if (membership) {
+        handedOver = await handoverActiveJobsToOwner(tx, {
+          traderProfileId: membership.traderProfileId,
+          fromUserId: userId,
+          ownerUserId: membership.ownerUserId,
+        });
+      }
+      return { tokenVersion: updated.tokenVersion, membership, handedOver };
     });
-    const refreshedToken = generateToken(user.id, user.role, newTokenVersion);
+    if (!txResult) {
+      // Race loser: someone (this user on another device, most likely)
+      // submitted first. Mirror the pre-check's 409 with the fresh status.
+      const [current] = await db
+        .select({ deletionStatus: usersTable.deletionStatus })
+        .from(usersTable)
+        .where(eq(usersTable.id, userId))
+        .limit(1);
+      res.status(409).json({
+        error: "Your account is already in the deletion lifecycle.",
+        code: "ALREADY_REQUESTED",
+        deletionStatus: current?.deletionStatus ?? "REQUESTED",
+      });
+      return;
+    }
+    const refreshedToken = generateToken(user.id, user.role, txResult.tokenVersion);
 
     void logAudit({
       userId,
@@ -177,6 +223,40 @@ router.post("/account/deletion-request", authMiddleware, async (req, res) => {
     void logAudit({ userId, action: "ACCOUNT_ACCESS_DISABLED" });
     if (user.role === "trader") {
       void logAudit({ userId, action: "TRADER_PROFILE_HIDDEN_FOR_DELETION" });
+    }
+    // Post-commit, winner-only: the conditional transition above ran at most
+    // once, so these side effects can never duplicate.
+    if (txResult.membership && txResult.handedOver.length > 0) {
+      const { membership, handedOver } = txResult;
+      void logJobsHandedToOwner({
+        traderProfileId: membership.traderProfileId,
+        conversations: handedOver,
+        removedUserId: userId,
+        ownerUserId: membership.ownerUserId,
+        actorUserId: userId,
+        reason: "account-deletion",
+      }).catch((err) => req.log.warn({ err }, "Deletion handover audit failed"));
+      void (async () => {
+        await notifyJobsHandedToOwner({
+          conversations: handedOver,
+          ownerUserId: membership.ownerUserId,
+          businessName: membership.businessName,
+          onError: (err, conversationId) =>
+            req.log.warn({ err, conversationId }, "Deletion handover notification failed"),
+        });
+        // Unlike member removal (owner-initiated, no self-notification), the
+        // owner did NOT trigger this handover — tell them their workload
+        // changed. ONE summary push, not one per job.
+        const count = handedOver.length;
+        await sendPushToUser(membership.ownerUserId, {
+          title: "Jobs handed to you",
+          body: `${count === 1 ? "1 live job is" : `${count} live jobs are`} now assigned to you after a team member's account was deactivated.`,
+          data: {
+            type: "job_reassigned",
+            ...(count === 1 ? { conversationId: handedOver[0].id } : {}),
+          },
+        });
+      })().catch((err) => req.log.warn({ err }, "Deletion handover notifications failed"));
     }
 
     sendAccountDeletionReceivedEmail({

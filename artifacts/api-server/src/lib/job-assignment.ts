@@ -10,6 +10,8 @@ import { companyTeamsEnabled } from "./company-membership";
 import { deriveStage } from "./conversation-stage";
 import { logAudit } from "./trader-status";
 import { jobReferenceOf } from "./job-reference";
+import { postSystemMessage } from "./system-messages";
+import { sendPushToUser } from "./push-notifications";
 
 /**
  * Company Teams — job claiming (Phase 2).
@@ -231,6 +233,28 @@ export async function reassignJobTx(opts: {
         .for("share")
         .limit(1);
       if (!member) throw new ReassignmentError("INVALID_ASSIGNEE");
+      // The membership row alone is not enough: an employee who requested
+      // account deletion keeps their ACTIVE membership until an admin
+      // finalises the deletion (so cancelling restores them cleanly), but
+      // their sessions are already revoked — a live job must never be handed
+      // to a locked-out account. FOR SHARE serializes against the deletion
+      // flow's UPDATE on this users row: if deletion commits first we see
+      // deletionStatus here and reject; if we commit first, the deletion
+      // request's own handover sweeps this job to the owner. The owner
+      // branch skips this check on purpose — handover TO the owner is the
+      // safety net and must never be blocked.
+      const [targetUser] = await tx
+        .select({
+          isActive: usersTable.isActive,
+          deletionStatus: usersTable.deletionStatus,
+        })
+        .from(usersTable)
+        .where(eq(usersTable.id, opts.toUserId))
+        .for("share")
+        .limit(1);
+      if (!targetUser || !targetUser.isActive || targetUser.deletionStatus != null) {
+        throw new ReassignmentError("INVALID_ASSIGNEE");
+      }
     }
     const now = new Date();
     await tx
@@ -267,6 +291,84 @@ export async function handoverActiveJobsToOwner(
       ),
     )
     .returning();
+}
+
+/**
+ * The user's ACTIVE EMPLOYEE membership plus the company context needed for
+ * a handover (owner + business name), or null. Deliberately flag-INDEPENDENT:
+ * account-deletion safety must hold even if COMPANY_TEAMS_ENABLED was turned
+ * off after jobs were assigned — sweeping zero rows is harmless, stranding a
+ * live job on a deleted account is not. (The one-active-company-per-user
+ * unique index guarantees at most one row.)
+ */
+export async function findActiveEmployeeMembership(
+  executor: Executor,
+  userId: number,
+): Promise<{
+  memberId: number;
+  traderProfileId: number;
+  ownerUserId: number;
+  businessName: string;
+} | null> {
+  const [row] = await executor
+    .select({
+      memberId: companyMembersTable.id,
+      traderProfileId: companyMembersTable.traderProfileId,
+      ownerUserId: traderProfilesTable.userId,
+      businessName: traderProfilesTable.businessName,
+    })
+    .from(companyMembersTable)
+    .innerJoin(
+      traderProfilesTable,
+      eq(traderProfilesTable.id, companyMembersTable.traderProfileId),
+    )
+    .where(
+      and(
+        eq(companyMembersTable.userId, userId),
+        eq(companyMembersTable.role, "EMPLOYEE"),
+        eq(companyMembersTable.status, "ACTIVE"),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Customer-facing side effects of a handover: ONE system message + ONE push
+ * per affected live job. MUST be called AFTER the handover transaction
+ * committed, and only by the winner (callers gate on the transaction's
+ * returned rows). Failures are per-conversation and never propagate — a
+ * notification hiccup must not fail the request that triggered the handover.
+ */
+export async function notifyJobsHandedToOwner(opts: {
+  conversations: ConversationRow[];
+  ownerUserId: number;
+  businessName: string;
+  onError?: (err: unknown, conversationId: number) => void;
+}): Promise<void> {
+  if (opts.conversations.length === 0) return;
+  const [ownerRow] = await db
+    .select({ fullName: usersTable.fullName })
+    .from(usersTable)
+    .where(eq(usersTable.id, opts.ownerUserId))
+    .limit(1);
+  const ownerFirstName = (ownerRow?.fullName ?? "The owner").trim().split(/\s+/)[0];
+  for (const conv of opts.conversations) {
+    try {
+      await postSystemMessage(
+        conv.id,
+        `Your job is now being handled by ${ownerFirstName} from ${opts.businessName}.`,
+        "customer",
+      );
+      await sendPushToUser(conv.customerId, {
+        title: "Your job has a new contact",
+        body: `${ownerFirstName} from ${opts.businessName} is now handling your job.`,
+        data: { type: "job_reassigned", conversationId: conv.id },
+      });
+    } catch (err) {
+      opts.onError?.(err, conv.id);
+    }
+  }
 }
 
 async function companyAnchor(traderProfileId: number) {
@@ -345,9 +447,11 @@ export async function logJobReassigned(opts: {
 }
 
 /**
- * Fire-and-forget audit: one row per REMOVAL OPERATION (not per job) — the
- * removal endpoint's conditional ACTIVE→REVOKED flip guarantees the handover
- * runs at most once, so retries cannot duplicate this row.
+ * Fire-and-forget audit: one row per HANDOVER OPERATION (not per job). The
+ * triggering flows guarantee at-most-once execution — removal via the
+ * conditional ACTIVE→REVOKED flip, account deletion via the conditional
+ * NULL→REQUESTED (or terminal) status transition — so retries cannot
+ * duplicate this row.
  */
 export async function logJobsHandedToOwner(opts: {
   traderProfileId: number;
@@ -355,6 +459,7 @@ export async function logJobsHandedToOwner(opts: {
   removedUserId: number;
   ownerUserId: number;
   actorUserId: number;
+  reason?: "removal" | "account-deletion";
 }): Promise<void> {
   if (opts.conversations.length === 0) return;
   const profile = await companyAnchor(opts.traderProfileId);
@@ -364,9 +469,14 @@ export async function logJobsHandedToOwner(opts: {
     displayNameOf(db, opts.removedUserId),
   ]);
   const count = opts.conversations.length;
+  const jobs = count === 1 ? "1 active job" : `${count} active jobs`;
+  const reason = opts.reason ?? "removal";
   await logAudit({
     userId: profile.userId,
-    action: "JOBS_HANDED_TO_OWNER_ON_MEMBER_REMOVAL",
+    action:
+      reason === "account-deletion"
+        ? "JOBS_HANDED_TO_OWNER_ON_ACCOUNT_DELETION"
+        : "JOBS_HANDED_TO_OWNER_ON_MEMBER_REMOVAL",
     performedBy: opts.actorUserId,
     details: {
       traderProfileId: opts.traderProfileId,
@@ -374,7 +484,10 @@ export async function logJobsHandedToOwner(opts: {
       fromUserId: opts.removedUserId,
       toUserId: opts.ownerUserId,
     },
-    notes: `${count === 1 ? "1 active job" : `${count} active jobs`} handed to ${ownerName} after ${removedName} was removed from ${profile.businessName}.`,
+    notes:
+      reason === "account-deletion"
+        ? `${jobs} handed to ${ownerName} after ${removedName}'s account entered deletion.`
+        : `${jobs} handed to ${ownerName} after ${removedName} was removed from ${profile.businessName}.`,
   });
 }
 

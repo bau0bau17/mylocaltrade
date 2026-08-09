@@ -50,7 +50,7 @@
 - [Booking lifecycle invariants](booking-lifecycle-invariants.md) — one live booking per conversation (partial unique index); EVERY mutation incl. cancel passes the live-job gate; notify direction rules.
 - [Canonical service/category matching](service-category-matching.md) — one server-side synonym map (expandServiceTerms) for category+search; no per-screen rules, no generic cross-category terms.
 - [Personal avatar vs business logo](avatar-vs-logo-identity.md) — users.avatarUrl is membership-gated (auth'd avatar-file route, headers on RN Image); logoUrl is public via gallery-file; business-field edits pass canManageBusinessFields choke point.
-- [Single-login company model](single-login-company-model.md) — 1 user ↔ 1 trader profile, NO members/teams/invites; businessRole is verification metadata, never access control; multi-member asks = new architecture.
+- [Company model: owner + employees](company-teams-model.md) — Teams SHIPPED (flag-gated): company_members OWNER/EMPLOYEE; businessRole still metadata NOT access control; employee blocks are ownership checks, not middleware.
 - [Booking conflict & blocking rules](booking-conflict-blocking-rules.md) — CONFIRMED + old-slot-during-pending-reschedule block; hours+conflict re-checked at confirm; ukLocalToUtc null = DST gap; tests need distinct slots.
 - [Notification fan-out conventions](notification-fanout-conventions.md) — transition sends gated by conditional UPDATE...RETURNING (never in-memory checks); email try/catch separate from push so one can't kill the other.
 - [Universal Links in email CTAs](universal-links-email.md) — /open email links must use the associated-domain host via getOpenLinkBase(); Brevo click-tracking can also break direct app open.
@@ -62,4 +62,4 @@
 - [Stripe removed Aug 2026](stripe-dormant-web-billing.md) — never launched & code fully removed; only legacy NULL stripe columns remain (drop = future migration); demo-activate is standalone dev-only.
 - [Search radius & geocoding](search-radius-geocoding.md) — sweep-owned trader coords (trusted iff geocodedPostcode==postcode), filter-only rule, cache semantics; prod MUST get the schema push before the new build or ALL trader queries break.
 - [Company membership choke point](company-membership-choke-point.md) — getActiveMembership() sole resolver; owner-only = profile-keyed, but userId-keyed surfaces (docs) need the explicit employee gate; flag OFF until claiming ships.
-- [Job reassignment & handover](job-reassignment-invariants.md) — conv-row FOR UPDATE = single serialization point; handover atomic with membership revoke; side effects post-commit, winner-only.
+- [Job reassignment & handover](job-reassignment-invariants.md) — conv FOR UPDATE = serialization point; handovers gated by conditional flips (removal + account deletion); reassign re-checks target membership+availability; side effects post-commit winner-only.

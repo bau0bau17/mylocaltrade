@@ -27,6 +27,12 @@ import { and, eq, ilike, or, desc, sql, inArray, gte, lte, isNotNull, isNull, as
 import { z } from "zod";
 import { authMiddleware, adminOnly, superAdminOnly, revokeUserSessions, findUserByEmail } from "../lib/auth";
 import { sendPushToUser } from "../lib/push-notifications";
+import {
+  findActiveEmployeeMembership,
+  handoverActiveJobsToOwner,
+  logJobsHandedToOwner,
+  notifyJobsHandedToOwner,
+} from "../lib/job-assignment";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { serializeQuote } from "../lib/quotes";
@@ -3005,7 +3011,9 @@ router.post(
       const anonEmail = `deleted-user-${user.id}@deleted.mylocaltrade.invalid`;
       const anonName = `Deleted user #${user.id}`;
       let anonOk = false;
-      await db.transaction(async (tx) => {
+      // Handover info is RETURNED from the transaction (not closure-assigned)
+      // so TypeScript's control-flow analysis keeps the narrowing intact.
+      const deletionHandover = await db.transaction(async (tx) => {
         // Atomic transition guard: refuse to anonymise an account that is
         // already ANONYMISED or COMPLETED — those states are terminal for
         // PII and re-running would be a no-op at best, a write conflict at
@@ -3040,7 +3048,7 @@ router.post(
             ),
           )
           .returning({ id: usersTable.id });
-        if (!updated) return;
+        if (!updated) return null;
         anonOk = true;
         await tx.delete(pushTokensTable).where(eq(pushTokensTable.userId, user.id));
         if (user.role === "trader") {
@@ -3062,6 +3070,42 @@ router.post(
             })
             .where(eq(traderProfilesTable.userId, user.id));
         }
+        // Company Teams: a wiped account must not linger as an ACTIVE member
+        // on a company roster. Revoke EMPLOYEE membership (owner rows are
+        // never touched — deleting an owner winds the business down, it is
+        // not a roster change) and sweep any live job still assigned to this
+        // account to the owner as a safety net; normally the request-time
+        // handover already moved them, so this usually sweeps zero rows.
+        // The conditional ACTIVE→REVOKED flip gates the sweep at-most-once.
+        if (user.role === "trader") {
+          const membership = await findActiveEmployeeMembership(tx, user.id);
+          if (membership) {
+            const revoked = await tx
+              .update(companyMembersTable)
+              .set({
+                status: "REVOKED",
+                revokedAt: now,
+                revokedByUserId: adminId,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(companyMembersTable.id, membership.memberId),
+                  eq(companyMembersTable.status, "ACTIVE"),
+                ),
+              )
+              .returning({ id: companyMembersTable.id });
+            if (revoked.length > 0) {
+              const handedOver = await handoverActiveJobsToOwner(tx, {
+                traderProfileId: membership.traderProfileId,
+                fromUserId: user.id,
+                ownerUserId: membership.ownerUserId,
+              });
+              return { ...membership, handedOver };
+            }
+          }
+        }
+        return null;
       });
       if (!anonOk) {
         res.status(409).json({
@@ -3069,6 +3113,53 @@ router.post(
           code: "INVALID_TRANSITION",
         });
         return;
+      }
+      // Post-commit, winner-only (gated by the conditional revoke above).
+      if (deletionHandover) {
+        const { memberId, traderProfileId, ownerUserId, businessName, handedOver } =
+          deletionHandover;
+        // Roster audit mirrors owner-initiated removal, so company history
+        // shows WHY the member vanished.
+        void logAudit({
+          userId: ownerUserId,
+          action: "MEMBER_REMOVED",
+          performedBy: adminId,
+          details: {
+            traderProfileId,
+            companyMemberId: memberId,
+            memberUserId: user.id,
+            viaAccountDeletion: true,
+          },
+          notes: "Membership revoked automatically: account deletion finalised (anonymised).",
+        });
+        void logJobsHandedToOwner({
+          traderProfileId,
+          conversations: handedOver,
+          removedUserId: user.id,
+          ownerUserId,
+          actorUserId: adminId,
+          reason: "account-deletion",
+        }).catch((err) => req.log.warn({ err }, "Deletion handover audit failed"));
+        if (handedOver.length > 0) {
+          void (async () => {
+            await notifyJobsHandedToOwner({
+              conversations: handedOver,
+              ownerUserId,
+              businessName,
+              onError: (err, conversationId) =>
+                req.log.warn({ err, conversationId }, "Deletion handover notification failed"),
+            });
+            const count = handedOver.length;
+            await sendPushToUser(ownerUserId, {
+              title: "Jobs handed to you",
+              body: `${count === 1 ? "1 live job is" : `${count} live jobs are`} now assigned to you after a team member's account was deleted.`,
+              data: {
+                type: "job_reassigned",
+                ...(count === 1 ? { conversationId: handedOver[0].id } : {}),
+              },
+            });
+          })().catch((err) => req.log.warn({ err }, "Deletion handover notifications failed"));
+        }
       }
       // Confirmation email: the real address was captured before the wipe.
       // Anonymisation is terminal for PII, so this is the last chance to
@@ -3136,7 +3227,9 @@ router.post(
       const alreadyPlaceholder = user.email.endsWith(".invalid");
       const releasedEmail = `deleted-user-${userId}@deleted.mylocaltrade.invalid`;
       let completed = false;
-      await db.transaction(async (tx) => {
+      // Handover info is RETURNED from the transaction (not closure-assigned)
+      // so TypeScript's control-flow analysis keeps the narrowing intact.
+      const completionHandover = await db.transaction(async (tx) => {
         // Atomic transition guard: COMPLETED is terminal — block re-completing.
         const [updated] = await tx
           .update(usersTable)
@@ -3161,7 +3254,7 @@ router.post(
             ),
           )
           .returning({ id: usersTable.id });
-        if (!updated) return;
+        if (!updated) return null;
         completed = true;
         // Belt-and-braces: earlier lifecycle steps already purge push tokens,
         // but the terminal transition must guarantee none survive.
@@ -3172,6 +3265,40 @@ router.post(
             .set({ email: releasedEmail, updatedAt: now })
             .where(eq(traderProfilesTable.userId, userId));
         }
+        // Company Teams: same terminal-roster rule as the anonymise route.
+        // If this account skipped anonymisation (straight to COMPLETED), its
+        // EMPLOYEE membership is still ACTIVE — revoke it and sweep any live
+        // job to the owner. After anonymise this is a no-op (already
+        // REVOKED). Owner rows are never touched.
+        if (user.role === "trader") {
+          const membership = await findActiveEmployeeMembership(tx, userId);
+          if (membership) {
+            const revoked = await tx
+              .update(companyMembersTable)
+              .set({
+                status: "REVOKED",
+                revokedAt: now,
+                revokedByUserId: adminId,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(companyMembersTable.id, membership.memberId),
+                  eq(companyMembersTable.status, "ACTIVE"),
+                ),
+              )
+              .returning({ id: companyMembersTable.id });
+            if (revoked.length > 0) {
+              const handedOver = await handoverActiveJobsToOwner(tx, {
+                traderProfileId: membership.traderProfileId,
+                fromUserId: userId,
+                ownerUserId: membership.ownerUserId,
+              });
+              return { ...membership, handedOver };
+            }
+          }
+        }
+        return null;
       });
       if (!completed) {
         res.status(409).json({
@@ -3181,6 +3308,51 @@ router.post(
         return;
       }
       await revokeUserSessions(userId);
+      // Post-commit, winner-only (gated by the conditional revoke above).
+      if (completionHandover) {
+        const { memberId, traderProfileId, ownerUserId, businessName, handedOver } =
+          completionHandover;
+        void logAudit({
+          userId: ownerUserId,
+          action: "MEMBER_REMOVED",
+          performedBy: adminId,
+          details: {
+            traderProfileId,
+            companyMemberId: memberId,
+            memberUserId: userId,
+            viaAccountDeletion: true,
+          },
+          notes: "Membership revoked automatically: account deletion finalised (completed).",
+        });
+        void logJobsHandedToOwner({
+          traderProfileId,
+          conversations: handedOver,
+          removedUserId: userId,
+          ownerUserId,
+          actorUserId: adminId,
+          reason: "account-deletion",
+        }).catch((err) => req.log.warn({ err }, "Deletion handover audit failed"));
+        if (handedOver.length > 0) {
+          void (async () => {
+            await notifyJobsHandedToOwner({
+              conversations: handedOver,
+              ownerUserId,
+              businessName,
+              onError: (err, conversationId) =>
+                req.log.warn({ err, conversationId }, "Deletion handover notification failed"),
+            });
+            const count = handedOver.length;
+            await sendPushToUser(ownerUserId, {
+              title: "Jobs handed to you",
+              body: `${count === 1 ? "1 live job is" : `${count} live jobs are`} now assigned to you after a team member's account was deleted.`,
+              data: {
+                type: "job_reassigned",
+                ...(count === 1 ? { conversationId: handedOver[0].id } : {}),
+              },
+            });
+          })().catch((err) => req.log.warn({ err }, "Deletion handover notifications failed"));
+        }
+      }
       // Confirmation email: address was captured before the row was rewritten
       // to the released placeholder. If the account was anonymised first, the
       // real address is already gone (the anonymise route sent the
