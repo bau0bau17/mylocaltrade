@@ -8,7 +8,7 @@ import { EnquiryCard } from '@/components/EnquiryCard';
 import { JobReferenceSearch } from '@/components/JobReferenceSearch';
 import { useGetEnquiries, useGetNewLeadCount, getGetEnquiriesQueryKey } from '@workspace/api-client-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { matchesJobReference } from '@/lib/job-reference-search';
+import { matchesLeadSearch } from '@/lib/job-reference-search';
 
 export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
@@ -23,7 +23,8 @@ export default function LeadsScreen() {
   });
   const newCount = newCountData?.newCount ?? 0;
 
-  // Small job-number filter (e.g. "MLT-000123" or just "000123"). Filtering is
+  // Lead search: matches job reference (MLT-000123 / 000123, dash-insensitive),
+  // job/category title, customer name, or description — case-insensitive,
   // client-side over the already-loaded list; clearing the box restores it.
   const [jobQuery, setJobQuery] = useState('');
   const trimmedJobQuery = jobQuery.trim();
@@ -31,7 +32,7 @@ export default function LeadsScreen() {
   const filteredEnquiries = useMemo(
     () =>
       trimmedJobQuery
-        ? enquiries.filter((e) => matchesJobReference(e.jobReference, trimmedJobQuery))
+        ? enquiries.filter((e) => matchesLeadSearch(e, trimmedJobQuery))
         : enquiries,
     [enquiries, trimmedJobQuery],
   );
@@ -78,7 +79,13 @@ export default function LeadsScreen() {
 
       {enquiries.length > 0 ? (
         <View style={styles.searchWrap}>
-          <JobReferenceSearch value={jobQuery} onChange={setJobQuery} />
+          <JobReferenceSearch
+            value={jobQuery}
+            onChange={setJobQuery}
+            placeholder="Search name, job title or MLT number"
+            autoCapitalize="none"
+            accessibilityLabel="Search leads"
+          />
         </View>
       ) : null}
 
@@ -95,7 +102,7 @@ export default function LeadsScreen() {
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>No jobs match</Text>
               <Text style={styles.emptySubtitle}>
-                No lead matches “{trimmedJobQuery}”. Check the job number and try again.
+                No lead matches “{trimmedJobQuery}”. Try a customer name, job title or MLT number.
               </Text>
             </View>
           ) : (

@@ -9,9 +9,15 @@ import Colors from '@/constants/colors';
 export function JobReferenceSearch({
   value,
   onChange,
+  placeholder = 'Search by job number (e.g. MLT-000123)',
+  autoCapitalize = 'characters',
+  accessibilityLabel = 'Search by job number',
 }: {
   value: string;
   onChange: (next: string) => void;
+  placeholder?: string;
+  autoCapitalize?: 'none' | 'characters';
+  accessibilityLabel?: string;
 }) {
   return (
     <View style={styles.wrap}>
@@ -20,19 +26,19 @@ export function JobReferenceSearch({
         style={styles.input}
         value={value}
         onChangeText={onChange}
-        placeholder="Search by job number (e.g. MLT-000123)"
+        placeholder={placeholder}
         placeholderTextColor={Colors.light.textMuted}
-        autoCapitalize="characters"
+        autoCapitalize={autoCapitalize}
         autoCorrect={false}
         returnKeyType="search"
-        accessibilityLabel="Search by job number"
+        accessibilityLabel={accessibilityLabel}
       />
       {value.length > 0 ? (
         <Pressable
           onPress={() => onChange('')}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Clear job number search"
+          accessibilityLabel="Clear search"
         >
           <Feather name="x-circle" size={16} color={Colors.light.textMuted} />
         </Pressable>
