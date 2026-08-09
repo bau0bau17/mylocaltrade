@@ -1,0 +1,164 @@
+Phase 1 is fully approved.
+
+Proceed with Phase 2 only: shared company leads, atomic job claiming, assigned-person identity and notification routing.
+
+Keep COMPANY_TEAMS_ENABLED OFF by default. Do not deploy production.
+
+ASSIGNMENT RULE
+
+For a new company lead, the conversation initially has no assigned person.
+
+The first active company member who successfully performs a customer-facing action claims the job:
+
+- sends the first outbound text message;
+- sends the first outbound photo/message attachment; or
+- submits the company quote.
+
+The following must never claim a job:
+
+- viewing/opening the lead;
+- reading messages;
+- loading photos;
+- drafting text;
+- receiving a customer message;
+- system-generated messages;
+- background refresh or notification handling.
+
+ATOMIC CLAIMING
+
+Claiming and the customer-facing action must be one atomic operation.
+
+If two members act simultaneously:
+
+- exactly one member becomes assigned;
+- only the winning member’s message or quote is created;
+- the losing action must fail before becoming visible to the customer;
+- the losing member receives a clear “This job was claimed by [name]” response;
+- no duplicate quote, message, system event or customer notification may be created.
+
+Reuse the Phase 0 assignment columns and existing database locking/constraints.
+
+ACCESS AFTER CLAIMING
+
+Assigned member:
+
+- can message, quote and perform the existing permitted job actions.
+
+Other employees:
+
+- may read the complete company job/conversation;
+- see “Job claimed by [name]” or “Quote submitted by [name]”;
+- cannot message, quote, upload chat attachments, book, complete or otherwise change the job;
+- must fail server-side even if they bypass the mobile UI.
+
+Owner:
+
+- may read every company job.
+- If the owner originally claims the job, the owner is the assigned person.
+- Do not implement manual reassignment yet; that belongs to Phase 3.
+
+CUSTOMER-FACING IDENTITY
+
+Before assignment:
+
+- display the company name and company logo;
+- use the existing fallback when no logo exists.
+
+After assignment:
+
+- display the assigned person’s name and personal profile photo;
+- keep the company name clearly visible;
+- never replace the person’s photo with the company logo;
+- preserve existing profile-photo privacy rules.
+
+Existing single-login conversations already assigned to their owner must continue displaying exactly as expected.
+
+COMPANY MEMBER UI
+
+For unclaimed leads:
+
+- active members can open and inspect the lead;
+- clearly show that it is available/unclaimed.
+
+For claimed jobs:
+
+- show who claimed it;
+- other employees get a clearly read-only experience;
+- disable or hide customer-facing action controls for non-assigned employees;
+- server permissions remain authoritative.
+
+NOTIFICATIONS
+
+- New unclaimed lead: notify all active company members.
+- After assignment: send customer/job-action notifications to the assigned member and the owner.
+- If the assigned member is the owner, send only one notification.
+- Other employees should not continue receiving routine notifications for that claimed job.
+- Never generate duplicate customer notifications or duplicate system messages.
+
+AUDIT
+
+Add human-readable audit events for:
+
+- JOB CLAIMED
+- COMPANY QUOTE SUBMITTED / existing equivalent with acting member identity
+
+Store acting user, company, conversation and relevant metadata internally without exposing raw payloads in the normal Admin audit-log UI.
+
+FEATURE FLAG
+
+When COMPANY_TEAMS_ENABLED is OFF:
+
+- all existing solo-trader behaviour must remain unchanged;
+- existing mobile builds and API shapes must remain compatible;
+- employee/team endpoints remain fail-closed.
+
+When ON:
+
+- only active memberships receive company access;
+- removed members remain locked out;
+- no owner-only setting permissions may change.
+
+DO NOT IMPLEMENT YET
+
+- Manual reassignment
+- Removed-member job handover
+- Manager role
+- Ownership transfer
+- Existing customer-account conversion
+- Review attribution
+- AI features
+- Billing or RevenueCat changes
+- Public production enablement
+
+TESTING
+
+Include focused tests for:
+
+- message-first claiming
+- photo-message-first claiming
+- quote-first claiming
+- viewing not claiming
+- customer/system messages not claiming
+- simultaneous message/message, quote/quote and message/quote races
+- losing action not being persisted
+- company-level duplicate quote prevention
+- non-assigned employee read-only enforcement
+- removed-member denial
+- cross-company access denial
+- notification recipients and deduplication
+- customer header identity before and after assignment
+- existing solo-owner compatibility with flag OFF and ON
+
+Run the complete API suite with the flag OFF and ON, mobile/Admin typechecks and relevant Admin tests. Perform a focused concurrency, authorization and notification review.
+
+Commit and push to origin/main, then report:
+
+1. Commit hash
+2. Files changed
+3. Claiming transaction/locking approach
+4. Tests and race simulations
+5. Notification behaviour
+6. Existing-app compatibility
+7. Deployment requirements
+
+Do not publish production. STOP after Phase 2 and wait for Phase 3 approval.

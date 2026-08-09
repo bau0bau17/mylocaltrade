@@ -8,6 +8,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendPushToUser } from "./push-notifications";
+import { traderSideRecipientUserIds } from "./company-membership";
 import { sendLeadReminderEmail } from "./email";
 import { generateUnsubscribeToken } from "./auth";
 
@@ -120,18 +121,28 @@ export async function sendLeadReminderIfUnread(enquiryId: number): Promise<boole
 
   const pushPromise = (async () => {
     try {
-      pushOk = await sendPushToUser(row.conv!.traderUserId, {
-        title: isUrgent ? "Unanswered ASAP lead" : "Unanswered lead",
-        body: isUrgent
-          ? `ASAP — ${customerName} is still waiting for a reply.`
-          : `You still have an unanswered lead from ${customerName}.`,
-        data: {
-          type: "lead_reminder",
-          enquiryId: row.enquiry.id,
-          conversationId: row.conv!.id,
-          ...(isUrgent ? { urgency: "urgent" } : {}),
-        },
+      // Company Teams routing: an unclaimed lead nudges every ACTIVE member;
+      // a claimed one the assignee + owner. Flag OFF: exactly the owner.
+      const reminderRecipients = await traderSideRecipientUserIds({
+        traderProfileId: row.conv!.traderProfileId,
+        traderUserId: row.conv!.traderUserId,
+        assignedTraderUserId: row.conv!.assignedTraderUserId,
       });
+      for (const recipientId of reminderRecipients) {
+        const sent = await sendPushToUser(recipientId, {
+          title: isUrgent ? "Unanswered ASAP lead" : "Unanswered lead",
+          body: isUrgent
+            ? `ASAP — ${customerName} is still waiting for a reply.`
+            : `You still have an unanswered lead from ${customerName}.`,
+          data: {
+            type: "lead_reminder",
+            enquiryId: row.enquiry.id,
+            conversationId: row.conv!.id,
+            ...(isUrgent ? { urgency: "urgent" } : {}),
+          },
+        });
+        pushOk = pushOk || sent;
+      }
     } catch (err) {
       logger.warn({ err, enquiryId }, "Failed to send lead reminder push");
     }

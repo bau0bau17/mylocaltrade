@@ -2414,6 +2414,18 @@ export const GetEnquiriesResponse = zod.object({
         .describe(
           "Human-readable job reference (e.g. MLT-000008). Only set once the customer has hired the trader.",
         ),
+      assignedTraderUserId: zod
+        .number()
+        .nullish()
+        .describe(
+          "Company Teams: the member the linked job is assigned to. Null while\nthe lead is unclaimed (or when no conversation exists). With teams\ndisabled this always reports the conversation's trader.\n",
+        ),
+      assignedTraderName: zod
+        .string()
+        .nullish()
+        .describe(
+          'Full name of the assigned member for \"Claimed by …\" chips on the\ntrader leads list. Null while unclaimed or with teams disabled.\n',
+        ),
       createdAt: zod.date(),
     }),
   ),
@@ -2635,6 +2647,30 @@ export const GetConversationsResponse = zod.object({
         .describe(
           "Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses.",
         ),
+      assignedTraderUserId: zod
+        .number()
+        .nullish()
+        .describe(
+          'Company Teams: the member this job is assigned to (whoever claimed\nit). Null while a company lead is unclaimed. With teams disabled\nthis always reports the conversation\'s trader, so clients never\nsee an \"unclaimed\" state in legacy mode.\n',
+        ),
+      assignedTraderName: zod
+        .string()
+        .nullish()
+        .describe(
+          'Full name of the assigned member, for the customer chat header and\ntrader-side \"Claimed by …\" banners. Null while unclaimed or with\nteams disabled.\n',
+        ),
+      traderLogoUrl: zod
+        .string()
+        .nullish()
+        .describe(
+          "Company logo object path, shown as the customer-facing identity\nbefore a member claims the job. Only populated on the conversation\ndetail response while teams are enabled; load via the public\ngallery-file endpoint.\n",
+        ),
+      viewerCanAct: zod
+        .boolean()
+        .nullish()
+        .describe(
+          'Trader-side viewers only: whether the caller may act on this job\n(it is unclaimed, or claimed by them). False drives the read-only\n\"claimed by a colleague\" experience. Always null for customers;\nalways true with teams disabled.\n',
+        ),
       createdAt: zod.date(),
     }),
   ),
@@ -2746,6 +2782,30 @@ export const GetConversationResponse = zod.object({
       .nullish()
       .describe(
         "Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses.",
+      ),
+    assignedTraderUserId: zod
+      .number()
+      .nullish()
+      .describe(
+        'Company Teams: the member this job is assigned to (whoever claimed\nit). Null while a company lead is unclaimed. With teams disabled\nthis always reports the conversation\'s trader, so clients never\nsee an \"unclaimed\" state in legacy mode.\n',
+      ),
+    assignedTraderName: zod
+      .string()
+      .nullish()
+      .describe(
+        'Full name of the assigned member, for the customer chat header and\ntrader-side \"Claimed by …\" banners. Null while unclaimed or with\nteams disabled.\n',
+      ),
+    traderLogoUrl: zod
+      .string()
+      .nullish()
+      .describe(
+        "Company logo object path, shown as the customer-facing identity\nbefore a member claims the job. Only populated on the conversation\ndetail response while teams are enabled; load via the public\ngallery-file endpoint.\n",
+      ),
+    viewerCanAct: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Trader-side viewers only: whether the caller may act on this job\n(it is unclaimed, or claimed by them). False drives the read-only\n\"claimed by a colleague\" experience. Always null for customers;\nalways true with teams disabled.\n',
       ),
     createdAt: zod.date(),
   }),

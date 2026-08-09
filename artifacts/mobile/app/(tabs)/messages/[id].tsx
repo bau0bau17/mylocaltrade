@@ -24,7 +24,7 @@ import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import { confirmAction } from "@/lib/confirm";
-import { avatarImageUrl } from "@/lib/api-url";
+import { avatarImageUrl, objectImageUrl } from "@/lib/api-url";
 import { isPhoneVerificationRequired, promptPhoneVerification } from "@/lib/phone-gate";
 
 // Server returns 409 with this machine-readable code when the customer tries
@@ -34,6 +34,19 @@ function isNoOfferYet(err: unknown): boolean {
   const data = (err as { data?: unknown }).data;
   if (!data || typeof data !== "object") return false;
   return (data as { code?: unknown }).code === "NO_OFFER_YET";
+}
+
+// Company Teams: the server answers 409 with this code when a teammate has
+// already claimed the job — the attempted write was rolled back entirely.
+// Returns undefined when the error is something else, otherwise the winning
+// teammate's name (or null when the server didn't include one).
+function jobClaimedByOtherName(err: unknown): string | null | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const data = (err as { data?: unknown }).data;
+  if (!data || typeof data !== "object") return undefined;
+  if ((data as { code?: unknown }).code !== "JOB_CLAIMED_BY_OTHER") return undefined;
+  const name = (data as { assignedName?: unknown }).assignedName;
+  return typeof name === "string" && name.trim() ? name : null;
 }
 import {
   useGetConversation,
@@ -393,6 +406,31 @@ export default function ConversationThreadScreen() {
     return isTrader ? conv.customerName : conv.traderBusinessName;
   }, [conv, isTrader]);
 
+  // Company Teams (Phase 2): assigned-person identity + claim state. With the
+  // feature flag OFF the server sends legacy-shaped values (assigned = the
+  // trader, no name/logo, viewerCanAct true), so every branch below collapses
+  // to the old behaviour automatically.
+  const assignedName = conv?.assignedTraderName ?? null;
+  // Trader side: an unclaimed company lead — the first action claims it.
+  const unclaimedLead =
+    isTrader && conv?.viewerCanAct === true && conv?.assignedTraderUserId == null;
+  // Trader side: a teammate owns this job — read-only for this viewer.
+  const claimedByOther = isTrader && conv?.viewerCanAct === false;
+
+  // A claim-race loser gets a 409: explain who won and refresh the thread so
+  // the claimed (read-only) state appears immediately.
+  const handleClaimedByOther = (err: unknown): boolean => {
+    const name = jobClaimedByOtherName(err);
+    if (name === undefined) return false;
+    qc.invalidateQueries({ queryKey: getGetConversationQueryKey(conversationId) });
+    qc.invalidateQueries({ queryKey: getGetConversationsQueryKey() });
+    Alert.alert(
+      "Job already claimed",
+      `${name ?? assignedName ?? "A teammate"} got there first — this job is now theirs.`,
+    );
+    return true;
+  };
+
   // "Add to calendar" prompt: shown once per confirmed booking+time (both the
   // confirmer and the proposer see it when they first observe the CONFIRMED
   // state). Dismissal ("Not now") is remembered locally; the booking card
@@ -526,6 +564,7 @@ export default function ConversationThreadScreen() {
       {
         onSuccess: () => setText(""),
         onError: (err: unknown) => {
+          if (handleClaimedByOther(err)) return;
           const msg =
             err instanceof Error ? err.message : "Could not send message. Please try again.";
           Alert.alert("Error", msg);
@@ -629,6 +668,10 @@ export default function ConversationThreadScreen() {
     const opts = {
       onSuccess: () => setQuoteOpen(false),
       onError: (err: unknown) => {
+        if (handleClaimedByOther(err)) {
+          setQuoteOpen(false);
+          return;
+        }
         const msg = err instanceof Error ? err.message : "Could not send the quote. Please try again.";
         Alert.alert("Error", msg);
       },
@@ -725,6 +768,10 @@ export default function ConversationThreadScreen() {
       {
         onSuccess: () => setBookingOpen(false),
         onError: (err: unknown) => {
+          if (handleClaimedByOther(err)) {
+            setBookingOpen(false);
+            return;
+          }
           const msg =
             err instanceof Error ? err.message : "Could not propose the appointment.";
           Alert.alert("Error", msg);
@@ -745,7 +792,12 @@ export default function ConversationThreadScreen() {
       onConfirm: () =>
         confirmBookingMutation.mutate(
           { id: booking.id },
-          { onError: () => Alert.alert("Error", "Could not confirm the appointment.") },
+          {
+            onError: (err: unknown) => {
+              if (handleClaimedByOther(err)) return;
+              Alert.alert("Error", "Could not confirm the appointment.");
+            },
+          },
         ),
     });
   };
@@ -760,7 +812,12 @@ export default function ConversationThreadScreen() {
       onConfirm: () =>
         cancelBookingMutation.mutate(
           { id: booking.id },
-          { onError: () => Alert.alert("Error", "Could not cancel the appointment.") },
+          {
+            onError: (err: unknown) => {
+              if (handleClaimedByOther(err)) return;
+              Alert.alert("Error", "Could not cancel the appointment.");
+            },
+          },
         ),
     });
   };
@@ -798,7 +855,10 @@ export default function ConversationThreadScreen() {
                 "Customer notified",
                 "We've let the customer know the work is done. They'll confirm to unlock a review.",
               ),
-            onError: () => Alert.alert("Error", "Could not notify the customer."),
+            onError: (err: unknown) => {
+              if (handleClaimedByOther(err)) return;
+              Alert.alert("Error", "Could not notify the customer.");
+            },
           },
         ),
     });
@@ -818,7 +878,13 @@ export default function ConversationThreadScreen() {
           setCancelReason("");
           Alert.alert("Job cancelled", "This job has been cancelled and the conversation closed.");
         },
-        onError: () => Alert.alert("Error", "Could not cancel the job."),
+        onError: (err: unknown) => {
+          if (handleClaimedByOther(err)) {
+            setCancelOpen(false);
+            return;
+          }
+          Alert.alert("Error", "Could not cancel the job.");
+        },
       },
     );
   };
@@ -1001,11 +1067,24 @@ export default function ConversationThreadScreen() {
               style={styles.headerAvatar}
             />
           </Pressable>
+        ) : !isTrader && conv.traderLogoUrl ? (
+          // Unclaimed company lead (Company Teams): no person yet, so show the
+          // business logo instead. Logos are public gallery objects — no auth
+          // headers needed.
+          <Image
+            source={{ uri: objectImageUrl(conv.traderLogoUrl)! }}
+            style={styles.headerAvatar}
+          />
         ) : null}
         <View style={{ flex: 1 }}>
           <Text style={styles.headerName} numberOfLines={1}>
-            {otherName}
+            {!isTrader && assignedName ? assignedName : otherName}
           </Text>
+          {!isTrader && assignedName ? (
+            <Text style={styles.headerSub} numberOfLines={1}>
+              {conv.traderBusinessName}
+            </Text>
+          ) : null}
           {conv.serviceRequired ? (
             <Text style={styles.headerSub} numberOfLines={1}>
               {conv.serviceRequired}
@@ -1067,9 +1146,10 @@ export default function ConversationThreadScreen() {
                 text: conv.muted ? "Unmute notifications" : "Mute notifications",
                 onPress: onShowMuteOptions,
               },
-              ...(conv.stage === "AWAITING_REPLY" ||
-              conv.stage === "HIRED" ||
-              conv.stage === "AWAITING_CUSTOMER_CONFIRMATION"
+              ...(!claimedByOther &&
+              (conv.stage === "AWAITING_REPLY" ||
+                conv.stage === "HIRED" ||
+                conv.stage === "AWAITING_CUSTOMER_CONFIRMATION")
                 ? [
                     {
                       text: "Cancel this job",
@@ -1078,7 +1158,7 @@ export default function ConversationThreadScreen() {
                     },
                   ]
                 : []),
-              ...(!closed
+              ...(!closed && !claimedByOther
                 ? [{ text: "Close conversation", onPress: onClose, style: "destructive" as const }]
                 : []),
               { text: "Report this conversation", onPress: onReport },
@@ -1128,6 +1208,15 @@ export default function ConversationThreadScreen() {
               ) : null}
             </Pressable>
           ))}
+        </View>
+      ) : null}
+
+      {unclaimedLead && !closed && conv.stage !== "CANCELLED" && conv.stage !== "JOB_DONE" ? (
+        <View style={styles.claimBanner}>
+          <Feather name="zap" size={14} color={Colors.light.primary} />
+          <Text style={styles.claimBannerText}>
+            New company lead — the first teammate to reply or send a quote takes this job.
+          </Text>
         </View>
       ) : null}
 
@@ -1304,7 +1393,7 @@ export default function ConversationThreadScreen() {
               </Pressable>
             </View>
           ) : null}
-          {!closed && isTrader && (hasLivePendingQuote || currentQuoteStatus === "EXPIRED") ? (
+          {!closed && isTrader && !claimedByOther && (hasLivePendingQuote || currentQuoteStatus === "EXPIRED") ? (
             <View style={styles.quoteActionsRow}>
               <Pressable
                 style={[styles.quoteBtn, styles.quoteBtnPrimary, quoteBusy && styles.quoteBtnDisabled]}
@@ -1333,6 +1422,7 @@ export default function ConversationThreadScreen() {
           ) : null}
           {!closed &&
           isTrader &&
+          !claimedByOther &&
           !hasLivePendingQuote &&
           !hasAcceptedQuote &&
           currentQuoteStatus !== "EXPIRED" &&
@@ -1355,7 +1445,7 @@ export default function ConversationThreadScreen() {
           PROPOSED booking shows Confirm to the non-proposer; both parties can
           cancel or propose a new time (reschedule = new proposal, mutual
           confirmation — never a silent overwrite). */}
-      {hired && conv.stage !== "CANCELLED" && conv.stage !== "JOB_DONE" && !closed ? (
+      {hired && conv.stage !== "CANCELLED" && conv.stage !== "JOB_DONE" && !closed && (booking || !claimedByOther) ? (
         <View style={styles.bookingBar}>
           {booking ? (
             <>
@@ -1388,6 +1478,7 @@ export default function ConversationThreadScreen() {
               {booking.note ? (
                 <Text style={styles.quoteNotes} numberOfLines={2}>{booking.note}</Text>
               ) : null}
+              {!claimedByOther ? (
               <View style={styles.quoteActionsRow}>
                 {booking.status === "PROPOSED" &&
                 booking.proposedByRole !== (isTrader ? "trader" : "customer") ? (
@@ -1435,6 +1526,7 @@ export default function ConversationThreadScreen() {
                   )}
                 </Pressable>
               </View>
+              ) : null}
             </>
           ) : (
             <View style={styles.bookingEmptyRow}>
@@ -1595,7 +1687,7 @@ export default function ConversationThreadScreen() {
             </>
           )}
         </View>
-      ) : isTrader && !closed ? (
+      ) : isTrader && !closed && !claimedByOther ? (
         <View style={styles.lifecycleBar}>
           {conv.stage === "AWAITING_CUSTOMER_CONFIRMATION" ? (
             <View style={styles.lifecycleDone}>
@@ -1647,6 +1739,12 @@ export default function ConversationThreadScreen() {
       {closed ? (
         <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
           <Text style={styles.closedText}>This conversation is {conv.status.toLowerCase()}.</Text>
+        </View>
+      ) : claimedByOther ? (
+        <View style={[styles.composer, { paddingBottom: insets.bottom + 12 }]}>
+          <Text style={styles.closedText}>
+            {assignedName ?? "A teammate"} is handling this job — it's read-only for you.
+          </Text>
         </View>
       ) : (
         <View style={[styles.composer, { paddingBottom: insets.bottom + 8 }]}>
@@ -2583,6 +2681,21 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   bubbleTimeMine: { color: "rgba(255,255,255,0.75)" },
+  claimBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: Colors.light.primaryMuted,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  claimBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.light.primary,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
   composer: {
     paddingHorizontal: 12,
     paddingTop: 8,

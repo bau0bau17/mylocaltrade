@@ -139,6 +139,7 @@ export default function MessagesIndexScreen() {
 }
 
 function MessagesList({ isTrader }: { isTrader: boolean }) {
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
@@ -262,6 +263,18 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
             isTrader && item.traderStatus
               ? `trader status ${String(item.traderStatus).toLowerCase()}`
               : null;
+          // Company Teams: claim state for trader-side rows. With the feature
+          // flag OFF the server reports every row as assigned with no name, so
+          // neither chip renders and the legacy layout is untouched.
+          const claimPhrase = !isTrader
+            ? null
+            : item.assignedTraderUserId == null
+              ? "available to claim"
+              : item.assignedTraderName
+                ? item.assignedTraderUserId === user?.id
+                  ? "claimed by you"
+                  : `claimed by ${item.assignedTraderName}`
+                : null;
           const mutedPhrase = muted
             ? remaining
               ? `muted, ${remaining}`
@@ -274,6 +287,7 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
             `last updated ${spokenTimeAgo(item.lastMessageAt)}`,
             `status ${statusSpoken}`,
             traderStatusPhrase,
+            claimPhrase,
             mutedPhrase,
           ]
             .filter(Boolean)
@@ -359,6 +373,22 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
                         ]}
                       >
                         {item.traderStatus}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {isTrader && item.assignedTraderUserId == null ? (
+                    <View style={[styles.statusPill, styles.availablePill]}>
+                      <Text style={[styles.statusText, styles.availableText]}>Available</Text>
+                    </View>
+                  ) : isTrader && item.assignedTraderName ? (
+                    <View style={[styles.statusPill, styles.claimedPill]}>
+                      <Text
+                        style={[styles.statusText, styles.claimedText]}
+                        numberOfLines={1}
+                      >
+                        {item.assignedTraderUserId === user?.id
+                          ? "Yours"
+                          : `Claimed · ${(item.assignedTraderName ?? "").split(" ")[0]}`}
                       </Text>
                     </View>
                   ) : null}
@@ -515,4 +545,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   mutedText: { color: Colors.light.textSecondary },
+  availablePill: { backgroundColor: "rgba(6, 214, 160, 0.12)" },
+  availableText: { color: Colors.light.success },
+  claimedPill: {
+    backgroundColor: Colors.light.surface,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    maxWidth: 140,
+  },
+  claimedText: { color: Colors.light.textSecondary },
 });

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
+import { useAuth } from '@/contexts/AuthContext';
 import type { Enquiry } from '@workspace/api-client-react';
 import {
   PROPERTY_TYPE_OPTIONS,
@@ -52,6 +53,7 @@ export function EnquiryCard({
   viewerRole?: 'customer' | 'trader';
 }) {
   const router = useRouter();
+  const { user } = useAuth();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -151,6 +153,26 @@ export function EnquiryCard({
         </View>
       </View>
       
+      {/* Company Teams claim state (trader view only). Flag OFF the server
+          reports every lead as assigned with no name, so neither row shows. */}
+      {!isCustomerView && enquiry.conversationId != null && enquiry.assignedTraderUserId == null ? (
+        <View style={styles.claimRow}>
+          <Feather name="zap" size={12} color={Colors.light.success} />
+          <Text style={[styles.claimText, styles.claimAvailableText]}>
+            Available — first teammate to reply takes this job
+          </Text>
+        </View>
+      ) : !isCustomerView && enquiry.assignedTraderName ? (
+        <View style={styles.claimRow}>
+          <Feather name="user-check" size={12} color={Colors.light.textSecondary} />
+          <Text style={styles.claimText} numberOfLines={1}>
+            {enquiry.assignedTraderUserId === user?.id
+              ? 'Assigned to you'
+              : `Claimed by ${enquiry.assignedTraderName}`}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.divider} />
       
       <Text style={styles.message} numberOfLines={3}>{enquiry.message}</Text>
@@ -252,6 +274,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.border,
     marginBottom: 12,
   },
+  claimRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  claimText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+    flex: 1,
+  },
+  claimAvailableText: { color: Colors.light.success },
   message: {
     fontSize: 14,
     color: Colors.light.text,

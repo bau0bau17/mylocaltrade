@@ -84,6 +84,10 @@ export const TRADER_AUDIT_ACTIONS = [
   "MEMBER_INVITE_ACCEPTED",
   "MEMBER_REMOVED",
   "JOB_CLAIMED",
+  // A company quote was submitted while Company Teams is enabled — records
+  // WHICH member acted for the business (performed_by), since quotes are
+  // company-level objects.
+  "QUOTE_SUBMITTED_BY_MEMBER",
   "JOB_REASSIGNED",
 ] as const;
 export type TraderAuditAction = (typeof TRADER_AUDIT_ACTIONS)[number];

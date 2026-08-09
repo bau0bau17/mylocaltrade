@@ -182,13 +182,16 @@ router.get("/customer/uploads/avatar-file", authMiddleware, async (req, res) => 
 
     if (owner.id !== userId) {
       // Membership check: the caller must share at least one conversation
-      // with the avatar's owner, in either direction.
+      // with the avatar's owner, in either direction. Company Teams: the
+      // trader side of a conversation is its legacy traderUserId OR the
+      // member the job is assigned to, so a customer can load the headshot
+      // of the colleague actually handling their job (and vice versa).
       const [shared] = await db
         .select({ id: conversationsTable.id })
         .from(conversationsTable)
         .where(
-          sql`(${conversationsTable.customerId} = ${userId} AND ${conversationsTable.traderUserId} = ${owner.id})
-           OR (${conversationsTable.customerId} = ${owner.id} AND ${conversationsTable.traderUserId} = ${userId})`,
+          sql`(${conversationsTable.customerId} = ${userId} AND (${conversationsTable.traderUserId} = ${owner.id} OR ${conversationsTable.assignedTraderUserId} = ${owner.id}))
+           OR (${conversationsTable.customerId} = ${owner.id} AND (${conversationsTable.traderUserId} = ${userId} OR ${conversationsTable.assignedTraderUserId} = ${userId}))`,
         )
         .limit(1);
       if (!shared) {

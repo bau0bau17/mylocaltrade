@@ -1,7 +1,18 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { getActiveMembership } from "../lib/company-membership";
+import {
+  getActiveMembership,
+  companyTeamsEnabled,
+  traderSideRecipientUserIds,
+} from "../lib/company-membership";
+import {
+  claimOrRequireAssigned,
+  canActOnJob,
+  JobClaimedByOtherError,
+  jobClaimedByOtherBody,
+  logJobClaimed,
+} from "../lib/job-assignment";
 import {
   conversationsTable,
   messagesTable,
@@ -19,6 +30,7 @@ import { alias } from "drizzle-orm/pg-core";
 // Second reference to users for joining the TRADER user on a conversation
 // (the primary usersTable join is the customer).
 const traderUsers = alias(usersTable, "trader_users");
+const assignedUsers = alias(usersTable, "assigned_users");
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import {
@@ -95,6 +107,14 @@ function serializeConversation(
     unreadCount: number;
     viewerRole: "customer" | "trader";
     hasReview?: boolean | null;
+    // Company Teams (Phase 2) — all additive, flag-aware:
+    // company logo for the pre-claim customer header (flag ON only).
+    traderLogoUrl?: string | null;
+    // Full name of the assigned member for headers/banners (flag ON only).
+    assignedTraderName?: string | null;
+    // Whether the TRADER viewer may act on this job (claimed by them or still
+    // unclaimed). Customers always get null. Flag OFF → always true.
+    viewerCanAct?: boolean | null;
   },
 ) {
   const mutedAt =
@@ -134,8 +154,30 @@ function serializeConversation(
     reviewUnlockedAt: c.reviewUnlockedAt?.toISOString() ?? null,
     jobReference: jobReferenceOf(c),
     hasReview: extras.hasReview ?? null,
+    // Flag OFF reports the legacy single trader as assigned (mirroring keeps
+    // assignedTraderUserId = traderUserId, but coalesce defensively for rows
+    // created between boots) so older payload consumers see no behaviour
+    // change and newer UIs never show an "unclaimed" state while teams are
+    // disabled.
+    assignedTraderUserId: companyTeamsEnabled()
+      ? c.assignedTraderUserId
+      : (c.assignedTraderUserId ?? c.traderUserId),
+    assignedTraderName: extras.assignedTraderName ?? null,
+    traderLogoUrl: extras.traderLogoUrl ?? null,
+    viewerCanAct:
+      extras.viewerRole === "trader" ? (extras.viewerCanAct ?? true) : null,
     createdAt: c.createdAt.toISOString(),
   };
+}
+
+// viewerCanAct for a trader-side viewer: with teams enabled, a claimed job is
+// actionable only by its assignee; unclaimed jobs are actionable (acting will
+// claim them). Flag OFF is always true — legacy behaviour.
+function traderViewerCanAct(c: ConversationRow, viewerUserId: number): boolean {
+  if (!companyTeamsEnabled()) return true;
+  return (
+    c.assignedTraderUserId == null || c.assignedTraderUserId === viewerUserId
+  );
 }
 
 function serializeMessage(m: MessageRow) {
@@ -227,14 +269,17 @@ router.get("/conversations", authMiddleware, async (req, res) => {
         customerName: usersTable.fullName,
         traderBusinessName: traderProfilesTable.businessName,
         traderVerificationStatus: traderProfilesTable.verificationStatus,
+        assignedTraderName: assignedUsers.fullName,
       })
       .from(conversationsTable)
       .innerJoin(usersTable, eq(conversationsTable.customerId, usersTable.id))
       .innerJoin(traderProfilesTable, eq(conversationsTable.traderProfileId, traderProfilesTable.id))
+      .leftJoin(assignedUsers, eq(conversationsTable.assignedTraderUserId, assignedUsers.id))
       .where(where)
       .orderBy(desc(conversationsTable.lastMessageAt));
 
-    const conversations = rows.map(({ conv, customerName, traderBusinessName, traderVerificationStatus }) =>
+    const teamsOn = companyTeamsEnabled();
+    const conversations = rows.map(({ conv, customerName, traderBusinessName, traderVerificationStatus, assignedTraderName }) =>
       serializeConversation(conv, {
         customerName,
         customerId: conv.customerId,
@@ -242,6 +287,9 @@ router.get("/conversations", authMiddleware, async (req, res) => {
         traderVerified: traderVerificationStatus === "VERIFIED",
         unreadCount: actor.role === "customer" ? conv.customerUnreadCount : conv.traderUnreadCount,
         viewerRole: actor.role === "customer" ? "customer" : "trader",
+        assignedTraderName: teamsOn ? assignedTraderName : null,
+        viewerCanAct:
+          actor.role === "trader" ? traderViewerCanAct(conv, userId) : null,
       }),
     );
 
@@ -426,16 +474,46 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
         }
       : null;
 
+    // Company Teams identity (Phase 2, all additive): with the flag ON the
+    // customer-facing person is the ASSIGNED member — before a claim the
+    // header shows the company identity (business name + logo) and no
+    // personal photo. Flag OFF the payload is bit-identical to legacy.
+    let assignedTraderName: string | null = null;
+    let assignedAvatarUrl: string | null = null;
+    let traderLogoUrl: string | null = null;
+    if (companyTeamsEnabled()) {
+      const [tpIdentity] = await db
+        .select({ logoUrl: traderProfilesTable.logoUrl })
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.id, row.conv.traderProfileId))
+        .limit(1);
+      traderLogoUrl = tpIdentity?.logoUrl ?? null;
+      if (row.conv.assignedTraderUserId != null) {
+        const [assigned] = await db
+          .select({ fullName: usersTable.fullName, avatarUrl: usersTable.avatarUrl })
+          .from(usersTable)
+          .where(eq(usersTable.id, row.conv.assignedTraderUserId))
+          .limit(1);
+        assignedTraderName = assigned?.fullName ?? null;
+        assignedAvatarUrl = assigned?.avatarUrl ?? null;
+      }
+    }
+
     res.json({
       conversation: serializeConversation(row.conv, {
         customerName: row.customerName,
         customerId: row.conv.customerId,
         traderBusinessName: row.traderBusinessName,
-        traderAvatarUrl: row.traderAvatarUrl,
+        traderAvatarUrl: companyTeamsEnabled()
+          ? assignedAvatarUrl
+          : row.traderAvatarUrl,
         traderVerified: row.traderVerificationStatus === "VERIFIED",
         unreadCount: 0,
         viewerRole: isCustomer ? "customer" : "trader",
         hasReview,
+        assignedTraderName,
+        traderLogoUrl,
+        viewerCanAct: isTrader ? traderViewerCanAct(row.conv, userId) : null,
       }),
       messages: messages.map(serializeMessage),
       enquiryAttachments,
@@ -530,7 +608,16 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
     // Atomic: insert the message AND advance conversation counters/status
     // together, so a partial failure can never leave a stored message with
     // stale unread counters or status.
+    let claimedNow = false;
     const created = await db.transaction(async (tx) => {
+      // Company job claiming (Phase 2): the FIRST trader-side reply claims
+      // the job for this member; on an already-claimed job only the assignee
+      // may send. Runs INSIDE the message transaction and BEFORE the insert,
+      // so a losing racer's message rolls back and never reaches the
+      // customer. Customer sends and system messages never claim.
+      if (isTrader) {
+        claimedNow = (await claimOrRequireAssigned(tx, conv, userId)).claimedNow;
+      }
       const [msg] = await tx
         .insert(messagesTable)
         .values({
@@ -558,15 +645,25 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
       return msg;
     });
 
-    // Fire-and-forget email to the other party.
+    // Audit the claim AFTER the transaction committed (fire-and-forget — an
+    // audit hiccup must never fail a delivered message).
+    if (claimedNow) {
+      void logJobClaimed({ conv, actorUserId: userId, via: "message" });
+    }
+
+    // Fire-and-forget email + push to the other side. Customer→trader
+    // notifications fan out per Company Teams routing (assigned member +
+    // owner once claimed; every active member while unclaimed; exactly the
+    // legacy single trader with the flag OFF).
     void (async () => {
       try {
-        const recipientUserId = isCustomer ? conv.traderUserId : conv.customerId;
-        const [recipient] = await db
-          .select({ email: usersTable.email, fullName: usersTable.fullName })
+        const recipientUserIds = isCustomer
+          ? await traderSideRecipientUserIds(conv)
+          : [conv.customerId];
+        const recipients = await db
+          .select({ id: usersTable.id, email: usersTable.email, fullName: usersTable.fullName })
           .from(usersTable)
-          .where(eq(usersTable.id, recipientUserId))
-          .limit(1);
+          .where(inArray(usersTable.id, recipientUserIds));
         const [sender] = await db
           .select({ fullName: usersTable.fullName })
           .from(usersTable)
@@ -584,7 +681,8 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
         // Email is best-effort and must NEVER block the push below — a Brevo
         // outage or a bad address previously aborted the whole notify block,
         // which is exactly how traders "stopped getting" message pushes.
-        if (recipient?.email) {
+        for (const recipient of recipients) {
+          if (!recipient.email) continue;
           try {
             await sendNewMessageEmail({
               toEmail: recipient.email,
@@ -621,19 +719,23 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
             )
             .where(eq(conversationsTable.id, id));
         }
+        // The mute is per conversation-SIDE, so it applies to every
+        // trader-side recipient alike.
         if (!recipientMuted) {
-          try {
-            await sendPushToUser(recipientUserId, {
-              title: senderName,
-              body: preview,
-              data: {
-                type: "new_message",
-                conversationId: id,
-                messageId: created.id,
-              },
-            });
-          } catch (pushErr) {
-            req.log.warn({ err: pushErr, conversationId: id }, "Failed to send new-message push");
+          for (const recipient of recipients) {
+            try {
+              await sendPushToUser(recipient.id, {
+                title: senderName,
+                body: preview,
+                data: {
+                  type: "new_message",
+                  conversationId: id,
+                  messageId: created.id,
+                },
+              });
+            } catch (pushErr) {
+              req.log.warn({ err: pushErr, conversationId: id }, "Failed to send new-message push");
+            }
           }
         }
       } catch (notifyErr) {
@@ -645,6 +747,10 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "Invalid message", details: error.issues });
+      return;
+    }
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
     }
     req.log.error({ err: error }, "Send message failed");
@@ -677,6 +783,15 @@ router.post("/conversations/:id/close", authMiddleware, async (req, res) => {
     if (!isCustomer && !isTrader) {
       res.status(403).json({ error: "You do not have access to this conversation" });
       return;
+    }
+    // Company Teams: a job claimed by a colleague is read-only for everyone
+    // else on the trader side (owner included, until Phase 3 reassignment).
+    if (isTrader) {
+      const act = await canActOnJob(conv, userId);
+      if (!act.ok) {
+        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        return;
+      }
     }
 
     await db
@@ -922,9 +1037,13 @@ router.post("/conversations/:id/complete", authMiddleware, async (req, res) => {
             .where(eq(traderProfilesTable.id, conv.traderProfileId))
             .limit(1);
           const refPart = conv.jobReference ? `job ${conv.jobReference}` : "your job";
-          if (tp?.traderUserId) {
+          // Company Teams routing: assigned member + owner (deduped when the
+          // owner did the job). Flag OFF this is exactly the legacy single
+          // trader recipient.
+          const traderRecipients = await traderSideRecipientUserIds(conv);
+          for (const traderRecipientId of traderRecipients) {
             try {
-              await sendPushToUser(tp.traderUserId, {
+              await sendPushToUser(traderRecipientId, {
                 title: "Job completed",
                 body: `Your customer confirmed ${refPart} as complete. Another completed job has been added to your MyLocalTrade history.`,
                 data: { type: "job_completed", conversationId: id },
@@ -997,6 +1116,14 @@ router.post("/conversations/:id/trader-mark-done", authMiddleware, async (req, r
     if (!(actor.role === "trader" && actor.traderProfileId === conv.traderProfileId)) {
       res.status(403).json({ error: "Only the assigned trader can mark the work as done" });
       return;
+    }
+    // Company Teams: only the member the job is assigned to may mark it done.
+    {
+      const act = await canActOnJob(conv, userId);
+      if (!act.ok) {
+        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        return;
+      }
     }
     if (conv.status === "CLOSED" || conv.status === "BLOCKED") {
       res.status(409).json({ error: "This conversation is closed." });
@@ -1110,6 +1237,16 @@ router.post("/conversations/:id/cancel", authMiddleware, async (req, res) => {
     if (!isCustomer && !isTrader) {
       res.status(403).json({ error: "You do not have access to this conversation" });
       return;
+    }
+    // Company Teams: a colleague's claimed job is read-only for other members
+    // (customers are unaffected). An UNCLAIMED lead may be cancelled by any
+    // active member — cancelling is deliberately a non-claiming action.
+    if (isTrader) {
+      const act = await canActOnJob(conv, userId);
+      if (!act.ok) {
+        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        return;
+      }
     }
     if (conv.cancelledAt) {
       res.status(409).json({ error: "This job has already been cancelled." });

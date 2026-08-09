@@ -125,3 +125,62 @@ export async function getActiveMembership(
   if (!profile) return null;
   return { traderProfileId: profile.id, role: "OWNER", profile };
 }
+
+/**
+ * User ids of everyone on the trader side of a company: all ACTIVE members
+ * plus (defensively) the profile owner, who counts as a member even if the
+ * boot backfill hasn't created their row yet. Flag OFF → exactly the owner,
+ * which is bit-for-bit the legacy notification target.
+ */
+export async function activeCompanyMemberUserIds(
+  traderProfileId: number,
+): Promise<number[]> {
+  const [profile] = await db
+    .select({ userId: traderProfilesTable.userId })
+    .from(traderProfilesTable)
+    .where(eq(traderProfilesTable.id, traderProfileId))
+    .limit(1);
+  if (!profile) return [];
+  if (!companyTeamsEnabled()) return [profile.userId];
+  const rows = await db
+    .select({ userId: companyMembersTable.userId })
+    .from(companyMembersTable)
+    .where(
+      and(
+        eq(companyMembersTable.traderProfileId, traderProfileId),
+        eq(companyMembersTable.status, "ACTIVE"),
+      ),
+    );
+  const ids = new Set<number>(rows.map((r) => r.userId));
+  ids.add(profile.userId);
+  return [...ids];
+}
+
+/**
+ * Notification routing for the trader side of a conversation.
+ *
+ *  - Flag OFF: exactly [traderUserId] — the legacy single recipient.
+ *  - Flag ON, job claimed: the assigned member + the owner (deduped when the
+ *    owner claimed it themselves). Non-assigned employees deliberately stop
+ *    receiving routine notifications for the job.
+ *  - Flag ON, unclaimed lead: every ACTIVE member — the whole team should
+ *    hear about jobs nobody has picked up yet.
+ */
+export async function traderSideRecipientUserIds(conv: {
+  traderProfileId: number;
+  traderUserId: number;
+  assignedTraderUserId: number | null;
+}): Promise<number[]> {
+  if (!companyTeamsEnabled()) return [conv.traderUserId];
+  if (conv.assignedTraderUserId != null) {
+    const [profile] = await db
+      .select({ userId: traderProfilesTable.userId })
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.id, conv.traderProfileId))
+      .limit(1);
+    const ownerUserId = profile?.userId ?? conv.traderUserId;
+    return [...new Set([conv.assignedTraderUserId, ownerUserId])];
+  }
+  const members = await activeCompanyMemberUserIds(conv.traderProfileId);
+  return members.length > 0 ? members : [conv.traderUserId];
+}

@@ -1,7 +1,18 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { getActiveMembership } from "../lib/company-membership";
+import {
+  getActiveMembership,
+  traderSideRecipientUserIds,
+} from "../lib/company-membership";
+import {
+  canActOnJob,
+  claimOrRequireAssigned,
+  JobClaimedByOtherError,
+  jobClaimedByOtherBody,
+  logJobClaimed,
+  logCompanyQuoteSubmitted,
+} from "../lib/job-assignment";
 import {
   quotesTable,
   conversationsTable,
@@ -102,6 +113,11 @@ function isPendingQuoteConflict(error: unknown): boolean {
   return code === "23505" && (constraint == null || constraint === "quotes_one_pending_per_conversation");
 }
 
+// Thrown inside the create-quote transaction when a live PENDING quote
+// already exists, so EVERYTHING in the transaction (including a job claim
+// that may have just happened) rolls back together.
+class PendingQuoteExistsError extends Error {}
+
 // POST /api/conversations/:id/quotes — trader sends a structured quote
 router.post("/conversations/:id/quotes", authMiddleware, async (req, res) => {
   try {
@@ -135,44 +151,61 @@ router.post("/conversations/:id/quotes", authMiddleware, async (req, res) => {
     }
 
     const now = new Date();
-    // One live quote per conversation. A stale PENDING row whose validUntil
-    // has passed is finalised to EXPIRED here (lazily) so it never blocks a
-    // fresh quote; a genuinely live one must be revised instead.
-    const [existing] = await db
-      .select()
-      .from(quotesTable)
-      .where(and(eq(quotesTable.conversationId, id), eq(quotesTable.status, "PENDING")))
-      .limit(1);
-    if (existing) {
-      if (existing.validUntil != null && existing.validUntil.getTime() <= now.getTime()) {
-        await db
-          .update(quotesTable)
-          .set({ status: "EXPIRED", updatedAt: now })
-          .where(and(eq(quotesTable.id, existing.id), eq(quotesTable.status, "PENDING")));
-      } else {
-        res.status(409).json({
-          error: "You already have a pending quote in this conversation. Revise it instead.",
-        });
-        return;
+    // One transaction for claim + one-live-quote check + insert (Phase 2):
+    // submitting the company quote CLAIMS an unclaimed job, and everything
+    // rolls back together — a racer who loses the claim never persists a
+    // quote the customer could see, and a pending-quote conflict undoes a
+    // just-made claim. A stale PENDING row whose validUntil has passed is
+    // finalised to EXPIRED here (lazily) so it never blocks a fresh quote; a
+    // genuinely live one must be revised instead.
+    let claimedNow = false;
+    const quote = await db.transaction(async (tx) => {
+      claimedNow = (await claimOrRequireAssigned(tx, conv, userId)).claimedNow;
+      const [existing] = await tx
+        .select()
+        .from(quotesTable)
+        .where(and(eq(quotesTable.conversationId, id), eq(quotesTable.status, "PENDING")))
+        .limit(1);
+      if (existing) {
+        if (existing.validUntil != null && existing.validUntil.getTime() <= now.getTime()) {
+          await tx
+            .update(quotesTable)
+            .set({ status: "EXPIRED", updatedAt: now })
+            .where(and(eq(quotesTable.id, existing.id), eq(quotesTable.status, "PENDING")));
+        } else {
+          throw new PendingQuoteExistsError();
+        }
       }
-    }
 
-    const [quote] = await db
-      .insert(quotesTable)
-      .values({
-        conversationId: id,
-        enquiryId: conv.enquiryId,
-        traderProfileId: conv.traderProfileId,
-        traderUserId: userId,
-        customerId: conv.customerId,
-        amountPence: body.amountPence,
-        priceType: body.priceType,
-        description: body.description,
-        notes: body.notes?.length ? body.notes : null,
-        validUntil: body.validUntil ?? null,
-        status: "PENDING",
-      })
-      .returning();
+      const [inserted] = await tx
+        .insert(quotesTable)
+        .values({
+          conversationId: id,
+          enquiryId: conv.enquiryId,
+          traderProfileId: conv.traderProfileId,
+          traderUserId: userId,
+          customerId: conv.customerId,
+          amountPence: body.amountPence,
+          priceType: body.priceType,
+          description: body.description,
+          notes: body.notes?.length ? body.notes : null,
+          validUntil: body.validUntil ?? null,
+          status: "PENDING",
+        })
+        .returning();
+      return inserted;
+    });
+
+    // Post-commit audit trail (fire-and-forget; flag-aware inside).
+    if (claimedNow) {
+      void logJobClaimed({ conv, actorUserId: userId, via: "quote" });
+    }
+    void logCompanyQuoteSubmitted({
+      conv,
+      actorUserId: userId,
+      quoteId: quote.id,
+      summary: `${formatPence(quote.amountPence)}, ${priceTypeLabel(quote.priceType)}`,
+    });
 
     await markConversationQuoted(conv);
     await postSystemMessage(id, `Quote sent: ${quoteSummaryLine(quote)}.`, "customer");
@@ -189,10 +222,14 @@ router.post("/conversations/:id/quotes", authMiddleware, async (req, res) => {
       res.status(400).json({ error: "Invalid quote", details: error.issues });
       return;
     }
-    if (isPendingQuoteConflict(error)) {
+    if (error instanceof PendingQuoteExistsError || isPendingQuoteConflict(error)) {
       res.status(409).json({
         error: "You already have a pending quote in this conversation. Revise it instead.",
       });
+      return;
+    }
+    if (error instanceof JobClaimedByOtherError) {
+      res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
     }
     req.log.error({ err: error }, "Create quote failed");
@@ -213,8 +250,19 @@ router.post("/quotes/:id/revise", authMiddleware, async (req, res) => {
     if (!validateValidUntil(body.validUntil, res)) return;
 
     const row = await loadQuoteWithConversation(id);
-    if (!row || row.quote.traderUserId !== userId) {
+    // Company boundary: the caller must currently act for the profile this
+    // quote belongs to (solo trader, owner or ACTIVE member — a revoked
+    // member loses access even to quotes they submitted themselves).
+    const actorProfileId = row ? await traderProfileIdFor(userId) : null;
+    if (!row || actorProfileId == null || actorProfileId !== row.quote.traderProfileId) {
       res.status(404).json({ error: "Quote not found" });
+      return;
+    }
+    // Claimed job: only the assigned member may revise the company quote
+    // (flag OFF this always passes — legacy behaviour unchanged).
+    const act = await canActOnJob(row.conv, userId);
+    if (!act.ok) {
+      res.status(409).json(jobClaimedByOtherBody(act.assignedName));
       return;
     }
     const closedReason = conversationClosedReason(row.conv);
@@ -295,8 +343,17 @@ router.post("/quotes/:id/withdraw", authMiddleware, async (req, res) => {
     }
     const { userId } = req as AuthenticatedRequest;
     const row = await loadQuoteWithConversation(id);
-    if (!row || row.quote.traderUserId !== userId) {
+    // Same company-boundary + assignment gates as /revise (see comments
+    // there): revoked members lose access; on a claimed job only the
+    // assignee may withdraw the company quote.
+    const actorProfileId = row ? await traderProfileIdFor(userId) : null;
+    if (!row || actorProfileId == null || actorProfileId !== row.quote.traderProfileId) {
       res.status(404).json({ error: "Quote not found" });
+      return;
+    }
+    const act = await canActOnJob(row.conv, userId);
+    if (!act.ok) {
+      res.status(409).json(jobClaimedByOtherBody(act.assignedName));
       return;
     }
 
@@ -395,11 +452,17 @@ router.post("/quotes/:id/accept", authMiddleware, async (req, res) => {
       `The customer accepted the quote of ${formatPence(accepted.amountPence)}.`,
       "trader",
     );
-    void sendPushToUser(row.quote.traderUserId, {
-      title: "Quote accepted",
-      body: `Your quote of ${formatPence(accepted.amountPence)} was accepted. You have been hired.`,
-      data: { type: "quote_accepted", conversationId: row.conv.id, quoteId: id },
-    }).catch((err) => req.log.warn({ err }, "Quote push failed"));
+    // Company Teams routing: assigned member + owner (deduped). Flag OFF this
+    // is exactly the legacy single trader recipient.
+    void (async () => {
+      for (const recipientId of await traderSideRecipientUserIds(row.conv)) {
+        await sendPushToUser(recipientId, {
+          title: "Quote accepted",
+          body: `Your quote of ${formatPence(accepted.amountPence)} was accepted. You have been hired.`,
+          data: { type: "quote_accepted", conversationId: row.conv.id, quoteId: id },
+        }).catch((err) => req.log.warn({ err }, "Quote push failed"));
+      }
+    })().catch((err) => req.log.warn({ err }, "Quote push failed"));
 
     res.json({ quote: serializeQuote(accepted) });
   } catch (error) {
@@ -439,11 +502,17 @@ router.post("/quotes/:id/decline", authMiddleware, async (req, res) => {
       `The customer declined the quote of ${formatPence(declined.amountPence)}.`,
       "trader",
     );
-    void sendPushToUser(row.quote.traderUserId, {
-      title: "Quote declined",
-      body: `Your quote of ${formatPence(declined.amountPence)} was declined. You can send a new one.`,
-      data: { type: "quote_declined", conversationId: row.conv.id, quoteId: id },
-    }).catch((err) => req.log.warn({ err }, "Quote push failed"));
+    // Company Teams routing: assigned member + owner (deduped). Flag OFF this
+    // is exactly the legacy single trader recipient.
+    void (async () => {
+      for (const recipientId of await traderSideRecipientUserIds(row.conv)) {
+        await sendPushToUser(recipientId, {
+          title: "Quote declined",
+          body: `Your quote of ${formatPence(declined.amountPence)} was declined. You can send a new one.`,
+          data: { type: "quote_declined", conversationId: row.conv.id, quoteId: id },
+        }).catch((err) => req.log.warn({ err }, "Quote push failed"));
+      }
+    })().catch((err) => req.log.warn({ err }, "Quote push failed"));
 
     res.json({ quote: serializeQuote(declined) });
   } catch (error) {

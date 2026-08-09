@@ -1019,10 +1019,14 @@ export default function TraderDetail({ userId }: Props) {
                             {e.notes && <div className="text-xs text-muted-foreground mt-0.5">{e.notes}</div>}
                             {/* Team events: the Team tab is the readable view;
                                 the audit line shows action + time only (full
-                                metadata stays stored). */}
+                                metadata stays stored). Job-claim and member-
+                                quote events read fine from their notes line,
+                                so their raw JSON stays hidden too. */}
                             {e.details &&
                               Object.keys(e.details).length > 0 &&
-                              !e.action.startsWith("MEMBER_") && (
+                              !e.action.startsWith("MEMBER_") &&
+                              !e.action.startsWith("JOB_") &&
+                              e.action !== "QUOTE_SUBMITTED_BY_MEMBER" && (
                               <pre className="text-[11px] bg-muted/60 rounded p-2 mt-1 overflow-x-auto">
                                 {JSON.stringify(e.details, null, 2)}
                               </pre>

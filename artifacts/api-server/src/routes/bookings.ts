@@ -1,7 +1,11 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { getActiveMembership } from "../lib/company-membership";
+import {
+  getActiveMembership,
+  traderSideRecipientUserIds,
+} from "../lib/company-membership";
+import { canActOnJob, jobClaimedByOtherBody } from "../lib/job-assignment";
 import {
   bookingsTable,
   conversationsTable,
@@ -134,6 +138,15 @@ router.post("/conversations/:id/bookings", authMiddleware, async (req, res) => {
       res.status(409).json({ error: closedReason });
       return;
     }
+    // Company Teams: bookings exist only post-hire (claimed jobs) — only the
+    // assigned member may act for the trader side.
+    if (role === "trader") {
+      const act = await canActOnJob(conv, userId);
+      if (!act.ok) {
+        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        return;
+      }
+    }
 
     const durationMinutes = body.durationMinutes ?? DEFAULT_LEGACY_DURATION_MINUTES;
     const endAt = new Date(body.startAt.getTime() + durationMinutes * 60000);
@@ -199,14 +212,19 @@ router.post("/conversations/:id/bookings", authMiddleware, async (req, res) => {
     // Notify the party who needs to act (the non-proposer).
     await postSystemMessage(id, systemBody, role === "trader" ? "customer" : "trader");
 
-    const otherUserId = await otherPartyUserId(conv, role);
-    if (otherUserId) {
-      void sendPushToUser(otherUserId, {
-        title: superseded ? "New appointment time proposed" : "Appointment proposed",
-        body: `${when}${conv.serviceRequired ? ` — ${conv.serviceRequired}` : ""}. Tap to confirm.`,
-        data: { type: "booking_proposed", conversationId: id, bookingId: created.id },
-      }).catch((err) => req.log.warn({ err }, "Booking push failed"));
-    }
+    // Customer proposals fan out to the trader side per Company Teams routing
+    // (assigned member + owner, deduped; legacy single trader with flag OFF).
+    void (async () => {
+      const proposalRecipients =
+        role === "trader" ? [conv.customerId] : await traderSideRecipientUserIds(conv);
+      for (const recipientId of proposalRecipients) {
+        await sendPushToUser(recipientId, {
+          title: superseded ? "New appointment time proposed" : "Appointment proposed",
+          body: `${when}${conv.serviceRequired ? ` — ${conv.serviceRequired}` : ""}. Tap to confirm.`,
+          data: { type: "booking_proposed", conversationId: id, bookingId: created.id },
+        }).catch((err) => req.log.warn({ err }, "Booking push failed"));
+      }
+    })().catch((err) => req.log.warn({ err }, "Booking push failed"));
 
     res.status(201).json({ booking: serializeBooking(created) });
   } catch (error) {
@@ -257,6 +275,14 @@ router.post("/bookings/:id/confirm", authMiddleware, async (req, res) => {
       res.status(409).json({ error: closedReason });
       return;
     }
+    // Company Teams: only the assigned member may confirm for the trader side.
+    if (role === "trader") {
+      const act = await canActOnJob(row.conv, userId);
+      if (!act.ok) {
+        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        return;
+      }
+    }
 
     // Re-check availability AT CONFIRMATION TIME: another conversation may
     // have taken the slot since this was proposed. Exclude this booking's own
@@ -303,12 +329,22 @@ router.post("/bookings/:id/confirm", authMiddleware, async (req, res) => {
       row.booking.proposedByRole === "trader" ? "trader" : "customer",
     );
 
-    // Push goes to the proposer (the confirmer already knows).
-    void sendPushToUser(row.booking.proposedByUserId, {
-      title: "Appointment confirmed",
-      body: `${when}${row.conv.serviceRequired ? ` — ${row.conv.serviceRequired}` : ""}`,
-      data: { type: "booking_confirmed", conversationId: row.conv.id, bookingId: updated.id },
-    }).catch((err) => req.log.warn({ err }, "Booking push failed"));
+    // Push goes to the proposer's side (the confirmer already knows). A
+    // trader-side proposal notifies the assigned member + owner per Company
+    // Teams routing; a customer proposal notifies only the customer.
+    void (async () => {
+      const confirmRecipients =
+        row.booking.proposedByRole === "customer"
+          ? [row.booking.proposedByUserId]
+          : await traderSideRecipientUserIds(row.conv);
+      for (const recipientId of confirmRecipients) {
+        await sendPushToUser(recipientId, {
+          title: "Appointment confirmed",
+          body: `${when}${row.conv.serviceRequired ? ` — ${row.conv.serviceRequired}` : ""}`,
+          data: { type: "booking_confirmed", conversationId: row.conv.id, bookingId: updated.id },
+        }).catch((err) => req.log.warn({ err }, "Booking push failed"));
+      }
+    })().catch((err) => req.log.warn({ err }, "Booking push failed"));
 
     res.json({ booking: serializeBooking(updated) });
   } catch (error) {
@@ -343,6 +379,14 @@ router.post("/bookings/:id/cancel", authMiddleware, async (req, res) => {
       res.status(409).json({ error: closedReason });
       return;
     }
+    // Company Teams: only the assigned member may cancel for the trader side.
+    if (role === "trader") {
+      const act = await canActOnJob(row.conv, userId);
+      if (!act.ok) {
+        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        return;
+      }
+    }
 
     const now = new Date();
     const [updated] = await db
@@ -369,14 +413,19 @@ router.post("/bookings/:id/cancel", authMiddleware, async (req, res) => {
       role === "trader" ? "customer" : "trader",
     );
 
-    const otherUserId = await otherPartyUserId(row.conv, role);
-    if (otherUserId) {
-      void sendPushToUser(otherUserId, {
-        title: "Appointment cancelled",
-        body: `${when}${row.conv.serviceRequired ? ` — ${row.conv.serviceRequired}` : ""}`,
-        data: { type: "booking_cancelled", conversationId: row.conv.id, bookingId: updated.id },
-      }).catch((err) => req.log.warn({ err }, "Booking push failed"));
-    }
+    // Notify only the opposite side — the canceller already knows. Trader
+    // side fans out per Company Teams routing (assigned member + owner).
+    void (async () => {
+      const cancelRecipients =
+        role === "trader" ? [row.conv.customerId] : await traderSideRecipientUserIds(row.conv);
+      for (const recipientId of cancelRecipients) {
+        await sendPushToUser(recipientId, {
+          title: "Appointment cancelled",
+          body: `${when}${row.conv.serviceRequired ? ` — ${row.conv.serviceRequired}` : ""}`,
+          data: { type: "booking_cancelled", conversationId: row.conv.id, bookingId: updated.id },
+        }).catch((err) => req.log.warn({ err }, "Booking push failed"));
+      }
+    })().catch((err) => req.log.warn({ err }, "Booking push failed"));
 
     res.json({ booking: serializeBooking(updated) });
   } catch (error) {

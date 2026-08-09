@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { getActiveMembership } from "../lib/company-membership";
 import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable, quotesTable } from "@workspace/db/schema";
+import {
+  companyTeamsEnabled,
+  activeCompanyMemberUserIds,
+} from "../lib/company-membership";
 import { eq, desc, and, isNull, isNotNull, inArray, sql, gte } from "drizzle-orm";
 import { deriveStage } from "../lib/conversation-stage";
 import { jobReferenceOf } from "../lib/job-reference";
@@ -182,6 +186,12 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
           traderUnreadCount: 1,
           lastMessageAt: new Date(),
           lastMessagePreview: previewBody.slice(0, 200),
+          // Company Teams (Phase 2): with the flag ON a new lead is SHARED —
+          // unassigned until a member claims it by replying/quoting. Flag OFF
+          // it is born assigned to the owner AT CREATION (never dependent on
+          // the boot-time mirror), which is exactly the legacy model.
+          assignedTraderUserId: companyTeamsEnabled() ? null : trader.userId,
+          assignedAt: companyTeamsEnabled() ? null : new Date(),
         })
         .returning({ id: conversationsTable.id });
       await tx.insert(messagesTable).values({
@@ -234,18 +244,28 @@ router.post("/enquiries", authMiddleware, async (req, res) => {
       try {
         const customerName = customer?.fullName || "A customer";
         const isUrgent = specialistFields?.urgency === "urgent";
-        await sendPushToUser(trader.userId, {
-          title: isUrgent ? "New ASAP enquiry" : "New enquiry",
-          body: isUrgent
-            ? `ASAP — ${customerName}: ${serviceRequired}`
-            : `${customerName}: ${serviceRequired}`,
-          data: {
-            type: "new_enquiry",
-            enquiryId: enquiry.id,
-            conversationId,
-            ...(isUrgent ? { urgency: "urgent" } : {}),
-          },
-        });
+        // Company Teams: a new lead is a SHARED opportunity — push every
+        // ACTIVE member (email above stays owner-only by design). Flag OFF
+        // this is exactly [owner], the legacy behaviour.
+        const pushRecipients = await activeCompanyMemberUserIds(trader.id);
+        for (const recipientId of pushRecipients) {
+          try {
+            await sendPushToUser(recipientId, {
+              title: isUrgent ? "New ASAP enquiry" : "New enquiry",
+              body: isUrgent
+                ? `ASAP — ${customerName}: ${serviceRequired}`
+                : `${customerName}: ${serviceRequired}`,
+              data: {
+                type: "new_enquiry",
+                enquiryId: enquiry.id,
+                conversationId,
+                ...(isUrgent ? { urgency: "urgent" } : {}),
+              },
+            });
+          } catch (pushErr) {
+            req.log.warn({ err: pushErr, enquiryId: enquiry.id }, "Failed to send new-enquiry push");
+          }
+        }
       } catch (pushErr) {
         req.log.warn({ err: pushErr, enquiryId: enquiry.id }, "Failed to send new-enquiry push");
       }
@@ -519,6 +539,30 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
         .orderBy(desc(enquiriesTable.createdAt));
     }
 
+    // Company Teams: resolve assigned-member names in one batch so the leads
+    // list can show "Claimed by …" chips (flag ON only — legacy payload keeps
+    // the owner implicitly assigned and no name).
+    const teamsOn = companyTeamsEnabled();
+    const assignedNameById = new Map<number, string>();
+    if (teamsOn) {
+      const assignedIds = [
+        ...new Set(
+          enquiries
+            .map((r) => r.conv?.assignedTraderUserId)
+            .filter((v): v is number => v != null),
+        ),
+      ];
+      if (assignedIds.length > 0) {
+        const assignedRows = await db
+          .select({ id: usersTable.id, fullName: usersTable.fullName })
+          .from(usersTable)
+          .where(inArray(usersTable.id, assignedIds));
+        for (const u of assignedRows) {
+          if (u.fullName) assignedNameById.set(u.id, u.fullName);
+        }
+      }
+    }
+
     const viewerIsTrader = userRole === "trader";
     const formatted = enquiries.map(({ enquiry: e, customer: c, trader: t, conv }) => {
       // Stage gate: a trader only sees the customer's contact details once the
@@ -551,6 +595,18 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
         traderStatus: conv?.traderStatus ?? null,
         stage: conv ? deriveStage(conv) : null,
         jobReference: conv ? jobReferenceOf(conv) : null,
+        // Company Teams (additive): who the lead's job is assigned to. Flag
+        // OFF reports the legacy trader as assigned so UIs never render an
+        // "unclaimed" state while teams are disabled.
+        assignedTraderUserId: conv
+          ? teamsOn
+            ? conv.assignedTraderUserId
+            : (conv.assignedTraderUserId ?? conv.traderUserId)
+          : null,
+        assignedTraderName:
+          teamsOn && conv?.assignedTraderUserId != null
+            ? (assignedNameById.get(conv.assignedTraderUserId) ?? null)
+            : null,
         createdAt: e.createdAt.toISOString(),
       };
     });

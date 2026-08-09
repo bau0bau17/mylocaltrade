@@ -757,6 +757,15 @@ export interface Enquiry {
   stage?: EnquiryStage;
   /** Human-readable job reference (e.g. MLT-000008). Only set once the customer has hired the trader. */
   jobReference?: string | null;
+  /** Company Teams: the member the linked job is assigned to. Null while
+the lead is unclaimed (or when no conversation exists). With teams
+disabled this always reports the conversation's trader.
+ */
+  assignedTraderUserId?: number | null;
+  /** Full name of the assigned member for "Claimed by …" chips on the
+trader leads list. Null while unclaimed or with teams disabled.
+ */
+  assignedTraderName?: string | null;
   createdAt: string;
 }
 
@@ -892,6 +901,29 @@ header to both parties; never shown on public reviews.
   jobReference?: string | null;
   /** Whether the customer has already left a review for this job. Only populated on the conversation detail endpoint; null in list responses. */
   hasReview?: boolean | null;
+  /** Company Teams: the member this job is assigned to (whoever claimed
+it). Null while a company lead is unclaimed. With teams disabled
+this always reports the conversation's trader, so clients never
+see an "unclaimed" state in legacy mode.
+ */
+  assignedTraderUserId?: number | null;
+  /** Full name of the assigned member, for the customer chat header and
+trader-side "Claimed by …" banners. Null while unclaimed or with
+teams disabled.
+ */
+  assignedTraderName?: string | null;
+  /** Company logo object path, shown as the customer-facing identity
+before a member claims the job. Only populated on the conversation
+detail response while teams are enabled; load via the public
+gallery-file endpoint.
+ */
+  traderLogoUrl?: string | null;
+  /** Trader-side viewers only: whether the caller may act on this job
+(it is unclaimed, or claimed by them). False drives the read-only
+"claimed by a colleague" experience. Always null for customers;
+always true with teams disabled.
+ */
+  viewerCanAct?: boolean | null;
   createdAt: string;
 }
 

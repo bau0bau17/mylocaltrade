@@ -36,5 +36,14 @@ export interface Enquiry {
   stage?: EnquiryStage;
   /** Human-readable job reference (e.g. MLT-000008). Only set once the customer has hired the trader. */
   jobReference?: string | null;
+  /** Company Teams: the member the linked job is assigned to. Null while
+the lead is unclaimed (or when no conversation exists). With teams
+disabled this always reports the conversation's trader.
+ */
+  assignedTraderUserId?: number | null;
+  /** Full name of the assigned member for "Claimed by …" chips on the
+trader leads list. Null while unclaimed or with teams disabled.
+ */
+  assignedTraderName?: string | null;
   createdAt: Date;
 }
