@@ -1,0 +1,78 @@
+Company Teams Phase 3 is approved.
+
+Before production publishing or TestFlight acceptance, perform one final, tightly scoped employee identity/account-access review.
+
+Inspect first and change code only where a confirmed gap exists.
+
+EMPLOYEE PERSONAL IDENTITY
+
+Confirm that every employee can:
+
+- upload their own personal profile photo;
+- replace or remove their personal profile photo;
+- view and edit their permitted personal name/details.
+
+The employee’s personal photo must:
+
+- remain separate from the company logo;
+- appear in the customer conversation header when that employee is assigned;
+- use the existing personal-photo fallback when missing;
+- follow the existing conversation privacy rules;
+- never give the employee permission to change the company logo.
+
+The employee does not need to upload a photo during invitation acceptance, but must have a clear way to add one afterwards.
+
+EMPLOYEE ACCOUNT ESSENTIALS
+
+Confirm employees retain access to the existing appropriate controls for:
+
+- Change password / account security
+- Sign out
+- Privacy Policy
+- Terms and Conditions
+- Support/contact
+- Existing account deletion flow, where applicable
+
+They must still not access:
+
+- Billing/subscription
+- Business profile editing
+- Company logo controls
+- Verification documents
+- Team management
+- Owner-only settings
+
+ACCOUNT DELETION / DEACTIVATION SAFETY
+
+If an employee deletes or deactivates their account while assigned to active jobs:
+
+- reuse the Phase 3 safe handover logic;
+- active jobs must move to the owner;
+- completed/cancelled history and authorship must remain intact;
+- the account must not disappear while leaving active jobs assigned to an unavailable user.
+
+TEST
+
+Verify:
+
+- employee photo upload/change/removal;
+- assigned customer header with real photo and fallback;
+- owner logo remains unchanged;
+- removed employee loses photo-management/account access;
+- cross-company photo access is rejected;
+- employee password/logout/account-deletion behaviour;
+- owner-only menu items remain hidden and server-blocked;
+- feature flag OFF remains unchanged.
+
+Run relevant API tests, mobile typecheck and focused authorization review.
+
+If fixes are required, commit and push to origin/main. Report exactly what was already present and what needed changing.
+
+Also provide a release-readiness summary explaining:
+
+- which backend TestFlight uses;
+- how COMPANY_TEAMS_ENABLED can be enabled safely for TestFlight testing;
+- whether it is global or can be limited to a test company;
+- the required backend, landing, Admin and mobile rollout order.
+
+Do not deploy, publish, enable the flag or create a TestFlight build. Stop and report.
