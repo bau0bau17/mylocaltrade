@@ -1,0 +1,287 @@
+Two incomplete fixes/regressions need to be corrected. Please treat this as a continuation of previous work, not as a new feature expansion.
+
+I have attached fresh screenshots from the real mobile app.
+
+Please inspect the real mobile routes/screens first, then fix only the issues below. Do not refactor unrelated code.
+
+
+ISSUE 1 — JOB NUMBER SEARCH IS STILL NOT VISIBLE
+
+The previous job-number search task is incomplete.
+
+The search box is still missing from the real mobile screens where it should appear.
+
+Fresh screenshots show:
+
+1. Trader Account → Enquiries & Leads
+
+Screen title:
+“Enquiries & Leads”
+
+Visible job cards include:
+Lucian Sabau
+Leaking · MLT-000012
+
+There is NO search box above the first card.
+
+2. Trader Messages screen
+
+Screen title:
+“Messages”
+Subtitle:
+“Conversations with customers”
+
+Visible conversation cards include:
+Leaking · MLT-000012
+Boiler · MLT-000008
+Electrical issue · MLT-000007
+
+There is NO search box above the conversation list.
+
+This is exactly where I need job-number search.
+
+
+REQUIRED BEHAVIOUR FOR SEARCH
+
+Add a visible search box on all relevant mobile job/conversation list screens for BOTH trader and customer accounts.
+
+The search must be visible on:
+
+TRADER:
+- Account → Enquiries & Leads
+- Messages / Conversations list
+
+CUSTOMER:
+- My Enquiries / customer enquiry list
+- Messages / Conversations list
+
+The search box should be visible directly under the page header/title area and above the first card/list item.
+
+Examples:
+
+On Enquiries & Leads:
+Header
+Search box
+Job cards
+
+On Messages:
+Header
+Search box
+Conversation cards
+
+Search should support job references such as:
+
+MLT-000012
+000012
+mlt 12
+12
+
+It should also keep useful matching where already implemented:
+- service/category title
+- customer name / trader name where relevant
+- description text where relevant
+
+But the main required feature is job-number search.
+
+Search requirements:
+- Case-insensitive
+- Dash/spacing tolerant where sensible
+- Clearing the search restores the full list immediately
+- If there are no matches, show a clear empty state such as:
+  “No jobs match your search”
+
+IMPORTANT: VERIFY THE REAL ROUTES
+
+Please do not only check the component that was assumed before.
+
+Trace the actual navigation routes used by the real mobile app and confirm the exact files/screens rendering the screenshots attached.
+
+Specifically verify the real route/component for:
+
+- Trader Account → Enquiries & Leads
+- Trader Messages list
+- Customer My Enquiries
+- Customer Messages list
+
+Then implement the search box in those actual screens.
+
+Please explain briefly why the previous implementation did not appear:
+1. Was it implemented in the wrong screen/component?
+2. Was it hidden by a condition/layout issue/cache?
+3. Was it only implemented on one side, customer or trader?
+4. Was it visible only in preview/web but not the real mobile route?
+
+Do not change:
+- job cards
+- conversation cards
+- status badges
+- quote/hire/completed logic
+- bottom Search tab behaviour
+- database schema
+- unrelated screens
+
+
+ISSUE 2 — DELETE ACCOUNT STILL SHOWS ACTIVE APP STORE SUBSCRIPTION AFTER CANCELLATION
+
+The subscription cancellation fix is still not working correctly on the real device.
+
+Fresh screenshot attached from the Delete account screen after cancelling the App Store subscription.
+
+CURRENT PROBLEM
+
+After cancelling the Premium subscription in App Store, the Delete account screen still shows:
+
+“You have an active App Store subscription”
+“Deleting your MyLocalTrade account does not automatically cancel your Apple subscription. Please manage or cancel your subscription through the App Store.”
+
+This is wrong after Apple confirms the subscription has already been cancelled / will not renew.
+
+The user may still have Premium access until the expiry date, but there should be no warning implying future charges or an active renewing subscription.
+
+EXPECTED BEHAVIOUR
+
+If subscription is active AND will renew:
+- Show the warning:
+  “You have an active App Store subscription”
+- Keep “Manage in App Store”
+
+If subscription is cancelled but still active until expiry:
+- Do NOT show the active renewing subscription warning.
+- Preferred: hide the App Store subscription warning completely.
+- Alternative acceptable copy:
+  “Your Premium subscription has been cancelled and remains active until [date]. There will be no further App Store charges unless you renew it.”
+
+If subscription is expired:
+- Do not show any App Store subscription warning.
+
+IMPORTANT
+
+Please verify the Delete account screen is using the same subscription state as Billing & Plan.
+
+The Delete account warning must be based on “will renew / will not renew”, not only “has active entitlement”.
+
+Cancelled-but-active-until-expiry should NOT trigger the strong active subscription warning.
+
+The likely issue is that Billing was updated but Delete account still checks only:
+
+has active Premium entitlement
+
+instead of:
+
+has active Premium entitlement AND subscription will renew
+
+Correct logic:
+- active + renewing = Premium active, warning shown
+- active + cancelled/will not renew = Premium active until expiry, warning hidden
+- expired = Basic/free, warning hidden
+
+Please specifically inspect:
+- Delete account screen subscription warning condition
+- RevenueCat CustomerInfo / entitlement willRenew state
+- server subscription sync response
+- foreground/app-active refresh
+- screen focus refresh
+- App Store manage sheet return flow
+- restore purchases refresh flow
+
+Do not remove Premium access immediately after cancellation.
+
+Cancellation means:
+- no future renewal
+- Premium remains available until the paid expiry date
+- after expiry, the app downgrades to Basic/free
+
+
+REAL DEVICE / SANDBOX TEST REQUIREMENTS
+
+Please verify the following states:
+
+1. Active subscription, still renewing
+Expected:
+- Billing shows ACTIVE / Renews on [date]
+- Delete account shows active App Store subscription warning
+
+2. Cancelled subscription, still active until expiry
+Expected:
+- Billing shows Cancelled / active until expiry / will not renew
+- Delete account does NOT show the strong active subscription warning
+- Premium features remain available until expiry
+
+3. Expired subscription
+Expected:
+- Trader returns to Basic/free
+- Premium status disappears
+- Delete account shows no App Store subscription warning
+
+
+SEARCH TEST REQUIREMENTS
+
+Please verify on mobile viewport / Expo preview:
+
+1. Trader → Account → Enquiries & Leads
+Expected:
+- Search visible above cards
+
+2. Trader → Messages
+Expected:
+- Search visible above conversation cards
+
+3. Customer → My Enquiries
+Expected:
+- Search visible above enquiry cards
+
+4. Customer → Messages
+Expected:
+- Search visible above conversation cards
+
+Test searches:
+
+MLT-000012
+000012
+mlt 12
+12
+Leaking
+Boiler
+Lucian
+
+Expected:
+- Matching cards remain visible
+- Non-matching cards hide
+- Clearing search restores the full list
+
+
+GENERAL REQUIREMENTS
+
+Please keep this focused on these two incomplete fixes.
+
+Do NOT change:
+- subscription products
+- App Store product IDs
+- RevenueCat project configuration
+- pricing
+- plan business rules
+- quote/hire/completed logic
+- job card design
+- conversation card design
+- unrelated screens
+- database schema unless genuinely required
+
+Run relevant typechecks/tests.
+
+After implementation:
+- commit and push to origin/main
+- report commit hash
+- files changed
+- exact screens/routes fixed for search
+- exact condition used for Delete account subscription warning
+- tests/checks run
+- whether backend republish is required
+- whether new TestFlight build is required
+
+Please explicitly confirm:
+
+1. Trader Messages list has search.
+2. Trader Enquiries & Leads has search.
+3. Customer Messages list has search.
+4. Customer My Enquiries has search.
+5. Delete account warning is hidden when willRenew=false.
