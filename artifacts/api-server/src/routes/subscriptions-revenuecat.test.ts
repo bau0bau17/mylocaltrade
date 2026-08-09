@@ -284,6 +284,107 @@ describe("RevenueCat subscription syncing", () => {
       );
     });
 
+    it("records an App Store cancellation from device-reported willRenew=false and preserves it on later flag-less syncs", async () => {
+      const trader = await createVerifiedTrader("cancelflag");
+      mockActiveEntitlement();
+
+      // Initial purchase sync — renewing.
+      await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({ willRenew: true });
+      await settle();
+
+      // Device learns the user cancelled in the App Store sheet.
+      const cancelRes = await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({ willRenew: false });
+      await settle();
+      expect(cancelRes.status).toBe(200);
+      expect(cancelRes.body.active).toBe(true); // perks stay until expiry
+
+      let [sub] = await db
+        .select({
+          cancelAtPeriodEnd: subscriptionsTable.cancelAtPeriodEnd,
+          status: subscriptionsTable.status,
+        })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub.status).toBe("active");
+      expect(sub.cancelAtPeriodEnd).toBe(true);
+
+      // Regression: a routine focus re-sync WITHOUT the flag must NOT clobber
+      // the recorded cancellation back to "renewing".
+      await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({});
+      await settle();
+
+      [sub] = await db
+        .select({
+          cancelAtPeriodEnd: subscriptionsTable.cancelAtPeriodEnd,
+          status: subscriptionsTable.status,
+        })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub.cancelAtPeriodEnd).toBe(true);
+
+      // User re-enables auto-renew in the App Store — flag clears again.
+      await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({ willRenew: true });
+      await settle();
+
+      [sub] = await db
+        .select({
+          cancelAtPeriodEnd: subscriptionsTable.cancelAtPeriodEnd,
+          status: subscriptionsTable.status,
+        })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub.cancelAtPeriodEnd).toBe(false);
+
+      // Cancellation state changes never re-send activation pushes.
+      expect(activationPushes(trader.id)).toHaveLength(1);
+    });
+
+    it("preserves a webhook-scheduled cancellation across flag-less focus syncs", async () => {
+      const trader = await createVerifiedTrader("webhookcancel");
+      mockActiveEntitlement();
+
+      await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({});
+      await settle();
+
+      // Simulate the CANCELLATION webhook having marked the row.
+      await db
+        .update(subscriptionsTable)
+        .set({ cancelAtPeriodEnd: true })
+        .where(eq(subscriptionsTable.userId, trader.id));
+
+      // Old behavior reset this to false on every focus sync.
+      await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({});
+      await settle();
+
+      const [sub] = await db
+        .select({ cancelAtPeriodEnd: subscriptionsTable.cancelAtPeriodEnd })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub.cancelAtPeriodEnd).toBe(true);
+    });
+
     it("re-activates an inactive/expired row and notifies again", async () => {
       const trader = await createVerifiedTrader("expired");
       // Seed a lapsed subscription row (downgraded perks).

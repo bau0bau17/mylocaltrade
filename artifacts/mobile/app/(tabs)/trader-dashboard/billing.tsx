@@ -120,6 +120,11 @@ export default function BillingScreen() {
   // subscription row (plan === null). Only true paid plans show as Premium.
   const planLabel = isPremium ? premiumName : 'Basic';
   const isActive = status?.status === 'active';
+  // Cancelled-but-still-active: Premium runs until the paid expiry but will
+  // not renew. Trust EITHER the server flag (webhook / sync) OR the device
+  // entitlement's willRenew === false — whichever learns about it first.
+  const cancelled =
+    isActive && ((status?.cancelAtPeriodEnd ?? false) || subscription.willRenew === false);
   // "Switch to yearly" nudge: only for traders actively paying monthly.
   // Prices come from the RevenueCat packages when available (native), falling
   // back to the backend plan list (same source the pricing screen uses).
@@ -130,10 +135,16 @@ export default function BillingScreen() {
     subscription.annualPackage?.product.price ??
     plansData?.plans.find(p => p.interval === 'year' && p.price > 0)?.price;
   const yearlySavings =
-    isActive && !status?.cancelAtPeriodEnd && cadence === 'monthly'
+    isActive && !cancelled && cadence === 'monthly'
       ? getYearlySavings(monthlyPrice, yearlyPrice)
       : null;
-  const periodEnd = status?.currentPeriodEnd ? new Date(status.currentPeriodEnd) : null;
+  // Prefer the server's period end; fall back to the device entitlement's
+  // expiry so the date still shows if the server briefly lags Apple.
+  const periodEnd = status?.currentPeriodEnd
+    ? new Date(status.currentPeriodEnd)
+    : subscription.expiresAt
+      ? new Date(subscription.expiresAt)
+      : null;
   const periodEndLabel = periodEnd
     ? periodEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     : null;
@@ -151,25 +162,45 @@ export default function BillingScreen() {
             <Text style={s.cardLabel}>Current Plan</Text>
             <Text style={s.planName}>{planLabel}</Text>
           </View>
-          <View style={[s.badge, (isActive || !isPremium) ? s.badgeActive : s.badgeInactive]}>
-            <Text style={[s.badgeText, (isActive || !isPremium) ? s.badgeTextActive : s.badgeTextInactive]}>
-              {isPremium ? (status?.status ?? 'inactive').toUpperCase() : 'FREE'}
+          <View
+            style={[
+              s.badge,
+              isPremium && cancelled
+                ? s.badgeCancelled
+                : (isActive || !isPremium)
+                  ? s.badgeActive
+                  : s.badgeInactive,
+            ]}
+          >
+            <Text
+              style={[
+                s.badgeText,
+                isPremium && cancelled
+                  ? s.badgeTextCancelled
+                  : (isActive || !isPremium)
+                    ? s.badgeTextActive
+                    : s.badgeTextInactive,
+              ]}
+            >
+              {isPremium ? (cancelled ? 'CANCELLED' : (status?.status ?? 'inactive').toUpperCase()) : 'FREE'}
             </Text>
           </View>
         </View>
 
         {periodEnd && (
           <Text style={s.meta}>
-            {status?.cancelAtPeriodEnd ? 'Ends on ' : 'Renews on '}
+            {cancelled ? 'Premium active until ' : 'Renews on '}
             {periodEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </Text>
         )}
 
-        {status?.cancelAtPeriodEnd ? (
+        {cancelled ? (
           <View style={s.cancelBanner}>
             <Feather name="alert-triangle" size={16} color={Colors.light.warning ?? '#B45309'} />
             <Text style={s.cancelText}>
-              Cancellation scheduled. Your Premium perks end at the end of the current period — your free Basic listing stays live.
+              Cancelled — will not renew. You keep your Premium perks until
+              {periodEndLabel ? ` ${periodEndLabel}` : ' the end of the current period'}, then your
+              free Basic listing stays live.
             </Text>
           </View>
         ) : null}
@@ -210,7 +241,7 @@ export default function BillingScreen() {
               <Text style={s.actionHint}>
                 Change between Monthly and Yearly, update payment or cancel any time in your App Store subscription settings.
               </Text>
-              {!status?.cancelAtPeriodEnd && (
+              {!cancelled && (
                 <Pressable style={s.dangerBtn} onPress={() => setShowDowngrade(true)}>
                   <Feather name="arrow-down-circle" size={18} color={Colors.light.text} />
                   <Text style={s.dangerBtnText}>Cancel Premium subscription</Text>
@@ -346,9 +377,11 @@ const s = StyleSheet.create({
   badge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   badgeActive: { backgroundColor: Colors.light.secondaryMuted },
   badgeInactive: { backgroundColor: Colors.light.surface },
+  badgeCancelled: { backgroundColor: '#FEF3C7' },
   badgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   badgeTextActive: { color: Colors.light.secondary },
   badgeTextInactive: { color: Colors.light.textMuted },
+  badgeTextCancelled: { color: '#92400E' },
   meta: { fontSize: 13, color: Colors.light.textSecondary, marginBottom: 12 },
   cancelBanner: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#FEF3C7', borderRadius: 10, padding: 10, marginBottom: 12 },
   cancelText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 },

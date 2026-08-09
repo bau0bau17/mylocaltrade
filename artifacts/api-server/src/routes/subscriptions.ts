@@ -269,6 +269,17 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
 
     const { userId } = req as AuthenticatedRequest;
 
+    // Optional device-reported auto-renew state. The native SDK's CustomerInfo
+    // knows willRenew immediately after the user cancels in the App Store
+    // sheet, while the CANCELLATION webhook can lag (or never arrive in the
+    // sandbox). Display-only: it only drives the cancelAtPeriodEnd flag
+    // (badges and copy) — never perks, pricing or the plan itself — so
+    // trusting the client here is safe. When absent, the stored flag is
+    // PRESERVED (it used to be reset to false on every focus sync, which
+    // clobbered the webhook's cancellation state).
+    const rawWillRenew = (req.body as { willRenew?: unknown } | undefined)?.willRenew;
+    const willRenew = typeof rawWillRenew === "boolean" ? rawWillRenew : undefined;
+
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
     if (!user) {
       res.status(404).json({ error: "User not found" });
@@ -392,7 +403,12 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
             planId: RC_PLAN_ID,
             currentPeriodStart: new Date(),
             currentPeriodEnd: periodEnd,
-            cancelAtPeriodEnd: false,
+            // Only overwrite the cancellation flag when the device reported a
+            // definite auto-renew state; otherwise keep what the webhook (or a
+            // previous sync) recorded. Resetting to false here used to wipe a
+            // scheduled cancellation on every focus re-sync.
+            cancelAtPeriodEnd:
+              willRenew !== undefined ? !willRenew : existing.cancelAtPeriodEnd,
             // First-purchase anchor only; renewals must not reset cooling-off.
             originalPurchaseAt: existing.originalPurchaseAt ?? new Date(),
             updatedAt: new Date(),
@@ -405,6 +421,7 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
           status: "active",
           currentPeriodStart: new Date(),
           currentPeriodEnd: periodEnd,
+          cancelAtPeriodEnd: willRenew === false,
           originalPurchaseAt: new Date(),
         });
       }

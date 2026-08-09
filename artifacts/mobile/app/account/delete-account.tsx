@@ -507,7 +507,11 @@ function RequestDeletionView({
           </View>
         </View>
 
-        {subscription.hasTraderSubscription ? (
+        {/* Only warn about future charges while the subscription will actually
+            renew. Once Apple confirms cancellation (willRenew === false) there
+            are no further charges, so the warning is hidden entirely; an
+            expired subscription has no active entitlement at all. */}
+        {subscription.hasTraderSubscription && subscription.willRenew !== false ? (
           <View style={styles.subCard}>
             <Feather name="credit-card" size={22} color={Colors.light.primary} />
             <View style={{ flex: 1 }}>

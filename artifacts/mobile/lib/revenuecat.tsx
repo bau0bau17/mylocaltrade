@@ -8,7 +8,7 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import type {
   CustomerInfo,
@@ -86,6 +86,22 @@ function findActiveTraderEntitlement(
     if (normalizeEntitlementKey(key) === TARGET_ENTITLEMENT_NORM) return active[key];
   }
   return null;
+}
+
+/**
+ * True when this RevenueCat account has EVER held the trader entitlement
+ * (active or not). Used to decide whether a no-active-entitlement state is a
+ * lapsed subscription worth reporting to the backend (provider-confirmed
+ * downgrade) vs. a user who never subscribed (no point pinging the server).
+ */
+function hadTraderEntitlement(info: CustomerInfo | null): boolean {
+  if (!info) return false;
+  const all = info.entitlements.all;
+  if (all[TRADER_ENTITLEMENT_ID]) return true;
+  for (const key of Object.keys(all)) {
+    if (normalizeEntitlementKey(key) === TARGET_ENTITLEMENT_NORM) return true;
+  }
+  return false;
 }
 
 // getCustomerInfo()/purchase()/restore() each return a BRAND NEW CustomerInfo
@@ -209,7 +225,10 @@ async function ensurePurchasesUI(): Promise<PurchasesUIDefault | null> {
   }
 }
 
-async function syncEntitlementWithBackend(token: string | null): Promise<void> {
+async function syncEntitlementWithBackend(
+  token: string | null,
+  willRenew?: boolean,
+): Promise<void> {
   if (!token) return;
   try {
     await fetch(`${getApiUrl()}/api/subscriptions/revenuecat-sync`, {
@@ -218,6 +237,9 @@ async function syncEntitlementWithBackend(token: string | null): Promise<void> {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
+      // willRenew lets the server mirror an App Store cancellation into its
+      // cancelAtPeriodEnd flag immediately, without waiting for the webhook.
+      body: JSON.stringify(willRenew === undefined ? {} : { willRenew }),
     });
   } catch (e) {
     // Best-effort: the entitlement is still valid on the device even if the
@@ -284,6 +306,12 @@ interface SubscriptionContextValue {
   activeCadence: 'monthly' | 'annual' | null;
   /** ISO expiry date of the active entitlement, if known. */
   expiresAt: string | null;
+  /**
+   * Auto-renew state of the active subscription: false = cancelled but still
+   * active until expiry; true = renewing; null = no active subscription (or
+   * unknown, e.g. unsupported build).
+   */
+  willRenew: boolean | null;
   refresh: () => Promise<void>;
   /** Returns true if the entitlement is active after the purchase. */
   purchase: (pkg: PurchasesPackage) => Promise<boolean>;
@@ -310,6 +338,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
   const lastUserIdRef = useRef<string | null>(null);
   const lastInfoSigRef = useRef<string | undefined>(undefined);
+  // Once-per-session guard for the "former subscriber, no active entitlement"
+  // sync below: without it every foreground refresh of an already-downgraded
+  // ex-subscriber would trigger a server-side RevenueCat API call. Reset
+  // whenever an active entitlement is seen so a mid-session expiry still syncs.
+  const syncedInactiveRef = useRef(false);
   const lastOfferingSigRef = useRef<string | undefined>(undefined);
 
   const applyCustomerInfo = useCallback((info: CustomerInfo | null) => {
@@ -366,8 +399,20 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const info = await P.getCustomerInfo();
       applyCustomerInfo(info);
       // Returning subscribers may already hold an active entitlement before they
-      // ever tap purchase/restore. Sync the server so their profile stays live.
-      if (findActiveTraderEntitlement(info)) {
+      // ever tap purchase/restore. Sync the server so their profile stays live —
+      // including willRenew, so an App Store cancellation shows up server-side
+      // even when the webhook lags.
+      const ent = findActiveTraderEntitlement(info);
+      if (ent) {
+        syncedInactiveRef.current = false;
+        await syncEntitlementWithBackend(token, ent.willRenew);
+      } else if (hadTraderEntitlement(info) && !syncedInactiveRef.current) {
+        // Former subscriber whose entitlement has lapsed (expired/refunded).
+        // Ping the sync endpoint WITHOUT willRenew so the server re-verifies
+        // with RevenueCat and performs the provider-confirmed downgrade even
+        // if the EXPIRATION webhook is missing or lagging. Once per session —
+        // never-subscribed users skip this entirely.
+        syncedInactiveRef.current = true;
         await syncEntitlementWithBackend(token);
       }
     } catch (e) {
@@ -433,6 +478,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, [loadOfferings, loadCustomerInfo]);
 
+  // Refresh entitlement state whenever the app returns to the foreground —
+  // e.g. after the user cancels or changes the subscription in the App Store
+  // app / management sheet. Event-driven (no polling): the signature guard in
+  // applyCustomerInfo makes identical refreshes no-ops.
+  useEffect(() => {
+    if (!isPurchasesSupported) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void loadCustomerInfo();
+    });
+    return () => sub.remove();
+  }, [loadCustomerInfo]);
+
   // Guarantee the RevenueCat customer is our signed-in user before a purchase
   // or restore. configure() starts anonymous and the identity effect above may
   // not have completed yet; without this a purchase can land on an
@@ -459,9 +516,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       await ensureIdentified(P);
       const { customerInfo: info } = await P.purchasePackage(pkg);
       applyCustomerInfo(info);
-      const active = !!findActiveTraderEntitlement(info);
-      if (active) await syncEntitlementWithBackend(token);
-      return active;
+      const ent = findActiveTraderEntitlement(info);
+      if (ent) await syncEntitlementWithBackend(token, ent.willRenew);
+      return !!ent;
     },
     [applyCustomerInfo, ensureIdentified, token],
   );
@@ -472,9 +529,17 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     await ensureIdentified(P);
     const info = await P.restorePurchases();
     applyCustomerInfo(info);
-    const active = !!findActiveTraderEntitlement(info);
-    if (active) await syncEntitlementWithBackend(token);
-    return active;
+    const ent = findActiveTraderEntitlement(info);
+    if (ent) {
+      syncedInactiveRef.current = false;
+      await syncEntitlementWithBackend(token, ent.willRenew);
+    } else if (hadTraderEntitlement(info)) {
+      // Explicit user action: always let the server re-verify and downgrade
+      // a lapsed subscription, even if the session guard already fired.
+      syncedInactiveRef.current = true;
+      await syncEntitlementWithBackend(token);
+    }
+    return !!ent;
   }, [applyCustomerInfo, ensureIdentified, token]);
 
   const manageSubscriptions = useCallback(async () => {
@@ -482,10 +547,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!P) return;
     try {
       await P.showManageSubscriptions();
+      // The user may have cancelled or changed their plan in the App Store
+      // sheet — re-read customer info as soon as it closes (this also syncs
+      // the fresh willRenew state to the backend).
+      await loadCustomerInfo();
     } catch (e) {
       console.warn('RevenueCat showManageSubscriptions failed', e);
     }
-  }, []);
+  }, [loadCustomerInfo]);
 
   const presentPaywall = useCallback(async (): Promise<boolean> => {
     const UI = await ensurePurchasesUI();
@@ -499,8 +568,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (P) {
       const info = await P.getCustomerInfo();
       applyCustomerInfo(info);
-      active = !!findActiveTraderEntitlement(info);
-      if (active) await syncEntitlementWithBackend(token);
+      const ent = findActiveTraderEntitlement(info);
+      active = !!ent;
+      if (ent) await syncEntitlementWithBackend(token, ent.willRenew);
     }
     return active;
   }, [offering, applyCustomerInfo, token]);
@@ -537,6 +607,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         offering,
       ),
       expiresAt: activeEntitlement?.expirationDate ?? null,
+      willRenew: activeEntitlement ? activeEntitlement.willRenew : null,
       refresh,
       purchase,
       restore,
