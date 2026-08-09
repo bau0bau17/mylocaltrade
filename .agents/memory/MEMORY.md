@@ -42,6 +42,7 @@
 - [Document expiry admin surfaces](document-expiry-surfaces.md) — "superseded by approved replacement" filter must hit ALL expiring-doc queries; expiry is date-based, edits reconcile trader state immediately.
 - [Profile change requests](profile-change-requests.md) — protected-field edits post-establishment create admin-reviewed requests; field lists live in lib/db schema; phone needs OTP before request; event types are fixed strings.
 - [Quote lifecycle invariants](quotes-one-pending-invariant.md) — one PENDING quote per conversation is a partial unique index (23505→409), expiry is lazy (no cron); digit-heavy test strings trip the contact filter.
+- [Conversation composer layout](conversation-screen-composer-layout.md) — chat detail order is trail → composer → info cards; cards collapse while keyboard open (intentional). Never pin content between composer and keyboard.
 - [Tab-bar-aware bottom padding](tab-bar-aware-bottom-padding.md) — tab bar is absolute; scroll content needs tabBarHeight+insets.bottom padding; exceptions & multi-component hook pitfall inside.
 - [Two suspension mechanisms](account-suspension-two-kinds.md) — users.suspendedAt = account moderation block (messages/enquiries, 403 ACCOUNT_SUSPENDED) vs trader verification SUSPENDED = public listing; never conflate.
 - [Healthcheck must stay DB-free](healthcheck-db-free.md) — GET /api healthcheck must skip the Postgres-backed rate limiter; DB latency otherwise reads as instance-unhealthy "outages". req.originalUrl for /api prefixes.
