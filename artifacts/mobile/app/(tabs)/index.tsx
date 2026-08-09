@@ -79,9 +79,10 @@ export default function HomeScreen() {
   const { isAuthenticated, isCustomer, isTrader } = useAuth();
   const { hasTraderSubscription } = useSubscription();
   const showCustomerSections = isAuthenticated && isCustomer;
-  // Trader-conversion promos (Get featured, List your business, Premium
-  // pricing) are only shown to logged-out visitors and trader accounts —
-  // never to logged-in customers (or any other signed-in non-trader role).
+  // Trader-conversion promos (Get featured, Premium promotion banner,
+  // Premium pricing) are only shown to logged-out visitors and trader
+  // accounts — never to logged-in customers (or any other signed-in
+  // non-trader role).
   const showTraderPromos = !isAuthenticated || isTrader;
   const premiumMonthlyPrice = usePremiumMonthlyPriceLabel(showTraderPromos);
 
@@ -389,11 +390,11 @@ export default function HomeScreen() {
           <Pressable style={styles.traderCtaBanner} onPress={() => router.push('/pricing')}>
             <View style={styles.traderCtaLeft}>
               <View style={styles.traderCtaBadge}>
-                <Text style={styles.traderCtaBadgeText}>FOR TRADERS</Text>
+                <Text style={styles.traderCtaBadgeText}>PROMOTE YOUR BUSINESS</Text>
               </View>
-              <Text style={styles.traderCtaTitle}>List your business</Text>
+              <Text style={styles.traderCtaTitle}>Stand out in local searches</Text>
               <Text style={styles.traderCtaSub}>
-                {premiumMonthlyPrice ? `Go Premium from ${premiumMonthlyPrice}/month` : 'Go Premium'}
+                {premiumMonthlyPrice ? `Get featured from ${premiumMonthlyPrice}/month` : 'Explore Premium promotion'}
               </Text>
             </View>
             <View style={styles.traderCtaArrow}>
