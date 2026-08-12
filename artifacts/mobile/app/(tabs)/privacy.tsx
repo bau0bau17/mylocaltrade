@@ -22,7 +22,7 @@ export default function PrivacyScreen() {
     >
       
       <View style={styles.section}>
-        <Text style={styles.lastUpdated}>Last Updated: 11 July 2026</Text>
+        <Text style={styles.lastUpdated}>Last Updated: 12 August 2026</Text>
         <Text style={styles.paragraph}>
           This Privacy Policy explains how Service Provider LTD (company registered in England and Wales under company number 15830141), trading as MyLocalTrade ("we", "us", "our"), collects, uses, discloses, and safeguards your personal data when you use our mobile application. Our registered office address is shown in the contact section below.
         </Text>
@@ -175,7 +175,20 @@ export default function PrivacyScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>12. International Data Transfers</Text>
+        <Text style={styles.heading}>12. Business Contacts and Direct Marketing</Text>
+        <Text style={styles.paragraph}>
+          If you run a trade business, we may obtain your business contact details — such as your name, business email address, company name, company number, website and a record of where we found them — from publicly available sources (for example your business website, Companies House or online directories) or from previous dealings with you, rather than directly from you. This notice is provided under Article 14 UK GDPR.
+        </Text>
+        <Text style={styles.paragraph}>
+          We only send marketing emails to business contacts obtained this way where we have a lawful basis: your consent, the 'soft opt-in' following a previous sale or negotiation with us, or — for corporate bodies such as limited companies and LLPs — our legitimate interest in telling relevant trade businesses about MyLocalTrade, as permitted by the Privacy and Electronic Communications Regulations for corporate subscribers. We record the source of every contact and the lawful basis we rely on before any marketing email is sent, and every such email tells you where we got your details.
+        </Text>
+        <Text style={styles.paragraph}>
+          You can object or unsubscribe at any time using the unsubscribe link in every email or via the Contact Us option below. If you object or unsubscribe, we add your email address to a permanent suppression list so that we never email you again, and we will delete your remaining details on request. We do not sell business contact details or share them with third parties for their own marketing.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>13. International Data Transfers</Text>
         <Text style={styles.paragraph}>
           Some of our service providers (including payment processors and hosting providers) may process your data outside the United Kingdom. Where we transfer personal data outside the UK, we ensure appropriate safeguards are in place, including:{'\n'}
           - UK Standard Contractual Clauses (SCCs) approved by the Secretary of State{'\n'}
@@ -188,14 +201,14 @@ export default function PrivacyScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>13. Data Security</Text>
+        <Text style={styles.heading}>14. Data Security</Text>
         <Text style={styles.paragraph}>
           We use administrative, technical, and physical security measures to help protect your personal information, including encryption of data in transit and at rest. While we have taken reasonable steps to secure the personal information you provide to us, no security measures are perfect or impenetrable.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>14. Contact the Data Controller</Text>
+        <Text style={styles.heading}>15. Contact the Data Controller</Text>
         <Text style={styles.paragraph}>
           If you have questions about this Privacy Policy or wish to exercise your data rights, please contact us:
         </Text>

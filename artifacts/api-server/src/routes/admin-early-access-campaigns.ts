@@ -7,6 +7,8 @@ import {
   earlyAccessCampaignBatchesTable,
   earlyAccessCampaignEventsTable,
   EARLY_ACCESS_CAMPAIGN_TYPES,
+  CAMPAIGN_AUDIENCES,
+  type CampaignAudience,
   type EarlyAccessCampaign,
   type EarlyAccessCampaignType,
 } from "@workspace/db/schema";
@@ -38,6 +40,10 @@ import {
 import { marketingSendingStatus } from "../lib/brevo-marketing";
 import { sendEarlyAccessCampaignTestEmail } from "../lib/email";
 import { buildUnsubscribeUrl } from "../lib/early-access-unsubscribe";
+import {
+  computeOutreachAudience,
+  selectEligibleOutreachContacts,
+} from "../lib/outreach-contacts";
 
 const router: IRouter = Router();
 
@@ -170,6 +176,17 @@ router.post("/admin/early-access/campaigns", async (req, res) => {
     res.status(400).json({ error: "type must be 'launch' or 'marketing'." });
     return;
   }
+  // Audience is fixed at creation (like type): it decides which list AND
+  // which eligibility engine every later step uses. Default: early_access.
+  const audienceRaw = body.audience ?? "early_access";
+  if (
+    typeof audienceRaw !== "string" ||
+    !CAMPAIGN_AUDIENCES.includes(audienceRaw as CampaignAudience)
+  ) {
+    res.status(400).json({ error: "audience must be 'early_access' or 'outreach'." });
+    return;
+  }
+  const audience = audienceRaw as CampaignAudience;
   const fields = contentFieldsFromBody(body);
   if (!fields.name) {
     res.status(400).json({ error: "Internal name is required." });
@@ -184,13 +201,13 @@ router.post("/admin/early-access/campaigns", async (req, res) => {
   }
   const [created] = await db
     .insert(c)
-    .values({ ...fields, type, status: "draft", createdBy: authReq.userId })
+    .values({ ...fields, type, audience, status: "draft", createdBy: authReq.userId })
     .returning();
   await db.insert(e).values({
     campaignId: created.id,
     kind: "CAMPAIGN_CREATED",
     performedBy: authReq.userId,
-    details: { type },
+    details: { type, audience },
   });
   res.status(201).json({ campaign: created });
 });
@@ -231,7 +248,12 @@ router.get("/admin/early-access/campaigns/:id", async (req, res) => {
     contentErrors: validateCampaignContent(campaign),
     // Live audience preview only matters before the snapshot exists.
     ...(campaign.status === "draft"
-      ? { audience: await computeAudience(campaign.type as EarlyAccessCampaignType) }
+      ? {
+          audience:
+            campaign.audience === "outreach"
+              ? await computeOutreachAudience()
+              : await computeAudience(campaign.type as EarlyAccessCampaignType),
+        }
       : {}),
     quota: await quotaInfo(),
     testSendsToday: await testSendsTodayForCampaign(db, campaign.id),
@@ -325,6 +347,11 @@ router.get("/admin/early-access/campaigns/:id/preview", async (req, res) => {
   const { html, text } = renderCampaignEmail(campaign, {
     greetingName: "Alex",
     unsubscribeUrl: "https://mylocaltrade.co.uk/unsubscribe",
+    audience: campaign.audience === "outreach" ? "outreach" : "early_access",
+    sourceNote:
+      campaign.audience === "outreach"
+        ? "Example source Ltd website (each recipient sees their own recorded source)"
+        : undefined,
   });
   res.json({ html, text, contentErrors: validateCampaignContent(campaign) });
 });
@@ -404,6 +431,11 @@ router.post("/admin/early-access/campaigns/:id/test-send", async (req, res) => {
     greetingName: admin.name.split(/\s+/)[0] || "there",
     unsubscribeUrl: "https://mylocaltrade.co.uk/unsubscribe",
     isTest: true,
+    audience: campaign.audience === "outreach" ? "outreach" : "early_access",
+    sourceNote:
+      campaign.audience === "outreach"
+        ? "Example source Ltd website (each recipient sees their own recorded source)"
+        : undefined,
   });
   let channel = "failed";
   try {
@@ -437,15 +469,19 @@ router.get("/admin/early-access/campaigns/:id/audience", async (req, res) => {
     res.status(404).json({ error: "Campaign not found." });
     return;
   }
-  const audience = await computeAudience(
-    campaign.type as EarlyAccessCampaignType,
-  );
+  const isOutreach = campaign.audience === "outreach";
+  const audience = isOutreach
+    ? await computeOutreachAudience()
+    : await computeAudience(campaign.type as EarlyAccessCampaignType);
   const cap = effectiveDailyCap();
   res.json({
     audience,
+    audienceKind: isOutreach ? "outreach" : "early_access",
     dailyCap: cap,
     estimatedDays: cap > 0 ? Math.ceil(audience.eligible / cap) : null,
-    confirmationPhrase: `SEND TO ${audience.eligible} PEOPLE`,
+    confirmationPhrase: isOutreach
+      ? `SEND TO ${audience.eligible} OUTREACH CONTACTS`
+      : `SEND TO ${audience.eligible} PEOPLE`,
     quota: await quotaInfo(),
   });
 });
@@ -469,11 +505,19 @@ router.post("/admin/early-access/campaigns/:id/queue", async (req, res) => {
     }
     // The eligible set is recomputed HERE, at queue time, under the campaign
     // row lock. The typed phrase must match the server's count exactly.
-    const eligible = await selectEligibleRegistrations(
-      tx,
-      campaign.type as EarlyAccessCampaignType,
-    );
-    const expectedPhrase = `SEND TO ${eligible.length} PEOPLE`;
+    // For outreach this re-runs the full evidence-based eligibility engine,
+    // the suppression list and the cross-list dedupe — the import-time
+    // status is never trusted.
+    const isOutreach = campaign.audience === "outreach";
+    const eligible = isOutreach
+      ? await selectEligibleOutreachContacts(tx)
+      : await selectEligibleRegistrations(
+          tx,
+          campaign.type as EarlyAccessCampaignType,
+        );
+    const expectedPhrase = isOutreach
+      ? `SEND TO ${eligible.length} OUTREACH CONTACTS`
+      : `SEND TO ${eligible.length} PEOPLE`;
     if (confirmation !== expectedPhrase) {
       return {
         status: 409 as const,
@@ -490,11 +534,12 @@ router.post("/admin/early-access/campaigns/:id/queue", async (req, res) => {
     // opt-outs are honoured by the per-batch re-check, never by widening.
     for (let i = 0; i < eligible.length; i += 500) {
       await tx.insert(r).values(
-        eligible.slice(i, i + 500).map((reg) => ({
+        eligible.slice(i, i + 500).map((row) => ({
           campaignId: campaign.id,
-          registrationId: reg.id,
-          emailNormalized: reg.emailNormalized,
-          name: reg.name,
+          registrationId: isOutreach ? null : row.id,
+          outreachContactId: isOutreach ? row.id : null,
+          emailNormalized: row.emailNormalized,
+          name: row.name,
           status: "queued",
         })),
       );

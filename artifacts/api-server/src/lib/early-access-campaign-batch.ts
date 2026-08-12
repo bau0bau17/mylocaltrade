@@ -30,7 +30,18 @@ import {
   remainingDailyQuota,
   renderCampaignEmail,
 } from "./early-access-campaigns";
-import { buildUnsubscribeToken } from "./early-access-unsubscribe";
+import {
+  buildOutreachUnsubscribeToken,
+  buildUnsubscribeToken,
+} from "./early-access-unsubscribe";
+import {
+  contactToEligibilityInput,
+  evaluateOutreachEligibility,
+} from "./outreach-contacts";
+import {
+  outreachContactsTable,
+  outreachSuppressionsTable,
+} from "@workspace/db/schema";
 
 /**
  * Daily batch engine (Phase 2B). One call = one "Send next batch" click.
@@ -367,6 +378,7 @@ async function runCampaignBatchLocked(
       .returning({
         id: r.id,
         registrationId: r.registrationId,
+        outreachContactId: r.outreachContactId,
         emailNormalized: r.emailNormalized,
         name: r.name,
       });
@@ -378,25 +390,99 @@ async function runCampaignBatchLocked(
 
     // RE-CHECK live consent/suppression for every reserved recipient — the
     // snapshot never overrides an opt-out that happened after queueing.
-    const regs = await tx
-      .select({
-        id: earlyAccessRegistrationsTable.id,
-        unsubscribedAt: earlyAccessRegistrationsTable.unsubscribedAt,
-        emailSuppressedAt: earlyAccessRegistrationsTable.emailSuppressedAt,
-      })
-      .from(earlyAccessRegistrationsTable)
-      .where(
-        inArray(
-          earlyAccessRegistrationsTable.id,
-          reservedRows.map((row) => row.registrationId),
-        ),
-      );
+    const eaIds = reservedRows
+      .map((row) => row.registrationId)
+      .filter((id): id is number => id !== null);
+    const regs =
+      eaIds.length > 0
+        ? await tx
+            .select({
+              id: earlyAccessRegistrationsTable.id,
+              unsubscribedAt: earlyAccessRegistrationsTable.unsubscribedAt,
+              emailSuppressedAt: earlyAccessRegistrationsTable.emailSuppressedAt,
+            })
+            .from(earlyAccessRegistrationsTable)
+            .where(inArray(earlyAccessRegistrationsTable.id, eaIds))
+        : [];
     const regById = new Map(regs.map((reg) => [reg.id, reg]));
+    // Outreach recipients: reload the contact and RE-RUN the full
+    // evidence-based eligibility engine plus the permanent suppression
+    // list — edited evidence, objections and rule changes are enforced at
+    // the moment of sending, never just at import or queue time.
+    const ocIds = reservedRows
+      .map((row) => row.outreachContactId)
+      .filter((id): id is number => id !== null);
+    const ocRows =
+      ocIds.length > 0
+        ? await tx
+            .select()
+            .from(outreachContactsTable)
+            .where(inArray(outreachContactsTable.id, ocIds))
+        : [];
+    const ocById = new Map(ocRows.map((row) => [row.id, row]));
+    // Cross-list rule enforced LIVE: an address that joined the Early Access
+    // list after this outreach campaign was queued must never receive
+    // outreach mail — EA-list addresses are contacted only via EA campaigns.
+    const ocEaDuplicates =
+      ocRows.length > 0
+        ? new Set(
+            (
+              await tx
+                .select({
+                  emailNormalized: earlyAccessRegistrationsTable.emailNormalized,
+                })
+                .from(earlyAccessRegistrationsTable)
+                .where(
+                  inArray(
+                    earlyAccessRegistrationsTable.emailNormalized,
+                    ocRows.map((row) => row.emailNormalized),
+                  ),
+                )
+            ).map((row) => row.emailNormalized),
+          )
+        : new Set<string>();
+    const ocSuppressed =
+      ocRows.length > 0
+        ? new Set(
+            (
+              await tx
+                .select({
+                  emailNormalized: outreachSuppressionsTable.emailNormalized,
+                })
+                .from(outreachSuppressionsTable)
+                .where(
+                  inArray(
+                    outreachSuppressionsTable.emailNormalized,
+                    ocRows.map((row) => row.emailNormalized),
+                  ),
+                )
+            ).map((row) => row.emailNormalized),
+          )
+        : new Set<string>();
     const skippedIds: number[] = [];
     const unsubscribedIds: number[] = [];
     const toSend: typeof reservedRows = [];
     for (const row of reservedRows) {
-      const reg = regById.get(row.registrationId);
+      if (row.outreachContactId !== null) {
+        const contact = ocById.get(row.outreachContactId);
+        if (!contact) {
+          skippedIds.push(row.id); // contact deleted since snapshot
+        } else if (contact.unsubscribedAt !== null) {
+          unsubscribedIds.push(row.id);
+        } else if (
+          contact.emailSuppressedAt !== null ||
+          ocSuppressed.has(contact.emailNormalized) ||
+          ocEaDuplicates.has(contact.emailNormalized) ||
+          evaluateOutreachEligibility(contactToEligibilityInput(contact))
+            .status !== "eligible"
+        ) {
+          skippedIds.push(row.id);
+        } else {
+          toSend.push(row);
+        }
+        continue;
+      }
+      const reg = row.registrationId !== null ? regById.get(row.registrationId) : undefined;
       if (!reg) {
         skippedIds.push(row.id); // registration deleted since snapshot
       } else if (reg.unsubscribedAt !== null) {
@@ -443,6 +529,14 @@ async function runCampaignBatchLocked(
       toSend,
       attempted: reservedRows.length,
       skipped: skippedIds.length + unsubscribedIds.length,
+      // Per-contact recorded source → OC_SOURCE merge attribute (the
+      // legally required "how we obtained your details" line).
+      outreachSources: new Map(
+        ocRows.map((row) => [
+          row.id,
+          `${row.sourceName} (${row.sourceDetail})`.slice(0, 400),
+        ]),
+      ),
     };
   });
 
@@ -482,7 +576,8 @@ async function runCampaignBatchLocked(
       campaignStatus: reserved.status ?? "completed",
     };
 
-  const { campaign, batch, batchNumber, toSend, attempted, skipped } = reserved;
+  const { campaign, batch, batchNumber, toSend, attempted, skipped, outreachSources } =
+    reserved;
 
   // ---- Phase 2: everything after this point talks to Brevo ----------------
   // Release is only ever called when NOTHING can have been sent (no Brevo
@@ -584,10 +679,20 @@ async function runCampaignBatchLocked(
       toSend.map((row) => ({
         email: row.emailNormalized,
         firstName: firstNameOf(row.name),
-        unsubscribeToken: buildUnsubscribeToken(row.registrationId),
+        unsubscribeToken:
+          row.outreachContactId !== null
+            ? buildOutreachUnsubscribeToken(row.outreachContactId)
+            : buildUnsubscribeToken(row.registrationId!),
+        sourceNote:
+          row.outreachContactId !== null
+            ? outreachSources.get(row.outreachContactId)
+            : undefined,
       })),
     );
-    const { html } = renderCampaignEmail(campaign, { brevoMergeTags: true });
+    const { html } = renderCampaignEmail(campaign, {
+      brevoMergeTags: true,
+      audience: campaign.audience === "outreach" ? "outreach" : "early_access",
+    });
     brevoCampaignId = await createCampaign({
       name: `${campaign.name} — batch ${batchNumber}`,
       subject: campaign.subject,

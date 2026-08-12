@@ -17,6 +17,10 @@ import { getOpenLinkBase } from "./email";
  */
 
 const TOKEN_PREFIX = "u1";
+/** Outreach-contact unsubscribe tokens: `o1.<contactId>.<sig>` — same
+ *  secret + rotation model, DIFFERENT domain string so an EA token can
+ *  never be replayed against an outreach contact or vice versa. */
+const OUTREACH_TOKEN_PREFIX = "o1";
 
 /**
  * SECRET & ROTATION MODEL
@@ -64,9 +68,26 @@ function signPayload(registrationId: number, key: Buffer): string {
     .digest("base64url");
 }
 
+function signOutreachPayload(contactId: number, key: Buffer): string {
+  return crypto
+    .createHmac("sha256", key)
+    .update(`oc-unsub.v1.${contactId}`)
+    .digest("base64url");
+}
+
 export function buildUnsubscribeToken(registrationId: number): string {
   // Always sign with the CURRENT secret only.
   return `${TOKEN_PREFIX}.${registrationId}.${signPayload(registrationId, signingKeys()[0])}`;
+}
+
+export function buildOutreachUnsubscribeToken(contactId: number): string {
+  return `${OUTREACH_TOKEN_PREFIX}.${contactId}.${signOutreachPayload(contactId, signingKeys()[0])}`;
+}
+
+export function buildOutreachUnsubscribeUrl(contactId: number): string {
+  return `${getOpenLinkBase()}/unsubscribe?token=${encodeURIComponent(
+    buildOutreachUnsubscribeToken(contactId),
+  )}`;
 }
 
 export function buildUnsubscribeUrl(registrationId: number): string {
@@ -81,9 +102,27 @@ export function buildUnsubscribeUrl(registrationId: number): string {
  * token.
  */
 export function verifyUnsubscribeToken(token: unknown): number | null {
+  const verified = verifyAnyUnsubscribeToken(token);
+  return verified?.list === "early_access" ? verified.id : null;
+}
+
+/**
+ * Verifies a token from EITHER list. Returns which list it belongs to plus
+ * the row id, or null. Constant-time comparisons; never throws; never logs.
+ */
+export function verifyAnyUnsubscribeToken(
+  token: unknown,
+): { list: "early_access" | "outreach"; id: number } | null {
   if (typeof token !== "string" || token.length > 200) return null;
   const parts = token.split(".");
-  if (parts.length !== 3 || parts[0] !== TOKEN_PREFIX) return null;
+  if (parts.length !== 3) return null;
+  const list =
+    parts[0] === TOKEN_PREFIX
+      ? ("early_access" as const)
+      : parts[0] === OUTREACH_TOKEN_PREFIX
+        ? ("outreach" as const)
+        : null;
+  if (!list) return null;
   const id = Number.parseInt(parts[1], 10);
   if (!Number.isInteger(id) || id <= 0 || String(id) !== parts[1]) return null;
   const given = parts[2];
@@ -91,11 +130,12 @@ export function verifyUnsubscribeToken(token: unknown): number | null {
   // in already-sent emails keep working. Every candidate is compared in
   // constant time.
   for (const key of signingKeys()) {
-    const expected = signPayload(id, key);
+    const expected =
+      list === "early_access" ? signPayload(id, key) : signOutreachPayload(id, key);
     if (given.length !== expected.length) continue;
     try {
       if (crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected))) {
-        return id;
+        return { list, id };
       }
     } catch {
       /* malformed input — try next key */

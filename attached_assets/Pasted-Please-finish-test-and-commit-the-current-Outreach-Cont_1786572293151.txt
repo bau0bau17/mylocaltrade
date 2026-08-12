@@ -1,0 +1,309 @@
+Please finish, test and commit the current Outreach Contacts task before starting this request. Treat the email redesign as a separate follow-up task and do not mix it into an unfinished Outreach Contacts diff.
+
+I have attached the approved visual reference named “MyLocalTrade-email-template-reference.png”. Please implement a production-quality MyLocalTrade email design system based on that reference.
+
+The image is a design direction, not an image that should be embedded as the entire email. Rebuild it as responsive, accessible, email-client-compatible HTML using the real application data and the official logo asset.
+
+Before changing anything, inspect and inventory every existing email emitted by the project. The previous investigation found approximately 25 email types passing through a central email layer. Identify:
+
+- transactional emails;
+- account verification and OTP emails;
+- password reset emails;
+- welcome/account emails;
+- company-team invitations;
+- customer notifications;
+- trader notifications;
+- Early Access confirmation emails;
+- launch campaigns;
+- marketing campaigns;
+- internal/admin/contact-form alerts;
+- their current HTML and plain-text renderers;
+- their recipient role and legal footer requirements.
+
+Do not remove or accidentally omit any existing email type.
+
+## 1. Shared visual system
+
+Create one reusable, central MyLocalTrade email shell with three server-selected variants:
+
+1. Neutral / Transactional
+2. Trader
+3. Customer
+
+Shared design:
+
+- deep navy outer background: `#07111F`;
+- slightly lighter navy content card: `#0F1B2D`;
+- cyan accent and CTA: `#12B8D4`;
+- white headings;
+- pale blue-grey body text;
+- amber only for expiration notices or genuine warnings;
+- thin cyan top rule;
+- rounded but email-compatible content container;
+- generous spacing;
+- one clear primary action;
+- maximum content width around 600px;
+- responsive down to narrow mobile inboxes;
+- no gradients, glass effects, glow, stock photography or decorative clutter;
+- no external web fonts;
+- no JavaScript;
+- no dependence on unsupported CSS.
+
+Use a table-based email-safe layout and inline critical CSS. Account for Gmail, Outlook desktop/web, Apple Mail and iOS Mail. Buttons must remain usable in Outlook, using an appropriate fallback where necessary.
+
+## 2. Official logo and brand repetition
+
+Use the real official MyLocalTrade logo from the repository — the blue rounded square with the white crossed screwdriver and wrench.
+
+Inspect and reuse the source asset already present under the mobile assets, rather than recreating, tracing or extracting the logo from the attached mockup.
+
+Provide it through a stable HTTPS production asset URL suitable for emails. Do not reference a local filesystem path. Include fixed dimensions and useful alt text so the email remains understandable when remote images are blocked.
+
+Approved placement:
+
+- no logo or “MyLocalTrade” wordmark in a decorative top header;
+- one larger official logo centred above the main email heading;
+- one small official logo plus the wordmark “MyLocalTrade” in the footer;
+- the shared layout must not repeat the company name elsewhere decoratively;
+- individual message copy may mention MyLocalTrade only when the meaning genuinely requires it;
+- do not use generic lock, megaphone or location-pin icons in place of the official central logo.
+
+The email must remain functional and understandable if the logo does not load.
+
+## 3. Audience variants
+
+Determine the variant from trusted server-side recipient/account data. Never rely on a client-supplied role, email-domain guessing or visual-only conditions.
+
+### Trader footer
+
+Use:
+
+“Your business. Your community.  
+We’re here to help you grow.”
+
+Suitable CTA examples:
+
+- `Grow your business`
+- `View your enquiry`
+- `View the job`
+- or the specific transactional action required by that email.
+
+### Customer footer
+
+Use:
+
+“Your home. Your project.  
+Find trusted local tradespeople with confidence.”
+
+Suitable CTA examples:
+
+- `Find a trusted trader`
+- `View your enquiry`
+- `View your quote`
+- or the specific transactional action required by that email.
+
+### Neutral / Transactional footer
+
+Use this when no verified role exists yet, or when the message is intentionally role-neutral:
+
+“Local help. Clear communication.  
+All in one place.”
+
+Do not guess a role. Unknown, mixed or pre-registration recipients must receive the neutral version.
+
+For campaigns that deliberately contain both customer and trader recipients, either render the correct variant per recipient using a safe, tested mechanism or use the neutral variant. Never show trader-growth messaging to a customer.
+
+## 4. Transactional email behaviour
+
+Verification/OTP example:
+
+- heading: `Verify your email`;
+- greeting using the recipient’s real safe display name where available;
+- code displayed prominently with accessible spacing;
+- expiration displayed clearly;
+- security copy:
+
+“For your security, never share this code. We will never ask for your code or password.”
+
+Transactional emails must not contain an unsubscribe link when the message is strictly necessary for account security or service delivery.
+
+Do not change:
+
+- token generation;
+- token hashing;
+- OTP length;
+- expiry;
+- one-time-use enforcement;
+- rate limiting;
+- privacy controls;
+- password or verification logic;
+- existing notification eligibility.
+
+Codes, tokens and sensitive URLs must never appear in server logs, audit metadata, analytics or error messages.
+
+Team invitation, reset-password and other link-based emails must preserve their existing security and expiry behaviour.
+
+## 5. Campaign and marketing behaviour
+
+Marketing/launch emails must retain:
+
+- the working personalised unsubscribe mechanism;
+- Privacy Policy link;
+- Contact link;
+- company identity and legally required company details;
+- Brevo personalisation tokens;
+- suppression handling;
+- complaint and bounce handling;
+- List-Unsubscribe behaviour;
+- webhook behaviour;
+- current daily limits and transactional reserve.
+
+The visual footer must contain:
+
+`Unsubscribe · Privacy Policy · Contact us`
+
+Campaign content entered in Admin remains editable. Apply the new visual shell without replacing legitimate saved campaign content.
+
+CTA and footer copy should follow the selected audience:
+
+- Trader: `Grow your business`
+- Customer: `Find a trusted trader`
+- Neutral/mixed: `Explore the app`
+
+Do not send any real campaign while implementing or testing this work.
+
+## 6. Internal emails
+
+Review internal support/admin/contact-form emails separately. Apply the shared branding only when useful, but preserve:
+
+- existing recipients;
+- Reply-To behaviour;
+- internal diagnostic information;
+- security redaction;
+- delivery routing.
+
+Do not add unsubscribe language to purely internal operational alerts.
+
+## 7. Plain-text and image-blocked fallbacks
+
+Every email must retain or gain a complete plain-text alternative containing:
+
+- the same essential message;
+- the verification code or safe action URL where applicable;
+- expiry information;
+- required legal links;
+- unsubscribe URL where required.
+
+HTML emails must remain understandable with:
+
+- images disabled;
+- CSS partially stripped;
+- dark mode forced by the email client.
+
+Do not use the logo as the only way to identify the sender.
+
+## 8. Admin previews
+
+The Admin campaign preview and test-send preview must use the exact same production renderer and shared shell as the real email. Do not maintain a visually separate imitation.
+
+Where practical, provide preview switching for:
+
+- Neutral;
+- Trader;
+- Customer;
+- desktop width;
+- narrow mobile width.
+
+Clearly label preview-only sample values.
+
+## 9. Accessibility and compatibility
+
+Verify:
+
+- accessible text contrast;
+- meaningful alt text;
+- readable typography without downloaded fonts;
+- body text approximately 16px where practical;
+- sufficiently large CTA tap targets;
+- logical reading order;
+- links distinguishable without relying only on colour;
+- no essential text baked into images;
+- no horizontal overflow on narrow screens;
+- long names, headings and URLs wrap safely;
+- Outlook does not produce broken buttons or collapsed spacing.
+
+## 10. Tests and safety
+
+Add focused regression tests covering:
+
+- every existing email type still renders;
+- each recipient role selects the correct variant;
+- unknown role selects Neutral;
+- customer never receives the trader footer;
+- trader never receives the customer footer;
+- verification codes and expiry text remain correct;
+- tokens/codes do not enter logs;
+- marketing emails always include unsubscribe, Privacy Policy, Contact and company identity;
+- transactional security emails do not receive inappropriate marketing unsubscribe copy;
+- plain-text alternatives contain all essential information;
+- URLs are absolute and use the correct production domain;
+- the official logo URL is stable and uses alt text;
+- the email remains valid when the logo is blocked;
+- campaign Admin preview uses the same renderer as the actual send;
+- test execution makes zero real Brevo requests and sends zero real emails.
+
+Run the full API and Admin suites and all relevant typechecks.
+
+Perform a focused email security, privacy and accessibility review before committing. Fix confirmed findings rather than only documenting them.
+
+## 11. Manual test evidence
+
+Generate previews for representative examples:
+
+- verification code;
+- password reset;
+- team invitation;
+- customer notification;
+- trader notification;
+- Early Access confirmation;
+- Customer campaign;
+- Trader campaign;
+- Neutral/mixed campaign.
+
+Send real test emails only to the configured admin/test inbox and stay within the existing test-send limits. Do not send to registrations, imported contacts, customers or traders.
+
+Report how the templates look in:
+
+- Gmail web/mobile;
+- Outlook web or desktop where available;
+- Apple Mail/iOS Mail where available.
+
+If a client cannot be tested directly, state that honestly and provide the generated HTML/preview for manual verification.
+
+## 12. Scope and release control
+
+Do not change subscriptions, mobile application UI, account permissions, campaign eligibility, consent rules or legal policies unless a genuine inconsistency is discovered.
+
+If a legal-document change appears necessary, explain exactly why and stop for approval before changing Terms or forcing any re-acceptance.
+
+This should normally be a backend/email-template change and should not require an EAS/TestFlight build. Confirm this in the final report.
+
+Preserve all production data.
+
+Do not deploy, republish, enable a feature flag or send a campaign. Commit and push the completed implementation, then stop for my review.
+
+Final report must include:
+
+- complete email inventory;
+- files changed;
+- shared template architecture;
+- recipient-role selection rules;
+- logo asset and hosting approach;
+- exact footer/CTA mapping;
+- plain-text handling;
+- test results;
+- security/accessibility review findings;
+- representative previews;
+- whether any schema migration is required;
+- whether any mobile build is required;
+- safe production rollout and rollback instructions.

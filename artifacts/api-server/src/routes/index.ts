@@ -28,6 +28,7 @@ import profileChangesRouter from "./profile-changes";
 import adminProfileChangesRouter from "./admin-profile-changes";
 import adminEarlyAccessRouter from "./admin-early-access";
 import adminEarlyAccessCampaignsRouter from "./admin-early-access-campaigns";
+import adminOutreachContactsRouter from "./admin-outreach-contacts";
 import companyTeamRouter from "./company-team";
 
 const router: IRouter = Router();
@@ -64,6 +65,7 @@ router.use(adminProfileChangesRouter);
 // GET /admin/early-access/campaigns (":id" = "campaigns" → 400 Invalid id).
 router.use(adminEarlyAccessCampaignsRouter);
 router.use(adminEarlyAccessRouter);
+router.use(adminOutreachContactsRouter);
 router.use(companyTeamRouter);
 
 export default router;

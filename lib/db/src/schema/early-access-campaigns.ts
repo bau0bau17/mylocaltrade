@@ -47,12 +47,24 @@ export const EARLY_ACCESS_CAMPAIGN_STATUSES = [
 export type EarlyAccessCampaignStatus =
   (typeof EARLY_ACCESS_CAMPAIGN_STATUSES)[number];
 
+export const CAMPAIGN_AUDIENCES = [
+  /** Double-opt-in Early Access registrations (default). */
+  "early_access",
+  /** Admin-imported Outreach Contacts — SEPARATE eligibility rules
+   *  (evidence-based lawful routes), separate stats and exports. */
+  "outreach",
+] as const;
+export type CampaignAudience = (typeof CAMPAIGN_AUDIENCES)[number];
+
 export const earlyAccessCampaignsTable = pgTable(
   "early_access_campaigns",
   {
     id: serial("id").primaryKey(),
     /** 'launch' | 'marketing' — fixed at creation, drives eligibility rules. */
     type: varchar("type", { length: 20 }).notNull(),
+    /** 'early_access' | 'outreach' — fixed at creation; picks the audience
+     *  list AND the eligibility engine. The two lists never mix. */
+    audience: varchar("audience", { length: 20 }).notNull().default("early_access"),
     /** Internal name shown only in admin. */
     name: varchar("name", { length: 120 }).notNull(),
 
@@ -111,7 +123,11 @@ export const earlyAccessCampaignRecipientsTable = pgTable(
   {
     id: serial("id").primaryKey(),
     campaignId: integer("campaign_id").notNull(),
-    registrationId: integer("registration_id").notNull(),
+    /** Set for audience='early_access' recipients; NULL for outreach. */
+    registrationId: integer("registration_id"),
+    /** Set for audience='outreach' recipients; NULL for early access.
+     *  Exactly one of registrationId/outreachContactId is set per row. */
+    outreachContactId: integer("outreach_contact_id"),
     /** Denormalised at snapshot time (audit stability if the row changes). */
     emailNormalized: varchar("email_normalized", { length: 254 }).notNull(),
     name: varchar("name", { length: 100 }).notNull(),
@@ -136,6 +152,11 @@ export const earlyAccessCampaignRecipientsTable = pgTable(
       table.status,
     ),
     index("ea_campaign_recipients_registration_idx").on(table.registrationId),
+    uniqueIndex("ea_campaign_recipients_outreach_unique_idx").on(
+      table.campaignId,
+      table.outreachContactId,
+    ),
+    index("ea_campaign_recipients_outreach_idx").on(table.outreachContactId),
     /** Daily-cap accounting scans sends by day. */
     index("ea_campaign_recipients_sent_at_idx").on(table.sentAt),
   ],

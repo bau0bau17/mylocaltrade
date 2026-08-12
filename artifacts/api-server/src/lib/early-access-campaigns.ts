@@ -452,6 +452,16 @@ export type RenderOptions = {
   /** Literal unsubscribe URL (test/preview mode). */
   unsubscribeUrl?: string;
   isTest?: boolean;
+  /**
+   * 'early_access' (default) or 'outreach'. Outreach emails carry the
+   * legally required extra footer: who we are, HOW the contact details were
+   * obtained (per-recipient source via the OC_SOURCE merge attribute in bulk
+   * mode, literal sourceNote in preview/test), and the right to object —
+   * plus the same unsubscribe, privacy-policy and contact links.
+   */
+  audience?: "early_access" | "outreach";
+  /** Literal "how we obtained your details" line (outreach preview/test). */
+  sourceNote?: string;
 };
 
 /**
@@ -499,6 +509,22 @@ export function renderCampaignEmail(
     ? ` · <a href="{{ unsubscribe }}" style="color: #6B7280; text-decoration: underline;">One-click unsubscribe</a>`
     : "";
 
+  const isOutreach = opts.audience === "outreach";
+  const outreachSourceHtml = opts.brevoMergeTags
+    ? `{{ contact.OC_SOURCE | default : "publicly available business sources" }}`
+    : escapeHtml(opts.sourceNote || "publicly available business sources");
+  const outreachSourceText = opts.brevoMergeTags
+    ? `{{ contact.OC_SOURCE | default : "publicly available business sources" }}`
+    : opts.sourceNote || "publicly available business sources";
+  // Transparency block (UK GDPR Art. 13/14 + PECR): identify the sender,
+  // explain how the details were obtained, and state the right to object.
+  const receivingHtml = isOutreach
+    ? `This is a business message from MyLocalTrade. We obtained your business contact details from: ${outreachSourceHtml}. Our Privacy Policy explains what we hold and why. You have the right to object to direct marketing at any time — use the unsubscribe link below or contact us, and we will stop immediately.`
+    : `You're receiving this because you joined the MyLocalTrade Early Access list and confirmed your email address.`;
+  const receivingText = isOutreach
+    ? `This is a business message from MyLocalTrade. We obtained your business contact details from: ${outreachSourceText}. Our Privacy Policy explains what we hold and why. You have the right to object to direct marketing at any time — use the unsubscribe link below or contact us, and we will stop immediately.`
+    : `You're receiving this because you joined the MyLocalTrade Early Access list and confirmed your email address.`;
+
   const safeCtaUrl = escapeHtml(campaign.ctaUrl);
   const html = `
 <!DOCTYPE html>
@@ -527,7 +553,7 @@ export function renderCampaignEmail(
     </p>
     <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 20px;">
     <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0 0 8px;">
-      You're receiving this because you joined the MyLocalTrade Early Access list and confirmed your email address.
+      ${receivingHtml}
     </p>
     <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0 0 8px;">
       <a href="${unsubscribeHref}" style="color: #6B7280; text-decoration: underline;">Unsubscribe</a>${brevoNativeUnsub} · <a href="${publicBase}/privacy-policy" style="color: #6B7280; text-decoration: underline;">Privacy Policy</a> · <a href="${publicBase}/contact" style="color: #6B7280; text-decoration: underline;">Contact us</a>
@@ -548,7 +574,7 @@ ${campaign.bodyText.trim()}
 ${campaign.ctaLabel}: ${campaign.ctaUrl}
 
 —
-You're receiving this because you joined the MyLocalTrade Early Access list and confirmed your email address.
+${receivingText}
 Unsubscribe: ${opts.brevoMergeTags ? `${publicBase}/unsubscribe?token={{ contact.EA_UNSUB_TOKEN }}` : (opts.unsubscribeUrl ?? `${publicBase}/unsubscribe`)}
 Privacy Policy: ${publicBase}/privacy-policy · Contact: ${publicBase}/contact
 MyLocalTrade · Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ`;

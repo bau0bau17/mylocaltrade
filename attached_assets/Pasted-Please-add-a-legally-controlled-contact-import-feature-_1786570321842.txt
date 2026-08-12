@@ -1,0 +1,152 @@
+Please add a legally controlled contact-import feature to the Admin dashboard. This must extend the existing Early Access campaign system safely; do not weaken double opt-in, suppression, unsubscribe or campaign protections.
+
+Important: I have found some business email addresses that I may want to contact. A publicly available email address must NOT automatically be treated as marketing consent. “The app is now live” is also direct marketing and must follow the same eligibility rules.
+
+Build a separate Admin section called “Outreach Contacts”. Do not classify imported contacts as Early Access registrations and do not invent consent for them.
+
+Required functionality:
+
+1. Allow:
+- adding one contact manually;
+- importing a CSV;
+- downloading a CSV template;
+- validating the complete import before saving anything;
+- showing accepted, duplicate, invalid, suppressed and legally ineligible rows;
+- displaying a clear reason for every rejected or blocked contact.
+
+2. Store:
+- email;
+- contact name, optional;
+- company name;
+- business type: Limited company, LLP, sole trader, partnership, individual, or unknown;
+- company number, optional;
+- website, optional;
+- source name;
+- exact source URL or source description;
+- date obtained;
+- country;
+- lawful route;
+- consent date and exact consent evidence, when applicable;
+- internal notes;
+- imported by and imported at;
+- eligibility status and reason.
+
+3. Enforce these eligibility categories server-side:
+
+A. CONFIRMED_CONSENT  
+May receive relevant campaigns only when valid consent evidence, date, wording and source are stored.
+
+B. EXISTING_CUSTOMER_SOFT_OPT_IN  
+May be eligible only if MyLocalTrade obtained the address directly during a sale or genuine negotiation, the campaign concerns similar MyLocalTrade services, and an opt-out was offered both when collected and in every email. Store evidence for every requirement.
+
+C. CORPORATE_B2B  
+May be eligible only for a verified corporate subscriber such as a Limited company or LLP, after recording the company evidence, relevance and purpose, source and documented legitimate-interest assessment. Named corporate addresses still involve personal data.
+
+D. SOLE_TRADER_OR_INDIVIDUAL  
+Must remain blocked without valid consent or a fully evidenced soft opt-in.
+
+E. UNKNOWN_OR_UNVERIFIED  
+Must remain blocked. There must be no admin override that silently converts an unknown contact into an eligible one.
+
+4. Do not allow a consent-request email to be used as a workaround, because an email asking for marketing consent can itself constitute direct marketing.
+
+5. Before every preview, queue and send, the server must re-check:
+- lawful eligibility;
+- campaign relevance;
+- confirmation or consent evidence where required;
+- global unsubscribe and suppression records;
+- duplicates across Early Access and Outreach Contacts;
+- current email validity and contact status.
+
+A UI-only check is not sufficient.
+
+6. Every imported-contact campaign email must:
+- identify MyLocalTrade clearly;
+- contain the existing working unsubscribe mechanism;
+- contain Privacy Policy and Contact links;
+- explain, where legally required, how the contact details were obtained;
+- make the right to object to direct marketing clear;
+- update the global suppression list immediately after an unsubscribe, objection, complaint or hard bounce.
+
+7. Perform a legal-content impact review covering every public surface:
+
+- landing-page Privacy Policy;
+- Privacy Policy shown or linked inside the mobile app;
+- customer and trader registration/onboarding privacy notices;
+- Admin notices relating to imported contacts;
+- Terms & Conditions on the landing page;
+- Terms & Conditions shown or linked inside the mobile app;
+- any consent wording, support/legal pages or account-setting pages affected by this feature.
+
+Update only the documents and surfaces that genuinely need to change to accurately and lawfully describe the new processing.
+
+The Privacy Policy should be updated where required to explain:
+- business contact information obtained from public or third-party sources;
+- the categories and exact sources of information;
+- the purposes and applicable lawful bases;
+- legitimate interests where applicable;
+- how corporate contacts differ from individuals and sole traders;
+- retention periods;
+- Brevo’s role as an email processor;
+- recipients or categories of recipients;
+- objection, deletion and unsubscribe rights;
+- how a person can ask where their details came from.
+
+Where personal information was obtained indirectly, ensure the required privacy information is provided no later than the first communication and within one month of collection.
+
+8. Keep every copy of the Privacy Policy consistent:
+- if the mobile app embeds the policy, update that copy too;
+- if the app opens the web policy, verify that it opens the current production version;
+- ensure landing, mobile and Admin do not contain contradictory wording;
+- preserve matching effective dates and version identifiers where copies are maintained separately.
+
+9. Do not modify Terms & Conditions merely because the Privacy Policy changed. Update the Terms only if the new import/outreach functionality changes the contractual relationship with app users, administrator responsibilities or acceptable-use rules. If no Terms change is legally or functionally required, leave them untouched and explicitly explain why in the final report.
+
+10. Do not force existing customers or traders to re-accept Terms or Privacy Policy unless the review identifies a genuine legal requirement or a material contractual change. If re-acceptance is considered necessary:
+- explain the exact reason first;
+- identify which users are affected;
+- propose the least disruptive compliant flow;
+- stop and request my approval before implementing forced re-acceptance.
+
+11. Keep imported contacts separate from genuine double-opt-in Early Access registrations in:
+- database records;
+- Admin filters and statistics;
+- campaign audience summaries;
+- exports;
+- consent and audit history.
+
+12. Add deletion and retention controls, but retain the minimum suppression record needed to ensure an opted-out or objecting address is never accidentally re-imported or contacted again.
+
+13. Add focused tests for:
+- sole trader blocked without consent;
+- individual or personal email blocked;
+- unknown business type blocked;
+- verified Ltd/LLP eligible only through the corporate B2B route;
+- fake or incomplete consent rejected;
+- duplicate and suppressed contacts rejected;
+- CSV formula injection and malformed files;
+- cross-list deduplication;
+- unsubscribe, objection and complaint immediately preventing future sends;
+- campaign queue rechecking eligibility rather than trusting the import result;
+- concurrent imports and sends not bypassing protections;
+- mobile and landing legal links resolving to the correct current policy;
+- duplicated policy copies using the same effective version;
+- no unnecessary Terms re-acceptance being introduced.
+
+14. Run a security, privacy and legal-content consistency review. Do not claim that the software itself provides legal advice or guarantees compliance. Clearly identify any decision that still requires a qualified UK privacy professional.
+
+15. In the final report provide:
+- files and database changes;
+- eligibility rules implemented;
+- test results;
+- security/privacy review findings;
+- exactly which legal documents were changed and why;
+- which documents were reviewed but left unchanged and why;
+- whether a new mobile build is required;
+- whether existing users need to re-accept anything;
+- schema migration and safe production rollout order;
+- rollback steps.
+
+Do not enable or send any new campaign during implementation. Preserve all current production data and keep existing campaign sending manual.
+
+Commit and push the completed work, but stop before production deployment and wait for my review.

@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
+  Contact,
   Users,
   FileWarning,
   ClipboardList,
@@ -61,6 +62,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
       { href: "/early-access", label: "Early Access", icon: Rocket },
+      { href: "/outreach-contacts", label: "Outreach contacts", icon: Contact },
       { href: "/enquiries", label: "Enquiries", icon: Mail },
     ],
   },

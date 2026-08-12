@@ -23,10 +23,15 @@ import {
   hashConfirmationToken,
   reserveConfirmationSend,
 } from "../lib/early-access-confirmation";
-import { verifyUnsubscribeToken } from "../lib/early-access-unsubscribe";
+import { verifyAnyUnsubscribeToken } from "../lib/early-access-unsubscribe";
 import crypto from "node:crypto";
 import { and, inArray, isNull } from "drizzle-orm";
-import { earlyAccessCampaignRecipientsTable } from "@workspace/db/schema";
+import {
+  earlyAccessCampaignRecipientsTable,
+  outreachContactsTable,
+  outreachEventsTable,
+  outreachSuppressionsTable,
+} from "@workspace/db/schema";
 
 const router: IRouter = Router();
 
@@ -417,14 +422,60 @@ router.post("/early-access/confirm", async (req, res) => {
  */
 router.post("/early-access/unsubscribe", async (req, res) => {
   try {
-    const registrationId = verifyUnsubscribeToken(
+    const verified = verifyAnyUnsubscribeToken(
       (req.body as Record<string, unknown>)?.token,
     );
-    if (registrationId === null) {
+    if (verified === null) {
       res.status(400).json({ error: "This unsubscribe link is invalid." });
       return;
     }
     const now = new Date();
+    if (verified.list === "outreach") {
+      // Outreach opt-out is PERMANENT: besides the contact row, the address
+      // goes onto the minimal suppression list, which survives deletion and
+      // blocks any future re-import. Idempotent like the EA path.
+      await db.transaction(async (tx) => {
+        const [contact] = await tx
+          .select({
+            id: outreachContactsTable.id,
+            emailNormalized: outreachContactsTable.emailNormalized,
+            unsubscribedAt: outreachContactsTable.unsubscribedAt,
+          })
+          .from(outreachContactsTable)
+          .where(eq(outreachContactsTable.id, verified.id))
+          .for("update");
+        if (!contact) return; // deleted — suppression row already retained
+        if (contact.unsubscribedAt === null) {
+          await tx
+            .update(outreachContactsTable)
+            .set({
+              unsubscribedAt: now,
+              unsubscribeSource: "user",
+              eligibilityStatus: "blocked",
+              eligibilityReason:
+                "Unsubscribed or objected — permanently excluded from marketing.",
+              updatedAt: now,
+            })
+            .where(eq(outreachContactsTable.id, contact.id));
+          await tx.insert(outreachEventsTable).values({
+            contactId: contact.id,
+            kind: "CONTACT_UNSUBSCRIBED",
+            details: { source: "link" },
+          });
+        }
+        await tx
+          .insert(outreachSuppressionsTable)
+          .values({
+            emailNormalized: contact.emailNormalized,
+            reason: "unsubscribed",
+            source: "user_link",
+          })
+          .onConflictDoNothing();
+      });
+      res.json({ success: true });
+      return;
+    }
+    const registrationId = verified.id;
     await db.transaction(async (tx) => {
       const [row] = await tx
         .select({
@@ -554,6 +605,109 @@ router.post("/early-access/brevo-events", async (req, res) => {
     }
     const normalized = email.trim().toLowerCase();
     const now = new Date();
+
+    // Outreach contacts share the same Brevo account, so every tightening
+    // event ALSO applies to a matching outreach contact (by normalized
+    // email) and — for unsubscribe/complaint/hard-bounce — to the permanent
+    // outreach suppression list. Never re-enables anyone; idempotent.
+    await db.transaction(async (tx) => {
+      const [contact] = await tx
+        .select()
+        .from(outreachContactsTable)
+        .where(eq(outreachContactsTable.emailNormalized, normalized))
+        .for("update");
+      if (!contact) return;
+
+      const outreachRecipientUpdate = async (
+        from: string[],
+        to: string,
+      ): Promise<void> => {
+        await tx
+          .update(earlyAccessCampaignRecipientsTable)
+          .set({ status: to, statusDetail: "brevo_webhook", updatedAt: now })
+          .where(
+            and(
+              eq(
+                earlyAccessCampaignRecipientsTable.outreachContactId,
+                contact.id,
+              ),
+              inArray(earlyAccessCampaignRecipientsTable.status, from),
+            ),
+          );
+      };
+
+      if (effect.kind === "delivered") {
+        await outreachRecipientUpdate(["sent"], "delivered");
+        return;
+      }
+
+      if (effect.kind === "unsubscribe") {
+        if (contact.unsubscribedAt === null) {
+          await tx
+            .update(outreachContactsTable)
+            .set({
+              unsubscribedAt: now,
+              unsubscribeSource: "user",
+              eligibilityStatus: "blocked",
+              eligibilityReason:
+                "Unsubscribed or objected — permanently excluded from marketing.",
+              updatedAt: now,
+            })
+            .where(eq(outreachContactsTable.id, contact.id));
+          await tx.insert(outreachEventsTable).values({
+            contactId: contact.id,
+            kind: "CONTACT_UNSUBSCRIBED",
+            details: { source: "brevo" },
+          });
+        }
+        await tx
+          .insert(outreachSuppressionsTable)
+          .values({
+            emailNormalized: contact.emailNormalized,
+            reason: "unsubscribed",
+            source: "brevo_webhook",
+          })
+          .onConflictDoNothing();
+        await outreachRecipientUpdate(["sent", "delivered"], "unsubscribed");
+        return;
+      }
+
+      if (contact.emailSuppressedAt === null) {
+        await tx
+          .update(outreachContactsTable)
+          .set({
+            emailSuppressedAt: now,
+            emailSuppressionReason: effect.reason,
+            eligibilityStatus: "blocked",
+            eligibilityReason:
+              "Email suppressed (bounce/complaint/block) — cannot be contacted.",
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(outreachContactsTable.id, contact.id),
+              isNull(outreachContactsTable.emailSuppressedAt),
+            ),
+          );
+        await tx.insert(outreachEventsTable).values({
+          contactId: contact.id,
+          kind: "CONTACT_SUPPRESSED",
+          details: { reason: effect.reason, source: "brevo_webhook" },
+        });
+      }
+      await tx
+        .insert(outreachSuppressionsTable)
+        .values({
+          emailNormalized: contact.emailNormalized,
+          reason: effect.reason === "complaint" ? "complaint" : "hard_bounce",
+          source: "brevo_webhook",
+        })
+        .onConflictDoNothing();
+      await outreachRecipientUpdate(
+        ["sent", "delivered"],
+        effect.reason === "complaint" ? "complained" : "bounced",
+      );
+    });
 
     await db.transaction(async (tx) => {
       const [row] = await tx

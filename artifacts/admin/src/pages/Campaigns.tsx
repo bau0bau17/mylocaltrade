@@ -101,9 +101,12 @@ interface CampaignProgress {
   queued: number;
 }
 
+type CampaignAudience = "early_access" | "outreach";
+
 interface Campaign {
   id: number;
   type: CampaignType | string;
+  audience: CampaignAudience | string;
   name: string;
   subject: string;
   previewText: string;
@@ -164,10 +167,16 @@ interface CampaignEvent {
 
 interface AudienceBreakdown {
   eligible: number;
-  excludedConsentMissing: number;
-  excludedConfirmationPending: number;
-  excludedUnsubscribedOrSuppressed: number;
   total: number;
+  // Early Access breakdown fields.
+  excludedConsentMissing?: number;
+  excludedConfirmationPending?: number;
+  excludedUnsubscribedOrSuppressed?: number;
+  // Outreach breakdown fields.
+  excludedBlocked?: number;
+  excludedOnSuppressionList?: number;
+  excludedEarlyAccessDuplicate?: number;
+  excludedByLiveRecheck?: number;
 }
 
 interface CampaignDetailResponse {
@@ -195,6 +204,7 @@ interface CleanupResult {
 
 interface AudienceResponse {
   audience: AudienceBreakdown;
+  audienceKind?: "early_access" | "outreach";
   dailyCap: number;
   estimatedDays: number | null;
   confirmationPhrase: string;
@@ -269,6 +279,23 @@ function TypeBadge({ type }: { type: string }) {
   return (
     <Badge variant="outline" className={cls} data-testid={`badge-type-${type}`}>
       {TYPE_LABELS[type] ?? type}
+    </Badge>
+  );
+}
+
+const AUDIENCE_LABELS: Record<string, string> = {
+  early_access: "Early Access",
+  outreach: "Outreach",
+};
+
+function AudienceBadge({ audience }: { audience: string }) {
+  const cls =
+    audience === "outreach"
+      ? "bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))] border-transparent font-medium"
+      : "bg-muted text-muted-foreground border-transparent font-medium";
+  return (
+    <Badge variant="outline" className={cls} data-testid={`badge-audience-${audience}`}>
+      {AUDIENCE_LABELS[audience] ?? audience}
     </Badge>
   );
 }
@@ -381,6 +408,7 @@ export default function Campaigns() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [newType, setNewType] = useState<CampaignType>("launch");
+  const [newAudience, setNewAudience] = useState<CampaignAudience>("early_access");
   const [newName, setNewName] = useState("");
 
   const { data, isLoading, error } = useQuery({
@@ -390,7 +418,7 @@ export default function Campaigns() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (input: { type: CampaignType; name: string }) =>
+    mutationFn: (input: { type: CampaignType; audience: CampaignAudience; name: string }) =>
       api<{ campaign: Campaign }>("/api/admin/early-access/campaigns", {
         method: "POST",
         body: input,
@@ -467,6 +495,7 @@ export default function Campaigns() {
                   <tr>
                     <th className="text-left px-4 py-2.5 font-medium">Name</th>
                     <th className="text-left px-4 py-2.5 font-medium">Type</th>
+                    <th className="text-left px-4 py-2.5 font-medium">Audience</th>
                     <th className="text-left px-4 py-2.5 font-medium">Status</th>
                     <th className="text-left px-4 py-2.5 font-medium">Progress</th>
                     <th className="text-left px-4 py-2.5 font-medium">Created</th>
@@ -482,6 +511,7 @@ export default function Campaigns() {
                     >
                       <td className="px-4 py-3 font-medium">{row.name || "—"}</td>
                       <td className="px-4 py-3"><TypeBadge type={row.type} /></td>
+                      <td className="px-4 py-3"><AudienceBadge audience={row.audience} /></td>
                       <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
                       <td className="px-4 py-3 tabular-nums" data-testid={`progress-campaign-${row.id}`}>
                         {row.progress.sent} / {row.progress.total}
@@ -519,6 +549,22 @@ export default function Campaigns() {
               </Select>
             </div>
             <div className="space-y-1.5">
+              <Label>Audience</Label>
+              <Select value={newAudience} onValueChange={(v) => setNewAudience(v as CampaignAudience)}>
+                <SelectTrigger data-testid="select-new-audience"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="early_access">Early Access list</SelectItem>
+                  <SelectItem value="outreach">Outreach contacts</SelectItem>
+                </SelectContent>
+              </Select>
+              {newAudience === "outreach" && (
+                <p className="text-xs text-muted-foreground">
+                  Sends only to imported contacts with a valid lawful route. Eligibility is
+                  re-checked at queue time and again before every batch.
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="new-name">Internal name</Label>
               <Input
                 id="new-name"
@@ -534,7 +580,7 @@ export default function Campaigns() {
               Cancel
             </Button>
             <Button
-              onClick={() => createMutation.mutate({ type: newType, name: newName.trim() })}
+              onClick={() => createMutation.mutate({ type: newType, audience: newAudience, name: newName.trim() })}
               disabled={createMutation.isPending || !newName.trim()}
               data-testid="button-create-campaign"
             >
@@ -929,6 +975,7 @@ export function CampaignDetail({ id }: { id: number }) {
           <div className="flex items-center gap-2 mt-1 flex-wrap">
             <h1 className="text-2xl font-semibold" data-testid="text-campaign-name">{campaign.name}</h1>
             <TypeBadge type={campaign.type} />
+            <AudienceBadge audience={campaign.audience} />
             <StatusBadge status={campaign.status} />
           </div>
         </div>
@@ -1147,7 +1194,8 @@ export function CampaignDetail({ id }: { id: number }) {
             </div>
             {data.audience && (
               <div className="text-xs text-muted-foreground" data-testid="audience-preview">
-                {data.audience.eligible} eligible of {data.audience.total} registrations.
+                {data.audience.eligible} eligible of {data.audience.total}{" "}
+                {campaign.audience === "outreach" ? "outreach contacts" : "registrations"}.
               </div>
             )}
           </CardContent>
@@ -1330,6 +1378,7 @@ export function CampaignDetail({ id }: { id: number }) {
             <div className="space-y-4 text-slate-900">
               <div className="rounded-md border bg-slate-50 p-3 space-y-2 text-sm">
                 <SummaryRow label="Type" value={TYPE_LABELS[campaign.type] ?? campaign.type} />
+                <SummaryRow label="Audience" value={AUDIENCE_LABELS[campaign.audience] ?? campaign.audience} />
                 <SummaryRow label="Subject" value={campaign.subject || "—"} />
                 <SummaryRow label="Preview text" value={campaign.previewText || "—"} />
                 <SummaryRow label="CTA" value={`${campaign.ctaLabel || "—"} → ${campaign.ctaUrl || "—"}`} />
@@ -1340,9 +1389,21 @@ export function CampaignDetail({ id }: { id: number }) {
                   <span>Eligible recipients</span>
                   <span className="tabular-nums" data-testid="queue-eligible">{queueAudience.audience.eligible}</span>
                 </div>
-                <SummaryRow label="No consent for this email type" value={String(queueAudience.audience.excludedConsentMissing)} />
-                <SummaryRow label="Confirmation still pending" value={String(queueAudience.audience.excludedConfirmationPending)} />
-                <SummaryRow label="Unsubscribed or suppressed" value={String(queueAudience.audience.excludedUnsubscribedOrSuppressed)} />
+                {queueAudience.audienceKind === "outreach" ? (
+                  <>
+                    <SummaryRow label="Blocked (no lawful route)" value={String(queueAudience.audience.excludedBlocked ?? 0)} />
+                    <SummaryRow label="Unsubscribed or suppressed" value={String(queueAudience.audience.excludedUnsubscribedOrSuppressed ?? 0)} />
+                    <SummaryRow label="On permanent suppression list" value={String(queueAudience.audience.excludedOnSuppressionList ?? 0)} />
+                    <SummaryRow label="Already on Early Access list" value={String(queueAudience.audience.excludedEarlyAccessDuplicate ?? 0)} />
+                    <SummaryRow label="Failed live evidence re-check" value={String(queueAudience.audience.excludedByLiveRecheck ?? 0)} />
+                  </>
+                ) : (
+                  <>
+                    <SummaryRow label="No consent for this email type" value={String(queueAudience.audience.excludedConsentMissing ?? 0)} />
+                    <SummaryRow label="Confirmation still pending" value={String(queueAudience.audience.excludedConfirmationPending ?? 0)} />
+                    <SummaryRow label="Unsubscribed or suppressed" value={String(queueAudience.audience.excludedUnsubscribedOrSuppressed ?? 0)} />
+                  </>
+                )}
                 <div className="border-t border-slate-200 pt-2">
                   <SummaryRow label="Daily cap" value={String(queueAudience.dailyCap)} />
                   <SummaryRow

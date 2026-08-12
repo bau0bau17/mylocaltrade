@@ -271,6 +271,8 @@ export type BrevoBatchContact = {
   firstName: string;
   /** Signed unsubscribe token → per-recipient visible unsubscribe link. */
   unsubscribeToken: string;
+  /** Outreach only: per-recipient recorded source (OC_SOURCE attribute). */
+  sourceNote?: string;
 };
 
 /**
@@ -291,6 +293,9 @@ export async function upsertContactsIntoList(
         attributes: {
           FIRSTNAME: contact.firstName,
           EA_UNSUB_TOKEN: contact.unsubscribeToken,
+          // Outreach only: per-recipient "how we obtained your details"
+          // source shown in the legally required transparency footer.
+          ...(contact.sourceNote ? { OC_SOURCE: contact.sourceNote } : {}),
         },
       },
     });
