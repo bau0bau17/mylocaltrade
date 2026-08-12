@@ -226,6 +226,8 @@ const STATUS_LABELS: Record<string, string> = {
   queued: "Queued",
   sending: "Sending",
   waiting_quota: "Waiting for quota",
+  waiting_rate_limit: "Waiting for rate-limit reset",
+  needs_attention: "Needs attention",
   paused: "Paused",
   completed: "Completed",
   partially_failed: "Finished with failures",
@@ -240,6 +242,12 @@ const WAITING_QUOTA_EXPLAINER =
 
 const RECOVERED_ASSUMED_SENT_NOTE =
   "Assumed sent — send request failed mid-flight; recipients were conservatively marked sent and will never be re-emailed. Verify in Brevo.";
+
+const WAITING_RATE_LIMIT_EXPLAINER =
+  "Brevo's API rate limit was hit — this is request throttling, NOT credit exhaustion. Retry in a few minutes with Send next batch.";
+
+const NEEDS_ATTENTION_EXPLAINER =
+  "Brevo rejected the campaign configuration or the API key. Fix the reported issue, then press Send next batch — automatic waiting will not fix this.";
 
 const EVENT_LABELS: Record<string, string> = {
   CAMPAIGN_CREATED: "Campaign created",
@@ -280,8 +288,8 @@ function StatusBadge({ status }: { status: CampaignStatus }) {
   if (status === "completed") cls = successClass;
   else if (status === "sending") cls = infoClass;
   else if (status === "queued") cls = infoClass;
-  else if (status === "waiting_quota" || status === "paused") cls = warnClass;
-  else if (status === "partially_failed") cls = destructiveClass;
+  else if (status === "waiting_quota" || status === "waiting_rate_limit" || status === "paused") cls = warnClass;
+  else if (status === "partially_failed" || status === "needs_attention") cls = destructiveClass;
   else if (status === "cancelled") cls = mutedClass;
   else if (status === "draft") cls = mutedClass;
 
@@ -765,11 +773,20 @@ export function CampaignDetail({ id }: { id: number }) {
           err.details && typeof err.details === "object" && "code" in err.details
             ? String((err.details as { code: unknown }).code)
             : undefined;
-        if (err.status === 429 && code === "brevo_credits") {
-          // Brevo rejected for lack of credits — nothing sent, queue preserved.
-          // Show the server's message verbatim (it explains the situation).
+        const verbatimCodes = [
+          "brevo_credits",
+          "brevo_rate_limited",
+          "brevo_auth",
+          "brevo_invalid",
+        ];
+        if (code && verbatimCodes.includes(code)) {
+          // Brevo rejected the send (credits / rate limit / auth / invalid config)
+          // — nothing sent, queue preserved. Show the server's message verbatim.
           title = "Brevo rejected the send";
-          description = err.message;
+          description =
+            err.details && typeof err.details === "object" && "message" in err.details
+              ? String((err.details as { message: unknown }).message)
+              : err.message;
         } else if (err.status === 429) {
           title = "Daily quota exhausted";
           description = "Daily quota exhausted — continue tomorrow.";
@@ -855,12 +872,22 @@ export function CampaignDetail({ id }: { id: number }) {
   const showSendingControls =
     status === "queued" ||
     status === "waiting_quota" ||
+    status === "waiting_rate_limit" ||
+    status === "needs_attention" ||
     status === "sending" ||
     status === "paused";
-  const canPause = status === "queued" || status === "waiting_quota";
+  const canPause =
+    status === "queued" ||
+    status === "waiting_quota" ||
+    status === "waiting_rate_limit" ||
+    status === "needs_attention";
   const canResume = status === "paused";
   const canSendBatch =
-    status === "queued" || status === "waiting_quota" || status === "sending";
+    status === "queued" ||
+    status === "waiting_quota" ||
+    status === "waiting_rate_limit" ||
+    status === "needs_attention" ||
+    status === "sending";
 
   const confirmationPhrase = queueAudience?.confirmationPhrase ?? "";
   const phraseMatches = confirmationText === confirmationPhrase && !!confirmationPhrase;
@@ -915,6 +942,42 @@ export function CampaignDetail({ id }: { id: number }) {
           data-testid="notice-waiting-quota"
         >
           <AlertDescription>{WAITING_QUOTA_EXPLAINER}</AlertDescription>
+        </Alert>
+      )}
+
+      {campaign.status === "waiting_rate_limit" && (
+        <Alert
+          className="border-transparent bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))]"
+          data-testid="notice-waiting-rate-limit"
+        >
+          <AlertDescription>{WAITING_RATE_LIMIT_EXPLAINER}</AlertDescription>
+        </Alert>
+      )}
+
+      {campaign.status === "needs_attention" && (
+        <Alert variant="destructive" data-testid="notice-needs-attention">
+          <AlertDescription>
+            <div>{NEEDS_ATTENTION_EXPLAINER}</div>
+            {(() => {
+              const lastFailed = [...data.batches]
+                .reverse()
+                .find((b) => b.status === "failed" && b.statusDetail);
+              if (!lastFailed?.statusDetail) return null;
+              return (
+                <div className="mt-2">
+                  <div className="text-xs font-medium uppercase tracking-wide mb-1">
+                    Brevo's reason
+                  </div>
+                  <pre
+                    className="text-xs font-mono whitespace-pre-wrap bg-[hsl(var(--muted))] text-muted-foreground rounded px-2 py-1.5"
+                    data-testid="needs-attention-reason"
+                  >
+                    {lastFailed.statusDetail}
+                  </pre>
+                </div>
+              );
+            })()}
+          </AlertDescription>
         </Alert>
       )}
 

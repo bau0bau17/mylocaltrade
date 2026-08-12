@@ -538,11 +538,15 @@ router.post("/admin/early-access/campaigns/:id/send-batch", async (req, res) => 
     const status =
       result.code === "not_found"
         ? 404
-        : result.code === "quota_exhausted" || result.code === "brevo_credits"
+        : result.code === "quota_exhausted" ||
+            result.code === "brevo_credits" ||
+            result.code === "brevo_rate_limited"
           ? 429
-          : result.code === "brevo_error" || result.code === "needs_recovery_review"
-            ? 502
-            : 409;
+          : result.code === "brevo_invalid" || result.code === "brevo_auth"
+            ? 422
+            : result.code === "brevo_error" || result.code === "needs_recovery_review"
+              ? 502
+              : 409;
     res.status(status).json(result);
     return;
   }
@@ -576,7 +580,7 @@ router.post("/admin/early-access/campaigns/:id/pause", async (req, res) => {
   const authReq = req as unknown as AuthenticatedRequest;
   const updated = await transition({
     id: Number(req.params.id),
-    from: ["queued", "waiting_quota"],
+    from: ["queued", "waiting_quota", "waiting_rate_limit", "needs_attention"],
     to: "paused",
     kind: "CAMPAIGN_PAUSED",
     performedBy: authReq.userId,
@@ -613,7 +617,14 @@ router.post("/admin/early-access/campaigns/:id/cancel", async (req, res) => {
     const [campaign] = await tx.select().from(c).where(eq(c.id, id)).for("update");
     if (!campaign) return { status: 404 as const, error: "Campaign not found." };
     if (
-      !["draft", "queued", "waiting_quota", "paused"].includes(campaign.status)
+      ![
+        "draft",
+        "queued",
+        "waiting_quota",
+        "waiting_rate_limit",
+        "needs_attention",
+        "paused",
+      ].includes(campaign.status)
     ) {
       return {
         status: 409 as const,

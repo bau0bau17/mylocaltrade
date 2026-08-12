@@ -1,0 +1,99 @@
+Before production, perform one final narrowly scoped verification/fix. Do not redesign or expand the campaign system.
+
+The hardening report currently states that every explicit Brevo 4xx response is treated as `waiting_quota`. That classification is too broad.
+
+1. CLASSIFY BREVO FAILURES CORRECTLY
+
+Implement and test distinct handling for:
+
+- `not_enough_credits` or confirmed account-credit exhaustion:
+  - `WAITING_FOR_QUOTA`
+  - Recipients remain safely queued
+  - Retry allowed after quota reset or plan upgrade
+
+- HTTP 429:
+  - `WAITING_FOR_RATE_LIMIT`
+  - Respect `Retry-After` or Brevo rate-limit reset information where available
+  - Do not describe this as daily/monthly credit exhaustion
+
+- HTTP 400/422 or confirmed validation failure:
+  - Permanent configuration/content failure
+  - Do not retry automatically every day
+  - Show the actionable Brevo error safely in Admin without exposing secrets or recipient data
+
+- HTTP 401/403:
+  - Authentication/permission/configuration failure
+  - Do not mark as quota exhaustion
+  - Admin must clearly say that the Brevo API key or permissions require correction
+
+- HTTP 404:
+  - Reconcile the missing remote list/campaign safely
+  - Recreate only when it cannot duplicate a send
+  - Otherwise require manual review
+
+- HTTP 409/duplicate/conflict:
+  - Reconcile with the stored Brevo IDs
+  - Never create or send a duplicate campaign
+
+- Explicit successful send:
+  - Mark normally
+
+- Ambiguous timeout/network loss/5xx after the send command may have reached Brevo:
+  - Preserve the conservative no-resend/assumed-sent behaviour
+  - Clearly mark it for manual verification in Brevo
+
+Do not expose raw Brevo response bodies if they contain private data.
+
+2. VERIFY UNSUBSCRIBE CONTENT
+
+Inspect the actual final HTML and plain-text content sent for both:
+
+- Launch Announcement
+- Marketing Campaign
+
+Confirm with tests that every real recipient email contains:
+
+- A valid personal unsubscribe link
+- MyLocalTrade identity
+- Privacy Policy link
+- Valid contact information
+- The intended CTA
+- No other recipient’s identifier or unsubscribe token
+
+Verify whether Brevo automatically provides the appropriate `List-Unsubscribe`/one-click unsubscribe headers for these Marketing Campaign API sends.
+
+If it does, document the evidence and ensure Brevo unsubscribe webhook events synchronise locally.
+
+If it does not, implement the appropriate supported mechanism without weakening the existing scanner-safe visible unsubscribe page.
+
+3. ADMIN STATUS
+
+Admin must distinguish clearly between:
+
+- Waiting for account quota
+- Waiting for API rate-limit reset
+- Invalid campaign content/configuration
+- Brevo authentication/permission failure
+- Remote-resource conflict/missing resource
+- Ambiguous assumed-sent outcome
+
+Do not show all these cases as `waiting_quota`.
+
+4. VERIFICATION
+
+Add focused tests for each classification and the final rendered email content.
+
+Run the relevant API/Admin tests and typechecks. Verify zero real Brevo calls and zero real email sends.
+
+Do not deploy, publish, apply production schema, change secrets, enable marketing, run EAS/TestFlight or perform my Git sync.
+
+Commit and push any required correction, then report:
+
+1. Commit hash
+2. Final Brevo error-classification table
+3. Admin status shown for each case
+4. Unsubscribe link/header verification
+5. Tests and review results
+6. Whether production setup instructions changed
+
+Stop after the report.

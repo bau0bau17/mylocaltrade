@@ -49,11 +49,21 @@ export class BrevoMarketingDisabledError extends Error {
 export class BrevoApiError extends Error {
   readonly status: number;
   readonly brevoCode: string | null;
-  constructor(opts: { method: string; path: string; status: number; brevoCode: string | null; message: string }) {
+  /** Parsed Retry-After (seconds), when Brevo sent one on a 429. */
+  readonly retryAfterSeconds: number | null;
+  constructor(opts: {
+    method: string;
+    path: string;
+    status: number;
+    brevoCode: string | null;
+    message: string;
+    retryAfterSeconds?: number | null;
+  }) {
     super(`Brevo ${opts.method} ${opts.path} → ${opts.status}: ${opts.message}`);
     this.name = "BrevoApiError";
     this.status = opts.status;
     this.brevoCode = opts.brevoCode;
+    this.retryAfterSeconds = opts.retryAfterSeconds ?? null;
   }
   /** The request was definitively refused — nothing can have been sent. */
   get definiteRejection(): boolean {
@@ -62,6 +72,73 @@ export class BrevoApiError extends Error {
   /** Brevo's explicit out-of-credits rejection (daily or monthly plan cap). */
   get insufficientCredits(): boolean {
     return this.brevoCode === "not_enough_credits";
+  }
+}
+
+/**
+ * Failure taxonomy for explicit Brevo rejections. Every kind except
+ * `ambiguous` means the request was REFUSED — nothing was sent.
+ *
+ * - credits:    account out of email credits → wait for reset/plan upgrade.
+ * - rate_limit: API request throttling (HTTP 429) — NOT credit exhaustion;
+ *               retry after `retryAfterSeconds` (or shortly).
+ * - auth:       401/403 — API key or permissions need correcting. Retrying
+ *               without a config fix cannot succeed.
+ * - validation: 400/422 (or other 4xx) — campaign content/configuration was
+ *               rejected. Permanent until an admin fixes it; never worth
+ *               blind daily retries.
+ * - missing:    404 — the remote list/campaign does not exist, so it cannot
+ *               have been sent; safe to rebuild on the next attempt.
+ * - conflict:   409/duplicate — the remote object may already be processing;
+ *               MUST be treated like an ambiguous send (never recreate or
+ *               resend automatically).
+ * - ambiguous:  network loss / timeout / 5xx — the request may have reached
+ *               Brevo; conservative assumed-sent handling applies.
+ */
+export type BrevoFailureKind =
+  | "credits"
+  | "rate_limit"
+  | "auth"
+  | "validation"
+  | "missing"
+  | "conflict"
+  | "ambiguous";
+
+/**
+ * Scrub untrusted Brevo response text before it is persisted (batch
+ * statusDetail) or shown to an admin: Brevo validation/contact errors can
+ * echo a recipient email address back. Never propagate addresses.
+ */
+export function scrubBrevoMessage(message: string): string {
+  return message.replace(
+    /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,
+    "[email]",
+  );
+}
+
+export function classifyBrevoError(err: unknown): {
+  kind: BrevoFailureKind;
+  retryAfterSeconds: number | null;
+} {
+  if (!(err instanceof BrevoApiError) || !err.definiteRejection) {
+    return { kind: "ambiguous", retryAfterSeconds: null };
+  }
+  if (err.insufficientCredits) {
+    return { kind: "credits", retryAfterSeconds: null };
+  }
+  switch (err.status) {
+    case 429:
+      return { kind: "rate_limit", retryAfterSeconds: err.retryAfterSeconds };
+    case 401:
+    case 403:
+      return { kind: "auth", retryAfterSeconds: null };
+    case 404:
+      return { kind: "missing", retryAfterSeconds: null };
+    case 409:
+      return { kind: "conflict", retryAfterSeconds: null };
+    default:
+      // 400/422 and any other explicit 4xx: content/config rejection.
+      return { kind: "validation", retryAfterSeconds: null };
   }
 }
 
@@ -122,6 +199,11 @@ async function brevoFetch<T>(
     } catch {
       /* non-JSON error body */
     }
+    const retryAfterRaw = res.headers.get("retry-after");
+    const retryAfterSeconds =
+      retryAfterRaw && /^\d+$/.test(retryAfterRaw.trim())
+        ? Number.parseInt(retryAfterRaw.trim(), 10)
+        : null;
     // Never include the request body (could carry recipient emails) or key.
     throw new BrevoApiError({
       method: init?.method ?? "GET",
@@ -129,6 +211,7 @@ async function brevoFetch<T>(
       status: res.status,
       brevoCode,
       message,
+      retryAfterSeconds,
     });
   }
   if (res.status === 204) return undefined as T;

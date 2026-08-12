@@ -59,6 +59,7 @@ import {
 import {
   billingPeriodStart,
   effectiveDailyCap,
+  renderCampaignEmail,
   sendAllowanceModel,
 } from "../lib/early-access-campaigns";
 import {
@@ -230,6 +231,16 @@ beforeEach(async () => {
     // (Same pattern as the other early-access suites.)
     // eslint-disable-next-line drizzle/enforce-delete-with-where
     (await import("drizzle-orm")).sql`DELETE FROM rate_limit_hits WHERE key LIKE 'early-access%' OR key LIKE 'brevo-webhook%'`,
+  );
+});
+
+beforeEach(async () => {
+  // The suite now issues more admin requests than the global per-IP API
+  // limiter (120/min) allows in one run; reset its counter between tests so
+  // request volume never masquerades as a test failure.
+  await db.execute(
+    // eslint-disable-next-line drizzle/enforce-delete-with-where
+    (await import("drizzle-orm")).sql`DELETE FROM rate_limit_hits WHERE key LIKE 'api%'`,
   );
 });
 
@@ -1139,6 +1150,223 @@ describe("Phase 2B hardening", () => {
     expect(detail.body.quota.allowance.sourceNote).toMatch(/Brevo's dashboard/);
     expect(detail.body.testSendDailyLimitGlobal).toBeGreaterThan(0);
   });
+});
+
+describe("Brevo failure classification", () => {
+  const brevoError = (
+    status: number,
+    opts: { brevoCode?: string | null; message?: string; retryAfterSeconds?: number } = {},
+  ) =>
+    new BrevoApiError({
+      method: "POST",
+      path: "/emailCampaigns/999/sendNow",
+      status,
+      brevoCode: opts.brevoCode ?? null,
+      message: opts.message ?? "rejected",
+      retryAfterSeconds: opts.retryAfterSeconds ?? null,
+    });
+
+  async function queuedCampaign(label: string) {
+    statusMock.mockReturnValue({ enabled: true });
+    await seedRegistration(label);
+    const id = await createDraft({ name: `${label} ${SUFFIX}` });
+    await queueCampaign(id);
+    return id;
+  }
+  const sendBatch = (id: number) =>
+    request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/send-batch`)
+      .set("Authorization", `Bearer ${adminToken}`);
+  const campaignRow = async (id: number) =>
+    (
+      await db
+        .select()
+        .from(earlyAccessCampaignsTable)
+        .where(eq(earlyAccessCampaignsTable.id, id))
+    )[0];
+
+  it("HTTP 429 → waiting_rate_limit with Retry-After, never described as credit exhaustion", async () => {
+    const id = await queuedCampaign("rate-limit");
+    sendNowMock.mockRejectedValueOnce(brevoError(429, { retryAfterSeconds: 42 }));
+    const res = await sendBatch(id);
+    expect(res.status).toBe(429);
+    expect(res.body.code).toBe("brevo_rate_limited");
+    expect(res.body.message).toContain("42 seconds");
+    // Explicitly disclaims quota exhaustion instead of being mistaken for it.
+    expect(res.body.message).toContain("NOT daily/monthly credit exhaustion");
+    expect(res.body.message).not.toMatch(/not enough email credits|allowance resets/i);
+    expect((await campaignRow(id)).status).toBe("waiting_rate_limit");
+    // Nothing sent; never-sent draft cleaned; retry from this status works.
+    expect(deleteCampaignMock).toHaveBeenCalledWith(999);
+    const retry = await sendBatch(id);
+    expect(retry.status).toBe(200);
+    expect((await campaignRow(id)).status).toBe("completed");
+  });
+
+  it("HTTP 401/403 → needs_attention, admin told to fix the API key, not quota", async () => {
+    const id = await queuedCampaign("auth-fail");
+    sendNowMock.mockRejectedValueOnce(brevoError(401, { message: "Key not found" }));
+    const res = await sendBatch(id);
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("brevo_auth");
+    expect(res.body.message).toMatch(/API key/i);
+    expect(res.body.message).not.toMatch(/quota|credit/i);
+    const row = await campaignRow(id);
+    expect(row.status).toBe("needs_attention");
+    const [batch] = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.campaignId, id));
+    expect(batch.status).toBe("failed");
+    expect(batch.statusDetail).toContain("brevo_auth");
+  });
+
+  it("HTTP 400/422 → needs_attention with Brevo's actionable reason, no auto-retry status", async () => {
+    const id = await queuedCampaign("invalid-content");
+    sendNowMock.mockRejectedValueOnce(
+      brevoError(400, { message: "sender email not validated" }),
+    );
+    const res = await sendBatch(id);
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("brevo_invalid");
+    expect(res.body.message).toContain("sender email not validated");
+    expect((await campaignRow(id)).status).toBe("needs_attention");
+    // Queue preserved for after the fix.
+    const [recip] = await db
+      .select()
+      .from(earlyAccessCampaignRecipientsTable)
+      .where(eq(earlyAccessCampaignRecipientsTable.campaignId, id));
+    expect(recip.status).toBe("queued");
+  });
+
+  it("HTTP 404 → provably unsent: released to queued, next send safely rebuilds", async () => {
+    const id = await queuedCampaign("gone-remote");
+    sendNowMock.mockRejectedValueOnce(brevoError(404, { message: "campaign not found" }));
+    const res = await sendBatch(id);
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe("brevo_error");
+    expect(res.body.message).toContain("cannot have been sent");
+    expect((await campaignRow(id)).status).toBe("queued");
+    const retry = await sendBatch(id);
+    expect(retry.status).toBe(200);
+    expect(sendNowMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("scrubs recipient email addresses out of Brevo error text (statusDetail + admin message)", async () => {
+    const id = await queuedCampaign("pii-scrub");
+    sendNowMock.mockRejectedValueOnce(
+      brevoError(400, { message: "Invalid contact somebody@example.com in list" }),
+    );
+    const res = await sendBatch(id);
+    expect(res.status).toBe(422);
+    expect(res.body.message).not.toContain("somebody@example.com");
+    expect(res.body.message).toContain("[email]");
+    const [batch] = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.campaignId, id));
+    expect(batch.statusDetail).not.toContain("somebody@example.com");
+    expect(batch.statusDetail).toContain("[email]");
+  });
+
+  it("holds a session advisory lock across the remote phase — a concurrent send gets 409, never a duplicate", async () => {
+    const id = await queuedCampaign("live-worker-race");
+    sendNowMock.mockClear();
+    createCampaignMock.mockClear();
+    // Worker A stalls INSIDE the remote phase (slow sendNow) — far beyond
+    // any reservation tx. Worker B must be refused while A is alive, no
+    // matter how long A takes.
+    let releaseA: () => void = () => undefined;
+    sendNowMock.mockImplementationOnce(
+      () => new Promise<undefined>((resolve) => {
+        releaseA = () => resolve(undefined);
+      }),
+    );
+    // supertest only dispatches when then()/end() is called — start A now.
+    const workerA = sendBatch(id).then((r) => r);
+    // Give A time to acquire the lock and reach sendNow.
+    await vi.waitFor(() => expect(sendNowMock).toHaveBeenCalledTimes(1));
+    const workerB = await sendBatch(id);
+    expect(workerB.status).toBe(409);
+    expect(workerB.body.code).toBe("in_progress");
+    releaseA();
+    const resA = await workerA;
+    expect(resA.status).toBe(200);
+    // Exactly one Brevo campaign, one send.
+    expect(createCampaignMock).toHaveBeenCalledTimes(1);
+    expect(sendNowMock).toHaveBeenCalledTimes(1);
+    expect((await campaignRow(id)).status).toBe("completed");
+  });
+
+  it("HTTP 409 conflict on sendNow → ambiguous: draft kept, held for manual review, assumed-sent (never resent)", async () => {
+    const id = await queuedCampaign("conflict-send");
+    deleteCampaignMock.mockClear();
+    sendNowMock.mockClear();
+    sendNowMock.mockRejectedValueOnce(brevoError(409, { message: "campaign already queued" }));
+    const res = await sendBatch(id);
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe("needs_recovery_review");
+    expect(res.body.message).toMatch(/conflict/i);
+    // Never delete or recreate a possibly-processing campaign.
+    expect(deleteCampaignMock).not.toHaveBeenCalled();
+    const [batch] = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.campaignId, id));
+    expect(batch.status).toBe("pending");
+    expect(batch.brevoCampaignId).toBe(999);
+    // Next run: conservative assumed-sent, sendNow NOT called again.
+    const next = await sendBatch(id);
+    expect(next.status).toBe(200);
+    expect(sendNowMock).toHaveBeenCalledTimes(1);
+    const [recip] = await db
+      .select()
+      .from(earlyAccessCampaignRecipientsTable)
+      .where(eq(earlyAccessCampaignRecipientsTable.campaignId, id));
+    expect(recip.status).toBe("sent");
+    expect(recip.statusDetail).toBe("recovered_assumed_sent");
+  });
+});
+
+describe("rendered campaign email content", () => {
+  const baseCampaign = {
+    subject: "Big news from MyLocalTrade",
+    previewText: "A quick update",
+    heading: "We have news",
+    bodyText: "Hello!\n\nSomething exciting is coming.",
+    ctaLabel: "Get the app",
+    ctaUrl: "https://mylocaltrade.co.uk/open/app",
+  };
+
+  for (const type of ["launch", "marketing"] as const) {
+    it(`${type} email: personal unsubscribe, identity, privacy, contact, CTA — and no recipient data`, () => {
+      const { html, text } = renderCampaignEmail(
+        { ...baseCampaign, type },
+        { brevoMergeTags: true },
+      );
+      for (const body of [html, text]) {
+        // Personal unsubscribe link via Brevo per-contact merge attribute —
+        // each recipient gets ONLY their own token substituted at send time.
+        expect(body).toContain(
+          "https://mylocaltrade.co.uk/unsubscribe?token={{ contact.EA_UNSUB_TOKEN }}",
+        );
+        expect(body).toContain("MyLocalTrade");
+        expect(body).toContain("https://mylocaltrade.co.uk/privacy-policy");
+        expect(body).toContain("https://mylocaltrade.co.uk/contact");
+        expect(body).toContain(baseCampaign.ctaUrl);
+        expect(body).toContain("Service Provider LTD");
+        // No pre-substituted recipient identifier or token can appear in the
+        // shared template (tokens are versioned "u1." strings).
+        expect(body).not.toContain("u1.");
+        expect(body).not.toMatch(/@[a-z0-9-]+\.(com|co\.uk)/i);
+      }
+      expect(html).toContain(baseCampaign.ctaLabel);
+      // Brevo's native tag keeps their automatic List-Unsubscribe /
+      // one-click header support intact (HTML only; headers are added by
+      // Brevo for all campaign emails).
+      expect(html).toContain("{{ unsubscribe }}");
+    });
+  }
 });
 
 describe("public form respects deliverability suppression", () => {

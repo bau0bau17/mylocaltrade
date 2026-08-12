@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import {
   earlyAccessRegistrationsTable,
   earlyAccessCampaignsTable,
@@ -12,6 +12,9 @@ import {
   BREVO_LIST_NAMES,
   BrevoApiError,
   BrevoMarketingDisabledError,
+  classifyBrevoError,
+  scrubBrevoMessage,
+  type BrevoFailureKind,
   createBatchList,
   createCampaign,
   deleteCampaign,
@@ -51,7 +54,71 @@ import { buildUnsubscribeToken } from "./early-access-unsubscribe";
 
 export type BatchRunResult =
   | { ok: true; batchNumber: number; attempted: number; sent: number; skipped: number; failed: number; remaining: number; campaignStatus: string }
-  | { ok: false; code: "not_found" | "bad_status" | "in_progress" | "quota_exhausted" | "brevo_credits" | "brevo_disabled" | "brevo_error" | "needs_recovery_review"; message: string; campaignStatus?: string };
+  | { ok: false; code: "not_found" | "bad_status" | "in_progress" | "quota_exhausted" | "brevo_credits" | "brevo_rate_limited" | "brevo_auth" | "brevo_invalid" | "brevo_disabled" | "brevo_error" | "needs_recovery_review"; message: string; campaignStatus?: string };
+
+/**
+ * How each EXPLICIT Brevo refusal parks the campaign. In every case here
+ * nothing was sent and the recipient queue is preserved — the statuses only
+ * differ in what the admin must do next:
+ * - waiting_quota:      wait for credit reset or upgrade the plan.
+ * - waiting_rate_limit: API request throttling — retry shortly. NOT credits.
+ * - needs_attention:    content/config or API-key problem — retrying without
+ *   a fix cannot succeed, so the campaign is NOT left auto-retryable in a
+ *   waiting state.
+ * - queued:             transient/rebuildable (e.g. remote object vanished).
+ */
+const FAILURE_HANDLING: Record<
+  Exclude<BrevoFailureKind, "ambiguous">,
+  {
+    campaignStatus: "queued" | "waiting_quota" | "waiting_rate_limit" | "needs_attention";
+    code: "brevo_credits" | "brevo_rate_limited" | "brevo_auth" | "brevo_invalid" | "brevo_error";
+    buildMessage: (brevoMessage: string, retryAfterSeconds: number | null) => string;
+  }
+> = {
+  credits: {
+    campaignStatus: "waiting_quota",
+    code: "brevo_credits",
+    buildMessage: () =>
+      "Brevo rejected the send: not enough email credits. No email was sent and no recipient was marked sent — the queue is preserved. Retry after the daily/monthly allowance resets (or after upgrading the plan and raising the caps).",
+  },
+  rate_limit: {
+    campaignStatus: "waiting_rate_limit",
+    code: "brevo_rate_limited",
+    buildMessage: (_msg, retryAfterSeconds) =>
+      `Brevo's API rate limit was hit (HTTP 429). This is request throttling, NOT daily/monthly credit exhaustion. Nothing was sent; the queue is preserved. Retry ${
+        retryAfterSeconds !== null
+          ? `after about ${retryAfterSeconds} seconds`
+          : "in a few minutes"
+      } with "Send next batch".`,
+  },
+  auth: {
+    campaignStatus: "needs_attention",
+    code: "brevo_auth",
+    buildMessage: (msg) =>
+      `Brevo refused the request: the API key is invalid or lacks permission. Nothing was sent. Correct the Brevo API key (BREVO_API_KEY_MARKETING) or its permissions in the Brevo dashboard, then press "Send next batch". (${msg})`,
+  },
+  validation: {
+    campaignStatus: "needs_attention",
+    code: "brevo_invalid",
+    buildMessage: (msg) =>
+      `Brevo rejected the campaign content/configuration. Nothing was sent and retrying without a fix cannot succeed. Brevo's reason: ${msg}`,
+  },
+  missing: {
+    campaignStatus: "queued",
+    code: "brevo_error",
+    buildMessage: (msg) =>
+      `The Brevo list/campaign no longer exists (HTTP 404) — so it cannot have been sent. Recipients were returned to the queue; the next "Send next batch" safely rebuilds the Brevo objects. (${msg})`,
+  },
+  // Only reachable BEFORE a Brevo campaign exists (e.g. list-name clash):
+  // nothing can be in flight, so releasing for a plain retry is safe. Once a
+  // campaign exists, a 409 takes the ambiguous assumed-sent path instead.
+  conflict: {
+    campaignStatus: "queued",
+    code: "brevo_error",
+    buildMessage: (msg) =>
+      `Brevo reported a conflict while preparing the batch (before any campaign existed) — nothing was sent. Recipients were returned to the queue; retry with "Send next batch". (${msg})`,
+  },
+};
 
 /**
  * Send lease: a 'pending' batch WITHOUT a Brevo campaign id younger than
@@ -175,7 +242,13 @@ async function finalizeIfDone(
     .where(
       and(
         eq(c.id, campaignId),
-        inArray(c.status, ["sending", "queued", "waiting_quota"]),
+        inArray(c.status, [
+          "sending",
+          "queued",
+          "waiting_quota",
+          "waiting_rate_limit",
+          "needs_attention",
+        ]),
       ),
     );
   await audit(tx, campaignId, "CAMPAIGN_COMPLETED", performedBy, {
@@ -185,7 +258,52 @@ async function finalizeIfDone(
   return status;
 }
 
+/**
+ * Advisory-lock class for campaign sends. One send may run per campaign at a
+ * time, enforced by a SESSION-level Postgres advisory lock held on a
+ * dedicated connection across the ENTIRE run — including the remote Brevo
+ * phase. Unlike the createdAt lease (which guards against zombie HTTP
+ * requests from a worker whose DB session died), the lock is crash-sensitive:
+ * it blocks a second runner for as long as the first worker's session is
+ * alive, no matter how slow it is, and frees automatically the moment the
+ * session dies.
+ */
+const EA_SEND_LOCK_CLASS = 741001;
+
 export async function runCampaignBatch(
+  campaignId: number,
+  performedBy: number,
+): Promise<BatchRunResult> {
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query<{ locked: boolean }>(
+      "SELECT pg_try_advisory_lock($1, $2) AS locked",
+      [EA_SEND_LOCK_CLASS, campaignId],
+    );
+    if (!rows[0]?.locked) {
+      return {
+        ok: false,
+        code: "in_progress",
+        message:
+          "Another send for this campaign is running right now (its worker is still alive). Wait for it to finish, then press \"Send next batch\" again.",
+        campaignStatus: "sending",
+      };
+    }
+    try {
+      return await runCampaignBatchLocked(campaignId, performedBy);
+    } finally {
+      await client
+        .query("SELECT pg_advisory_unlock($1, $2)", [EA_SEND_LOCK_CLASS, campaignId])
+        .catch(() => {
+          /* session teardown releases it regardless */
+        });
+    }
+  } finally {
+    client.release();
+  }
+}
+
+async function runCampaignBatchLocked(
   campaignId: number,
   performedBy: number,
 ): Promise<BatchRunResult> {
@@ -200,7 +318,11 @@ export async function runCampaignBatch(
       .where(eq(c.id, campaignId))
       .for("update");
     if (!campaign) return { error: "not_found" as const };
-    if (!["queued", "waiting_quota", "sending"].includes(campaign.status)) {
+    if (
+      !["queued", "waiting_quota", "waiting_rate_limit", "needs_attention", "sending"].includes(
+        campaign.status,
+      )
+    ) {
       return { error: "bad_status" as const, status: campaign.status };
     }
 
@@ -368,7 +490,11 @@ export async function runCampaignBatch(
   // preserved: rows go back to 'queued' for a safe retry.
   const release = async (
     detail: string,
-    campaignStatus: "queued" | "waiting_quota" = "queued",
+    campaignStatus:
+      | "queued"
+      | "waiting_quota"
+      | "waiting_rate_limit"
+      | "needs_attention" = "queued",
   ): Promise<void> => {
     const now = new Date();
     await db.transaction(async (tx) => {
@@ -476,35 +602,76 @@ export async function runCampaignBatch(
       .where(eq(b.id, batch.id));
     await sendCampaignNow(brevoCampaignId);
   } catch (err) {
-    const message = err instanceof BrevoMarketingDisabledError
-      ? err.message
-      : err instanceof Error
+    // Untrusted Brevo response text is scrubbed of any email addresses
+    // BEFORE it is persisted or surfaced (validation errors can echo a
+    // recipient address back).
+    const message = scrubBrevoMessage(
+      err instanceof BrevoMarketingDisabledError
         ? err.message
-        : "Brevo request failed";
-    const insufficientCredits =
-      err instanceof BrevoApiError && err.insufficientCredits;
-    if (brevoCampaignId === null) {
-      // Nothing could have been sent yet — safe to release and retry.
-      // An explicit out-of-credits rejection parks the campaign in
-      // waiting_quota so the admin sees WHY it stopped.
-      await release(
-        `brevo_error: ${message}`,
-        insufficientCredits ? "waiting_quota" : "queued",
-      );
-      if (insufficientCredits) {
-        await audit(db, campaignId, "BATCH_REJECTED", performedBy, {
-          batchNumber,
-          reason: "not_enough_credits",
-          stage: "before_campaign_creation",
-        });
-        return {
-          ok: false,
-          code: "brevo_credits",
-          message:
-            "Brevo rejected the send: not enough email credits. No email was sent and no recipient was marked sent — the queue is preserved. Retry after the daily/monthly allowance resets (or after upgrading the plan and raising the caps).",
-          campaignStatus: "waiting_quota",
-        };
+        : err instanceof Error
+          ? err.message
+          : "Brevo request failed",
+    );
+    const { kind, retryAfterSeconds } = classifyBrevoError(err);
+
+    // `conflict` (409/duplicate) can mean "already processing" — it MUST be
+    // treated like an ambiguous outcome: never delete the draft, never
+    // recreate, never resend. Same conservative path as network loss/5xx —
+    // but only once a Brevo campaign exists; before creation nothing can be
+    // in flight, so a conflict there is a plain safe-release retry.
+    const ambiguousOutcome =
+      kind === "ambiguous" || (kind === "conflict" && brevoCampaignId !== null);
+
+    if (!ambiguousOutcome) {
+      // Explicit refusal (or 404 = object provably gone): NOTHING was sent.
+      // Clean up the never-sent draft campaign when one exists, release the
+      // recipients back to the queue, and park the campaign in the status
+      // that tells the admin exactly what to do next.
+      let draftCleaned = false;
+      if (brevoCampaignId !== null) {
+        try {
+          await deleteCampaign(brevoCampaignId);
+          draftCleaned = true;
+          if (brevoListId !== null) {
+            await deleteList(brevoListId);
+            await db
+              .update(b)
+              .set({ brevoListDeletedAt: new Date() })
+              .where(eq(b.id, batch.id));
+          }
+        } catch {
+          /* draft cleanup is retried by the orphan-cleanup pass */
+        }
       }
+      // kind !== "ambiguous" here: ambiguousOutcome is false.
+      const failure = FAILURE_HANDLING[kind as Exclude<BrevoFailureKind, "ambiguous">];
+      const status = err instanceof BrevoApiError ? err.status : null;
+      const brevoCode = err instanceof BrevoApiError ? err.brevoCode : null;
+      await release(
+        `brevo_${kind}(${brevoCode ?? status ?? "error"}): ${message}`,
+        failure.campaignStatus,
+      );
+      await audit(db, campaignId, "BATCH_REJECTED", performedBy, {
+        batchNumber,
+        classification: kind,
+        brevoStatus: status,
+        brevoCode,
+        retryAfterSeconds,
+        stage: brevoCampaignId === null ? "before_send" : "send_rejected",
+        draftCleaned,
+      });
+      return {
+        ok: false,
+        code: failure.code,
+        message: failure.buildMessage(message, retryAfterSeconds),
+        campaignStatus: failure.campaignStatus,
+      };
+    }
+
+    if (brevoCampaignId === null) {
+      // Ambiguous failure BEFORE the Brevo campaign existed (list/contact
+      // stage): nothing can have been sent — releasing is provably safe.
+      await release(`brevo_error: ${message}`);
       return {
         ok: false,
         code: "brevo_error",
@@ -512,62 +679,18 @@ export async function runCampaignBatch(
         campaignStatus: "queued",
       };
     }
-    // sendNow was reached. Distinguish DEFINITE rejection from AMBIGUOUS
-    // failure:
-    // - 4xx (incl. not_enough_credits, permission/validation errors, 429):
-    //   Brevo REFUSED the send request — nothing was sent. Deleting the
-    //   never-sent draft campaign is safe and prevents a duplicate Brevo
-    //   campaign on retry; recipients are released for a safe retry.
-    // - network errors / timeouts / 5xx: the send may or may not have
-    //   fired. Batch stays 'pending' with the Brevo id; the next run's
-    //   recovery marks it assumed-sent. Never auto-retried — a duplicate
-    //   email is worse than a skipped batch.
-    if (err instanceof BrevoApiError && err.definiteRejection) {
-      let draftCleaned = false;
-      try {
-        await deleteCampaign(brevoCampaignId);
-        draftCleaned = true;
-        if (brevoListId !== null) {
-          await deleteList(brevoListId);
-          await db
-            .update(b)
-            .set({ brevoListDeletedAt: new Date() })
-            .where(eq(b.id, batch.id));
-        }
-      } catch {
-        /* draft cleanup is retried by the orphan-cleanup pass */
-      }
-      await release(
-        `brevo_rejected(${err.brevoCode ?? err.status}): ${message}`,
-        insufficientCredits ? "waiting_quota" : "queued",
-      );
-      await audit(db, campaignId, "BATCH_REJECTED", performedBy, {
-        batchNumber,
-        brevoStatus: err.status,
-        brevoCode: err.brevoCode,
-        stage: "send_rejected",
-        draftCleaned,
-      });
-      if (insufficientCredits) {
-        return {
-          ok: false,
-          code: "brevo_credits",
-          message:
-            "Brevo rejected the send: not enough email credits. No email was sent and no recipient was marked sent — the queue is preserved. Retry after the daily/monthly allowance resets (or after upgrading the plan and raising the caps).",
-          campaignStatus: "waiting_quota",
-        };
-      }
-      return {
-        ok: false,
-        code: "brevo_error",
-        message: `Brevo refused the send request (nothing was sent); recipients were returned to the queue. (${message})`,
-        campaignStatus: "queued",
-      };
-    }
+    // Ambiguous failure AFTER the campaign existed (timeout/network/5xx on
+    // sendNow, or a 409 conflict): the send may have fired. Batch stays
+    // 'pending' with the Brevo id; the next run's recovery conservatively
+    // marks it assumed-sent. Never auto-retried — a duplicate email is worse
+    // than a skipped batch.
     return {
       ok: false,
       code: "needs_recovery_review",
-      message: `The send request to Brevo failed AFTER the campaign was created — it may still have gone out. The batch is held; pressing "Continue next batch" will mark it as assumed-sent (never resent). Verify in the Brevo dashboard. (${message})`,
+      message:
+        kind === "conflict"
+          ? `Brevo reported a conflict (HTTP 409) — the campaign may already be processing on Brevo's side. The batch is held for manual verification; pressing "Send next batch" will mark it as assumed-sent (never resent). Check the campaign in the Brevo dashboard. (${message})`
+          : `The send request to Brevo failed AFTER the campaign was created — it may still have gone out. The batch is held; pressing "Continue next batch" will mark it as assumed-sent (never resent). Verify in the Brevo dashboard. (${message})`,
       campaignStatus: "sending",
     };
   }

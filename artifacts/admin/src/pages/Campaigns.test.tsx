@@ -545,4 +545,95 @@ describe("Campaign detail page", () => {
     );
     expect(screen.getByTestId("batch-assumed-sent-1")).toHaveTextContent(/Assumed sent/);
   });
+
+  it("labels waiting_rate_limit and shows the throttling explainer", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(detailResponse({ campaign: { status: "waiting_rate_limit" } }));
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    await screen.findByTestId("text-campaign-name");
+    expect(screen.getByTestId("badge-status-waiting_rate_limit")).toHaveTextContent(
+      "Waiting for rate-limit reset",
+    );
+    expect(screen.getByTestId("notice-waiting-rate-limit")).toHaveTextContent(
+      /request throttling, NOT credit exhaustion/,
+    );
+    // Send / Pause / Cancel are all offered.
+    expect(screen.getByTestId("button-send-batch")).toBeInTheDocument();
+    expect(screen.getByTestId("button-pause")).toBeInTheDocument();
+    expect(screen.getByTestId("button-cancel")).toBeInTheDocument();
+  });
+
+  it("labels needs_attention and surfaces the failed batch's Brevo reason", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(
+          detailResponse({
+            campaign: { status: "needs_attention" },
+            batches: [
+              {
+                id: 1,
+                campaignId: 1,
+                batchNumber: 1,
+                recipientCount: 50,
+                status: "failed",
+                sentAt: null,
+                statusDetail: "Key not found (401): invalid API key",
+                createdAt: "2026-01-02T00:00:00.000Z",
+              },
+            ],
+          }),
+        );
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    await screen.findByTestId("text-campaign-name");
+    expect(screen.getByTestId("badge-status-needs_attention")).toHaveTextContent("Needs attention");
+    expect(screen.getByTestId("notice-needs-attention")).toHaveTextContent(
+      /automatic waiting will not fix this/,
+    );
+    expect(screen.getByTestId("needs-attention-reason")).toHaveTextContent(
+      "Key not found (401): invalid API key",
+    );
+    // Send / Pause / Cancel are all offered.
+    expect(screen.getByTestId("button-send-batch")).toBeInTheDocument();
+    expect(screen.getByTestId("button-pause")).toBeInTheDocument();
+    expect(screen.getByTestId("button-cancel")).toBeInTheDocument();
+  });
+
+  it("shows the verbatim message on a brevo_rate_limited 429 and not the credit-exhaustion copy", async () => {
+    const rateMsg =
+      "Brevo throttled the request (429 rate limit). Nothing was sent and the queue is preserved. Retry in a few minutes.";
+    apiMock.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path === "/api/admin/early-access/campaigns/1/send-batch" && init?.method === "POST")
+        return Promise.reject(
+          new ApiError(rateMsg, 429, { code: "brevo_rate_limited", message: rateMsg }),
+        );
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(detailResponse({ campaign: { status: "queued" } }));
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    fireEvent.click(await screen.findByTestId("button-send-batch"));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Brevo rejected the send",
+          description: rateMsg,
+          variant: "destructive",
+        }),
+      ),
+    );
+    // Must NOT surface the generic daily-quota copy.
+    expect(toastMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: "Daily quota exhausted — continue tomorrow.",
+      }),
+    );
+  });
 });
