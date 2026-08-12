@@ -150,6 +150,18 @@ const contactLimiter = rateLimit({
   store: createPgStore("contact"),
 });
 
+// Landing-site "Join Early Access" form: public + sends email, so throttle
+// like the contact form but in its own bucket (one form must not eat the
+// other's allowance).
+const earlyAccessLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many signups from this connection. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createPgStore("early-access"),
+});
+
 const enquiriesLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 30,
@@ -234,6 +246,7 @@ app.use("/api/trader/phone/send-otp", phoneOtpIpLimiter);
 app.use("/api/profile/phone-change/send-otp", phoneOtpIpLimiter);
 app.use("/api/customer/phone/send-otp", phoneOtpIpLimiter);
 app.use("/api/contact", contactLimiter);
+app.use("/api/early-access", earlyAccessLimiter);
 app.use("/api/enquiries", enquiriesLimiter);
 app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);
 app.use(/^\/api\/conversations\/\d+\/report$/, reportsLimiter);

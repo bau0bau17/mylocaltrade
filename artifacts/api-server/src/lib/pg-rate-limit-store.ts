@@ -23,8 +23,21 @@ export class PgRateLimitStore implements Store {
   private readonly keyPrefix: string;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
+  /**
+   * Read by express-rate-limit's `singleCount` validation. Global (non
+   * `localKeys`) stores are grouped by constructor name, so without a public
+   * `prefix` every PgRateLimitStore looks like ONE store to the validator and
+   * any request that passes through two pg-backed limiters (a per-route
+   * limiter + the global /api limiter) logs a false-positive
+   * ERR_ERL_DOUBLE_COUNT ValidationError. The real DB keys are namespaced with
+   * this same prefix, so actual double increments within one limiter are still
+   * caught.
+   */
+  readonly prefix: string;
+
   constructor(keyPrefix: string) {
     this.keyPrefix = keyPrefix;
+    this.prefix = `${keyPrefix}:`;
     this.windowMs = 60 * 1000;
   }
 

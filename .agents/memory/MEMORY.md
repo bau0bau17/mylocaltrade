@@ -46,7 +46,7 @@
 - [Tab-bar-aware bottom padding](tab-bar-aware-bottom-padding.md) — tab bar is absolute; scroll content needs tabBarHeight+insets.bottom padding; exceptions & multi-component hook pitfall inside.
 - [Two suspension mechanisms](account-suspension-two-kinds.md) — users.suspendedAt = account moderation block (messages/enquiries, 403 ACCOUNT_SUSPENDED) vs trader verification SUSPENDED = public listing; never conflate.
 - [Healthcheck must stay DB-free](healthcheck-db-free.md) — GET /api healthcheck must skip the Postgres-backed rate limiter; DB latency otherwise reads as instance-unhealthy "outages". req.originalUrl for /api prefixes.
-- [API test 429 flakiness](test-rate-limit-429-flakiness.md) — rate limits live in shared Postgres; repeated test runs hit 429; test-setup clears rate_limit_hits before each run.
+- [API test shared-DB flakiness](test-rate-limit-429-flakiness.md) — shared dev Postgres: 429s from leftover rate-limit rows + dev-server boot backfill racing test fixtures (23505 in company-jobs); rerun passes.
 - [Mobile dead-session logout](mobile-dead-session-logout.md) — 401 with app session token attached ⇒ forceLogout; getMe check on start/foreground; applyToken sets 10s suppression for rotation races.
 - [Booking lifecycle invariants](booking-lifecycle-invariants.md) — one live booking per conversation (partial unique index); EVERY mutation incl. cancel passes the live-job gate; notify direction rules.
 - [Canonical service/category matching](service-category-matching.md) — one server-side synonym map (expandServiceTerms) for category+search; no per-screen rules, no generic cross-category terms.

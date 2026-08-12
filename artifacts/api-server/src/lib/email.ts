@@ -725,6 +725,146 @@ export async function sendContactEmail(opts: {
   });
 }
 
+const EARLY_ACCESS_TYPE_LABELS: Record<string, string> = {
+  customer: "Customer",
+  trader: "Trader",
+  other: "Other",
+};
+
+/**
+ * Landing-site "Join Early Access" signup → internal notification.
+ * Goes to the noreply@ inbox from the standard sender identity, with
+ * reply-to set to the signer-up so a direct reply reaches them.
+ * Returns the delivery channel so the route can fail loudly when no
+ * transport delivered the lead (there is no DB fallback for this form).
+ */
+export async function sendEarlyAccessNotificationEmail(opts: {
+  name: string;
+  email: string;
+  type: string;
+  town?: string | null;
+  message?: string | null;
+}): Promise<"brevo" | "smtp" | "none" | "skipped"> {
+  const INBOX_EMAIL = "noreply@mylocaltrade.co.uk";
+  const typeLabel = EARLY_ACCESS_TYPE_LABELS[opts.type] ?? opts.type;
+  const safeName = escapeHtml(opts.name);
+  const safeEmail = escapeHtml(opts.email);
+  const safeType = escapeHtml(typeLabel);
+  const safeTown = opts.town?.trim() ? escapeHtml(opts.town.trim()) : "—";
+  const safeMessage = opts.message?.trim() ? escapeHtml(opts.message.trim()) : "";
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Early Access Signup</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
+    <div style="background: #00B4D8; color: #0B1120; padding: 12px 16px; border-radius: 10px; margin-bottom: 24px; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">
+      NEW EARLY ACCESS SIGNUP
+    </div>
+    <div style="text-align: center; margin-bottom: 24px;">
+      <div style="margin-bottom: 12px;">${LOGO_IMG_HTML}</div>
+      <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0 0 6px;">MyLocalTrade</h1>
+      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">Someone joined the early access list on the website</p>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 110px;">Name</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeName}</td></tr>
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Email</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeEmail}</td></tr>
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">I am a</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeType}</td></tr>
+      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Town / area</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeTown}</td></tr>
+    </table>
+    ${safeMessage ? `<hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
+    <p style="color: #E5E7EB; font-size: 15px; line-height: 1.7; white-space: pre-wrap; margin: 0;">${safeMessage}</p>` : ""}
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 24px 0 16px;">
+    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
+      Sent via the mylocaltrade.co.uk early access form · reply goes straight to the signer-up
+    </p>
+  </div>
+</body>
+</html>`;
+  const text = `New early access signup
+
+Name: ${opts.name}
+Email: ${opts.email}
+I am a: ${typeLabel}
+Town / area: ${opts.town?.trim() || "—"}
+${opts.message?.trim() ? `\nMessage:\n${opts.message.trim()}\n` : ""}
+Sent via the mylocaltrade.co.uk early access form.`;
+  return dispatchEmail({
+    category: "contact",
+    to: { email: INBOX_EMAIL },
+    from: { email: FROM_EMAIL, name: FROM_NAME },
+    replyTo: { email: opts.email, name: opts.name },
+    subject: `[EARLY ACCESS] ${sanitizeHeaderValue(opts.name)} (${typeLabel}) joined the list`,
+    html,
+    text,
+    tag: "early-access-notify",
+  });
+}
+
+/**
+ * Confirmation back to the person who signed up, from the standard
+ * "MyLocalTrade <noreply@…>" identity. Best-effort: failure is logged by the
+ * dispatcher and must never fail the signup itself.
+ */
+export async function sendEarlyAccessConfirmationEmail(opts: {
+  toEmail: string;
+  toName: string;
+}): Promise<void> {
+  const safeName = escapeHtml(opts.toName);
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>You're on the list</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <div style="margin-bottom: 16px;">${LOGO_IMG_HTML}</div>
+      <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 8px;">MyLocalTrade</h1>
+      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">You're on the early access list</p>
+    </div>
+    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
+    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+      Thanks for joining early access — you're on the list. We'll email you as soon as
+      MyLocalTrade launches in your area, so you can be among the first in.
+    </p>
+    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+      No action needed from you right now.
+    </p>
+    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
+    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
+      This mailbox isn't monitored — if you need to reach us, use the contact form on mylocaltrade.co.uk.<br><br>
+      Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ
+    </p>
+  </div>
+</body>
+</html>`;
+  const text = `Hi ${opts.toName},
+
+Thanks for joining early access — you're on the list. We'll email you as soon as MyLocalTrade launches in your area, so you can be among the first in.
+
+No action needed from you right now.
+
+This mailbox isn't monitored — if you need to reach us, use the contact form on mylocaltrade.co.uk.
+
+Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ`;
+  await dispatchEmail({
+    category: "contact",
+    to: { email: opts.toEmail, name: opts.toName },
+    from: { email: FROM_EMAIL, name: FROM_NAME },
+    subject: "You're on the MyLocalTrade early access list",
+    html,
+    text,
+    tag: "early-access-confirm",
+  });
+}
+
 const ENQUIRY_PROPERTY_TYPE_LABELS: Record<string, string> = {
   house: "House",
   flat: "Flat",
