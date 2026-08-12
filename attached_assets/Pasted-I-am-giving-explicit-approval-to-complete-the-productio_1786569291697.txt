@@ -1,0 +1,42 @@
+I am giving explicit approval to complete the production rollout now. Treat the manual smoke checks as approved and proceed without waiting for another button or confirmation from me.
+
+Current verified results:
+- Early Access registration and email confirmation worked in production.
+- The confirmed registration appears correctly in Admin with launch and marketing consent history.
+- Campaign create → save → preview → list → reopen works after the route fix.
+- The admin test email was sent successfully through Brevo.
+- The test campaign correctly snapshotted one eligible recipient.
+- No bulk campaign email was sent: Sent = 0, Batches = none, and the test recipient was safely cancelled.
+- The previous “Invalid id” problem is fixed.
+- Production data must be preserved.
+
+Please complete the launch now:
+
+1. Verify that the current production deployment contains commit 9fe4cb7 and that all required Early Access database tables and columns exist.
+2. Verify all required production secrets and daily limits are present and valid.
+3. Configure or verify the Brevo webhook:
+   - URL: https://mylocaltrade.co.uk/api/early-access/brevo-events
+   - Events: delivered, hardBounce, spam, unsubscribed
+   - Authentication header: X-Webhook-Secret using the existing BREVO_WEBHOOK_SECRET
+4. Confirm the webhook endpoint rejects requests with an invalid secret and accepts a valid, non-destructive verification request.
+5. Set the production variable MARKETING_BREVO_ENABLED=true.
+6. Republish the production backend so the setting becomes active.
+7. Perform post-deployment checks without sending a real bulk campaign:
+   - backend is healthy;
+   - Admin Early Access and Campaigns pages load;
+   - the warning that real sending is disabled has disappeared;
+   - existing registrations, consent history and the cancelled smoke campaign remain intact;
+   - no queued or cancelled smoke recipient is automatically sent;
+   - no background job or automatic campaign starts;
+   - unsubscribe and webhook endpoints are healthy;
+   - transactional emails remain operational and the 100-email reserve remains protected.
+8. Do not create or send a real campaign and do not reactivate the cancelled smoke campaign. All future bulk sending must still require my explicit manual action in Admin.
+9. Give me a final production report containing:
+   - deployment status;
+   - confirmation that MARKETING_BREVO_ENABLED is active;
+   - webhook status;
+   - database/data integrity status;
+   - proof that zero bulk emails were sent during activation;
+   - exact rollback steps.
+
+You are authorised to configure the webhook, enable the production flag and republish now. Do not wait for further approval.
