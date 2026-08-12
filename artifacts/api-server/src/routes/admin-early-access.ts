@@ -4,12 +4,33 @@ import {
   earlyAccessRegistrationsTable,
   earlyAccessEventsTable,
 } from "@workspace/db/schema";
-import { and, desc, eq, ilike, isNull, isNotNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ilike, isNull, isNotNull, lte, or, sql } from "drizzle-orm";
 import { authMiddleware, adminOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { CONSENT_WORDING_BY_VERSION } from "../lib/early-access-consent";
+import { sendEarlyAccessConfirmationEmail } from "../lib/email";
+import {
+  CONFIRMATION_TOKEN_TTL_MS,
+  type ConfirmationSendChannel,
+  buildConfirmUrl,
+  confirmationSendCapReached,
+  finalizeConfirmationSend,
+  generateConfirmationToken,
+  reserveConfirmationSend,
+} from "../lib/early-access-confirmation";
+import type { EarlyAccessRegistration } from "@workspace/db/schema";
 
 const router: IRouter = Router();
+
+/**
+ * Registrations leave this router WITHOUT the confirmation-token hash: raw
+ * tokens are never stored anywhere, and even the hash never reaches the
+ * admin UI or CSV exports.
+ */
+function sanitizeRegistration(r: EarlyAccessRegistration) {
+  const { confirmationTokenHash: _hash, ...rest } = r;
+  return rest;
+}
 
 /**
  * Admin-only management of the Early Access list. All permissions are
@@ -37,8 +58,32 @@ type Filters = {
   to?: Date;
   launchConsent?: "yes" | "unknown";
   marketing?: "yes" | "no";
-  status?: "subscribed" | "unsubscribed" | "suppressed";
+  status?:
+    | "subscribed"
+    | "unsubscribed"
+    | "suppressed"
+    | "pending"
+    | "expired"
+    | "confirmed";
 };
+
+const t = earlyAccessRegistrationsTable;
+// Awaiting confirmation: an unused, unexpired token on a never-confirmed row.
+const pendingCondition = () =>
+  and(
+    isNull(t.confirmedAt),
+    isNotNull(t.confirmationTokenHash),
+    isNull(t.confirmationTokenUsedAt),
+    gt(t.confirmationTokenExpiresAt, sql`now()`),
+  );
+// Confirmation window elapsed without a confirm (derived lazily — no cron).
+const expiredCondition = () =>
+  and(
+    isNull(t.confirmedAt),
+    isNotNull(t.confirmationTokenHash),
+    isNull(t.confirmationTokenUsedAt),
+    lte(t.confirmationTokenExpiresAt, sql`now()`),
+  );
 
 function buildConditions(f: Filters) {
   const conds = [];
@@ -78,6 +123,10 @@ function buildConditions(f: Filters) {
         eq(earlyAccessRegistrationsTable.unsubscribeSource, "admin"),
       ),
     );
+  if (f.status === "pending") conds.push(pendingCondition());
+  if (f.status === "expired") conds.push(expiredCondition());
+  if (f.status === "confirmed")
+    conds.push(isNotNull(earlyAccessRegistrationsTable.confirmedAt));
   return conds;
 }
 
@@ -105,7 +154,10 @@ function parseFilters(query: Record<string, unknown>):
   if (
     query.status === "subscribed" ||
     query.status === "unsubscribed" ||
-    query.status === "suppressed"
+    query.status === "suppressed" ||
+    query.status === "pending" ||
+    query.status === "expired" ||
+    query.status === "confirmed"
   )
     filters.status = query.status;
   return { ok: true, filters };
@@ -127,8 +179,16 @@ router.get(
           other: sql<number>`count(*) filter (where ${t.audienceType} = 'other')::int`,
           launchConsent: sql<number>`count(*) filter (where ${t.launchConsentAt} is not null)::int`,
           marketingConsent: sql<number>`count(*) filter (where ${t.marketingConsentAt} is not null)::int`,
-          unsubscribed: sql<number>`count(*) filter (where ${t.unsubscribedAt} is not null)::int`,
-          unknownLegacyConsent: sql<number>`count(*) filter (where ${t.launchConsentAt} is null)::int`,
+          unsubscribed: sql<number>`count(*) filter (where ${t.unsubscribedAt} is not null and ${t.unsubscribeSource} = 'user')::int`,
+          suppressed: sql<number>`count(*) filter (where ${t.unsubscribedAt} is not null and ${t.unsubscribeSource} = 'admin')::int`,
+          unknownLegacyConsent: sql<number>`count(*) filter (where ${t.launchConsentAt} is null and ${t.confirmationTokenHash} is null)::int`,
+          // Double opt-in buckets (Phase 2A):
+          pendingConfirmation: sql<number>`count(*) filter (where ${t.confirmedAt} is null and ${t.confirmationTokenHash} is not null and ${t.confirmationTokenUsedAt} is null and ${t.confirmationTokenExpiresAt} > now())::int`,
+          confirmationExpired: sql<number>`count(*) filter (where ${t.confirmedAt} is null and ${t.confirmationTokenHash} is not null and ${t.confirmationTokenUsedAt} is null and ${t.confirmationTokenExpiresAt} <= now())::int`,
+          confirmedLaunchOnly: sql<number>`count(*) filter (where ${t.confirmedAt} is not null and ${t.marketingConsentAt} is null and ${t.unsubscribedAt} is null)::int`,
+          confirmedLaunchMarketing: sql<number>`count(*) filter (where ${t.confirmedAt} is not null and ${t.marketingConsentAt} is not null and ${t.unsubscribedAt} is null)::int`,
+          // Phase 1 rows: consent recorded before double opt-in existed.
+          legacyUnconfirmed: sql<number>`count(*) filter (where ${t.confirmedAt} is null and ${t.launchConsentAt} is not null)::int`,
         })
         .from(t);
       res.json(row);
@@ -175,7 +235,12 @@ router.get(
           .from(earlyAccessRegistrationsTable)
           .where(where),
       ]);
-      res.json({ registrations: rows, total: count, limit, offset });
+      res.json({
+        registrations: rows.map(sanitizeRegistration),
+        total: count,
+        limit,
+        offset,
+      });
     } catch (error) {
       req.log.error({ err: error }, "Early access list failed");
       res.status(500).json({ error: "Failed to load registrations" });
@@ -270,7 +335,7 @@ router.get(
         return safe;
       };
       const header =
-        "id,name,email,type,town,joinedAt,launchConsentAt,launchConsentVersion,marketingConsentAt,marketingConsentVersion,unsubscribedAt,unsubscribeSource";
+        "id,name,email,type,town,joinedAt,confirmedAt,launchConsentAt,launchConsentVersion,marketingConsentAt,marketingConsentVersion,unsubscribedAt,unsubscribeSource";
       const lines = rows.map((r) =>
         [
           r.id,
@@ -279,6 +344,7 @@ router.get(
           r.audienceType,
           r.town,
           r.joinedAt,
+          r.confirmedAt,
           r.launchConsentAt,
           r.launchConsentVersion,
           r.marketingConsentAt,
@@ -329,7 +395,7 @@ router.get(
         .orderBy(desc(earlyAccessEventsTable.createdAt))
         .limit(200);
       res.json({
-        registration,
+        registration: sanitizeRegistration(registration),
         events: events.map((e) => ({
           ...e,
           wording: e.wordingVersion
@@ -403,10 +469,116 @@ router.post(
         return;
       }
 
-      res.json({ success: true, registration: updated });
+      res.json({ success: true, registration: sanitizeRegistration(updated) });
     } catch (error) {
       req.log.error({ err: error }, "Early access suppress failed");
       res.status(500).json({ error: "Failed to suppress contact" });
+    }
+  },
+);
+
+// POST /api/admin/early-access/:id/resend-confirmation — reissue the double
+// opt-in email for a registration that still has something to confirm.
+// Always mints a FRESH token (the previously emailed link stops working),
+// keeps the original pending checkbox choices, and records the real dispatch
+// channel. Capped at the shared 3-per-24h per-address budget.
+router.post(
+  "/admin/early-access/:id/resend-confirmation",
+  authMiddleware,
+  adminOnly,
+  async (req, res) => {
+    try {
+      const id = Number.parseInt(String(req.params.id), 10);
+      if (!Number.isInteger(id) || id <= 0) {
+        res.status(400).json({ error: "Invalid id" });
+        return;
+      }
+
+      const { token, hash } = generateConfirmationToken();
+      const now = new Date();
+
+      const outcome = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .select()
+          .from(earlyAccessRegistrationsTable)
+          .where(eq(earlyAccessRegistrationsTable.id, id))
+          .for("update");
+        if (!row) return { status: 404 as const, error: "Registration not found" };
+        if (row.unsubscribedAt && row.unsubscribeSource === "admin") {
+          return {
+            status: 409 as const,
+            error: "Contact is administratively suppressed.",
+          };
+        }
+        // Something to confirm = an open pending request (incl. expired ones
+        // — resending is how an expired window is reopened). Confirmed rows
+        // without a new pending request, and legacy Phase 1 rows that never
+        // submitted under double opt-in, have nothing to resend: a
+        // confirmation request must originate from the person's own
+        // submission, never from an admin.
+        if (!row.pendingLaunchConsentVersion || row.confirmationTokenUsedAt) {
+          return {
+            status: 409 as const,
+            error: "No pending confirmation request for this contact.",
+          };
+        }
+        if (await confirmationSendCapReached(tx, row.id)) {
+          return {
+            status: 429 as const,
+            error:
+              "Confirmation email limit reached for this address. Try again in 24 hours.",
+          };
+        }
+        await tx
+          .update(earlyAccessRegistrationsTable)
+          .set({
+            confirmationTokenHash: hash,
+            confirmationTokenExpiresAt: new Date(
+              now.getTime() + CONFIRMATION_TOKEN_TTL_MS,
+            ),
+            confirmationTokenUsedAt: null,
+            updatedAt: now,
+          })
+          .where(eq(earlyAccessRegistrationsTable.id, row.id));
+        // Reserve the send in THIS transaction (cap check above holds the
+        // row lock) so concurrent resends cannot overshoot the daily cap.
+        const sendEventId = await reserveConfirmationSend(tx, row.id, {
+          resend: true,
+          performedBy: (req as AuthenticatedRequest).userId!,
+        });
+        return { status: 200 as const, row, sendEventId };
+      });
+
+      if (outcome.status !== 200) {
+        res.status(outcome.status).json({ error: outcome.error });
+        return;
+      }
+
+      let channel: ConfirmationSendChannel;
+      try {
+        channel = await sendEarlyAccessConfirmationEmail({
+          toEmail: outcome.row.emailNormalized,
+          toName: outcome.row.name,
+          confirmUrl: buildConfirmUrl(token),
+        });
+      } catch (err) {
+        channel = "failed";
+        req.log.error({ err }, "Admin resend confirmation email failed");
+      }
+      await finalizeConfirmationSend(outcome.sendEventId, channel, {
+        resend: true,
+      }).catch((err) =>
+        req.log.error({ err }, "Failed to record resend confirmation outcome"),
+      );
+
+      res.json({
+        success: true,
+        sent: channel === "brevo" || channel === "smtp",
+        channel,
+      });
+    } catch (error) {
+      req.log.error({ err: error }, "Early access resend confirmation failed");
+      res.status(500).json({ error: "Failed to resend confirmation" });
     }
   },
 );

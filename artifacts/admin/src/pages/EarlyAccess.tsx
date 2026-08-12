@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { Search, Download, Rocket, Ban } from "lucide-react";
+import { Search, Download, Rocket, Ban, Copy, Send } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types (local — this page is the only consumer of the early-access contract).
@@ -54,7 +54,13 @@ interface EarlyAccessStats {
   launchConsent: number;
   marketingConsent: number;
   unsubscribed: number;
+  suppressed: number;
   unknownLegacyConsent: number;
+  pendingConfirmation: number;
+  confirmationExpired: number;
+  confirmedLaunchOnly: number;
+  confirmedLaunchMarketing: number;
+  legacyUnconfirmed: number;
 }
 
 interface EarlyAccessRegistration {
@@ -72,6 +78,12 @@ interface EarlyAccessRegistration {
   marketingConsentVersion: string | null;
   unsubscribedAt: string | null;
   unsubscribeSource: UnsubscribeSource;
+  pendingRequestedAt: string | null;
+  pendingLaunchConsentVersion: string | null;
+  pendingMarketingConsentVersion: string | null;
+  confirmationTokenExpiresAt: string | null;
+  confirmationTokenUsedAt: string | null;
+  confirmedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -90,6 +102,8 @@ type EventKind =
   | "MARKETING_CONSENT"
   | "ADMIN_SUPPRESSED"
   | "CSV_EXPORTED"
+  | "CONFIRMATION_SENT"
+  | "EMAIL_CONFIRMED"
   | string;
 
 interface EarlyAccessEvent {
@@ -107,6 +121,16 @@ interface EarlyAccessDetailResponse {
   events: EarlyAccessEvent[];
 }
 
+// Query values the server understands for ?status= (distinct from the richer
+// client-derived StatusKind used for the per-row badge).
+type StatusFilter =
+  | "subscribed"
+  | "unsubscribed"
+  | "suppressed"
+  | "pending"
+  | "expired"
+  | "confirmed";
+
 const PAGE_SIZE = 50;
 
 const AUDIENCE_LABELS: Record<string, string> = {
@@ -122,33 +146,88 @@ const EVENT_LABELS: Record<string, string> = {
   MARKETING_CONSENT: "Marketing consent",
   ADMIN_SUPPRESSED: "Suppressed by admin",
   CSV_EXPORTED: "CSV exported",
+  CONFIRMATION_SENT: "Confirmation email sent",
+  EMAIL_CONFIRMED: "Email confirmed",
 };
 
-type StatusKind = "subscribed" | "unsubscribed" | "suppressed";
-
-function deriveStatus(r: EarlyAccessRegistration): StatusKind {
-  if (!r.unsubscribedAt) return "subscribed";
-  return r.unsubscribeSource === "admin" ? "suppressed" : "unsubscribed";
+// Human-readable label for an event, taking into account its details payload
+// (e.g. a CONFIRMATION_SENT with ok=false is a failure, not a success).
+function eventLabel(e: EarlyAccessEvent): string {
+  if (e.kind === "CONFIRMATION_SENT") {
+    const d = (e.details ?? {}) as Record<string, unknown>;
+    if (d.ok === false) return "Confirmation email failed";
+    const channel = typeof d.channel === "string" ? d.channel : null;
+    return channel ? `Confirmation email sent (${channel})` : "Confirmation email sent";
+  }
+  return EVENT_LABELS[e.kind] ?? e.kind;
 }
 
+type StatusKind =
+  | "subscribed"
+  | "unsubscribed"
+  | "suppressed"
+  | "pending"
+  | "expired"
+  | "confirmed-launch"
+  | "confirmed-marketing"
+  | "legacy"
+  | "unknown";
+
+// Client-side status precedence (mirrors the server's derivation). Suppression
+// and user unsubscribe take priority; then confirmation-window state; then the
+// confirmed/legacy consent buckets.
+function deriveStatus(r: EarlyAccessRegistration): StatusKind {
+  if (r.unsubscribedAt && r.unsubscribeSource === "admin") return "suppressed";
+  if (r.unsubscribedAt && r.unsubscribeSource === "user") return "unsubscribed";
+  if (
+    !r.confirmedAt &&
+    r.confirmationTokenExpiresAt &&
+    !r.confirmationTokenUsedAt
+  ) {
+    const expiry = new Date(r.confirmationTokenExpiresAt).getTime();
+    return expiry > Date.now() ? "pending" : "expired";
+  }
+  if (r.confirmedAt) {
+    return r.marketingConsentAt ? "confirmed-marketing" : "confirmed-launch";
+  }
+  if (r.launchConsentAt) return "legacy";
+  return "unknown";
+}
+
+const STATUS_LABELS: Record<StatusKind, string> = {
+  subscribed: "Subscribed",
+  unsubscribed: "Unsubscribed",
+  suppressed: "Suppressed",
+  pending: "Pending confirmation",
+  expired: "Confirmation expired",
+  "confirmed-launch": "Confirmed · launch only",
+  "confirmed-marketing": "Confirmed · launch + marketing",
+  legacy: "Legacy (pre-confirmation)",
+  unknown: "Unknown consent",
+};
+
 function StatusBadge({ status }: { status: StatusKind }) {
-  if (status === "subscribed") {
-    return (
-      <Badge variant="outline" className="bg-[hsl(var(--success-tint))] text-[hsl(var(--success))] border-transparent font-medium">
-        Subscribed
-      </Badge>
-    );
-  }
-  if (status === "unsubscribed") {
-    return (
-      <Badge variant="outline" className="bg-muted text-muted-foreground border-transparent font-medium">
-        Unsubscribed
-      </Badge>
-    );
-  }
+  const label = STATUS_LABELS[status];
+  const successClass =
+    "bg-[hsl(var(--success-tint))] text-[hsl(var(--success))] border-transparent font-medium";
+  const mutedClass = "bg-muted text-muted-foreground border-transparent font-medium";
+  const destructiveClass =
+    "bg-[hsl(var(--destructive-tint))] text-[hsl(var(--destructive))] border-transparent font-medium";
+  const warnClass =
+    "bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))] border-transparent font-medium";
+
+  let cls = mutedClass;
+  if (status === "confirmed-launch" || status === "confirmed-marketing") cls = successClass;
+  else if (status === "suppressed") cls = destructiveClass;
+  else if (status === "expired") cls = destructiveClass;
+  else if (status === "pending") cls = warnClass;
+  else if (status === "subscribed") cls = successClass;
+  else if (status === "unsubscribed" || status === "legacy" || status === "unknown")
+    cls = mutedClass;
+
   return (
-    <Badge variant="outline" className="bg-[hsl(var(--destructive-tint))] text-[hsl(var(--destructive))] border-transparent font-medium">
-      Suppressed
+    <Badge variant="outline" className={cls}>
+      {label}
     </Badge>
   );
 }
@@ -199,8 +278,8 @@ export default function EarlyAccess() {
   const [marketing, setMarketing] = useState<"yes" | "no" | "ALL">(
     (params.get("marketing") as "yes" | "no" | null) ?? "ALL",
   );
-  const [status, setStatus] = useState<StatusKind | "ALL">(
-    (params.get("status") as StatusKind | null) ?? "ALL",
+  const [status, setStatus] = useState<StatusFilter | "ALL">(
+    (params.get("status") as StatusFilter | null) ?? "ALL",
   );
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -349,8 +428,52 @@ export default function EarlyAccess() {
     }
   }
 
+  const resendMutation = useMutation({
+    mutationFn: () =>
+      api<{ success: boolean; sent: boolean; channel: string }>(
+        `/api/admin/early-access/${selectedId}/resend-confirmation`,
+        { method: "POST", body: {} },
+      ),
+    onSuccess: (res) => {
+      toast({
+        title: res.sent ? "Confirmation email sent" : "Confirmation not sent",
+        description: res.sent
+          ? `A fresh confirmation link was sent via ${res.channel}.`
+          : `The email was not delivered (channel: ${res.channel}). A fresh token was still issued.`,
+        variant: res.sent ? undefined : "destructive",
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin", "early-access", "detail", selectedId] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "early-access", "stats"] });
+    },
+    onError: (err) => {
+      toast({
+        title: "Resend failed",
+        description:
+          err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  async function handleCopyEmail(email: string) {
+    try {
+      await navigator.clipboard.writeText(email);
+      toast({ title: "Email copied", description: email });
+    } catch {
+      toast({ title: "Could not copy email", variant: "destructive" });
+    }
+  }
+
   const selected = detailQuery.data?.registration ?? null;
   const selectedStatus = selected ? deriveStatus(selected) : null;
+  // A resend only makes sense while there is an open pending request. The
+  // server rejects everything else (suppressed / confirmed-without-pending /
+  // legacy / unknown) with 409, so we hide the button in those states.
+  const canResend =
+    !!selected &&
+    selectedStatus !== "suppressed" &&
+    !!selected.pendingLaunchConsentVersion &&
+    !selected.confirmationTokenUsedAt;
 
   return (
     <div className="space-y-4">
@@ -389,15 +512,42 @@ export default function EarlyAccess() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="stat-cards">
-        <StatCard label="Total" value={stats?.total} testId="stat-total" />
-        <StatCard label="Customers" value={stats?.customers} testId="stat-customers" />
-        <StatCard label="Traders" value={stats?.traders} testId="stat-traders" />
-        <StatCard label="Other" value={stats?.other} testId="stat-other" />
-        <StatCard label="Launch consent" value={stats?.launchConsent} testId="stat-launch-consent" />
-        <StatCard label="Marketing consent" value={stats?.marketingConsent} testId="stat-marketing-consent" />
-        <StatCard label="Unsubscribed / suppressed" value={stats?.unsubscribed} testId="stat-unsubscribed" />
-        <StatCard label="Unknown legacy consent" value={stats?.unknownLegacyConsent} testId="stat-unknown-legacy" />
+      <div className="space-y-3" data-testid="stat-cards">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
+            Audience
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="Total" value={stats?.total} testId="stat-total" />
+            <StatCard label="Customers" value={stats?.customers} testId="stat-customers" />
+            <StatCard label="Traders" value={stats?.traders} testId="stat-traders" />
+            <StatCard label="Other" value={stats?.other} testId="stat-other" />
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
+            Confirmation
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="Pending confirmation" value={stats?.pendingConfirmation} testId="stat-pending-confirmation" />
+            <StatCard label="Confirmation expired" value={stats?.confirmationExpired} testId="stat-confirmation-expired" />
+            <StatCard label="Confirmed (launch only)" value={stats?.confirmedLaunchOnly} testId="stat-confirmed-launch-only" />
+            <StatCard label="Confirmed (launch + marketing)" value={stats?.confirmedLaunchMarketing} testId="stat-confirmed-launch-marketing" />
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
+            Consent &amp; status
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="Launch consent" value={stats?.launchConsent} testId="stat-launch-consent" />
+            <StatCard label="Marketing consent" value={stats?.marketingConsent} testId="stat-marketing-consent" />
+            <StatCard label="Unsubscribed" value={stats?.unsubscribed} testId="stat-unsubscribed" />
+            <StatCard label="Suppressed" value={stats?.suppressed} testId="stat-suppressed" />
+            <StatCard label="Legacy (pre-confirmation)" value={stats?.legacyUnconfirmed} testId="stat-legacy-unconfirmed" />
+            <StatCard label="Unknown legacy consent" value={stats?.unknownLegacyConsent} testId="stat-unknown-legacy" />
+          </div>
+        </div>
       </div>
 
       <Card>
@@ -463,11 +613,14 @@ export default function EarlyAccess() {
           </div>
           <div className="space-y-1.5">
             <Label>Status</Label>
-            <Select value={status} onValueChange={(v) => setStatus(v as StatusKind | "ALL")}>
+            <Select value={status} onValueChange={(v) => setStatus(v as StatusFilter | "ALL")}>
               <SelectTrigger data-testid="select-status"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All statuses</SelectItem>
                 <SelectItem value="subscribed">Subscribed</SelectItem>
+                <SelectItem value="pending">Pending confirmation</SelectItem>
+                <SelectItem value="expired">Confirmation expired</SelectItem>
+                <SelectItem value="confirmed">Confirmed</SelectItem>
                 <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
                 <SelectItem value="suppressed">Suppressed</SelectItem>
               </SelectContent>
@@ -585,17 +738,60 @@ export default function EarlyAccess() {
                     via {selected.unsubscribeSource}
                   </span>
                 )}
-                {selectedStatus === "subscribed" && (
+                <div className="ml-auto flex items-center gap-2">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="ml-auto"
-                    onClick={() => { setSuppressReason(""); setSuppressOpen(true); }}
-                    data-testid="button-suppress"
+                    onClick={() => handleCopyEmail(selected.email)}
+                    data-testid="button-copy-email"
                   >
-                    <Ban className="w-4 h-4 mr-1.5" /> Suppress
+                    <Copy className="w-4 h-4 mr-1.5" /> Copy email
                   </Button>
-                )}
+                  {canResend && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => resendMutation.mutate()}
+                      disabled={resendMutation.isPending}
+                      data-testid="button-resend-confirmation"
+                    >
+                      <Send className="w-4 h-4 mr-1.5" />
+                      {resendMutation.isPending ? "Sending…" : "Resend confirmation"}
+                    </Button>
+                  )}
+                  {!selected.unsubscribedAt && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setSuppressReason(""); setSuppressOpen(true); }}
+                      data-testid="button-suppress"
+                    >
+                      <Ban className="w-4 h-4 mr-1.5" /> Suppress
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-md border bg-muted/40 p-3">
+                <h3 className="text-sm font-semibold mb-2">Confirmation</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <DetailField
+                    label="Confirmation requested"
+                    value={formatDateTime(selected.pendingRequestedAt)}
+                  />
+                  <DetailField
+                    label="Link expires"
+                    value={formatDateTime(selected.confirmationTokenExpiresAt)}
+                  />
+                  <DetailField
+                    label="Confirmed at"
+                    value={formatDateTime(selected.confirmedAt)}
+                  />
+                  <DetailField
+                    label="Marketing requested"
+                    value={selected.pendingMarketingConsentVersion != null ? "Yes" : "No"}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
@@ -635,7 +831,7 @@ export default function EarlyAccess() {
                     {detailQuery.data.events.map((e) => (
                       <li key={e.id} className="rounded-md border bg-muted/40 p-3 space-y-1">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <span className="text-sm font-medium">{EVENT_LABELS[e.kind] ?? e.kind}</span>
+                          <span className="text-sm font-medium">{eventLabel(e)}</span>
                           <span className="text-xs text-muted-foreground">{formatDateTime(e.createdAt)}</span>
                         </div>
                         {e.wordingVersion && (

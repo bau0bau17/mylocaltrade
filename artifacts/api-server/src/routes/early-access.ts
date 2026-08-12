@@ -4,7 +4,7 @@ import {
   earlyAccessRegistrationsTable,
   earlyAccessEventsTable,
 } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   sendEarlyAccessConfirmationEmail,
   sendEarlyAccessNotificationEmail,
@@ -13,6 +13,16 @@ import {
   LAUNCH_CONSENT_VERSION,
   MARKETING_CONSENT_VERSION,
 } from "../lib/early-access-consent";
+import {
+  CONFIRMATION_TOKEN_TTL_MS,
+  type ConfirmationSendChannel,
+  buildConfirmUrl,
+  confirmationSendCapReached,
+  finalizeConfirmationSend,
+  generateConfirmationToken,
+  hashConfirmationToken,
+  reserveConfirmationSend,
+} from "../lib/early-access-confirmation";
 
 const router: IRouter = Router();
 
@@ -30,14 +40,20 @@ function sourcePageFromReferer(referer: unknown): string | null {
 }
 
 /**
- * Landing-site "Join Early Access" form (mylocaltrade.co.uk).
+ * Landing-site "Join Early Access" form (mylocaltrade.co.uk) — Phase 2A
+ * double opt-in.
  *
- * The registration is stored in early_access_registrations (source of
- * truth); the notification + confirmation emails are best-effort. Repeat
- * submissions for the same email update basic details and refresh launch
- * consent but NEVER create duplicates, never reveal that the email already
- * exists, and never silently restore marketing consent after an
- * unsubscribe/suppression (see rules inline).
+ * A submission only ever creates a PENDING confirmation request: the
+ * checkbox choices + wording versions are stored as pending* fields with a
+ * hashed single-use token (48h expiry), and a neutral confirmation email is
+ * sent. No address becomes eligible for launch or marketing emails until
+ * the explicit confirm POST proves mailbox ownership.
+ *
+ * Repeat submissions update basic details, never create duplicates, never
+ * reveal that the email already exists, and NEVER lift an existing
+ * unsubscribe/suppression by themselves. Admin-suppressed addresses never
+ * even receive a confirmation email — that suppression is not overridable
+ * through the public form.
  */
 router.post("/early-access", async (req, res) => {
   try {
@@ -83,6 +99,21 @@ router.post("/early-access", async (req, res) => {
     const marketingTicked = marketingConsent === true;
     const sourcePage = sourcePageFromReferer(req.get("referer"));
     const now = new Date();
+    // Generated up front; only persisted (hash) when a confirmation flow is
+    // actually started. The raw token exists solely in memory + the email.
+    const { token, hash: tokenHash } = generateConfirmationToken();
+    const tokenExpiresAt = new Date(now.getTime() + CONFIRMATION_TOKEN_TTL_MS);
+
+    const pendingFields = {
+      pendingRequestedAt: now,
+      pendingLaunchConsentVersion: LAUNCH_CONSENT_VERSION,
+      pendingMarketingConsentVersion: marketingTicked
+        ? MARKETING_CONSENT_VERSION
+        : null,
+      confirmationTokenHash: tokenHash,
+      confirmationTokenExpiresAt: tokenExpiresAt,
+      confirmationTokenUsedAt: null,
+    };
 
     const outcome = await db.transaction(async (tx) => {
       const [existing] = await tx
@@ -103,12 +134,8 @@ router.post("/early-access", async (req, res) => {
             message: trimmedMessage,
             sourcePage,
             joinedAt: now,
-            launchConsentAt: now,
-            launchConsentVersion: LAUNCH_CONSENT_VERSION,
-            marketingConsentAt: marketingTicked ? now : null,
-            marketingConsentVersion: marketingTicked
-              ? MARKETING_CONSENT_VERSION
-              : null,
+            // Double opt-in: consent columns stay NULL until confirmed.
+            ...pendingFields,
           })
           .onConflictDoNothing({
             target: earlyAccessRegistrationsTable.emailNormalized,
@@ -116,23 +143,13 @@ router.post("/early-access", async (req, res) => {
           .returning();
 
         if (inserted) {
-          const events: (typeof earlyAccessEventsTable.$inferInsert)[] = [
-            { registrationId: inserted.id, kind: "REGISTERED", details: { sourcePage } },
-            {
-              registrationId: inserted.id,
-              kind: "LAUNCH_CONSENT",
-              wordingVersion: LAUNCH_CONSENT_VERSION,
-            },
-          ];
-          if (marketingTicked) {
-            events.push({
-              registrationId: inserted.id,
-              kind: "MARKETING_CONSENT",
-              wordingVersion: MARKETING_CONSENT_VERSION,
-            });
-          }
-          await tx.insert(earlyAccessEventsTable).values(events);
-          return { isNew: true as const };
+          await tx.insert(earlyAccessEventsTable).values({
+            registrationId: inserted.id,
+            kind: "REGISTERED",
+            details: { sourcePage, marketingRequested: marketingTicked },
+          });
+          const sendEventId = await reserveConfirmationSend(tx, inserted.id);
+          return { isNew: true as const, id: inserted.id, sendEventId };
         }
         // Lost an insert race — fall through by re-reading the winner.
         const [raced] = await tx
@@ -152,6 +169,31 @@ router.post("/early-access", async (req, res) => {
         txn: typeof tx,
         row: typeof earlyAccessRegistrationsTable.$inferSelect,
       ) {
+        const adminSuppressed =
+          row.unsubscribedAt !== null && row.unsubscribeSource === "admin";
+        const userUnsubscribed =
+          row.unsubscribedAt !== null && row.unsubscribeSource === "user";
+
+        // Is there anything the person could newly confirm?
+        // - never confirmed at all (incl. Phase 1 legacy + expired pendings)
+        // - a NEW marketing request (box ticked, marketing not active)
+        // - verified resubscription after a voluntary unsubscribe
+        // Admin suppression is NOT overridable through the public form: no
+        // confirmation flow is even started (and no email sent).
+        const somethingToConfirm =
+          !adminSuppressed &&
+          (row.confirmedAt === null ||
+            (marketingTicked && row.marketingConsentAt === null) ||
+            userUnsubscribed);
+
+        // Per-address daily send cap: when reached, leave the existing
+        // pending request (and its still-valid emailed link) untouched.
+        // Checked while HOLDING the row lock, and the send is reserved (the
+        // CONFIRMATION_SENT event inserted) in this same transaction below,
+        // so concurrent submissions cannot overshoot the cap.
+        const startFlow =
+          somethingToConfirm && !(await confirmationSendCapReached(txn, row.id));
+
         const update: Partial<
           typeof earlyAccessRegistrationsTable.$inferInsert
         > = {
@@ -161,52 +203,36 @@ router.post("/early-access", async (req, res) => {
           town: trimmedTown,
           message: trimmedMessage ?? row.message,
           sourcePage: sourcePage ?? row.sourcePage,
-          // Re-submitting the form is a fresh launch-updates agreement.
-          launchConsentAt: now,
-          launchConsentVersion: LAUNCH_CONSENT_VERSION,
           updatedAt: now,
+          ...(startFlow ? pendingFields : {}),
         };
-        const events: (typeof earlyAccessEventsTable.$inferInsert)[] = [
-          { registrationId: row.id, kind: "DETAILS_UPDATED", details: { sourcePage } },
-          {
-            registrationId: row.id,
-            kind: "LAUNCH_CONSENT",
-            wordingVersion: LAUNCH_CONSENT_VERSION,
-          },
-        ];
-
-        if (marketingTicked) {
-          // Explicit new tick = new consent evidence, always recorded.
-          update.marketingConsentAt = now;
-          update.marketingConsentVersion = MARKETING_CONSENT_VERSION;
-          events.push({
-            registrationId: row.id,
-            kind: "MARKETING_CONSENT",
-            wordingVersion: MARKETING_CONSENT_VERSION,
-            details: row.unsubscribedAt
-              ? { unsubscribeRetained: row.unsubscribeSource }
-              : null,
-          });
-          // SECURITY: this form is unauthenticated — anyone who knows an
-          // email address can submit it, so a re-tick must NEVER lift an
-          // existing unsubscribe/suppression (that would let a third party
-          // reverse someone's opt-out). The evidence event above is kept so
-          // a verified flow (Phase 2) or an admin can act on it.
-        }
-        // Checkbox left unticked: marketing + suppression state untouched.
 
         await txn
           .update(earlyAccessRegistrationsTable)
           .set(update)
           .where(eq(earlyAccessRegistrationsTable.id, row.id));
-        await txn.insert(earlyAccessEventsTable).values(events);
-        return { isNew: false as const };
+        await txn.insert(earlyAccessEventsTable).values({
+          registrationId: row.id,
+          kind: "DETAILS_UPDATED",
+          details: {
+            sourcePage,
+            marketingRequested: marketingTicked,
+            ...(adminSuppressed
+              ? { confirmationWithheld: "admin_suppressed" }
+              : {}),
+            ...(somethingToConfirm && !startFlow
+              ? { confirmationWithheld: "send_cap" }
+              : {}),
+          },
+        });
+        const sendEventId = startFlow
+          ? await reserveConfirmationSend(txn, row.id)
+          : null;
+        return { isNew: false as const, id: row.id, sendEventId };
       }
     });
 
-    // Notify + confirm only for NEW registrations (repeat submissions must
-    // not spam the inbox or the address owner); both best-effort — the DB
-    // row above is the durable record.
+    // Internal heads-up only for NEW registrations; fire-and-forget.
     if (outcome.isNew) {
       sendEarlyAccessNotificationEmail({
         name: trimmedName,
@@ -217,11 +243,26 @@ router.post("/early-access", async (req, res) => {
       }).catch((err) =>
         req.log.error({ err }, "Failed to send early access notification email"),
       );
-      sendEarlyAccessConfirmationEmail({
-        toEmail: normalizedEmail,
-        toName: trimmedName,
-      }).catch((err) =>
-        req.log.error({ err }, "Failed to send early access confirmation email"),
+    }
+
+    // Confirmation email is AWAITED so the audit event records the real
+    // dispatch channel — never "sent" just because it was queued locally.
+    // The event itself was reserved inside the transaction (cap safety);
+    // here we only fill in the actual outcome.
+    if (outcome.sendEventId !== null) {
+      let channel: ConfirmationSendChannel;
+      try {
+        channel = await sendEarlyAccessConfirmationEmail({
+          toEmail: normalizedEmail,
+          toName: trimmedName,
+          confirmUrl: buildConfirmUrl(token),
+        });
+      } catch (err) {
+        channel = "failed";
+        req.log.error({ err }, "Failed to send early access confirmation email");
+      }
+      await finalizeConfirmationSend(outcome.sendEventId, channel).catch((err) =>
+        req.log.error({ err }, "Failed to record confirmation send outcome"),
       );
     }
 
@@ -231,6 +272,121 @@ router.post("/early-access", async (req, res) => {
   } catch (error: unknown) {
     req.log.error({ err: error }, "Early access signup failed");
     res.status(500).json({ error: "Failed to submit. Please try again later." });
+  }
+});
+
+const TOKEN_SHAPE = /^[A-Za-z0-9_-]{20,128}$/;
+
+/**
+ * Explicit double opt-in confirmation. POST-only BY DESIGN: automated link
+ * scanners issue GETs against the emailed URL — the landing page they hit
+ * is inert, and only this deliberate POST (button press) activates consent.
+ *
+ * Idempotent: replaying an already-used token returns success without
+ * creating duplicate consent events. All failures collapse to ONE generic
+ * message so the endpoint can't be used to probe token validity classes.
+ */
+router.post("/early-access/confirm", async (req, res) => {
+  try {
+    const token = (req.body as Record<string, unknown>)?.token;
+    if (typeof token !== "string" || !TOKEN_SHAPE.test(token)) {
+      res.status(400).json({
+        error: "This confirmation link is invalid or has expired.",
+      });
+      return;
+    }
+    const tokenHash = hashConfirmationToken(token);
+    const now = new Date();
+
+    const result = await db.transaction(async (tx) => {
+      // Row lock serialises concurrent confirmations of the same token: the
+      // loser re-reads the committed usedAt marker and takes the idempotent
+      // path — no duplicate consent events possible.
+      const [row] = await tx
+        .select()
+        .from(earlyAccessRegistrationsTable)
+        .where(
+          eq(earlyAccessRegistrationsTable.confirmationTokenHash, tokenHash),
+        )
+        .for("update");
+
+      if (!row) return { status: "invalid" as const };
+      if (row.confirmationTokenUsedAt) return { status: "already" as const };
+      if (
+        !row.pendingLaunchConsentVersion ||
+        !row.confirmationTokenExpiresAt ||
+        row.confirmationTokenExpiresAt.getTime() <= now.getTime()
+      ) {
+        return { status: "invalid" as const };
+      }
+
+      const activateMarketing = row.pendingMarketingConsentVersion !== null;
+      // Verified resubscription lifts a VOLUNTARY unsubscribe only; an admin
+      // suppression survives confirmation (consent evidence is still kept so
+      // an admin can act on it).
+      const liftUserUnsubscribe =
+        row.unsubscribedAt !== null && row.unsubscribeSource === "user";
+      const adminSuppressed =
+        row.unsubscribedAt !== null && row.unsubscribeSource === "admin";
+
+      await tx
+        .update(earlyAccessRegistrationsTable)
+        .set({
+          confirmationTokenUsedAt: now,
+          confirmedAt: now,
+          launchConsentAt: now,
+          launchConsentVersion: row.pendingLaunchConsentVersion,
+          ...(activateMarketing
+            ? {
+                marketingConsentAt: now,
+                marketingConsentVersion: row.pendingMarketingConsentVersion,
+              }
+            : {}),
+          ...(liftUserUnsubscribe
+            ? { unsubscribedAt: null, unsubscribeSource: null }
+            : {}),
+          updatedAt: now,
+        })
+        .where(eq(earlyAccessRegistrationsTable.id, row.id));
+
+      const events: (typeof earlyAccessEventsTable.$inferInsert)[] = [
+        {
+          registrationId: row.id,
+          kind: "EMAIL_CONFIRMED",
+          details: {
+            marketing: activateMarketing,
+            ...(liftUserUnsubscribe ? { unsubscribeLifted: "user" } : {}),
+            ...(adminSuppressed ? { suppressionRetained: "admin" } : {}),
+          },
+        },
+        {
+          registrationId: row.id,
+          kind: "LAUNCH_CONSENT",
+          wordingVersion: row.pendingLaunchConsentVersion,
+        },
+      ];
+      if (activateMarketing) {
+        events.push({
+          registrationId: row.id,
+          kind: "MARKETING_CONSENT",
+          wordingVersion: row.pendingMarketingConsentVersion,
+        });
+      }
+      await tx.insert(earlyAccessEventsTable).values(events);
+      return { status: "confirmed" as const };
+    });
+
+    if (result.status === "invalid") {
+      res.status(400).json({
+        error: "This confirmation link is invalid or has expired.",
+      });
+      return;
+    }
+    // "confirmed" and "already" are indistinguishable on purpose.
+    res.json({ success: true });
+  } catch (error: unknown) {
+    req.log.error({ err: error }, "Early access confirmation failed");
+    res.status(500).json({ error: "Failed to confirm. Please try again later." });
   }
 });
 

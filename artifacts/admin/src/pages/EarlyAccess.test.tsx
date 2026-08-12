@@ -36,7 +36,13 @@ const STATS = {
   launchConsent: 2,
   marketingConsent: 1,
   unsubscribed: 1,
+  suppressed: 1,
   unknownLegacyConsent: 1,
+  pendingConfirmation: 1,
+  confirmationExpired: 1,
+  confirmedLaunchOnly: 1,
+  confirmedLaunchMarketing: 1,
+  legacyUnconfirmed: 1,
 };
 
 function makeReg(overrides: Record<string, unknown> = {}) {
@@ -55,21 +61,35 @@ function makeReg(overrides: Record<string, unknown> = {}) {
     marketingConsentVersion: null,
     unsubscribedAt: null,
     unsubscribeSource: null,
+    pendingRequestedAt: null,
+    pendingLaunchConsentVersion: null,
+    pendingMarketingConsentVersion: null,
+    confirmationTokenExpiresAt: null,
+    confirmationTokenUsedAt: null,
+    confirmedAt: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };
 }
 
-function setupApi(regs: ReturnType<typeof makeReg>[]) {
-  apiMock.mockImplementation((path: string) => {
+function setupApi(
+  regs: ReturnType<typeof makeReg>[],
+  opts: { events?: unknown[] } = {},
+) {
+  apiMock.mockImplementation((path: string, init?: { method?: string }) => {
     if (path === "/api/admin/early-access/stats") return Promise.resolve(STATS);
     if (path === "/api/admin/early-access")
       return Promise.resolve({ registrations: regs, total: regs.length, limit: 50, offset: 0 });
-    if (path.startsWith("/api/admin/early-access/") && path.endsWith("/suppress"))
+    if (path.endsWith("/suppress"))
       return Promise.resolve({ success: true, registration: regs[0] });
-    if (path.startsWith("/api/admin/early-access/"))
-      return Promise.resolve({ registration: regs[0], events: [] });
+    if (path.endsWith("/resend-confirmation"))
+      return Promise.resolve({ success: true, sent: true, channel: "brevo" });
+    if (path.startsWith("/api/admin/early-access/") && (!init || init.method !== "POST")) {
+      const id = Number(path.split("/").pop());
+      const reg = regs.find((r) => r.id === id) ?? regs[0];
+      return Promise.resolve({ registration: reg, events: opts.events ?? [] });
+    }
     return Promise.resolve({});
   });
 }
@@ -103,7 +123,8 @@ describe("EarlyAccess page", () => {
     );
     const row = await screen.findByTestId("row-registration-1");
     expect(within(row).getByText("Alice Smith")).toBeInTheDocument();
-    expect(within(row).getByText("Subscribed")).toBeInTheDocument();
+    // launchConsentAt set but never confirmed → legacy (pre double opt-in).
+    expect(within(row).getByText("Legacy (pre-confirmation)")).toBeInTheDocument();
     // launchConsentAt is set → "Yes"; marketingConsentAt is null → "No".
     expect(within(row).getByText("Yes")).toBeInTheDocument();
     expect(within(row).getByText("No")).toBeInTheDocument();
@@ -132,5 +153,136 @@ describe("EarlyAccess page", () => {
     const url = downloadAuthedMock.mock.calls[0][0] as string;
     expect(url).toContain("includeSuppressed=true");
     expect(url).toContain("confirmAll=true");
+  });
+
+  it("derives pending / expired / confirmed status badges from confirmation fields", async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const past = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    setupApi([
+      makeReg({
+        id: 10,
+        name: "Pending Pat",
+        launchConsentAt: null,
+        pendingLaunchConsentVersion: "1",
+        pendingRequestedAt: "2026-01-01T00:00:00.000Z",
+        confirmationTokenExpiresAt: future,
+      }),
+      makeReg({
+        id: 11,
+        name: "Expired Erin",
+        launchConsentAt: null,
+        pendingLaunchConsentVersion: "1",
+        pendingRequestedAt: "2026-01-01T00:00:00.000Z",
+        confirmationTokenExpiresAt: past,
+      }),
+      makeReg({
+        id: 12,
+        name: "Confirmed Cass",
+        confirmedAt: "2026-01-02T00:00:00.000Z",
+        marketingConsentAt: null,
+      }),
+      makeReg({
+        id: 13,
+        name: "Marketing Mel",
+        confirmedAt: "2026-01-02T00:00:00.000Z",
+        marketingConsentAt: "2026-01-02T00:00:00.000Z",
+      }),
+    ]);
+    renderPage();
+
+    const pending = await screen.findByTestId("row-registration-10");
+    expect(within(pending).getByText("Pending confirmation")).toBeInTheDocument();
+    const expired = screen.getByTestId("row-registration-11");
+    expect(within(expired).getByText("Confirmation expired")).toBeInTheDocument();
+    const confirmed = screen.getByTestId("row-registration-12");
+    expect(within(confirmed).getByText("Confirmed · launch only")).toBeInTheDocument();
+    const marketing = screen.getByTestId("row-registration-13");
+    expect(within(marketing).getByText("Confirmed · launch + marketing")).toBeInTheDocument();
+  });
+
+  it("shows the resend button for a pending contact and posts to resend-confirmation", async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    setupApi([
+      makeReg({
+        id: 20,
+        name: "Pending Pat",
+        launchConsentAt: null,
+        pendingLaunchConsentVersion: "1",
+        confirmationTokenExpiresAt: future,
+      }),
+    ]);
+    renderPage();
+
+    fireEvent.click(await screen.findByTestId("row-registration-20"));
+    const resend = await screen.findByTestId("button-resend-confirmation");
+    fireEvent.click(resend);
+
+    await waitFor(() =>
+      expect(
+        apiMock.mock.calls.some(
+          ([path, init]) =>
+            path === "/api/admin/early-access/20/resend-confirmation" &&
+            (init as { method?: string })?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("hides the resend button for a confirmed contact with nothing pending", async () => {
+    setupApi([
+      makeReg({
+        id: 30,
+        name: "Confirmed Cass",
+        confirmedAt: "2026-01-02T00:00:00.000Z",
+        pendingLaunchConsentVersion: null,
+        confirmationTokenUsedAt: "2026-01-02T00:00:00.000Z",
+      }),
+    ]);
+    renderPage();
+
+    fireEvent.click(await screen.findByTestId("row-registration-30"));
+    // Detail dialog opens (Copy email is always present)…
+    await screen.findByTestId("button-copy-email");
+    // …but there is nothing to resend for a confirmed row.
+    expect(screen.queryByTestId("button-resend-confirmation")).not.toBeInTheDocument();
+  });
+
+  it("never renders confirmation-token-hash data in the detail view", async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    setupApi(
+      [
+        makeReg({
+          id: 40,
+          name: "Pending Pat",
+          launchConsentAt: null,
+          pendingLaunchConsentVersion: "1",
+          confirmationTokenExpiresAt: future,
+        }),
+      ],
+      {
+        events: [
+          {
+            id: 1,
+            kind: "CONFIRMATION_SENT",
+            wordingVersion: null,
+            wording: null,
+            performedBy: 1,
+            details: { channel: "brevo", ok: true, resend: true },
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    );
+    const { container } = renderPage();
+
+    fireEvent.click(await screen.findByTestId("row-registration-40"));
+    const dialog = await screen.findByTestId("dialog-detail");
+    // Wait for the detail query to resolve before asserting on its content.
+    await within(dialog).findByText("Pending Pat");
+    // Readable event label is shown…
+    expect(within(dialog).getByText(/Confirmation email sent \(brevo\)/)).toBeInTheDocument();
+    // …and no token/hash-like field ever leaks into the UI.
+    expect(container.textContent).not.toMatch(/confirmationTokenHash/i);
+    expect(container.textContent).not.toMatch(/tokenHash/i);
   });
 });

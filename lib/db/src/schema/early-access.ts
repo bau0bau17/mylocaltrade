@@ -30,6 +30,19 @@ import {
  *
  * Legacy/imported records with unknown consent have launchConsentAt = NULL
  * and must stay that way unless real evidence is attached ("unknown" bucket).
+ *
+ * Double opt-in (Phase 2A):
+ * - New submissions no longer set launchConsentAt/marketingConsentAt
+ *   directly. The requested choices are stored as pending* fields together
+ *   with a single-use confirmation token (HASH only — the raw token is never
+ *   stored or logged) that expires after 48 hours.
+ * - Only an explicit POST from the confirmation page copies the pending
+ *   choices into the live consent columns and sets confirmedAt.
+ * - Confirmation lifts a 'user' unsubscribe (verified resubscription) but
+ *   NEVER an 'admin' suppression.
+ * - Phase 1 rows (consent recorded before double opt-in existed) keep their
+ *   classification: launchConsentAt set, confirmedAt NULL. Never backfill
+ *   confirmedAt without a real confirmation event.
  */
 export const earlyAccessRegistrationsTable = pgTable(
   "early_access_registrations",
@@ -60,6 +73,29 @@ export const earlyAccessRegistrationsTable = pgTable(
     /** 'user' (self-service, Phase 2) | 'admin' (manual suppression). */
     unsubscribeSource: varchar("unsubscribe_source", { length: 20 }),
 
+    /** When the latest confirmation request (form submission) was made. */
+    pendingRequestedAt: timestamp("pending_requested_at"),
+    /** Wording version of the launch consent awaiting confirmation. */
+    pendingLaunchConsentVersion: varchar("pending_launch_consent_version", {
+      length: 40,
+    }),
+    /**
+     * Wording version of the OPTIONAL marketing consent awaiting
+     * confirmation. NULL when the marketing box was not ticked in the latest
+     * submission (the latest submission's checkbox choices are canonical).
+     */
+    pendingMarketingConsentVersion: varchar(
+      "pending_marketing_consent_version",
+      { length: 40 },
+    ),
+    /** SHA-256 hex of the single-use confirmation token. NEVER the raw token. */
+    confirmationTokenHash: varchar("confirmation_token_hash", { length: 64 }),
+    confirmationTokenExpiresAt: timestamp("confirmation_token_expires_at"),
+    /** Set exactly once per token — the single-use marker. */
+    confirmationTokenUsedAt: timestamp("confirmation_token_used_at"),
+    /** Last successful email-ownership confirmation. */
+    confirmedAt: timestamp("confirmed_at"),
+
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -69,6 +105,9 @@ export const earlyAccessRegistrationsTable = pgTable(
     ),
     index("early_access_audience_type_idx").on(table.audienceType),
     index("early_access_joined_at_idx").on(table.joinedAt),
+    index("early_access_confirmation_token_hash_idx").on(
+      table.confirmationTokenHash,
+    ),
   ],
 );
 
@@ -80,6 +119,14 @@ export const EARLY_ACCESS_EVENT_KINDS = [
   "MARKETING_UNSUBSCRIBED",
   "ADMIN_SUPPRESSED",
   "CSV_EXPORTED",
+  /**
+   * A confirmation email dispatch attempt. details: { channel:
+   * 'brevo'|'smtp'|'none'|'skipped', ok: boolean, resend?: true }.
+   * NEVER contains the token or the confirmation URL.
+   */
+  "CONFIRMATION_SENT",
+  /** Explicit ownership confirmation via the confirm POST. */
+  "EMAIL_CONFIRMED",
 ] as const;
 
 export type EarlyAccessEventKind = (typeof EARLY_ACCESS_EVENT_KINDS)[number];

@@ -1,0 +1,133 @@
+Phase 1 is approved. Implement Phase 2A only: secure email confirmation and double opt-in for the Early Access list.
+
+Do not implement campaign sending yet. Stop after Phase 2A and wait for my approval.
+
+Start by inspecting commit `43a2409` and the real Phase 1 implementation. Reuse the new Early Access tables, consent events, public form, Admin Dashboard permissions and central email architecture.
+
+REQUIRED BEHAVIOUR
+
+After submitting the Early Access form:
+
+- Store the registration as pending email confirmation.
+- Send a neutral confirmation email to the submitted address.
+- The address must not become eligible for launch announcements or marketing until ownership is confirmed.
+- If the optional marketing checkbox was not selected, confirmation activates launch updates only.
+- If marketing was selected explicitly, confirmation activates both launch updates and marketing consent.
+- Store the original checkbox choices, wording versions, submission timestamp, confirmation timestamp and final confirmed statuses separately.
+
+The confirmation email must not contain promotions. It should only ask the person to confirm that they requested MyLocalTrade Early Access emails.
+
+SECURITY
+
+- Generate a cryptographically secure, single-use token.
+- Store only a hash of the token in the database.
+- Token expiry: 48 hours.
+- Do not log raw tokens or complete confirmation URLs.
+- Use generic public responses that do not reveal whether an address already exists.
+- Rate-limit form submissions, confirmation requests and resend requests.
+- Prevent simultaneous confirmations from producing duplicate events.
+- Automated link scanners must not activate consent through a GET request.
+- GET may display a confirmation page, but the user must press an explicit button that performs a protected POST to confirm.
+- Strip the token from browser history after loading the page.
+- Add `Referrer-Policy: no-referrer`.
+- Confirmation and resend operations must be idempotent.
+- Tests must never send real Brevo emails.
+
+RESUBSCRIPTION
+
+A previously unsubscribed or suppressed address must never be silently restored by submitting the public form.
+
+If resubscription is supported, it must require:
+
+1. A new explicit form submission with the relevant checkbox choices.
+2. A new confirmation email.
+3. An explicit confirmation action.
+4. A new consent event and timestamp.
+
+An administrator suppression for abuse, hard bounce or complaint must not be overridable through the public form. Distinguish administrative suppression from voluntary unsubscribe.
+
+ADMIN DASHBOARD
+
+Update the Early Access section to display:
+
+- Pending confirmation
+- Confirmed for launch only
+- Confirmed for launch and marketing
+- Confirmation expired
+- Unsubscribed
+- Administratively suppressed
+
+Add safe administrator actions where appropriate:
+
+- Resend confirmation
+- View confirmation history
+- Copy the email address
+- Suppress with reason
+
+Never display raw confirmation tokens.
+
+EMAIL DELIVERY
+
+Use:
+
+`MyLocalTrade <noreply@mylocaltrade.co.uk>`
+
+Reuse the existing central email system and existing Brevo transport. Do not create a marketing campaign or marketing list in this phase.
+
+The confirmation email counts toward the shared Brevo daily allowance, so record send success/failure accurately. Never report “sent” solely because the request was queued locally.
+
+Do not use Microsoft SMTP as an uncontrolled fallback if it bypasses the existing logging and safety rules.
+
+PRIVACY
+
+Update the Early Access privacy wording only where needed to explain email confirmation. Do not rewrite unrelated legal sections.
+
+Existing Phase 1 registrations must not be automatically marked as confirmed. Preserve their current classification until valid evidence exists.
+
+TESTS
+
+Add focused tests for:
+
+- Pending registration
+- Launch-only confirmation
+- Launch plus marketing confirmation
+- Expired token
+- Invalid token
+- One-time token use
+- Concurrent confirmation
+- Link-scanner GET does not activate consent
+- Explicit POST activates consent
+- Resend invalidates or safely replaces the previous token
+- Unsubscribe cannot be silently reversed
+- Administrative suppression cannot be bypassed
+- Generic public responses
+- No raw tokens in database logs or audit records
+- No real email traffic during tests
+- Existing Phase 1 behavior and admin permissions remain intact
+
+Run all relevant API, Admin Dashboard and landing-page tests/typechecks. Conduct a focused security/privacy review.
+
+DO NOT
+
+- Do not implement launch or marketing campaigns yet.
+- Do not sync contacts into Brevo marketing lists yet.
+- Do not deploy or publish.
+- Do not change production secrets or variables.
+- Do not modify mobile, RevenueCat, subscriptions, Company Teams, password resets or unrelated emails.
+- Do not run EAS/TestFlight.
+- Do not perform my local Git sync.
+
+DELIVERY
+
+Commit and push Phase 2A to main, then report:
+
+1. Commit hash
+2. Files and migrations changed
+3. Confirmation and expiry behaviour
+4. Resubscription and suppression behaviour
+5. Admin Dashboard changes
+6. Tests and security-review results
+7. Production migration requirements
+8. Anything required before Phase 2B
+
+Stop after the report and wait for my approval.

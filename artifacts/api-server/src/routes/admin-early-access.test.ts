@@ -8,9 +8,25 @@ import {
 } from "@workspace/db/schema";
 import { and, eq, inArray, like } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { vi } from "vitest";
+
+// Resend-confirmation dispatches email: mock the transport so tests never
+// produce real Brevo traffic (test-setup.ts also strips transport creds).
+vi.mock("../lib/email", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/email")>();
+  return {
+    ...actual,
+    sendEarlyAccessConfirmationEmail: vi.fn(async () => "brevo" as const),
+  };
+});
+
 import app from "../app";
 import { generateToken } from "../lib/auth";
 import { LAUNCH_CONSENT_VERSION } from "../lib/early-access-consent";
+import { sendEarlyAccessConfirmationEmail } from "../lib/email";
+import { hashConfirmationToken } from "../lib/early-access-confirmation";
+
+const confirmSendMock = vi.mocked(sendEarlyAccessConfirmationEmail);
 
 /**
  * Admin Early Access management: server-side authz, stats, search/filters,
@@ -141,6 +157,7 @@ describe("admin early-access authorization", () => {
     ["get", "/api/admin/early-access/export"],
     ["get", "/api/admin/early-access/1"],
     ["post", "/api/admin/early-access/1/suppress"],
+    ["post", "/api/admin/early-access/1/resend-confirmation"],
   ];
 
   it("rejects unauthenticated and non-admin callers on every route", async () => {
@@ -166,8 +183,18 @@ describe("GET /api/admin/early-access/stats", () => {
     // Shared dev DB: assert at-least, not exact.
     expect(res.body.total).toBeGreaterThanOrEqual(4);
     expect(res.body.marketingConsent).toBeGreaterThanOrEqual(1);
-    expect(res.body.unsubscribed).toBeGreaterThanOrEqual(1);
+    expect(res.body.suppressed).toBeGreaterThanOrEqual(1);
     expect(res.body.unknownLegacyConsent).toBeGreaterThanOrEqual(1);
+    // Double opt-in buckets exist (numbers vary on the shared dev DB).
+    for (const key of [
+      "pendingConfirmation",
+      "confirmationExpired",
+      "confirmedLaunchOnly",
+      "confirmedLaunchMarketing",
+      "legacyUnconfirmed",
+    ]) {
+      expect(typeof res.body[key], key).toBe("number");
+    }
   });
 });
 
@@ -291,6 +318,168 @@ describe("POST /api/admin/early-access/:id/suppress", () => {
       adminToken,
     );
     expect(again.status).toBe(409);
+  });
+});
+
+describe("double opt-in admin surfaces (Phase 2A)", () => {
+  async function seedPending(label: string, expired = false) {
+    return seedRegistration({
+      label,
+      launchConsentAt: null,
+      launchConsentVersion: null,
+      pendingRequestedAt: new Date(),
+      pendingLaunchConsentVersion: LAUNCH_CONSENT_VERSION,
+      confirmationTokenHash: hashConfirmationToken(`seed-${label}-${SUFFIX}`),
+      confirmationTokenExpiresAt: new Date(
+        Date.now() + (expired ? -1 : 1) * 60 * 60 * 1000,
+      ),
+    });
+  }
+
+  it("filters by pending / expired / confirmed status", async () => {
+    const pendingId = await seedPending("pending");
+    const expiredId = await seedPending("expired", true);
+    const confirmedId = await seedRegistration({
+      label: "confirmed",
+      confirmedAt: new Date(),
+    });
+
+    const q = async (status: string) => {
+      const res = await authed(
+        request(app)
+          .get("/api/admin/early-access")
+          .query({ search: SUFFIX, status }),
+        adminToken,
+      );
+      expect(res.status).toBe(200);
+      return res.body.registrations.map((r: any) => r.id);
+    };
+    expect(await q("pending")).toEqual([pendingId]);
+    expect(await q("expired")).toEqual([expiredId]);
+    expect(await q("confirmed")).toEqual([confirmedId]);
+  });
+
+  it("never returns the confirmation token hash in list, detail or CSV", async () => {
+    const pendingId = await seedPending("nohash");
+    const hash = hashConfirmationToken(`seed-nohash-${SUFFIX}`);
+
+    const list = await authed(
+      request(app)
+        .get("/api/admin/early-access")
+        .query({ search: `eaadmin-nohash-${SUFFIX}` }),
+      adminToken,
+    );
+    expect(list.status).toBe(200);
+    expect(list.body.registrations[0].id).toBe(pendingId);
+    expect(JSON.stringify(list.body)).not.toContain(hash);
+    expect(list.body.registrations[0]).not.toHaveProperty(
+      "confirmationTokenHash",
+    );
+
+    const detail = await authed(
+      request(app).get(`/api/admin/early-access/${pendingId}`),
+      adminToken,
+    );
+    expect(JSON.stringify(detail.body)).not.toContain(hash);
+
+    const csv = await authed(
+      request(app)
+        .get("/api/admin/early-access/export")
+        .query({ search: `eaadmin-nohash-${SUFFIX}` }),
+      adminToken,
+    );
+    expect(csv.text).not.toContain(hash);
+
+    // Suppress response must be sanitized too (it echoes the updated row).
+    const suppress = await authed(
+      request(app).post(`/api/admin/early-access/${pendingId}/suppress`),
+      adminToken,
+    );
+    expect(suppress.status).toBe(200);
+    expect(JSON.stringify(suppress.body)).not.toContain(hash);
+    expect(suppress.body.registration).not.toHaveProperty(
+      "confirmationTokenHash",
+    );
+  });
+
+  it("resend mints a fresh token, audits the send, and respects the daily cap", async () => {
+    confirmSendMock.mockClear();
+    const id = await seedPending("resend", true); // expired → resend reopens it
+    const oldHash = hashConfirmationToken(`seed-resend-${SUFFIX}`);
+
+    const res = await authed(
+      request(app).post(`/api/admin/early-access/${id}/resend-confirmation`),
+      adminToken,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.sent).toBe(true);
+    expect(confirmSendMock).toHaveBeenCalledTimes(1);
+
+    const [row] = await db
+      .select()
+      .from(earlyAccessRegistrationsTable)
+      .where(eq(earlyAccessRegistrationsTable.id, id));
+    // Fresh token replaces the previous one and the window is reopened.
+    expect(row.confirmationTokenHash).not.toBe(oldHash);
+    expect(row.confirmationTokenExpiresAt!.getTime()).toBeGreaterThan(
+      Date.now(),
+    );
+    // The emailed URL's token hashes to exactly what was stored.
+    const url = new URL(confirmSendMock.mock.calls.at(-1)![0].confirmUrl);
+    expect(hashConfirmationToken(url.searchParams.get("token")!)).toBe(
+      row.confirmationTokenHash,
+    );
+
+    const events = await db
+      .select()
+      .from(earlyAccessEventsTable)
+      .where(
+        and(
+          eq(earlyAccessEventsTable.registrationId, id),
+          eq(earlyAccessEventsTable.kind, "CONFIRMATION_SENT"),
+        ),
+      );
+    expect(events).toHaveLength(1);
+    expect((events[0].details as any).resend).toBe(true);
+    expect((events[0].details as any).ok).toBe(true);
+    expect(events[0].performedBy).toBe(createdUserIds[0]);
+
+    // Daily cap: two more resends allowed, the fourth send is refused.
+    for (const expected of [200, 200, 429]) {
+      const again = await authed(
+        request(app).post(`/api/admin/early-access/${id}/resend-confirmation`),
+        adminToken,
+      );
+      expect(again.status).toBe(expected);
+    }
+    expect(confirmSendMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("refuses resend for suppressed contacts and rows with nothing pending", async () => {
+    confirmSendMock.mockClear();
+    const suppressed = await authed(
+      request(app).post(
+        `/api/admin/early-access/${suppressedId}/resend-confirmation`,
+      ),
+      adminToken,
+    );
+    expect(suppressed.status).toBe(409);
+
+    // Legacy Phase 1 row: never submitted under double opt-in → no pending.
+    const legacy = await authed(
+      request(app).post(
+        `/api/admin/early-access/${subscribedId}/resend-confirmation`,
+      ),
+      adminToken,
+    );
+    expect(legacy.status).toBe(409);
+    expect(confirmSendMock).not.toHaveBeenCalled();
+
+    const missing = await authed(
+      request(app).post("/api/admin/early-access/999999999/resend-confirmation"),
+      adminToken,
+    );
+    expect(missing.status).toBe(404);
   });
 });
 

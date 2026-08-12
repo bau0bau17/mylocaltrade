@@ -159,7 +159,23 @@ const earlyAccessLimiter = rateLimit({
   message: { error: "Too many signups from this connection. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  // Mounted on the /api/early-access prefix, so the confirm endpoint would
+  // otherwise share (and starve) the 5/hour form bucket — it has its own
+  // limiter below. req.path is mount-relative here.
+  skip: (req) => req.path.startsWith("/confirm"),
   store: createPgStore("early-access"),
+});
+
+// Double opt-in confirmation POST: takes a raw single-use token from anyone
+// on the internet, so throttle guessing attempts (tokens are 256-bit — this
+// is defence in depth), while leaving room for legitimate retries/resends.
+const earlyAccessConfirmLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 15,
+  message: { error: "Too many attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createPgStore("early-access-confirm"),
 });
 
 const enquiriesLimiter = rateLimit({
@@ -246,6 +262,7 @@ app.use("/api/trader/phone/send-otp", phoneOtpIpLimiter);
 app.use("/api/profile/phone-change/send-otp", phoneOtpIpLimiter);
 app.use("/api/customer/phone/send-otp", phoneOtpIpLimiter);
 app.use("/api/contact", contactLimiter);
+app.use("/api/early-access/confirm", earlyAccessConfirmLimiter);
 app.use("/api/early-access", earlyAccessLimiter);
 app.use("/api/enquiries", enquiriesLimiter);
 app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);

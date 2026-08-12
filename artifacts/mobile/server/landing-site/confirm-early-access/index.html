@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- The URL carries a single-use token: never leak it via Referer, never index. -->
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Confirm your email — MyLocalTrade</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0B1120; color: #E5E7EB; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .card {
+      max-width: 480px; width: 100%; background: #111827;
+      border: 1px solid #1F2937; border-radius: 16px; padding: 40px; text-align: center;
+    }
+    h1 { color: #F9FAFB; font-size: 22px; margin-bottom: 12px; }
+    p { color: #9CA3AF; font-size: 15px; line-height: 1.6; margin-bottom: 24px; }
+    .btn {
+      display: inline-block; background: #00B4D8; color: #06121F; border: none;
+      font-size: 16px; font-weight: 700; padding: 14px 32px; border-radius: 10px;
+      cursor: pointer;
+    }
+    .btn:disabled { opacity: 0.6; cursor: default; }
+    .link { color: #00B4D8; text-decoration: none; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="state-ready">
+      <h1>Confirm your email address</h1>
+      <p>Press the button below to confirm that you asked to receive MyLocalTrade Early Access emails at this address.</p>
+      <button class="btn" id="confirm-btn" type="button">Confirm my email</button>
+    </div>
+    <div id="state-success" class="hidden">
+      <h1>Email confirmed</h1>
+      <p>Thanks — your email address is confirmed. We'll be in touch when early access opens.</p>
+      <a class="link" href="/">Back to MyLocalTrade</a>
+    </div>
+    <div id="state-error" class="hidden">
+      <h1>Link invalid or expired</h1>
+      <p>This confirmation link is invalid or has expired. You can request a new one by submitting the early access form again.</p>
+      <a class="link" href="/">Back to MyLocalTrade</a>
+    </div>
+    <div id="state-retry" class="hidden">
+      <h1>Something went wrong</h1>
+      <p>We couldn't confirm your email just now. Please try again in a moment.</p>
+      <button class="btn" id="retry-btn" type="button">Try again</button>
+    </div>
+  </div>
+  <script>
+    (function () {
+      // Token is held in memory only; it is stripped from the address bar
+      // (and therefore browser history) immediately on load. Consent is NEVER
+      // activated by loading this page — only by the explicit POST below, so
+      // automated link scanners issuing GETs are inert.
+      var params = new URLSearchParams(window.location.search);
+      var token = params.get("token") || "";
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+      var states = ["ready", "success", "error", "retry"];
+      function show(name) {
+        states.forEach(function (s) {
+          document.getElementById("state-" + s).classList.toggle("hidden", s !== name);
+        });
+      }
+      if (!/^[A-Za-z0-9_-]{20,128}$/.test(token)) { show("error"); }
+      function confirm() {
+        var btn = document.getElementById("confirm-btn");
+        btn.disabled = true;
+        fetch("/api/early-access/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: token }),
+        }).then(function (res) {
+          if (res.ok) { show("success"); return; }
+          if (res.status === 400) { show("error"); return; }
+          show("retry");
+        }).catch(function () {
+          show("retry");
+        }).finally(function () {
+          btn.disabled = false;
+        });
+      }
+      document.getElementById("confirm-btn").addEventListener("click", confirm);
+      document.getElementById("retry-btn").addEventListener("click", function () {
+        show("ready");
+        confirm();
+      });
+    })();
+  </script>
+</body>
+</html>

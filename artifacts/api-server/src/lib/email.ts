@@ -149,7 +149,7 @@ export function assertOpenLinkBaseAtStartup(): OpenLinkStatus {
   return status;
 }
 
-function getOpenLinkBase(): string {
+export function getOpenLinkBase(): string {
   const status = getOpenLinkStatus();
   if (!status.universalLinks) {
     // Per-send visibility: keep the (unchanged) fallback behaviour, but make
@@ -805,37 +805,53 @@ Sent via the mylocaltrade.co.uk early access form.`;
 }
 
 /**
- * Confirmation back to the person who signed up, from the standard
- * "MyLocalTrade <noreply@…>" identity. Best-effort: failure is logged by the
- * dispatcher and must never fail the signup itself.
+ * Double opt-in confirmation email (Phase 2A). Strictly neutral: it only
+ * asks the recipient to confirm that they requested MyLocalTrade Early
+ * Access emails — no promotions, no marketing copy.
+ *
+ * SECURITY: `confirmUrl` carries the single-use raw token. It must NEVER be
+ * logged — the dispatcher only logs tag/recipient/subject, never the body.
+ * Returns the real dispatch channel so the caller can record send
+ * success/failure accurately (never "sent" just because it was queued).
  */
 export async function sendEarlyAccessConfirmationEmail(opts: {
   toEmail: string;
   toName: string;
-}): Promise<void> {
+  confirmUrl: string;
+}): Promise<"brevo" | "smtp" | "none" | "skipped"> {
   const safeName = escapeHtml(opts.toName);
+  const safeUrl = escapeHtml(opts.confirmUrl);
   const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>You're on the list</title>
+  <title>Confirm your email</title>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
   <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
     <div style="text-align: center; margin-bottom: 32px;">
       <div style="margin-bottom: 16px;">${LOGO_IMG_HTML}</div>
       <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 8px;">MyLocalTrade</h1>
-      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">You're on the early access list</p>
+      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">Confirm your email address</p>
     </div>
     <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-      Thanks for joining early access — you're on the list. We'll email you as soon as
-      MyLocalTrade launches in your area, so you can be among the first in.
-    </p>
     <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-      No action needed from you right now.
+      We received a request to receive MyLocalTrade Early Access emails at this
+      address. To confirm it was you, please press the button below.
+    </p>
+    <div style="text-align: center; margin: 0 0 24px;">
+      <a href="${safeUrl}" style="display: inline-block; background: #00B4D8; color: #06121F; font-size: 16px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 10px;">Confirm my email</a>
+    </div>
+    <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+      This link expires in 48 hours. If the button doesn't work, copy and paste
+      this address into your browser:<br>
+      <span style="color: #6B7280; word-break: break-all;">${safeUrl}</span>
+    </p>
+    <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
+      If you didn't request this, you can safely ignore this email — nothing
+      will be sent to you.
     </p>
     <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
     <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
@@ -847,18 +863,22 @@ export async function sendEarlyAccessConfirmationEmail(opts: {
 </html>`;
   const text = `Hi ${opts.toName},
 
-Thanks for joining early access — you're on the list. We'll email you as soon as MyLocalTrade launches in your area, so you can be among the first in.
+We received a request to receive MyLocalTrade Early Access emails at this address. To confirm it was you, open this link:
 
-No action needed from you right now.
+${opts.confirmUrl}
+
+This link expires in 48 hours.
+
+If you didn't request this, you can safely ignore this email — nothing will be sent to you.
 
 This mailbox isn't monitored — if you need to reach us, use the contact form on mylocaltrade.co.uk.
 
 Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ`;
-  await dispatchEmail({
+  return dispatchEmail({
     category: "contact",
     to: { email: opts.toEmail, name: opts.toName },
     from: { email: FROM_EMAIL, name: FROM_NAME },
-    subject: "You're on the MyLocalTrade early access list",
+    subject: "Confirm your MyLocalTrade Early Access request",
     html,
     text,
     tag: "early-access-confirm",
