@@ -1,0 +1,332 @@
+Before production, perform one focused Phase 2B hardening pass. Do not expand the feature beyond the requirements below and do not deploy anything.
+
+The Phase 2B report is promising, but the following production risks must be inspected against the actual implementation and corrected where confirmed.
+
+1. BREVO TEMPORARY LIST LIFECYCLE
+
+The implementation creates a unique Brevo contact list for every batch. Brevo has a finite contact-list quota, so these lists must not accumulate indefinitely.
+
+Inspect the exact lifecycle.
+
+Implement safe cleanup for temporary batch lists after:
+
+- The Brevo campaign has been created/sent
+- The local immutable recipient snapshot is preserved
+- Any information required for webhook matching is stored locally
+- Deleting the temporary list no longer risks affecting an active send
+
+Store cleanup state locally and make cleanup idempotent.
+
+A failed cleanup must be retryable without resending the campaign.
+
+Add an Admin status/warning for orphaned Brevo resources if cleanup repeatedly fails.
+
+Do not delete:
+
+- The local campaign
+- Local campaign recipients
+- Consent evidence
+- Audit history
+- The Brevo campaign reference
+
+Add tests proving that repeated batches do not permanently consume one Brevo contact list each.
+
+2. WEBHOOK EVENT NAMES
+
+Verify the webhook implementation against Brevo’s real Marketing webhook events.
+
+For Marketing webhooks, use the exact event names supported by Brevo, including where appropriate:
+
+- `spam`
+- `hardBounce`
+- `unsubscribed`
+- `delivered`
+
+Do not instruct me to configure unsupported Marketing webhook event names such as `blocked` or `complaint`.
+
+Treat Brevo’s `spam` Marketing event as a permanent complaint/spam suppression locally.
+
+If `blocked` is only available through another Brevo webhook type, document that distinction instead of presenting it as a Marketing webhook event.
+
+Webhook processing must be idempotent because Brevo delivery may be at-least-once.
+
+Duplicate webhook deliveries must never:
+
+- Create conflicting recipient states
+- Duplicate campaign events
+- Reverse a suppression
+- Reprocess the same delivery incorrectly
+
+3. WEBHOOK AUTHENTICATION
+
+Do not place `BREVO_WEBHOOK_SECRET` in the URL query string.
+
+Use Brevo’s supported webhook authentication or a dedicated custom authentication header, for example an Authorization header or clearly named custom header.
+
+The endpoint must:
+
+- Validate the authentication header server-side
+- Use constant-time comparison where appropriate
+- Reject missing or invalid authentication
+- Never log the secret
+- Never return the secret
+- Not accept query-string-only authentication in production
+- Support safe secret rotation if practical
+- Rate-limit invalid authentication attempts without blocking legitimate Brevo events
+
+Update the final manual Brevo instructions with the exact authentication/header configuration I must enter.
+
+4. GLOBAL TEST-EMAIL LIMIT
+
+The current limit of five test emails per campaign is insufficient by itself because Brevo’s campaign test-email allowance is global per account/day.
+
+Add a globally serialised, database-backed test-send counter across:
+
+- All campaigns
+- All administrators
+- All test-email endpoints
+
+Keep both limits:
+
+- Maximum five test sends per campaign per day
+- A configurable global test-send limit per day, with a safe default below Brevo’s documented global limit
+
+Concurrent requests must not exceed either limit.
+
+Test sends must be included in local email-credit estimates where appropriate.
+
+If Brevo rejects a test send, record the actual failure accurately. Do not claim that it was sent.
+
+5. FREE AND PAID BREVO PLAN CONFIGURATION
+
+Do not permanently hardcode Brevo’s current Free-plan allowance of 300 emails per day.
+
+The current Free-plan safe defaults may be:
+
+- `BREVO_ACCOUNT_DAILY_CAP=300`
+- `MARKETING_DAILY_SEND_CAP=200`
+- `TRANSACTIONAL_EMAIL_DAILY_RESERVE=100`
+
+The system must also support a future paid Brevo plan with:
+
+- No daily sending limit
+- A monthly allowance, such as 5,000 emails per month
+
+A Brevo allowance labelled “5,000 emails” must not be treated automatically as 5,000 emails per day.
+
+Add a documented configuration model that can safely represent:
+
+- Daily account allowance, when applicable
+- Monthly account allowance, when applicable
+- No daily account cap on a paid plan
+- Internal marketing batch cap
+- Transactional-email reserve
+- Current local daily/monthly usage estimate
+- Billing-period/reset boundaries
+
+Use clearly named configuration values, for example:
+
+- `BREVO_ACCOUNT_DAILY_CAP`
+- `BREVO_ACCOUNT_MONTHLY_CAP`
+- `MARKETING_DAILY_SEND_CAP`
+- `TRANSACTIONAL_EMAIL_DAILY_RESERVE`
+- A monthly transactional reserve if required by the final design
+
+Define and validate exactly how an unlimited/not-applicable daily cap is represented. Do not rely on an ambiguous value without documentation.
+
+After a future Brevo upgrade, changing production configuration must be sufficient. A code change, mobile build or TestFlight release must not be required.
+
+The Admin Dashboard must clearly display whether the allowance is:
+
+- Daily
+- Monthly
+- Locally estimated
+- Reliably retrieved from Brevo
+
+Never label a local counter as Brevo’s exact live balance unless it was retrieved reliably from Brevo.
+
+If exact Brevo credit usage cannot be retrieved, say clearly:
+
+“Local safety estimate — Brevo’s dashboard remains the source of truth.”
+
+6. SHARED TRANSACTIONAL AND MARKETING USAGE
+
+Brevo’s current allowance is shared with transactional emails.
+
+Inspect whether local quota accounting includes actual sends initiated through the central email service, including:
+
+- Password resets
+- Verification emails
+- Team invitations
+- Early Access confirmation emails
+- Campaign test emails
+- Other Brevo transactional emails
+
+Do not allow the marketing engine to assume that the entire transactional reserve is unused.
+
+If exact shared consumption cannot be guaranteed, keep a conservative marketing cap and explain the limitation in the Admin interface and final report.
+
+Marketing email must never take priority over password resets, verification or essential account-security email.
+
+7. DAILY OR MONTHLY CREDIT FAILURE BEHAVIOUR
+
+Handle Brevo responses carefully.
+
+If Brevo explicitly returns an insufficient-credit response such as `not_enough_credits`:
+
+- Do not mark recipients as sent
+- Do not mark recipients as assumed sent
+- Move the batch/campaign to `WAITING_FOR_QUOTA`
+- Preserve the recipient queue
+- Release or correct unused local reservations safely
+- Allow a safe retry after the relevant daily or monthly allowance resets
+- Do not duplicate a Brevo campaign that was already created
+
+Only use an `assumed sent`/no-retry result when the outcome is genuinely ambiguous after a send command may have been accepted, such as:
+
+- Connection loss after submission
+- Timeout after the send request was transmitted
+- Unknown result where retrying could duplicate delivery
+
+Distinguish clearly between:
+
+- Rejection before Brevo campaign creation
+- Campaign created but send explicitly rejected
+- Insufficient credits
+- API rate limiting
+- Definite validation/permission failure
+- Ambiguous timeout after send request
+- Confirmed successful send
+
+Add focused tests for every case.
+
+8. RETRY AFTER PLAN UPGRADE
+
+If a batch is waiting because the Free-plan allowance was exhausted and I later upgrade Brevo:
+
+- Updating the configuration must allow the remaining batch to continue
+- Already sent recipients must not be sent again
+- The immutable audience snapshot must remain unchanged
+- Newly registered people must not be silently added to an already-started campaign
+- Unsubscribed/suppressed people must still be rechecked and excluded before the next batch
+- No server restart should be required unless the deployment platform requires it to load changed environment variables
+
+Document the exact Admin action required to continue a waiting campaign.
+
+9. UNSUBSCRIBE TOKEN SECRET
+
+Inspect exactly which secret signs the stateless unsubscribe links.
+
+The unsubscribe mechanism must use a dedicated, stable production secret, not:
+
+- A session secret
+- The Brevo API key
+- The Brevo webhook secret
+- Another unrelated application secret
+
+Use a clearly named secret such as:
+
+`EARLY_ACCESS_UNSUBSCRIBE_SECRET`
+
+Do not expose or log this secret.
+
+Document what happens to unsubscribe links in already-sent emails when this secret rotates.
+
+Prefer either:
+
+- Safe support for current and previous signing secrets during rotation; or
+- Another secure design that does not unexpectedly invalidate all unsubscribe links from existing emails
+
+Previously issued unsubscribe links must remain usable for a reasonable campaign/retention period.
+
+10. BREVO RESOURCE AND CONTACT CLEANUP
+
+Inspect what happens to:
+
+- Temporary batch lists
+- Brevo campaign drafts
+- Failed Brevo campaigns
+- Contacts removed from eligible audiences
+- Unsubscribed contacts
+- Hard-bounced contacts
+- Spam/complaint contacts
+
+Do not remove local suppression evidence.
+
+Ensure unsubscribe, spam and hard-bounce states are synchronised safely so those contacts are not re-added to later eligible lists.
+
+Temporary remote resources must have a documented cleanup lifecycle, retry state and audit event.
+
+Do not delete resources still required for a live campaign or webhook matching.
+
+11. ADMIN DASHBOARD CLARITY
+
+Update Admin copy where necessary so it does not promise inaccurate behaviour.
+
+It must clearly show:
+
+- Campaign state
+- Eligible and excluded counts
+- Current batch size
+- Remaining unsent recipients
+- Local estimated allowance
+- Whether allowance is daily or monthly
+- Why a batch is waiting
+- Whether Brevo is disabled
+- Whether temporary Brevo cleanup failed
+- Whether a result is confirmed or assumed sent
+- How to continue the next batch safely
+
+Do not show “Completed” if recipients remain queued, failed or waiting for quota.
+
+12. FINAL VERIFICATION
+
+After these focused checks/fixes:
+
+- Run all relevant API tests
+- Run all relevant Admin Dashboard tests
+- Run all landing-page tests/typechecks
+- Conduct a focused concurrency, quota, webhook and idempotency review
+- Verify automated tests make zero real Brevo calls
+- Verify automated tests consume zero real Brevo credits
+- Verify no secret appears in API responses, logs, audit events or URLs
+- Verify no recipient can receive a duplicate campaign email through retry/concurrency
+- Verify suppression always wins over campaign state
+
+DO NOT
+
+- Do not send any real launch or marketing email
+- Do not create production Brevo contacts, lists, campaigns or webhooks
+- Do not apply production database schema
+- Do not publish or deploy
+- Do not change production secrets or variables
+- Do not enable `MARKETING_BREVO_ENABLED`
+- Do not modify mobile
+- Do not modify RevenueCat, subscriptions or Company Teams
+- Do not change unrelated transactional-email behaviour
+- Do not run EAS or TestFlight
+- Do not perform my local Git sync
+- Do not start another feature phase
+
+DELIVERY
+
+Commit and push the hardening changes to main, then report:
+
+1. Commit hash
+2. Which risks were confirmed
+3. Temporary Brevo-list cleanup lifecycle
+4. Exact valid Marketing webhook events
+5. Exact webhook authentication setup
+6. Global and per-campaign test-email limits
+7. Free-plan configuration
+8. Future 5,000-emails/month configuration
+9. Shared transactional/marketing quota behaviour
+10. Insufficient-credit versus ambiguous-timeout behaviour
+11. Retry behaviour after a plan upgrade
+12. Unsubscribe signing secret and rotation behaviour
+13. Brevo resource-cleanup behaviour
+14. Admin Dashboard wording/status changes
+15. Tests and final review results
+16. Corrected production setup, schema and publish order
+
+Stop after this report. Do not deploy or begin other work.

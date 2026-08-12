@@ -14,6 +14,8 @@ const TRANSPORT_ENV_KEYS = [
   "BREVO_API_KEY_VERIFICATION",
   "BREVO_API_KEY_NOTIFICATIONS",
   "BREVO_API_KEY_CONTACT",
+  "BREVO_API_KEY_MARKETING",
+  "MARKETING_BREVO_ENABLED",
   "SMTP_HOST",
   "SMTP_USER",
   "SMTP_PASS",
@@ -21,6 +23,12 @@ const TRANSPORT_ENV_KEYS = [
 for (const key of TRANSPORT_ENV_KEYS) {
   delete process.env[key];
 }
+
+// Unsubscribe tokens are signed with a DEDICATED secret (never the session
+// secret). Tests always run with a fixed throwaway value so token building
+// and verification work without any real configuration.
+process.env.EARLY_ACCESS_UNSUBSCRIBE_SECRET = "test-unsubscribe-secret";
+delete process.env.EARLY_ACCESS_UNSUBSCRIBE_SECRET_PREVIOUS;
 
 // Rate-limit counters live in a shared Postgres table (see
 // lib/pg-rate-limit-store.ts), so back-to-back test runs against the same

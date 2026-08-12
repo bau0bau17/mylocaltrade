@@ -10,9 +10,13 @@ import {
 } from "@workspace/db/schema";
 import {
   BREVO_LIST_NAMES,
+  BrevoApiError,
   BrevoMarketingDisabledError,
   createBatchList,
   createCampaign,
+  deleteCampaign,
+  deleteList,
+  getCampaignStatus,
   marketingSendingStatus,
   sendCampaignNow,
   upsertContactsIntoList,
@@ -47,7 +51,17 @@ import { buildUnsubscribeToken } from "./early-access-unsubscribe";
 
 export type BatchRunResult =
   | { ok: true; batchNumber: number; attempted: number; sent: number; skipped: number; failed: number; remaining: number; campaignStatus: string }
-  | { ok: false; code: "not_found" | "bad_status" | "quota_exhausted" | "brevo_disabled" | "brevo_error" | "needs_recovery_review"; message: string; campaignStatus?: string };
+  | { ok: false; code: "not_found" | "bad_status" | "in_progress" | "quota_exhausted" | "brevo_credits" | "brevo_disabled" | "brevo_error" | "needs_recovery_review"; message: string; campaignStatus?: string };
+
+/**
+ * Send lease: a 'pending' batch WITHOUT a Brevo campaign id younger than
+ * this is treated as an ACTIVE send by another worker — its recipients are
+ * NOT released (releasing them while the other worker goes on to create and
+ * send its Brevo campaign would double-send them). Recovery/release only
+ * happens after the lease expires, i.e. after a proven crash. The remote
+ * phase takes seconds; 15 minutes is deliberately conservative.
+ */
+export const BATCH_SEND_LEASE_MS = 15 * 60 * 1000;
 
 const c = earlyAccessCampaignsTable;
 const r = earlyAccessCampaignRecipientsTable;
@@ -68,16 +82,21 @@ async function audit(
   });
 }
 
-/** Recover any crashed batch left in 'pending'. Runs inside the reserve tx. */
+/**
+ * Recover any crashed batch left in 'pending'. Runs inside the reserve tx.
+ * Returns true when a fresh no-id pending batch (within the send lease) was
+ * found — the caller must abort instead of reserving on top of it.
+ */
 async function recoverPendingBatch(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   campaignId: number,
   performedBy: number,
-): Promise<void> {
+): Promise<boolean> {
   const pending = await tx
     .select()
     .from(b)
     .where(and(eq(b.campaignId, campaignId), eq(b.status, "pending")));
+  let activeSendInProgress = false;
   for (const batch of pending) {
     const now = new Date();
     if (batch.brevoCampaignId !== null) {
@@ -105,8 +124,16 @@ async function recoverPendingBatch(
         batchNumber: batch.batchNumber,
         recovered: "assumed_sent",
       });
+    } else if (now.getTime() - batch.createdAt.getTime() < BATCH_SEND_LEASE_MS) {
+      // No Brevo id YET — but the batch is fresh, so another worker may be
+      // between committing its reservation and persisting the Brevo id.
+      // Releasing now would let this run resend the same recipients while
+      // the other worker's send goes out. Abort instead; release becomes
+      // safe only once the lease has expired (proven crash).
+      activeSendInProgress = true;
     } else {
-      // Brevo campaign was never created — releasing is provably safe.
+      // Brevo campaign was never created and the lease has long expired —
+      // releasing is provably safe.
       await tx
         .update(r)
         .set({ status: "queued", batchNumber: null, updatedAt: now })
@@ -123,6 +150,7 @@ async function recoverPendingBatch(
         .where(eq(b.id, batch.id));
     }
   }
+  return activeSendInProgress;
 }
 
 /** Terminal-state bookkeeping once no queued recipients remain. */
@@ -176,7 +204,8 @@ export async function runCampaignBatch(
       return { error: "bad_status" as const, status: campaign.status };
     }
 
-    await recoverPendingBatch(tx, campaignId, performedBy);
+    const activeSend = await recoverPendingBatch(tx, campaignId, performedBy);
+    if (activeSend) return { error: "in_progress" as const };
 
     // Campaign may already be finished after recovery.
     const finished = await finalizeIfDone(tx, campaignId, performedBy);
@@ -304,6 +333,14 @@ export async function runCampaignBatch(
       message: `Campaign is ${reserved.status} — batches can only run while queued, waiting for quota, or recovering.`,
       campaignStatus: reserved.status,
     };
+  if (reserved.error === "in_progress")
+    return {
+      ok: false,
+      code: "in_progress",
+      message:
+        "Another send for this campaign appears to be in progress. Wait for it to finish; if it crashed, retry after 15 minutes and it will recover safely.",
+      campaignStatus: "sending",
+    };
   if (reserved.error === "quota")
     return {
       ok: false,
@@ -326,7 +363,13 @@ export async function runCampaignBatch(
   const { campaign, batch, batchNumber, toSend, attempted, skipped } = reserved;
 
   // ---- Phase 2: everything after this point talks to Brevo ----------------
-  const release = async (detail: string): Promise<void> => {
+  // Release is only ever called when NOTHING can have been sent (no Brevo
+  // campaign, or an explicit 4xx sendNow rejection). The recipient queue is
+  // preserved: rows go back to 'queued' for a safe retry.
+  const release = async (
+    detail: string,
+    campaignStatus: "queued" | "waiting_quota" = "queued",
+  ): Promise<void> => {
     const now = new Date();
     await db.transaction(async (tx) => {
       await tx
@@ -345,7 +388,7 @@ export async function runCampaignBatch(
         .where(eq(b.id, batch.id));
       await tx
         .update(c)
-        .set({ status: "queued", updatedAt: now })
+        .set({ status: campaignStatus, updatedAt: now })
         .where(and(eq(c.id, campaignId), eq(c.status, "sending")));
     });
   };
@@ -398,12 +441,18 @@ export async function runCampaignBatch(
   }
 
   let brevoCampaignId: number | null = null;
+  let brevoListId: number | null = null;
   try {
     // One brand-new, never-reused list per batch: a concurrent batch (same
     // or other campaign) can never swap this batch's audience before send.
     const listId = await createBatchList(
       `${BREVO_LIST_NAMES[campaign.type as EarlyAccessCampaignType]} — c${campaignId} b${batchNumber}`,
     );
+    brevoListId = listId;
+    // Persist the list id IMMEDIATELY: if any later step fails, the cleanup
+    // pass can still find and delete this remote list. Kept in memory only,
+    // it would leak on Brevo forever.
+    await db.update(b).set({ brevoListId: listId }).where(eq(b.id, batch.id));
     await upsertContactsIntoList(
       listId,
       toSend.map((row) => ({
@@ -432,9 +481,30 @@ export async function runCampaignBatch(
       : err instanceof Error
         ? err.message
         : "Brevo request failed";
+    const insufficientCredits =
+      err instanceof BrevoApiError && err.insufficientCredits;
     if (brevoCampaignId === null) {
       // Nothing could have been sent yet — safe to release and retry.
-      await release(`brevo_error: ${message}`);
+      // An explicit out-of-credits rejection parks the campaign in
+      // waiting_quota so the admin sees WHY it stopped.
+      await release(
+        `brevo_error: ${message}`,
+        insufficientCredits ? "waiting_quota" : "queued",
+      );
+      if (insufficientCredits) {
+        await audit(db, campaignId, "BATCH_REJECTED", performedBy, {
+          batchNumber,
+          reason: "not_enough_credits",
+          stage: "before_campaign_creation",
+        });
+        return {
+          ok: false,
+          code: "brevo_credits",
+          message:
+            "Brevo rejected the send: not enough email credits. No email was sent and no recipient was marked sent — the queue is preserved. Retry after the daily/monthly allowance resets (or after upgrading the plan and raising the caps).",
+          campaignStatus: "waiting_quota",
+        };
+      }
       return {
         ok: false,
         code: "brevo_error",
@@ -442,9 +512,58 @@ export async function runCampaignBatch(
         campaignStatus: "queued",
       };
     }
-    // sendNow was reached: the batch stays 'pending' with the Brevo id, and
-    // the NEXT run's recovery conservatively marks it assumed-sent. Never
-    // auto-retried — duplicates are worse than a skipped batch.
+    // sendNow was reached. Distinguish DEFINITE rejection from AMBIGUOUS
+    // failure:
+    // - 4xx (incl. not_enough_credits, permission/validation errors, 429):
+    //   Brevo REFUSED the send request — nothing was sent. Deleting the
+    //   never-sent draft campaign is safe and prevents a duplicate Brevo
+    //   campaign on retry; recipients are released for a safe retry.
+    // - network errors / timeouts / 5xx: the send may or may not have
+    //   fired. Batch stays 'pending' with the Brevo id; the next run's
+    //   recovery marks it assumed-sent. Never auto-retried — a duplicate
+    //   email is worse than a skipped batch.
+    if (err instanceof BrevoApiError && err.definiteRejection) {
+      let draftCleaned = false;
+      try {
+        await deleteCampaign(brevoCampaignId);
+        draftCleaned = true;
+        if (brevoListId !== null) {
+          await deleteList(brevoListId);
+          await db
+            .update(b)
+            .set({ brevoListDeletedAt: new Date() })
+            .where(eq(b.id, batch.id));
+        }
+      } catch {
+        /* draft cleanup is retried by the orphan-cleanup pass */
+      }
+      await release(
+        `brevo_rejected(${err.brevoCode ?? err.status}): ${message}`,
+        insufficientCredits ? "waiting_quota" : "queued",
+      );
+      await audit(db, campaignId, "BATCH_REJECTED", performedBy, {
+        batchNumber,
+        brevoStatus: err.status,
+        brevoCode: err.brevoCode,
+        stage: "send_rejected",
+        draftCleaned,
+      });
+      if (insufficientCredits) {
+        return {
+          ok: false,
+          code: "brevo_credits",
+          message:
+            "Brevo rejected the send: not enough email credits. No email was sent and no recipient was marked sent — the queue is preserved. Retry after the daily/monthly allowance resets (or after upgrading the plan and raising the caps).",
+          campaignStatus: "waiting_quota",
+        };
+      }
+      return {
+        ok: false,
+        code: "brevo_error",
+        message: `Brevo refused the send request (nothing was sent); recipients were returned to the queue. (${message})`,
+        campaignStatus: "queued",
+      };
+    }
     return {
       ok: false,
       code: "needs_recovery_review",
@@ -492,6 +611,15 @@ export async function runCampaignBatch(
     }
   });
 
+  // Opportunistic, best-effort cleanup of EARLIER batches' temporary Brevo
+  // lists (this batch's own list is still in use by the in-flight send and
+  // is skipped by the active-send check). Failures never affect the batch.
+  try {
+    await cleanupBatchLists(campaignId, performedBy);
+  } catch {
+    /* surfaced via cleanupAttempts/orphanedBrevoLists, retried later */
+  }
+
   const remaining = await remainingQueued(campaignId);
   return {
     ok: true,
@@ -510,5 +638,125 @@ async function remainingQueued(campaignId: number): Promise<number> {
     .select({ count: sql<number>`count(*)::int` })
     .from(r)
     .where(and(eq(r.campaignId, campaignId), eq(r.status, "queued")));
+  return row?.count ?? 0;
+}
+
+// ---------------------------------------------------------------------------
+// Temporary Brevo list cleanup
+// ---------------------------------------------------------------------------
+
+/**
+ * TEMPORARY LIST LIFECYCLE — Brevo's contact-list quota is finite, so the
+ * one-list-per-batch design MUST NOT leak a list per batch forever.
+ *
+ * A batch's list is deleted only once ALL of these hold:
+ *   1. the local immutable recipient snapshot is preserved (always — we
+ *      never delete local rows),
+ *   2. webhook matching does not need the list (webhooks are matched by
+ *      recipient EMAIL against local rows, never by list id),
+ *   3. deleting cannot affect an active send:
+ *      - batch 'failed' (recipients released, nothing in flight), or
+ *      - batch 'sent' AND Brevo reports the campaign status as
+ *        'sent'/'archive' (or the campaign no longer exists).
+ *
+ * Cleanup state lives on the batch row (brevoListDeletedAt /
+ * cleanupAttempts / cleanupLastError): it is idempotent (remote 404 counts
+ * as deleted), retryable without EVER touching recipients or resending
+ * anything, and repeated failures surface as an admin warning
+ * (orphanedBrevoLists). The local campaign, recipients, consent evidence,
+ * audit history and the brevoCampaignId reference are NEVER deleted.
+ */
+const BREVO_DELETABLE_CAMPAIGN_STATUSES = new Set(["sent", "archive", "archived"]);
+
+/** Attempts >= this with no success ⇒ shown as orphaned in admin. */
+export const CLEANUP_ORPHAN_ATTEMPT_THRESHOLD = 3;
+
+export type ListCleanupResult = {
+  checked: number;
+  deleted: number;
+  skippedStillActive: number;
+  failed: number;
+};
+
+export async function cleanupBatchLists(
+  campaignId: number,
+  performedBy: number | null,
+): Promise<ListCleanupResult> {
+  const result: ListCleanupResult = {
+    checked: 0,
+    deleted: 0,
+    skippedStillActive: 0,
+    failed: 0,
+  };
+  // Without Brevo access there is nothing safe to do — never guess.
+  if (!marketingSendingStatus().enabled) return result;
+
+  const candidates = await db
+    .select()
+    .from(b)
+    .where(
+      and(
+        eq(b.campaignId, campaignId),
+        isNull(b.brevoListDeletedAt),
+        sql`${b.brevoListId} is not null`,
+        inArray(b.status, ["sent", "failed"]),
+      ),
+    );
+  for (const batch of candidates) {
+    result.checked += 1;
+    try {
+      if (batch.status === "sent" && batch.brevoCampaignId !== null) {
+        const status = await getCampaignStatus(batch.brevoCampaignId);
+        if (status !== null && !BREVO_DELETABLE_CAMPAIGN_STATUSES.has(status)) {
+          // Still queued/inProcess on Brevo's side — deleting the list now
+          // could affect the active send. Try again later.
+          result.skippedStillActive += 1;
+          continue;
+        }
+      }
+      await deleteList(batch.brevoListId!);
+      await db
+        .update(b)
+        .set({ brevoListDeletedAt: new Date(), cleanupLastError: null })
+        .where(eq(b.id, batch.id));
+      await audit(db, campaignId, "BREVO_CLEANUP", performedBy, {
+        batchNumber: batch.batchNumber,
+        brevoListId: batch.brevoListId,
+      });
+      result.deleted += 1;
+    } catch (err) {
+      result.failed += 1;
+      const message =
+        err instanceof Error ? err.message.slice(0, 200) : "cleanup failed";
+      await db
+        .update(b)
+        .set({
+          cleanupAttempts: sql`${b.cleanupAttempts} + 1`,
+          cleanupLastError: message,
+        })
+        .where(eq(b.id, batch.id));
+      await audit(db, campaignId, "BREVO_CLEANUP_FAILED", performedBy, {
+        batchNumber: batch.batchNumber,
+        brevoListId: batch.brevoListId,
+        attempt: (batch.cleanupAttempts ?? 0) + 1,
+      });
+    }
+  }
+  return result;
+}
+
+/** Batches whose list cleanup failed repeatedly — admin warning surface. */
+export async function orphanedBrevoLists(campaignId: number): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(b)
+    .where(
+      and(
+        eq(b.campaignId, campaignId),
+        isNull(b.brevoListDeletedAt),
+        sql`${b.brevoListId} is not null`,
+        sql`${b.cleanupAttempts} >= ${CLEANUP_ORPHAN_ATTEMPT_THRESHOLD}`,
+      ),
+    );
   return row?.count ?? 0;
 }

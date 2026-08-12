@@ -88,38 +88,142 @@ export async function selectEligibleRegistrations(
 }
 
 // ---------------------------------------------------------------------------
-// Daily quota
+// Send-allowance model (configurable for Free AND paid Brevo plans)
 // ---------------------------------------------------------------------------
 
-/** Brevo Free plan: 300 sends/day shared with transactional email. */
-const BREVO_FREE_PLAN_DAILY_LIMIT = 300;
+/**
+ * CONFIGURATION MODEL — every value is read from the environment at call
+ * time, so upgrading the Brevo plan later only requires changing production
+ * configuration (and whatever restart the platform needs to load new env
+ * vars) — never a code change or mobile build.
+ *
+ * - BREVO_ACCOUNT_DAILY_CAP    total account emails/day shared with
+ *                              transactional email. Positive integer, or the
+ *                              literal string `none` for a paid plan with no
+ *                              daily limit. Default: 300 (current Free plan).
+ * - BREVO_ACCOUNT_MONTHLY_CAP  total account emails per billing month.
+ *                              Positive integer or `none` (default). A plan
+ *                              sold as "5,000 emails" is 5,000 per MONTH —
+ *                              set this, never the daily cap, to 5000.
+ * - BREVO_MONTHLY_RESET_DAY    UTC day-of-month (1–28) the billing month
+ *                              rolls over. Default 1 (calendar month).
+ * - MARKETING_DAILY_SEND_CAP   internal marketing batch cap per UTC day.
+ *                              Default 200.
+ * - TRANSACTIONAL_EMAIL_DAILY_RESERVE   daily headroom kept for password
+ *                              resets / verification / OTP email. Default 100.
+ * - TRANSACTIONAL_EMAIL_MONTHLY_RESERVE monthly headroom for the same
+ *                              (only used when a monthly cap is set).
+ *                              Default 300.
+ *
+ * All usage numbers are LOCAL CONSERVATIVE ESTIMATES: Brevo exposes no
+ * reliable remaining-credit API for these plans, so the local counter only
+ * tracks what THIS system sent and protects the transactional reserve.
+ * Brevo's dashboard remains the source of truth for the real balance.
+ */
+export type SendAllowanceModel = {
+  /** null = no daily account cap (paid plan). */
+  accountDailyCap: number | null;
+  /** null = no monthly account cap. */
+  accountMonthlyCap: number | null;
+  monthlyResetDay: number;
+  marketingDailyCap: number;
+  transactionalDailyReserve: number;
+  transactionalMonthlyReserve: number;
+  /** Human-readable problems with the current configuration values. */
+  configIssues: string[];
+};
 
-function intFromEnv(name: string, fallback: number, max: number): number {
-  const raw = process.env[name];
+function capFromEnv(
+  name: string,
+  fallback: number | null,
+  issues: string[],
+): number | null {
+  const raw = process.env[name]?.trim();
   if (!raw) return fallback;
+  if (raw.toLowerCase() === "none") return null;
   const parsed = Number.parseInt(raw, 10);
-  if (!Number.isInteger(parsed) || parsed < 0) return fallback;
-  return Math.min(parsed, max);
+  if (!Number.isInteger(parsed) || parsed <= 0 || String(parsed) !== raw) {
+    issues.push(
+      `${name}='${raw.slice(0, 30)}' is invalid — use a positive integer or 'none'. Falling back to ${fallback === null ? "'none'" : fallback}.`,
+    );
+    return fallback;
+  }
+  return Math.min(parsed, 1_000_000);
 }
 
+function intFromEnv(
+  name: string,
+  fallback: number,
+  max: number,
+  issues: string[],
+): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isInteger(parsed) || parsed < 0 || String(parsed) !== raw) {
+    issues.push(
+      `${name}='${raw.slice(0, 30)}' is invalid — use a non-negative integer. Falling back to ${fallback}.`,
+    );
+    return fallback;
+  }
+  if (parsed > max) {
+    issues.push(
+      `${name}='${raw.slice(0, 30)}' is above the maximum ${max}. Using ${max}.`,
+    );
+    return max;
+  }
+  return parsed;
+}
+
+export function sendAllowanceModel(): SendAllowanceModel {
+  const issues: string[] = [];
+  const model: SendAllowanceModel = {
+    accountDailyCap: capFromEnv("BREVO_ACCOUNT_DAILY_CAP", 300, issues),
+    accountMonthlyCap: capFromEnv("BREVO_ACCOUNT_MONTHLY_CAP", null, issues),
+    monthlyResetDay: intFromEnv("BREVO_MONTHLY_RESET_DAY", 1, 28, issues) || 1,
+    marketingDailyCap: intFromEnv("MARKETING_DAILY_SEND_CAP", 200, 100_000, issues),
+    transactionalDailyReserve: intFromEnv(
+      "TRANSACTIONAL_EMAIL_DAILY_RESERVE", 100, 100_000, issues,
+    ),
+    transactionalMonthlyReserve: intFromEnv(
+      "TRANSACTIONAL_EMAIL_MONTHLY_RESERVE", 300, 1_000_000, issues,
+    ),
+    configIssues: issues,
+  };
+  if (model.monthlyResetDay < 1 || model.monthlyResetDay > 28) {
+    issues.push("BREVO_MONTHLY_RESET_DAY must be 1–28. Falling back to 1.");
+    model.monthlyResetDay = 1;
+  }
+  if (model.accountDailyCap === null && model.accountMonthlyCap === null) {
+    issues.push(
+      "Both account caps are 'none' — only MARKETING_DAILY_SEND_CAP protects the Brevo balance. Set BREVO_ACCOUNT_MONTHLY_CAP to the plan's monthly allowance.",
+    );
+  }
+  return model;
+}
+
+/** Kept for compatibility with older call sites/tests. */
 export function marketingDailySendCap(): number {
-  return intFromEnv("MARKETING_DAILY_SEND_CAP", 200, 10_000);
+  return sendAllowanceModel().marketingDailyCap;
 }
 
 export function transactionalDailyReserve(): number {
-  return intFromEnv("TRANSACTIONAL_EMAIL_DAILY_RESERVE", 100, 10_000);
+  return sendAllowanceModel().transactionalDailyReserve;
 }
 
 /**
- * The cap we actually enforce per UTC day: the configured marketing cap,
- * never exceeding what the plan allows once the transactional reserve is
- * set aside. Brevo does not expose a reliable remaining-quota API on the
- * free plan, so this LOCAL conservative budget is authoritative.
+ * The marketing budget we enforce per UTC day: the internal marketing cap,
+ * never exceeding the account's daily allowance once the daily
+ * transactional reserve is set aside. With no daily account cap (paid
+ * plan), only the internal marketing cap applies daily — the monthly cap is
+ * enforced separately in remainingDailyQuota().
  */
 export function effectiveDailyCap(): number {
+  const model = sendAllowanceModel();
+  if (model.accountDailyCap === null) return model.marketingDailyCap;
   return Math.min(
-    marketingDailySendCap(),
-    Math.max(0, BREVO_FREE_PLAN_DAILY_LIMIT - transactionalDailyReserve()),
+    model.marketingDailyCap,
+    Math.max(0, model.accountDailyCap - model.transactionalDailyReserve),
   );
 }
 
@@ -129,6 +233,16 @@ function utcDayStart(): Date {
   return new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
+}
+
+/** Start of the current billing month (UTC, config-defined reset day). */
+export function billingPeriodStart(resetDay: number, now = new Date()): Date {
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  if (now.getUTCDate() >= resetDay) {
+    return new Date(Date.UTC(year, month, resetDay));
+  }
+  return new Date(Date.UTC(year, month - 1, resetDay));
 }
 
 /**
@@ -149,22 +263,22 @@ export async function acquireQuotaLock(
 }
 
 /**
- * Marketing sends already consumed today across ALL campaigns: recipients
- * marked sent/delivered today + test emails (test sends burn real credits
- * too). 'sending' reservations also count — they may already have reached
- * Brevo, so the conservative reading protects the transactional reserve.
- * (A crashed reservation stops counting once the next run recovers it.)
+ * Marketing sends consumed since `periodStart` across ALL campaigns:
+ * recipients marked sent/delivered + test emails (test sends burn real
+ * credits too). 'sending' reservations also count — they may already have
+ * reached Brevo, so the conservative reading protects the transactional
+ * reserve. (A crashed reservation stops counting once recovered.)
  */
-export async function marketingSendsToday(
+async function marketingSendsSince(
   executor: Pick<typeof db, "select">,
+  periodStart: Date,
 ): Promise<number> {
-  const dayStart = utcDayStart();
   const r = earlyAccessCampaignRecipientsTable;
   const [sent] = await executor
     .select({ count: sql<number>`count(*)::int` })
     .from(r)
     .where(
-      sql`(${r.sentAt} >= ${dayStart} OR ${r.status} = 'sending')`,
+      sql`(${r.sentAt} >= ${periodStart} OR ${r.status} = 'sending')`,
     );
   const e = earlyAccessCampaignEventsTable;
   const [tests] = await executor
@@ -173,21 +287,78 @@ export async function marketingSendsToday(
     .where(
       and(
         eq(e.kind, "TEST_SENT"),
-        gte(e.createdAt, dayStart),
+        gte(e.createdAt, periodStart),
         sql`(${e.details} ->> 'ok')::boolean = true`,
       ),
     );
   return (sent?.count ?? 0) + (tests?.count ?? 0);
 }
 
+export async function marketingSendsToday(
+  executor: Pick<typeof db, "select">,
+): Promise<number> {
+  return marketingSendsSince(executor, utcDayStart());
+}
+
+export async function marketingSendsThisPeriod(
+  executor: Pick<typeof db, "select">,
+): Promise<number> {
+  const model = sendAllowanceModel();
+  return marketingSendsSince(
+    executor,
+    billingPeriodStart(model.monthlyResetDay),
+  );
+}
+
+/**
+ * How many marketing emails may still be sent RIGHT NOW: the daily budget
+ * minus today's usage, further limited by the monthly allowance (minus the
+ * monthly transactional reserve) when one is configured. Local conservative
+ * estimate — Brevo's dashboard remains the source of truth.
+ */
 export async function remainingDailyQuota(
   executor: Pick<typeof db, "select">,
 ): Promise<number> {
-  return Math.max(0, effectiveDailyCap() - (await marketingSendsToday(executor)));
+  const model = sendAllowanceModel();
+  let remaining =
+    effectiveDailyCap() - (await marketingSendsToday(executor));
+  if (model.accountMonthlyCap !== null) {
+    const monthlyBudget = Math.max(
+      0,
+      model.accountMonthlyCap - model.transactionalMonthlyReserve,
+    );
+    const usedThisPeriod = await marketingSendsSince(
+      executor,
+      billingPeriodStart(model.monthlyResetDay),
+    );
+    remaining = Math.min(remaining, monthlyBudget - usedThisPeriod);
+  }
+  return Math.max(0, remaining);
 }
 
 /** Max test emails per campaign per UTC day (they consume real credits). */
 export const TEST_SEND_DAILY_LIMIT_PER_CAMPAIGN = 5;
+
+/**
+ * Brevo's test-email allowance is GLOBAL per account/day, so the
+ * per-campaign limit alone cannot protect it. Default stays safely below
+ * Brevo's documented daily test allowance; configurable for paid plans.
+ */
+export function testSendDailyLimitGlobal(): number {
+  return intFromEnv("TEST_EMAIL_DAILY_LIMIT", 20, 1_000, []);
+}
+
+/** All TEST_SENT events today across ALL campaigns and admins. */
+export async function testSendsTodayGlobal(
+  executor: Pick<typeof db, "select">,
+): Promise<number> {
+  const e = earlyAccessCampaignEventsTable;
+  const [row] = await executor
+    .select({ count: sql<number>`count(*)::int` })
+    .from(e)
+    .where(and(eq(e.kind, "TEST_SENT"), gte(e.createdAt, utcDayStart())));
+  return row?.count ?? 0;
+}
 
 export async function testSendsTodayForCampaign(
   executor: Pick<typeof db, "select">,

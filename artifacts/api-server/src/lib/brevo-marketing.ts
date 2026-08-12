@@ -39,6 +39,32 @@ export class BrevoMarketingDisabledError extends Error {
   }
 }
 
+/**
+ * HTTP-level Brevo rejection. Carries the status and Brevo's machine `code`
+ * so callers can distinguish DEFINITE rejections (4xx — the request was
+ * refused, nothing was sent) from AMBIGUOUS failures (network errors /
+ * 5xx — the request may have been processed). Never contains the API key
+ * or any recipient data.
+ */
+export class BrevoApiError extends Error {
+  readonly status: number;
+  readonly brevoCode: string | null;
+  constructor(opts: { method: string; path: string; status: number; brevoCode: string | null; message: string }) {
+    super(`Brevo ${opts.method} ${opts.path} → ${opts.status}: ${opts.message}`);
+    this.name = "BrevoApiError";
+    this.status = opts.status;
+    this.brevoCode = opts.brevoCode;
+  }
+  /** The request was definitively refused — nothing can have been sent. */
+  get definiteRejection(): boolean {
+    return this.status >= 400 && this.status < 500;
+  }
+  /** Brevo's explicit out-of-credits rejection (daily or monthly plan cap). */
+  get insufficientCredits(): boolean {
+    return this.brevoCode === "not_enough_credits";
+  }
+}
+
 function marketingApiKey(): string | undefined {
   // Prefer a dedicated marketing key; fall back to existing keys only if
   // present (the free-plan account uses one key across pipelines).
@@ -88,14 +114,22 @@ async function brevoFetch<T>(
   });
   if (!res.ok) {
     let message = res.statusText;
+    let brevoCode: string | null = null;
     try {
       const data = (await res.json()) as { message?: string; code?: string };
       message = data.message ?? data.code ?? message;
+      brevoCode = data.code ?? null;
     } catch {
       /* non-JSON error body */
     }
     // Never include the request body (could carry recipient emails) or key.
-    throw new Error(`Brevo ${init?.method ?? "GET"} ${path} → ${res.status}: ${message}`);
+    throw new BrevoApiError({
+      method: init?.method ?? "GET",
+      path,
+      status: res.status,
+      brevoCode,
+      message,
+    });
   }
   if (res.status === 204) return undefined as T;
   const text = await res.text();
@@ -215,4 +249,51 @@ export async function sendCampaignNow(brevoCampaignId: number): Promise<void> {
     method: "POST",
     body: {},
   });
+}
+
+/**
+ * Brevo-side campaign status ('sent', 'queued', 'draft', 'inProcess', …) or
+ * null when the campaign no longer exists. Used to decide when deleting a
+ * batch's temporary list can no longer affect an active send.
+ */
+export async function getCampaignStatus(
+  brevoCampaignId: number,
+): Promise<string | null> {
+  try {
+    const data = await brevoFetch<{ status?: string }>(
+      `/emailCampaigns/${brevoCampaignId}`,
+    );
+    return data?.status ?? null;
+  } catch (err) {
+    if (err instanceof BrevoApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * Delete a temporary batch list. Idempotent: a 404 (already gone) counts as
+ * success. Deletes ONLY the remote list — contacts themselves and all local
+ * snapshot/consent/audit rows are untouched.
+ */
+export async function deleteList(listId: number): Promise<void> {
+  try {
+    await brevoFetch(`/contacts/lists/${listId}`, { method: "DELETE" });
+  } catch (err) {
+    if (err instanceof BrevoApiError && err.status === 404) return;
+    throw err;
+  }
+}
+
+/**
+ * Delete a Brevo campaign that was created but DEFINITELY never sent
+ * (explicit sendNow rejection). Idempotent via 404-as-success. Never called
+ * for campaigns whose send outcome is ambiguous.
+ */
+export async function deleteCampaign(brevoCampaignId: number): Promise<void> {
+  try {
+    await brevoFetch(`/emailCampaigns/${brevoCampaignId}`, { method: "DELETE" });
+  } catch (err) {
+    if (err instanceof BrevoApiError && err.status === 404) return;
+    throw err;
+  }
 }

@@ -458,17 +458,37 @@ router.post("/early-access/unsubscribe", async (req, res) => {
 // Brevo marketing webhook — sync unsubscribes / bounces / complaints back
 // ---------------------------------------------------------------------------
 
-/** Constant-time shared-secret check; false when the feature is unset. */
+/**
+ * Constant-time shared-secret check against the current secret and — during
+ * rotation — BREVO_WEBHOOK_SECRET_PREVIOUS, so the Brevo-side header can be
+ * updated without a window of dropped events. False when unset. The secret
+ * is never logged and never appears in any response or URL.
+ */
 function webhookSecretValid(given: unknown): boolean {
-  const expected = process.env.BREVO_WEBHOOK_SECRET;
-  if (!expected || typeof given !== "string") return false;
+  if (typeof given !== "string" || given.length === 0) return false;
+  const candidates = [
+    process.env.BREVO_WEBHOOK_SECRET,
+    process.env.BREVO_WEBHOOK_SECRET_PREVIOUS,
+  ].filter((s): s is string => Boolean(s));
   const a = Buffer.from(given);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  for (const expected of candidates) {
+    const b = Buffer.from(expected);
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
+  }
+  return false;
 }
 
-/** Normalised Brevo marketing event names → local effect. */
+/**
+ * Normalised Brevo event names → local effect.
+ *
+ * Brevo MARKETING webhooks emit (exact names): `spam`, `hardBounce`,
+ * `softBounce`, `unsubscribed`, `delivered`, `opened`, `click`,
+ * `listAddition`. `blocked` and `complaint` exist only on Brevo's
+ * TRANSACTIONAL webhook type — they are still accepted here defensively
+ * (same suppression semantics) but must NOT be selected when configuring
+ * the marketing webhook, because Brevo does not offer them there.
+ * `spam` is treated as a permanent complaint suppression locally.
+ */
 function classifyBrevoEvent(
   event: string,
 ):
@@ -499,13 +519,19 @@ function classifyBrevoEvent(
 
 /**
  * Brevo webhook receiver (Phase 2B). Configure in Brevo as a MARKETING
- * webhook pointing at /api/early-access/brevo-events?secret=<value of
- * BREVO_WEBHOOK_SECRET>. Returns 404 while the secret env is unset (feature
- * off) and a generic 401 for a wrong secret.
+ * webhook pointing at /api/early-access/brevo-events with the custom
+ * request header `X-Webhook-Secret: <value of BREVO_WEBHOOK_SECRET>`
+ * (Brevo webhooks support custom headers). Authentication is HEADER-ONLY
+ * by design: a query-string secret would leak into proxy/access logs and
+ * browser history, so it is deliberately NOT accepted. Returns 404 while
+ * the secret env is unset (feature off) and a generic 401 for a missing or
+ * wrong header. Invalid attempts are rate-limited upstream (app.ts) with a
+ * budget far above Brevo's legitimate delivery rate.
  *
  * Local DB stays the source of truth: Brevo events only ever TIGHTEN state
  * (unsubscribe, suppress, mark delivered) — they never re-enable anyone.
- * Idempotent: replays hit conditional updates and change nothing.
+ * Idempotent (Brevo delivery is at-least-once): replays hit conditional
+ * updates and change nothing, and a suppression is never reversed here.
  * Response is always minimal; recipient details are never echoed or logged.
  */
 router.post("/early-access/brevo-events", async (req, res) => {
@@ -513,7 +539,7 @@ router.post("/early-access/brevo-events", async (req, res) => {
     res.status(404).json({ error: "Not found" });
     return;
   }
-  if (!webhookSecretValid(req.query.secret)) {
+  if (!webhookSecretValid(req.get("x-webhook-secret"))) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

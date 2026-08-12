@@ -26,6 +26,9 @@ vi.mock("../lib/brevo-marketing", async (importOriginal) => {
     upsertContactsIntoList: vi.fn(async () => undefined),
     createCampaign: vi.fn(async () => 999),
     sendCampaignNow: vi.fn(async () => undefined),
+    getCampaignStatus: vi.fn(async () => "sent"),
+    deleteList: vi.fn(async () => undefined),
+    deleteCampaign: vi.fn(async () => undefined),
   };
 });
 
@@ -48,7 +51,16 @@ import {
   createCampaign,
   upsertContactsIntoList,
   sendCampaignNow,
+  getCampaignStatus,
+  deleteList,
+  deleteCampaign,
+  BrevoApiError,
 } from "../lib/brevo-marketing";
+import {
+  billingPeriodStart,
+  effectiveDailyCap,
+  sendAllowanceModel,
+} from "../lib/early-access-campaigns";
 import {
   sendEarlyAccessCampaignTestEmail,
   sendEarlyAccessConfirmationEmail,
@@ -62,6 +74,9 @@ const statusMock = vi.mocked(marketingSendingStatus);
 const createCampaignMock = vi.mocked(createCampaign);
 const upsertMock = vi.mocked(upsertContactsIntoList);
 const sendNowMock = vi.mocked(sendCampaignNow);
+const campaignStatusMock = vi.mocked(getCampaignStatus);
+const deleteListMock = vi.mocked(deleteList);
+const deleteCampaignMock = vi.mocked(deleteCampaign);
 const testEmailMock = vi.mocked(sendEarlyAccessCampaignTestEmail);
 const confirmEmailMock = vi.mocked(sendEarlyAccessConfirmationEmail);
 
@@ -667,20 +682,40 @@ describe("Brevo webhook sync", () => {
 
     process.env.BREVO_WEBHOOK_SECRET = `whsec-${SUFFIX}`;
     const wrong = await request(app)
-      .post("/api/early-access/brevo-events?secret=nope")
+      .post("/api/early-access/brevo-events")
+      .set("x-webhook-secret", "nope")
       .send({ event: "hard_bounce", email: emailFor("whatever") });
     expect(wrong.status).toBe(401);
+
+    // Query-string authentication is deliberately NOT accepted (secrets in
+    // URLs leak into proxy/access logs).
+    const query = await request(app)
+      .post(
+        `/api/early-access/brevo-events?secret=${encodeURIComponent(process.env.BREVO_WEBHOOK_SECRET)}`,
+      )
+      .send({ event: "hard_bounce", email: emailFor("whatever") });
+    expect(query.status).toBe(401);
+
+    // Rotation: the previous secret keeps working while configured.
+    process.env.BREVO_WEBHOOK_SECRET_PREVIOUS = "old-webhook-secret";
+    const prev = await request(app)
+      .post("/api/early-access/brevo-events")
+      .set("x-webhook-secret", "old-webhook-secret")
+      .send({ event: "opened", email: emailFor("whatever") });
+    expect(prev.status).toBe(200);
+    delete process.env.BREVO_WEBHOOK_SECRET_PREVIOUS;
   });
 
   it("applies bounce suppression + unsubscribe sync idempotently", async () => {
     process.env.BREVO_WEBHOOK_SECRET = `whsec-${SUFFIX}`;
-    const secret = encodeURIComponent(process.env.BREVO_WEBHOOK_SECRET);
+    const secret = process.env.BREVO_WEBHOOK_SECRET;
     const bounceId = await seedRegistration("wh-bounce");
     const unsubId = await seedRegistration("wh-unsub");
 
     for (let i = 0; i < 2; i++) {
       const res = await request(app)
-        .post(`/api/early-access/brevo-events?secret=${secret}`)
+        .post("/api/early-access/brevo-events")
+        .set("x-webhook-secret", secret)
         .send({ event: "hard_bounce", email: emailFor("wh-bounce") });
       expect(res.status).toBe(200);
     }
@@ -699,7 +734,8 @@ describe("Brevo webhook sync", () => {
     ).toHaveLength(1);
 
     const unsubRes = await request(app)
-      .post(`/api/early-access/brevo-events?secret=${secret}`)
+      .post("/api/early-access/brevo-events")
+        .set("x-webhook-secret", secret)
       .send({ event: "unsubscribed", email: emailFor("wh-unsub") });
     expect(unsubRes.status).toBe(200);
     const [unsubbed] = await db
@@ -711,14 +747,15 @@ describe("Brevo webhook sync", () => {
 
     // Unknown events/emails are acknowledged without side effects.
     const noop = await request(app)
-      .post(`/api/early-access/brevo-events?secret=${secret}`)
+      .post("/api/early-access/brevo-events")
+        .set("x-webhook-secret", secret)
       .send({ event: "opened", email: emailFor("wh-bounce") });
     expect(noop.status).toBe(200);
   });
 
   it("updates campaign recipient state from webhook events", async () => {
     process.env.BREVO_WEBHOOK_SECRET = `whsec-${SUFFIX}`;
-    const secret = encodeURIComponent(process.env.BREVO_WEBHOOK_SECRET);
+    const secret = process.env.BREVO_WEBHOOK_SECRET;
     statusMock.mockReturnValue({ enabled: true });
     const regId = await seedRegistration("wh-recip");
     const id = await createDraft({ name: `wh-recip ${SUFFIX}` });
@@ -728,7 +765,8 @@ describe("Brevo webhook sync", () => {
       .set("Authorization", `Bearer ${adminToken}`);
 
     await request(app)
-      .post(`/api/early-access/brevo-events?secret=${secret}`)
+      .post("/api/early-access/brevo-events")
+        .set("x-webhook-secret", secret)
       .send({ event: "delivered", email: emailFor("wh-recip") });
     let [recip] = await db
       .select()
@@ -737,7 +775,8 @@ describe("Brevo webhook sync", () => {
     expect(recip.status).toBe("delivered");
 
     await request(app)
-      .post(`/api/early-access/brevo-events?secret=${secret}`)
+      .post("/api/early-access/brevo-events")
+        .set("x-webhook-secret", secret)
       .send({ event: "spam", email: emailFor("wh-recip") });
     [recip] = await db
       .select()
@@ -749,6 +788,356 @@ describe("Brevo webhook sync", () => {
       .from(earlyAccessRegistrationsTable)
       .where(eq(earlyAccessRegistrationsTable.id, regId));
     expect(reg.emailSuppressionReason).toBe("complaint");
+  });
+});
+
+describe("Phase 2B hardening", () => {
+  async function sendOneBatch(label: string) {
+    statusMock.mockReturnValue({ enabled: true });
+    await seedRegistration(label);
+    const id = await createDraft({ name: `${label} ${SUFFIX}` });
+    await queueCampaign(id);
+    const res = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/send-batch`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    return { id, res };
+  }
+
+  it("cleans up temporary Brevo lists after send, idempotently", async () => {
+    // Hold the opportunistic in-send cleanup off so the endpoint is what
+    // actually deletes the list in this test.
+    campaignStatusMock.mockResolvedValue("inProcess");
+    const { id, res } = await sendOneBatch("cleanup-ok");
+    expect(res.status).toBe(200);
+
+    campaignStatusMock.mockResolvedValue("sent");
+    const clean = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/cleanup`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(clean.status).toBe(200);
+    expect(clean.body.deleted).toBe(1);
+    expect(deleteListMock).toHaveBeenCalledWith(111);
+    const [batch] = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.campaignId, id));
+    expect(batch.brevoListDeletedAt).not.toBeNull();
+    // Local evidence is untouched: recipients + Brevo campaign ref stay.
+    expect(batch.brevoCampaignId).toBe(999);
+    const recips = await db
+      .select()
+      .from(earlyAccessCampaignRecipientsTable)
+      .where(eq(earlyAccessCampaignRecipientsTable.campaignId, id));
+    expect(recips.some((r) => r.status === "sent")).toBe(true);
+
+    // Idempotent: a second pass finds nothing to do and never resends.
+    deleteListMock.mockClear();
+    sendNowMock.mockClear();
+    const again = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/cleanup`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(again.body.checked).toBe(0);
+    expect(deleteListMock).not.toHaveBeenCalled();
+    expect(sendNowMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the list while Brevo still reports the campaign as sending", async () => {
+    campaignStatusMock.mockResolvedValue("inProcess");
+    const { id } = await sendOneBatch("cleanup-active");
+    deleteListMock.mockClear();
+    const clean = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/cleanup`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(clean.body.skippedStillActive).toBe(1);
+    expect(deleteListMock).not.toHaveBeenCalled();
+    campaignStatusMock.mockResolvedValue("sent");
+  });
+
+  it("tracks failed cleanups and surfaces orphaned lists, retry-safe", async () => {
+    campaignStatusMock.mockResolvedValue("inProcess");
+    const { id } = await sendOneBatch("cleanup-fail");
+    campaignStatusMock.mockResolvedValue("sent");
+    deleteListMock.mockRejectedValueOnce(new Error("brevo down"));
+    const fail = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/cleanup`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(fail.body.failed).toBe(1);
+    let [batch] = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.campaignId, id));
+    expect(batch.cleanupAttempts).toBe(1);
+    expect(batch.cleanupLastError).toContain("brevo down");
+
+    // Repeated failure becomes a visible orphan warning.
+    await db
+      .update(earlyAccessCampaignBatchesTable)
+      .set({ cleanupAttempts: 3 })
+      .where(eq(earlyAccessCampaignBatchesTable.id, batch.id));
+    const detail = await request(app)
+      .get(`/api/admin/early-access/campaigns/${id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(detail.body.orphanedBrevoLists).toBe(1);
+
+    // Retry succeeds later without touching recipients or resending.
+    sendNowMock.mockClear();
+    const retry = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/cleanup`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(retry.body.deleted).toBe(1);
+    expect(retry.body.orphanedBrevoLists).toBe(0);
+    expect(sendNowMock).not.toHaveBeenCalled();
+    [batch] = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.id, batch.id));
+    expect(batch.brevoListDeletedAt).not.toBeNull();
+    expect(batch.cleanupLastError).toBeNull();
+  });
+
+  it("treats not_enough_credits as NOT SENT: waiting_quota, queue preserved, draft deleted, safe retry", async () => {
+    statusMock.mockReturnValue({ enabled: true });
+    const regId = await seedRegistration("credits-fail");
+    const id = await createDraft({ name: `credits ${SUFFIX}` });
+    await queueCampaign(id);
+    sendNowMock.mockRejectedValueOnce(
+      new BrevoApiError({
+        method: "POST",
+        path: "/emailCampaigns/999/sendNow",
+        status: 402,
+        brevoCode: "not_enough_credits",
+        message: "Not enough credits",
+      }),
+    );
+    const res = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/send-batch`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(429);
+    expect(res.body.code).toBe("brevo_credits");
+
+    // Nothing sent, nothing assumed-sent, never-sent draft cleaned up.
+    expect(deleteCampaignMock).toHaveBeenCalledWith(999);
+    const [camp] = await db
+      .select()
+      .from(earlyAccessCampaignsTable)
+      .where(eq(earlyAccessCampaignsTable.id, id));
+    expect(camp.status).toBe("waiting_quota");
+    let [recip] = await db
+      .select()
+      .from(earlyAccessCampaignRecipientsTable)
+      .where(eq(earlyAccessCampaignRecipientsTable.registrationId, regId));
+    expect(recip.status).toBe("queued");
+    const batches = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.campaignId, id));
+    expect(batches[0].status).toBe("failed");
+    expect(batches[0].statusDetail).toContain("not_enough_credits");
+
+    // After the allowance recovers (plan upgrade / next day), the SAME
+    // button resumes and the recipient is sent exactly once.
+    const cont = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/send-batch`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(cont.status).toBe(200);
+    [recip] = await db
+      .select()
+      .from(earlyAccessCampaignRecipientsTable)
+      .where(eq(earlyAccessCampaignRecipientsTable.registrationId, regId));
+    expect(recip.status).toBe("sent");
+  });
+
+  it("keeps ambiguous sendNow failures on the assumed-sent path (never resends)", async () => {
+    statusMock.mockReturnValue({ enabled: true });
+    const regId = await seedRegistration("ambiguous-fail");
+    const id = await createDraft({ name: `ambiguous ${SUFFIX}` });
+    await queueCampaign(id);
+    sendNowMock.mockRejectedValueOnce(new Error("socket hang up"));
+    const res = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/send-batch`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe("needs_recovery_review");
+    // The draft is NOT deleted — it may have gone out.
+    expect(deleteCampaignMock).not.toHaveBeenCalled();
+
+    const next = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/send-batch`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(next.status).toBe(200);
+    const [recip] = await db
+      .select()
+      .from(earlyAccessCampaignRecipientsTable)
+      .where(eq(earlyAccessCampaignRecipientsTable.registrationId, regId));
+    // Conservatively assumed sent — flagged, never resent.
+    expect(recip.status).toBe("sent");
+    const batches = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.campaignId, id));
+    expect(batches[0].statusDetail).toBe("recovered_assumed_sent");
+    // sendNow was attempted exactly once — never retried for this batch.
+    expect(sendNowMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to reserve over a fresh in-flight batch (send lease) and recovers after expiry", async () => {
+    statusMock.mockReturnValue({ enabled: true });
+    await seedRegistration("lease-race");
+    const id = await createDraft({ name: `lease ${SUFFIX}` });
+    await queueCampaign(id);
+    // Simulate worker A mid-flight: committed reservation, no Brevo id yet.
+    const [pendingBatch] = await db
+      .insert(earlyAccessCampaignBatchesTable)
+      .values({ campaignId: id, batchNumber: 1, recipientCount: 1, status: "pending" })
+      .returning();
+    const blocked = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/send-batch`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.code).toBe("in_progress");
+    // Worker A's reservation was NOT released, nothing was sent.
+    expect(createCampaignMock).not.toHaveBeenCalled();
+
+    // After the lease expires (proven crash), recovery releases and resumes.
+    await db
+      .update(earlyAccessCampaignBatchesTable)
+      .set({ createdAt: new Date(Date.now() - 16 * 60 * 1000) })
+      .where(eq(earlyAccessCampaignBatchesTable.id, pendingBatch.id));
+    const recovered = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/send-batch`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(recovered.status).toBe(200);
+    const [released] = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.id, pendingBatch.id));
+    expect(released.status).toBe("failed");
+    expect(released.statusDetail).toBe("recovered_released");
+  });
+
+  it("persists the Brevo list id before contact upload so failed batches stay cleanable", async () => {
+    statusMock.mockReturnValue({ enabled: true });
+    await seedRegistration("leak-guard");
+    const id = await createDraft({ name: `leak ${SUFFIX}` });
+    await queueCampaign(id);
+    upsertMock.mockRejectedValueOnce(new Error("upload failed"));
+    const res = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/send-batch`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(502);
+    const [batch] = await db
+      .select()
+      .from(earlyAccessCampaignBatchesTable)
+      .where(eq(earlyAccessCampaignBatchesTable.campaignId, id));
+    expect(batch.status).toBe("failed");
+    // The remote list is discoverable for cleanup even though the campaign
+    // was never created.
+    expect(batch.brevoListId).toBe(111);
+    const clean = await request(app)
+      .post(`/api/admin/early-access/campaigns/${id}/cleanup`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(clean.body.deleted).toBe(1);
+    expect(deleteListMock).toHaveBeenCalledWith(111);
+  });
+
+  it("enforces the GLOBAL daily test-send limit across campaigns", async () => {
+    const prev = process.env.TEST_EMAIL_DAILY_LIMIT;
+    process.env.TEST_EMAIL_DAILY_LIMIT = "0";
+    try {
+      const id = await createDraft({ name: `global-test ${SUFFIX}` });
+      const res = await request(app)
+        .post(`/api/admin/early-access/campaigns/${id}/test-send`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(res.status).toBe(429);
+      expect(res.body.error).toMatch(/Global test-send limit/);
+      expect(testEmailMock).not.toHaveBeenCalled();
+    } finally {
+      if (prev === undefined) delete process.env.TEST_EMAIL_DAILY_LIMIT;
+      else process.env.TEST_EMAIL_DAILY_LIMIT = prev;
+    }
+  });
+
+  it("rotates the unsubscribe secret without breaking already-sent links", async () => {
+    const regId = await seedRegistration("rotate-unsub");
+    const oldToken = buildUnsubscribeToken(regId);
+    const prevCurrent = process.env.EARLY_ACCESS_UNSUBSCRIBE_SECRET!;
+    try {
+      process.env.EARLY_ACCESS_UNSUBSCRIBE_SECRET = "rotated-new-secret";
+      process.env.EARLY_ACCESS_UNSUBSCRIBE_SECRET_PREVIOUS = prevCurrent;
+      // Old links keep working through the previous secret…
+      expect(verifyUnsubscribeToken(oldToken)).toBe(regId);
+      // …new tokens are signed with the NEW secret only.
+      const newToken = buildUnsubscribeToken(regId);
+      expect(verifyUnsubscribeToken(newToken)).toBe(regId);
+      delete process.env.EARLY_ACCESS_UNSUBSCRIBE_SECRET_PREVIOUS;
+      expect(verifyUnsubscribeToken(oldToken)).toBeNull();
+      expect(verifyUnsubscribeToken(newToken)).toBe(regId);
+    } finally {
+      process.env.EARLY_ACCESS_UNSUBSCRIBE_SECRET = prevCurrent;
+      delete process.env.EARLY_ACCESS_UNSUBSCRIBE_SECRET_PREVIOUS;
+    }
+  });
+
+  it("models the configurable plan allowance (daily 'none', monthly caps, config validation)", () => {
+    const env = process.env;
+    const prev = {
+      daily: env.BREVO_ACCOUNT_DAILY_CAP,
+      monthly: env.BREVO_ACCOUNT_MONTHLY_CAP,
+      reset: env.BREVO_MONTHLY_RESET_DAY,
+    };
+    try {
+      // Free plan default: 300/day, no monthly cap.
+      delete env.BREVO_ACCOUNT_DAILY_CAP;
+      delete env.BREVO_ACCOUNT_MONTHLY_CAP;
+      delete env.BREVO_MONTHLY_RESET_DAY;
+      let model = sendAllowanceModel();
+      expect(model.accountDailyCap).toBe(300);
+      expect(model.accountMonthlyCap).toBeNull();
+      expect(model.configIssues).toHaveLength(0);
+
+      // Paid plan example: 5,000/month, no daily cap.
+      env.BREVO_ACCOUNT_DAILY_CAP = "none";
+      env.BREVO_ACCOUNT_MONTHLY_CAP = "5000";
+      env.BREVO_MONTHLY_RESET_DAY = "15";
+      model = sendAllowanceModel();
+      expect(model.accountDailyCap).toBeNull();
+      expect(model.accountMonthlyCap).toBe(5000);
+      expect(model.monthlyResetDay).toBe(15);
+      expect(model.configIssues).toHaveLength(0);
+      // With no account daily cap, the marketing cap is the daily limit.
+      expect(effectiveDailyCap()).toBe(model.marketingDailyCap);
+
+      // Billing period math anchors on the reset day.
+      const start = billingPeriodStart(15);
+      expect(start.getDate()).toBe(15);
+      expect(start.getTime()).toBeLessThanOrEqual(Date.now());
+
+      // Bad values are surfaced, never silently accepted.
+      env.BREVO_ACCOUNT_DAILY_CAP = "lots";
+      env.BREVO_MONTHLY_RESET_DAY = "31";
+      model = sendAllowanceModel();
+      expect(model.configIssues.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      for (const [key, value] of [
+        ["BREVO_ACCOUNT_DAILY_CAP", prev.daily],
+        ["BREVO_ACCOUNT_MONTHLY_CAP", prev.monthly],
+        ["BREVO_MONTHLY_RESET_DAY", prev.reset],
+      ] as const) {
+        if (value === undefined) delete env[key];
+        else env[key] = value;
+      }
+    }
+  });
+
+  it("labels quota numbers as local estimates in the admin API", async () => {
+    const id = await createDraft({ name: `quota-label ${SUFFIX}` });
+    const detail = await request(app)
+      .get(`/api/admin/early-access/campaigns/${id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.quota.allowance.source).toBe("local_estimate");
+    expect(detail.body.quota.allowance.sourceNote).toMatch(/Brevo's dashboard/);
+    expect(detail.body.testSendDailyLimitGlobal).toBeGreaterThan(0);
   });
 });
 

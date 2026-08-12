@@ -170,6 +170,16 @@ export const earlyAccessCampaignBatchesTable = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     sentAt: timestamp("sent_at"),
     statusDetail: varchar("status_detail", { length: 200 }),
+    /**
+     * Temporary Brevo list cleanup lifecycle: Brevo has a finite list quota,
+     * so per-batch lists are deleted once the send can no longer be
+     * affected. Local snapshot/audit rows are NEVER deleted; only the
+     * remote temporary list is. Cleanup is idempotent (a remote 404 counts
+     * as cleaned) and retryable without ever re-sending anything.
+     */
+    brevoListDeletedAt: timestamp("brevo_list_deleted_at"),
+    cleanupAttempts: integer("cleanup_attempts").notNull().default(0),
+    cleanupLastError: varchar("cleanup_last_error", { length: 200 }),
   },
   (table) => [
     uniqueIndex("ea_campaign_batches_unique_idx").on(
@@ -190,6 +200,11 @@ export const EARLY_ACCESS_CAMPAIGN_EVENT_KINDS = [
   "CAMPAIGN_RESUMED",
   /** details: { batchNumber, attempted, sent, skipped, failed }. */
   "BATCH_SENT",
+  /** Temporary Brevo list/draft cleanup. details: ids + outcome only. */
+  "BREVO_CLEANUP",
+  "BREVO_CLEANUP_FAILED",
+  /** Explicit Brevo credit rejection moved the campaign to waiting_quota. */
+  "BATCH_REJECTED",
   "CAMPAIGN_CANCELLED",
   "CAMPAIGN_COMPLETED",
 ] as const;

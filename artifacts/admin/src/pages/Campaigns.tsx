@@ -49,6 +49,7 @@ import {
   PlayCircle,
   CheckCircle2,
   XCircle,
+  Trash2,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -73,11 +74,25 @@ interface BrevoSending {
   reason?: string;
 }
 
+interface Allowance {
+  accountDailyCap: number | null;
+  accountMonthlyCap: number | null;
+  monthlyResetDay: number;
+  marketingDailyCap: number;
+  transactionalDailyReserve: number;
+  transactionalMonthlyReserve: number;
+  sentThisPeriod: number | null;
+  configIssues: string[];
+  source: string;
+  sourceNote: string;
+}
+
 interface Quota {
   dailyCap: number;
   sentToday: number;
   remainingToday: number;
   brevoSending: BrevoSending;
+  allowance?: Allowance;
 }
 
 interface CampaignProgress {
@@ -165,6 +180,17 @@ interface CampaignDetailResponse {
   quota: Quota;
   testSendsToday: number;
   testSendDailyLimit: number;
+  testSendsTodayGlobal: number;
+  testSendDailyLimitGlobal: number;
+  orphanedBrevoLists: number;
+}
+
+interface CleanupResult {
+  checked: number;
+  deleted: number;
+  skippedStillActive: number;
+  failed: number;
+  orphanedBrevoLists: number;
 }
 
 interface AudienceResponse {
@@ -202,9 +228,18 @@ const STATUS_LABELS: Record<string, string> = {
   waiting_quota: "Waiting for quota",
   paused: "Paused",
   completed: "Completed",
-  partially_failed: "Partially failed",
+  partially_failed: "Finished with failures",
   cancelled: "Cancelled",
 };
+
+const SOURCE_NOTE =
+  "Local safety estimate — Brevo's dashboard remains the source of truth.";
+
+const WAITING_QUOTA_EXPLAINER =
+  "Daily/monthly email allowance reached (or Brevo refused for lack of credits). Nothing was lost — press 'Send next batch' when the allowance resets or after upgrading the plan.";
+
+const RECOVERED_ASSUMED_SENT_NOTE =
+  "Assumed sent — send request failed mid-flight; recipients were conservatively marked sent and will never be re-emailed. Verify in Brevo.";
 
 const EVENT_LABELS: Record<string, string> = {
   CAMPAIGN_CREATED: "Campaign created",
@@ -257,15 +292,61 @@ function StatusBadge({ status }: { status: CampaignStatus }) {
   );
 }
 
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+
 function QuotaBanner({ quota }: { quota: Quota | undefined }) {
   if (!quota) return null;
+  const allowance = quota.allowance;
+  const hasMonthlyCap = allowance != null && allowance.accountMonthlyCap !== null;
   return (
     <div className="space-y-2" data-testid="quota-banner">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <StatCard label="Daily send cap" value={quota.dailyCap} testId="stat-daily-cap" />
-        <StatCard label="Sent today" value={quota.sentToday} testId="stat-sent-today" />
-        <StatCard label="Remaining today" value={quota.remainingToday} testId="stat-remaining-today" />
+      <div>
+        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
+          Sending allowance — today
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <StatCard label="Daily send cap" value={quota.dailyCap} testId="stat-daily-cap" />
+          <StatCard label="Sent today" value={quota.sentToday} testId="stat-sent-today" />
+          <StatCard label="Remaining today" value={quota.remainingToday} testId="stat-remaining-today" />
+        </div>
       </div>
+
+      {hasMonthlyCap && allowance && (
+        <div data-testid="monthly-usage">
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
+            This billing month (resets on the {ordinal(allowance.monthlyResetDay)} of each month)
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <StatCard label="Monthly cap" value={allowance.accountMonthlyCap ?? undefined} testId="stat-monthly-cap" />
+            <StatCard label="Sent this billing month" value={allowance.sentThisPeriod ?? undefined} testId="stat-sent-this-period" />
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground" data-testid="quota-source-note">
+        {allowance?.sourceNote ?? SOURCE_NOTE}
+      </p>
+
+      {allowance && allowance.configIssues.length > 0 && (
+        <Alert
+          className="border-transparent bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))]"
+          data-testid="notice-config-issues"
+        >
+          <AlertDescription>
+            <div className="font-medium mb-1">Email allowance configuration problems</div>
+            <ul className="list-disc pl-5 space-y-0.5">
+              {allowance.configIssues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {!quota.brevoSending.enabled && (
         <Alert
           className="border-transparent bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))]"
@@ -593,7 +674,10 @@ export function CampaignDetail({ id }: { id: number }) {
     onError: (err) => {
       let description = apiErrorMessage(err);
       if (err instanceof ApiError && err.status === 429 && data) {
-        description = `${err.message} (${data.testSendsToday}/${data.testSendDailyLimit} today)`;
+        const isGlobal = err.message.startsWith("Global test-send limit");
+        description = isGlobal
+          ? `${err.message} (${data.testSendsTodayGlobal}/${data.testSendDailyLimitGlobal} global today)`
+          : `${err.message} (${data.testSendsToday}/${data.testSendDailyLimit} for this campaign today)`;
       }
       toast({
         title: "Test send failed",
@@ -677,7 +761,16 @@ export function CampaignDetail({ id }: { id: number }) {
       let title = "Batch send failed";
       let description = apiErrorMessage(err);
       if (err instanceof ApiError) {
-        if (err.status === 429) {
+        const code =
+          err.details && typeof err.details === "object" && "code" in err.details
+            ? String((err.details as { code: unknown }).code)
+            : undefined;
+        if (err.status === 429 && code === "brevo_credits") {
+          // Brevo rejected for lack of credits — nothing sent, queue preserved.
+          // Show the server's message verbatim (it explains the situation).
+          title = "Brevo rejected the send";
+          description = err.message;
+        } else if (err.status === 429) {
           title = "Daily quota exhausted";
           description = "Daily quota exhausted — continue tomorrow.";
         }
@@ -727,6 +820,30 @@ export function CampaignDetail({ id }: { id: number }) {
       setCancelOpen(false);
       toast({
         title: "Could not cancel",
+        description: apiErrorMessage(err),
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ---- Retry Brevo cleanup ----
+  const cleanupMutation = useMutation({
+    mutationFn: () =>
+      api<CleanupResult>(`/api/admin/early-access/campaigns/${id}/cleanup`, {
+        method: "POST",
+        body: {},
+      }),
+    onSuccess: (res) => {
+      toast({
+        title: "Brevo cleanup complete",
+        description: `Checked ${res.checked}, deleted ${res.deleted}, still active ${res.skippedStillActive}, failed ${res.failed}. ${res.orphanedBrevoLists} orphaned list(s) remain.`,
+      });
+      invalidate();
+    },
+    onError: (err) => {
+      const disabled = err instanceof ApiError && err.status === 409;
+      toast({
+        title: disabled ? "Cleanup unavailable" : "Cleanup failed",
         description: apiErrorMessage(err),
         variant: "destructive",
       });
@@ -791,6 +908,43 @@ export function CampaignDetail({ id }: { id: number }) {
       </div>
 
       <QuotaBanner quota={data.quota} />
+
+      {campaign.status === "waiting_quota" && (
+        <Alert
+          className="border-transparent bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))]"
+          data-testid="notice-waiting-quota"
+        >
+          <AlertDescription>{WAITING_QUOTA_EXPLAINER}</AlertDescription>
+        </Alert>
+      )}
+
+      {data.orphanedBrevoLists > 0 && (
+        <Alert
+          className="border-transparent bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))]"
+          data-testid="notice-orphaned-lists"
+        >
+          <AlertDescription>
+            <div className="font-medium mb-1">
+              {data.orphanedBrevoLists} temporary Brevo contact list(s) could not be deleted
+            </div>
+            <p className="mb-2">
+              Temporary lists from finished batches remained after repeated delete attempts. This does
+              not affect recipients. Use “Retry Brevo cleanup” below, and check the Brevo dashboard if
+              they persist.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => cleanupMutation.mutate()}
+              disabled={cleanupMutation.isPending}
+              data-testid="button-cleanup-orphaned"
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" />
+              {cleanupMutation.isPending ? "Cleaning…" : "Retry Brevo cleanup"}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Content errors checklist */}
       {data.contentErrors.length > 0 && (
@@ -902,6 +1056,9 @@ export function CampaignDetail({ id }: { id: number }) {
             Sends to your admin email only. Counts toward the daily send quota. Limit {data.testSendDailyLimit}/day per campaign
             {" "}({data.testSendsToday} used today).
           </p>
+          <p className="text-xs text-muted-foreground" data-testid="test-send-note-global">
+            Global today (all campaigns/admins): {data.testSendsTodayGlobal}/{data.testSendDailyLimitGlobal} used.
+          </p>
         </CardContent>
       </Card>
 
@@ -998,7 +1155,21 @@ export function CampaignDetail({ id }: { id: number }) {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold mb-2">Batches</h3>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="text-sm font-semibold">Batches</h3>
+              {data.batches.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => cleanupMutation.mutate()}
+                  disabled={cleanupMutation.isPending}
+                  data-testid="button-cleanup"
+                >
+                  <Trash2 className="w-4 h-4 mr-1.5" />
+                  {cleanupMutation.isPending ? "Cleaning…" : "Retry Brevo cleanup"}
+                </Button>
+              )}
+            </div>
             {data.batches.length === 0 ? (
               <p className="text-sm text-muted-foreground">No batches sent yet.</p>
             ) : (
@@ -1014,15 +1185,29 @@ export function CampaignDetail({ id }: { id: number }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {data.batches.map((batch) => (
-                      <tr key={batch.id} data-testid={`row-batch-${batch.batchNumber}`}>
-                        <td className="px-3 py-2 tabular-nums">{batch.batchNumber}</td>
-                        <td className="px-3 py-2 tabular-nums">{batch.recipientCount}</td>
-                        <td className="px-3 py-2">{batch.status}</td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">{formatDateTime(batch.sentAt)}</td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">{batch.statusDetail || "—"}</td>
-                      </tr>
-                    ))}
+                    {data.batches.map((batch) => {
+                      const assumedSent = batch.statusDetail === "recovered_assumed_sent";
+                      return (
+                        <tr key={batch.id} data-testid={`row-batch-${batch.batchNumber}`}>
+                          <td className="px-3 py-2 tabular-nums">{batch.batchNumber}</td>
+                          <td className="px-3 py-2 tabular-nums">{batch.recipientCount}</td>
+                          <td className="px-3 py-2">{batch.status}</td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground">{formatDateTime(batch.sentAt)}</td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground">
+                            {assumedSent ? (
+                              <span
+                                className="text-[hsl(var(--warning,var(--foreground)))]"
+                                data-testid={`batch-assumed-sent-${batch.batchNumber}`}
+                              >
+                                {RECOVERED_ASSUMED_SENT_NOTE}
+                              </span>
+                            ) : (
+                              batch.statusDetail || "—"
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

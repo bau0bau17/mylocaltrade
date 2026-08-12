@@ -11,9 +11,11 @@ vi.mock("@/lib/api", () => ({
   api: (...args: unknown[]) => apiMock(...args),
   ApiError: class ApiError extends Error {
     status: number;
-    constructor(message: string, status = 500) {
+    details?: unknown;
+    constructor(message: string, status = 500, details?: unknown) {
       super(message);
       this.status = status;
+      this.details = details;
     }
   },
 }));
@@ -30,11 +32,25 @@ vi.mock("@/hooks/use-toast", () => ({
 import Campaigns, { CampaignDetail } from "./Campaigns";
 import { ApiError } from "@/lib/api";
 
+const ALLOWANCE = {
+  accountDailyCap: 300,
+  accountMonthlyCap: 9000,
+  monthlyResetDay: 1,
+  marketingDailyCap: 250,
+  transactionalDailyReserve: 50,
+  transactionalMonthlyReserve: 1500,
+  sentThisPeriod: 1200,
+  configIssues: [] as string[],
+  source: "local_estimate",
+  sourceNote: "Local safety estimate — Brevo's dashboard remains the source of truth.",
+};
+
 const QUOTA = {
   dailyCap: 300,
   sentToday: 50,
   remainingToday: 250,
   brevoSending: { enabled: false, reason: "MARKETING_BREVO_ENABLED is not set to 'true'" },
+  allowance: ALLOWANCE,
 };
 
 function makeCampaign(overrides: Record<string, unknown> = {}) {
@@ -84,6 +100,9 @@ function detailResponse(overrides: Record<string, unknown> = {}) {
     quota: QUOTA,
     testSendsToday: 0,
     testSendDailyLimit: 3,
+    testSendsTodayGlobal: 0,
+    testSendDailyLimitGlobal: 20,
+    orphanedBrevoLists: 0,
     ...rest,
   };
 }
@@ -120,6 +139,55 @@ describe("Campaigns list page", () => {
     const row = await screen.findByTestId("row-campaign-7");
     expect(within(row).getByText("Spring push")).toBeInTheDocument();
     expect(within(row).getByTestId("progress-campaign-7")).toHaveTextContent("42 / 100");
+  });
+
+  it("shows monthly usage, the source-note caption and config issues", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns")
+        return Promise.resolve({
+          campaigns: [],
+          quota: {
+            ...QUOTA,
+            allowance: {
+              ...ALLOWANCE,
+              accountMonthlyCap: 9000,
+              sentThisPeriod: 1200,
+              monthlyResetDay: 3,
+              configIssues: ["MARKETING_DAILY_CAP exceeds the account daily cap."],
+            },
+          },
+        });
+      return Promise.resolve({});
+    });
+    renderPage(<Campaigns />);
+
+    await waitFor(() => expect(screen.getByTestId("stat-monthly-cap")).toHaveTextContent("9,000"));
+    expect(screen.getByTestId("stat-sent-this-period")).toHaveTextContent("1,200");
+    expect(screen.getByTestId("monthly-usage")).toHaveTextContent(/3rd of each month/);
+    expect(screen.getByTestId("quota-source-note")).toHaveTextContent(
+      "Local safety estimate — Brevo's dashboard remains the source of truth.",
+    );
+    expect(screen.getByTestId("notice-config-issues")).toHaveTextContent(
+      /MARKETING_DAILY_CAP exceeds the account daily cap/,
+    );
+  });
+
+  it("hides monthly usage when there is no monthly cap", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns")
+        return Promise.resolve({
+          campaigns: [],
+          quota: {
+            ...QUOTA,
+            allowance: { ...ALLOWANCE, accountMonthlyCap: null, sentThisPeriod: null },
+          },
+        });
+      return Promise.resolve({});
+    });
+    renderPage(<Campaigns />);
+
+    await waitFor(() => expect(screen.getByTestId("stat-daily-cap")).toBeInTheDocument());
+    expect(screen.queryByTestId("monthly-usage")).not.toBeInTheDocument();
   });
 
   it("posts the new campaign and navigates to its detail", async () => {
@@ -314,5 +382,167 @@ describe("Campaign detail page", () => {
         apiMock.mock.calls.some(([p]) => p === "/api/admin/early-access/campaigns/1/resume"),
       ).toBe(true),
     );
+  });
+
+  it("shows the global test-send counter and handles the global 429", async () => {
+    apiMock.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path === "/api/admin/early-access/campaigns/1/test-send" && init?.method === "POST")
+        return Promise.reject(new ApiError("Global test-send limit reached (20/day).", 429));
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(detailResponse({ testSendsTodayGlobal: 20, testSendDailyLimitGlobal: 20 }));
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    expect(await screen.findByTestId("test-send-note-global")).toHaveTextContent(
+      "Global today (all campaigns/admins): 20/20 used.",
+    );
+    fireEvent.click(screen.getByTestId("button-test-send"));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Test send failed",
+          description: expect.stringContaining("global today"),
+          variant: "destructive",
+        }),
+      ),
+    );
+  });
+
+  it("shows the verbatim message on a brevo_credits 429 from send-batch", async () => {
+    const creditsMsg =
+      "Brevo rejected the send: not enough email credits. Nothing was sent and the queue is preserved. Top up credits, then press Send next batch.";
+    apiMock.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path === "/api/admin/early-access/campaigns/1/send-batch" && init?.method === "POST")
+        return Promise.reject(new ApiError(creditsMsg, 429, { code: "brevo_credits", message: creditsMsg }));
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(detailResponse({ campaign: { status: "queued" } }));
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    fireEvent.click(await screen.findByTestId("button-send-batch"));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Brevo rejected the send",
+          description: creditsMsg,
+          variant: "destructive",
+        }),
+      ),
+    );
+  });
+
+  it("explains waiting_quota and offers the orphaned-list cleanup which calls the endpoint", async () => {
+    apiMock.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path === "/api/admin/early-access/campaigns/1/cleanup" && init?.method === "POST")
+        return Promise.resolve({
+          checked: 3,
+          deleted: 2,
+          skippedStillActive: 0,
+          failed: 1,
+          orphanedBrevoLists: 1,
+        });
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(
+          detailResponse({ campaign: { status: "waiting_quota" }, orphanedBrevoLists: 1 }),
+        );
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    expect(await screen.findByTestId("notice-waiting-quota")).toHaveTextContent(
+      /Nothing was lost/,
+    );
+    const notice = screen.getByTestId("notice-orphaned-lists");
+    expect(notice).toHaveTextContent(/1 temporary Brevo contact list/);
+
+    fireEvent.click(screen.getByTestId("button-cleanup-orphaned"));
+    await waitFor(() =>
+      expect(
+        apiMock.mock.calls.some(
+          ([p, init]) =>
+            p === "/api/admin/early-access/campaigns/1/cleanup" &&
+            (init as { method?: string })?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Brevo cleanup complete" }),
+      ),
+    );
+  });
+
+  it("shows the 409 error when cleanup is unavailable (sending disabled)", async () => {
+    apiMock.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path === "/api/admin/early-access/campaigns/1/cleanup" && init?.method === "POST")
+        return Promise.reject(new ApiError("Brevo sending is disabled.", 409));
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(
+          detailResponse({
+            campaign: { status: "completed" },
+            batches: [
+              {
+                id: 1,
+                campaignId: 1,
+                batchNumber: 1,
+                recipientCount: 50,
+                status: "sent",
+                sentAt: "2026-01-02T00:00:00.000Z",
+                statusDetail: null,
+                createdAt: "2026-01-02T00:00:00.000Z",
+              },
+            ],
+          }),
+        );
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    fireEvent.click(await screen.findByTestId("button-cleanup"));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Cleanup unavailable",
+          description: "Brevo sending is disabled.",
+          variant: "destructive",
+        }),
+      ),
+    );
+  });
+
+  it("flags a recovered_assumed_sent batch and labels partially_failed distinctly", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(
+          detailResponse({
+            campaign: { status: "partially_failed" },
+            batches: [
+              {
+                id: 1,
+                campaignId: 1,
+                batchNumber: 1,
+                recipientCount: 50,
+                status: "sent",
+                sentAt: "2026-01-02T00:00:00.000Z",
+                statusDetail: "recovered_assumed_sent",
+                createdAt: "2026-01-02T00:00:00.000Z",
+              },
+            ],
+          }),
+        );
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    await screen.findByTestId("text-campaign-name");
+    expect(screen.getByTestId("badge-status-partially_failed")).toHaveTextContent(
+      "Finished with failures",
+    );
+    expect(screen.getByTestId("badge-status-partially_failed")).not.toHaveTextContent(
+      /Completed/,
+    );
+    expect(screen.getByTestId("batch-assumed-sent-1")).toHaveTextContent(/Assumed sent/);
   });
 });

@@ -18,15 +18,23 @@ import {
   computeAudience,
   effectiveDailyCap,
   marketingSendsToday,
+  marketingSendsThisPeriod,
   remainingDailyQuota,
   renderCampaignEmail,
   selectEligibleRegistrations,
+  sendAllowanceModel,
+  testSendDailyLimitGlobal,
   testSendsTodayForCampaign,
+  testSendsTodayGlobal,
   TEST_SEND_DAILY_LIMIT_PER_CAMPAIGN,
   validateCampaignContent,
   validateCtaUrl,
 } from "../lib/early-access-campaigns";
-import { runCampaignBatch } from "../lib/early-access-campaign-batch";
+import {
+  cleanupBatchLists,
+  orphanedBrevoLists,
+  runCampaignBatch,
+} from "../lib/early-access-campaign-batch";
 import { marketingSendingStatus } from "../lib/brevo-marketing";
 import { sendEarlyAccessCampaignTestEmail } from "../lib/email";
 import { buildUnsubscribeUrl } from "../lib/early-access-unsubscribe";
@@ -93,11 +101,34 @@ async function recipientCounts(campaignId: number) {
 }
 
 async function quotaInfo() {
+  const model = sendAllowanceModel();
   return {
     dailyCap: effectiveDailyCap(),
     sentToday: await marketingSendsToday(db),
     remainingToday: await remainingDailyQuota(db),
     brevoSending: marketingSendingStatus(),
+    /**
+     * Allowance transparency for the dashboard. Every number here is a
+     * LOCAL estimate of what THIS system sent — it cannot see transactional
+     * traffic beyond the configured reserve, and Brevo exposes no reliable
+     * live balance API on these plans.
+     */
+    allowance: {
+      accountDailyCap: model.accountDailyCap, // null = no daily cap (paid plan)
+      accountMonthlyCap: model.accountMonthlyCap, // null = no monthly cap
+      monthlyResetDay: model.monthlyResetDay,
+      marketingDailyCap: model.marketingDailyCap,
+      transactionalDailyReserve: model.transactionalDailyReserve,
+      transactionalMonthlyReserve: model.transactionalMonthlyReserve,
+      sentThisPeriod:
+        model.accountMonthlyCap !== null
+          ? await marketingSendsThisPeriod(db)
+          : null,
+      configIssues: model.configIssues,
+      source: "local_estimate" as const,
+      sourceNote:
+        "Local safety estimate — Brevo's dashboard remains the source of truth.",
+    },
   };
 }
 
@@ -205,6 +236,37 @@ router.get("/admin/early-access/campaigns/:id", async (req, res) => {
     quota: await quotaInfo(),
     testSendsToday: await testSendsTodayForCampaign(db, campaign.id),
     testSendDailyLimit: TEST_SEND_DAILY_LIMIT_PER_CAMPAIGN,
+    testSendsTodayGlobal: await testSendsTodayGlobal(db),
+    testSendDailyLimitGlobal: testSendDailyLimitGlobal(),
+    /** Batches whose temporary Brevo list cleanup keeps failing. */
+    orphanedBrevoLists: await orphanedBrevoLists(campaign.id),
+  });
+});
+
+/**
+ * Retry temporary Brevo list cleanup for this campaign's batches. Safe to
+ * call any time: it is idempotent, only deletes remote lists whose send can
+ * no longer be affected, and NEVER touches local recipients, consent
+ * evidence, audit rows or the Brevo campaign reference — so it can never
+ * cause a resend.
+ */
+router.post("/admin/early-access/campaigns/:id/cleanup", async (req, res) => {
+  const authReq = req as unknown as AuthenticatedRequest;
+  const campaign = await loadCampaign(Number(req.params.id));
+  if (!campaign) {
+    res.status(404).json({ error: "Campaign not found." });
+    return;
+  }
+  if (!marketingSendingStatus().enabled) {
+    res.status(409).json({
+      error: "Brevo sending is disabled — cleanup needs Brevo API access.",
+    });
+    return;
+  }
+  const result = await cleanupBatchLists(campaign.id, authReq.userId);
+  res.json({
+    ...result,
+    orphanedBrevoLists: await orphanedBrevoLists(campaign.id),
   });
 });
 
@@ -299,6 +361,11 @@ router.post("/admin/early-access/campaigns/:id/test-send", async (req, res) => {
     ) {
       return { error: "limit" as const };
     }
+    // Brevo's test-email allowance is GLOBAL per account/day — enforce a
+    // global cross-campaign, cross-admin limit under the same lock.
+    if ((await testSendsTodayGlobal(tx)) >= testSendDailyLimitGlobal()) {
+      return { error: "global_limit" as const };
+    }
     if ((await remainingDailyQuota(tx)) <= 0) {
       return { error: "quota" as const };
     }
@@ -318,6 +385,12 @@ router.post("/admin/early-access/campaigns/:id/test-send", async (req, res) => {
   if (gate.error === "limit") {
     res.status(429).json({
       error: `Test-send limit reached for this campaign (${TEST_SEND_DAILY_LIMIT_PER_CAMPAIGN}/day).`,
+    });
+    return;
+  }
+  if (gate.error === "global_limit") {
+    res.status(429).json({
+      error: `Global test-send limit reached for today (${testSendDailyLimitGlobal()} across all campaigns and admins).`,
     });
     return;
   }
@@ -465,7 +538,7 @@ router.post("/admin/early-access/campaigns/:id/send-batch", async (req, res) => 
     const status =
       result.code === "not_found"
         ? 404
-        : result.code === "quota_exhausted"
+        : result.code === "quota_exhausted" || result.code === "brevo_credits"
           ? 429
           : result.code === "brevo_error" || result.code === "needs_recovery_review"
             ? 502

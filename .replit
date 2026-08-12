@@ -78,6 +78,9 @@ UNIVERSAL_LINK_BASE_URL = "https://mylocaltrade.co.uk"
 ADMIN_BOOTSTRAP_EMAIL = "lucian.sabau@serviceproviderltd.co.uk"
 COMPANY_TEAMS_ENABLED = "true"
 
+[userenv.development]
+EARLY_ACCESS_UNSUBSCRIBE_SECRET = "dev-only-unsubscribe-secret-3f9c2a71"
+
 [nix]
 channel = "stable-25_05"
 packages = ["zip"]
