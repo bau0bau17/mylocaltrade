@@ -260,6 +260,65 @@ describe("admin authz", () => {
   });
 });
 
+describe("route mounting — campaigns list vs registrations :id", () => {
+  // Regression: the registrations router's GET /admin/early-access/:id used
+  // to swallow GET /admin/early-access/campaigns (":id" = "campaigns"),
+  // returning 400 "Invalid id" and blanking the admin Campaigns page.
+  it("GET /admin/early-access/campaigns returns the list, never 'Invalid id'", async () => {
+    const res = await request(app)
+      .get("/api/admin/early-access/campaigns")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.campaigns)).toBe(true);
+  });
+
+  it("full flow: create → save → preview → list still shows the draft → reopen", async () => {
+    const created = await request(app)
+      .post("/api/admin/early-access/campaigns")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ type: "launch", name: "List survival flow" });
+    expect(created.status).toBe(201);
+    const id = created.body.campaign.id;
+
+    const saved = await request(app)
+      .patch(`/api/admin/early-access/campaigns/${id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ name: "List survival flow", subject: "Hello", heading: "Hi", bodyText: "Body text" });
+    expect(saved.status).toBe(200);
+
+    const preview = await request(app)
+      .get(`/api/admin/early-access/campaigns/${id}/preview`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(preview.status).toBe(200);
+    expect(preview.body.html).toContain("Hello");
+
+    const list = await request(app)
+      .get("/api/admin/early-access/campaigns")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(list.status).toBe(200);
+    expect(list.body.campaigns.some((c: { id: number }) => c.id === id)).toBe(true);
+
+    const reopened = await request(app)
+      .get(`/api/admin/early-access/campaigns/${id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(reopened.status).toBe(200);
+    expect(reopened.body.campaign.name).toBe("List survival flow");
+  });
+
+  it("registration detail routes keep working: numeric id resolves, non-numeric falls through to 404", async () => {
+    const missing = await request(app)
+      .get("/api/admin/early-access/999999")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(missing.status).toBe(404);
+
+    const nonNumeric = await request(app)
+      .get("/api/admin/early-access/not-a-real-subroute")
+      .set("Authorization", `Bearer ${adminToken}`);
+    expect(nonNumeric.status).toBe(404);
+    expect(nonNumeric.body?.error ?? "").not.toBe("Invalid id");
+  });
+});
+
 describe("draft editor validation", () => {
   it("rejects invalid type and non-HTTPS CTA URLs", async () => {
     const badType = await request(app)

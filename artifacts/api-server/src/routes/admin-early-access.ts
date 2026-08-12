@@ -373,8 +373,14 @@ router.get(
   "/admin/early-access/:id",
   authMiddleware,
   adminOnly,
-  async (req, res) => {
+  async (req, res, next) => {
     try {
+      // Non-numeric segments (e.g. "campaigns") belong to sibling routers —
+      // fall through instead of claiming them, regardless of mount order.
+      if (!/^\d+$/.test(String(req.params.id))) {
+        next();
+        return;
+      }
       const id = Number.parseInt(String(req.params.id), 10);
       if (!Number.isInteger(id) || id <= 0) {
         res.status(400).json({ error: "Invalid id" });

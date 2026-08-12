@@ -59,8 +59,11 @@ router.use(promoRouter);
 router.use(accountDeletionRouter);
 router.use(profileChangesRouter);
 router.use(adminProfileChangesRouter);
-router.use(adminEarlyAccessRouter);
+// Campaigns MUST be mounted before the registrations router: the latter has
+// a GET /admin/early-access/:id route that would otherwise swallow
+// GET /admin/early-access/campaigns (":id" = "campaigns" → 400 Invalid id).
 router.use(adminEarlyAccessCampaignsRouter);
+router.use(adminEarlyAccessRouter);
 router.use(companyTeamRouter);
 
 export default router;
