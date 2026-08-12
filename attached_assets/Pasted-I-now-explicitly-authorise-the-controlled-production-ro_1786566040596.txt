@@ -1,0 +1,161 @@
+I now explicitly authorise the controlled production rollout of the completed Early Access and campaign system through commit `b13360a`.
+
+The objective is to make the feature live and operational in production.
+
+This authorisation replaces the previous “do not deploy” restriction only for the Early Access Phase 1, Phase 2A and Phase 2B work.
+
+Do not send a launch or marketing campaign to real subscribers during rollout. Making the feature live must not automatically send any campaign.
+
+PRODUCTION PREFLIGHT
+
+Before changing production:
+
+1. Confirm production code is being deployed from main at commit `b13360a` or a later commit containing it.
+2. Confirm the production database target explicitly.
+3. Inspect the pending schema changes and verify they are additive and contain all Phase 1, 2A and 2B tables/columns/indexes.
+4. Confirm existing customer, trader, Company Teams, subscription and conversation data will not be modified.
+5. Confirm there is no existing queued Early Access campaign that would send automatically when marketing is enabled.
+6. Confirm the rollback procedure before starting.
+7. Do not make additional feature or design changes during rollout.
+
+PRODUCTION SECRETS
+
+Use production secrets only.
+
+Required:
+
+- `BREVO_API_KEY_MARKETING`
+- `EARLY_ACCESS_UNSUBSCRIBE_SECRET`
+- `BREVO_WEBHOOK_SECRET`
+
+Ask me to provide `BREVO_API_KEY_MARKETING` through Replit’s secure Add Secret interface. Never ask me to paste the value into the normal chat.
+
+Generate strong, independent random values for:
+
+- `EARLY_ACCESS_UNSUBSCRIBE_SECRET`
+- `BREVO_WEBHOOK_SECRET`
+
+Store them as production secrets without printing them in chat, command output, application logs or the final report.
+
+Do not reuse:
+
+- Session secrets
+- Brevo API keys
+- Verification keys
+- SMTP passwords
+- The same value for both secrets
+
+Configure the current Brevo Free-plan limits explicitly:
+
+- `BREVO_ACCOUNT_DAILY_CAP=300`
+- `MARKETING_DAILY_SEND_CAP=200`
+- `TRANSACTIONAL_EMAIL_DAILY_RESERVE=100`
+- `TEST_EMAIL_DAILY_LIMIT=20`
+
+Leave unset for now:
+
+- `BREVO_ACCOUNT_MONTHLY_CAP`
+- `BREVO_MONTHLY_RESET_DAY`
+- `BREVO_WEBHOOK_SECRET_PREVIOUS`
+- `EARLY_ACCESS_UNSUBSCRIBE_SECRET_PREVIOUS`
+
+Initially set:
+
+`MARKETING_BREVO_ENABLED=false`
+
+Do not enable real campaign delivery before the schema, publish, webhook and smoke checks are complete.
+
+DATABASE AND FIRST PUBLISH
+
+1. Apply the complete Early Access Phase 1/2A/2B schema to the production database before the new server code begins receiving traffic.
+2. Verify the migration/schema push completed successfully.
+3. Verify all expected tables, columns and indexes exist.
+4. Do not delete, reset or recreate the production database.
+5. Publish the backend, Admin Dashboard and landing-page update.
+6. Confirm clean server startup with no migration/schema errors.
+
+PRODUCTION SMOKE CHECKS WITH MARKETING DISABLED
+
+Verify:
+
+- Public health endpoint is successful
+- Existing customer and trader authentication remains operational
+- Existing conversations, quotes, bookings and subscriptions are unaffected
+- mylocaltrade.co.uk loads normally
+- Privacy Policy contains the new Early Access section
+- Early Access form loads
+- A new registration is stored as pending confirmation
+- Confirmation email delivery uses the existing transactional Brevo flow
+- Confirmation link GET does not activate consent
+- Explicit confirmation POST activates the correct consent
+- Early Access records appear in the Admin Dashboard
+- Search, filters and subscriber details work
+- Campaign controls are visible to authorised administrators only
+- Attempting a real campaign while `MARKETING_BREVO_ENABLED=false` fails safely without creating contacts, lists, campaigns or sends
+
+Only use an email address that I explicitly approve for the smoke test. Do not use an existing subscriber or customer without my permission.
+
+BREVO WEBHOOK
+
+After the first production publish is healthy, configure a Brevo outbound webhook of type MARKETING.
+
+URL:
+
+`https://mylocaltrade.co.uk/api/early-access/brevo-events`
+
+Events:
+
+- `spam`
+- `hardBounce`
+- `unsubscribed`
+- `delivered`
+
+Authentication:
+
+- Custom header name: `X-Webhook-Secret`
+- Value: the production `BREVO_WEBHOOK_SECRET`
+
+Do not put the secret in the URL or query string.
+
+If Brevo’s interface does not permit the required custom header, stop and report the exact available authentication options before weakening authentication.
+
+Verify the webhook endpoint:
+
+- Rejects missing authentication
+- Rejects invalid authentication
+- Accepts a correctly authenticated safe test event
+- Processes duplicate webhook delivery idempotently
+- Does not expose the secret or recipient details in logs
+
+FINAL ENABLEMENT
+
+After all disabled-mode checks and webhook checks pass:
+
+1. Confirm again that no campaign is queued for automatic sending.
+2. Set `MARKETING_BREVO_ENABLED=true` in production.
+3. Republish/restart production as required for the new environment value.
+4. Confirm the feature reports that Brevo marketing is enabled.
+5. Do not start or send a real launch/marketing campaign.
+6. Confirm campaigns require the administrator’s explicit `SEND TO N PEOPLE` action.
+7. Confirm no background worker sends anything automatically.
+
+FINAL REPORT
+
+Report:
+
+1. Production commit deployed
+2. Production schema result
+3. Secrets configured by name only, never their values
+4. First publish result
+5. Early Access registration and confirmation smoke-test result
+6. Admin Dashboard result
+7. Webhook ID/type/events/authentication result
+8. Final `MARKETING_BREVO_ENABLED` state
+9. Confirmation that zero real launch/marketing campaigns were sent
+10. Relevant production logs, excluding personal data and secrets
+11. Exact rollback steps
+12. Any remaining manual acceptance test for me
+
+Do not run EAS, create a mobile build or submit to TestFlight. No mobile code changed.
+
+If any production preflight, schema, publish or webhook check fails, stop before enabling marketing, preserve production data and report the blocker.
