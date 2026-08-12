@@ -26,6 +26,7 @@ import promoRouter from "./promo";
 import accountDeletionRouter from "./account-deletion";
 import profileChangesRouter from "./profile-changes";
 import adminProfileChangesRouter from "./admin-profile-changes";
+import adminEarlyAccessRouter from "./admin-early-access";
 import companyTeamRouter from "./company-team";
 
 const router: IRouter = Router();
@@ -57,6 +58,7 @@ router.use(promoRouter);
 router.use(accountDeletionRouter);
 router.use(profileChangesRouter);
 router.use(adminProfileChangesRouter);
+router.use(adminEarlyAccessRouter);
 router.use(companyTeamRouter);
 
 export default router;

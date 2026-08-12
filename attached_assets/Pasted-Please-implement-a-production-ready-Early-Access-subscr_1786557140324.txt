@@ -1,0 +1,387 @@
+Please implement a production-ready Early Access subscriber list and compliant bulk-email campaign system inside the existing MyLocalTrade Admin Dashboard.
+
+This extends the existing Early Access form on mylocaltrade.co.uk. It is not a redesign and it must not affect unrelated application features.
+
+Before editing anything, inspect:
+
+- The current landing-page Early Access form
+- `POST /api/early-access`
+- Where existing submissions are currently stored or sent
+- The database schema
+- The Admin Dashboard authentication and permission model
+- The existing Brevo integration
+- The central transactional email service
+- Current Privacy Policy wording
+
+Report what already exists before replacing or duplicating it.
+
+CORE OUTCOME
+
+I need:
+
+1. Every Early Access registration stored safely.
+2. A searchable Early Access section in the Admin Dashboard.
+3. A button to announce that MyLocalTrade is live and sign-up is open.
+4. Controls for future marketing campaigns.
+5. Marketing emails sent only to people who explicitly accepted ongoing marketing.
+6. Unsubscribe, suppression, batching and audit protection.
+7. Password resets, verification codes and other transactional emails protected from marketing quota consumption.
+
+DATABASE AND EXISTING RECORDS
+
+Create or extend the appropriate database structures for:
+
+- ID
+- Name
+- Normalised email address, unique case-insensitively
+- Audience type: Customer, Trader or Other
+- Town/postcode area
+- Optional message
+- Source page
+- Date joined
+- Launch-update consent status
+- Launch-consent timestamp
+- Exact launch-consent text/version
+- Separate ongoing-marketing consent status
+- Marketing-consent timestamp
+- Exact marketing-consent text/version
+- Unsubscribed/suppressed status
+- Unsubscribed date and reason
+- Launch-announcement status and sent date
+- Brevo contact/campaign references where required
+- Created and updated dates
+
+Repeated submissions must not create duplicates.
+
+A repeated submission may safely update the person’s name, type or area, but it must never silently re-subscribe someone who previously unsubscribed. Re-subscription requires a new explicit action from that person and new consent evidence.
+
+Inspect and report:
+
+- How many existing Early Access registrations are recoverable
+- Where they are currently stored
+- Whether their consent evidence was retained
+- How many are eligible for the launch announcement
+- How many have unknown or insufficient consent
+
+The existing wording about “launch updates and early access” may qualify a record for the launch announcement only when there is evidence that the person submitted that form with that wording.
+
+Do not infer consent where no evidence exists.
+
+Never convert existing Early Access registrations into ongoing marketing subscribers automatically.
+
+LANDING-PAGE FORM
+
+Keep the existing fields:
+
+- Name
+- Email
+- Customer/Trader/Other
+- Town/postcode area
+- Optional message
+
+Use two clearly separated purposes.
+
+Required Early Access wording:
+
+“I’d like MyLocalTrade to email me when early access opens and the app goes live.”
+
+Separate optional checkbox, unchecked by default:
+
+“Yes, send me occasional MyLocalTrade news, updates and offers by email.”
+
+The ongoing-marketing checkbox must:
+
+- Be optional
+- Be unchecked by default
+- Never be bundled with joining Early Access
+- Link visibly to the Privacy Policy
+- Record its own timestamp and wording version
+
+Add clear validation, success and duplicate-registration states.
+
+Do not reveal whether an address belongs to an existing application account.
+
+Keep or improve the existing anti-spam protection, validation, honeypot and public-endpoint rate limiting.
+
+ADMIN DASHBOARD
+
+Add an administrator-only “Early Access” section.
+
+All permissions must be enforced by the API, not only by hiding the interface.
+
+Dashboard summary:
+
+- Total registrations
+- Customers
+- Traders
+- Other
+- Eligible for launch announcement
+- Marketing subscribers
+- Unsubscribed/suppressed
+- Launch announcement sent/not sent
+
+Subscriber table:
+
+- Name
+- Email
+- Type
+- Area
+- Joined date
+- Launch consent
+- Marketing consent
+- Launch-email status
+- Unsubscribe/suppression status
+
+Controls:
+
+- Search by name or email
+- Filter by type
+- Filter by date
+- Filter by launch consent
+- Filter by marketing consent
+- Filter by sent/not sent
+- Filter by subscribed/unsubscribed/suppressed
+- Subscriber detail view with consent history
+- Manual unsubscribe/suppress action with confirmation
+- Safe CSV export
+- Campaign history
+- Audit history
+
+CSV export must exclude unsubscribed and suppressed contacts by default. Exporting a full list must require an additional confirmation and create an audit event.
+
+Do not expose tokens, hashes or Brevo credentials.
+
+BREVO ARCHITECTURE
+
+Do not use the transactional password-reset/verification email flow for bulk marketing.
+
+Use Brevo’s Contacts and Marketing Campaign APIs for:
+
+- Contact-list synchronisation
+- Launch announcements
+- Marketing campaigns
+- Campaign test emails
+- Campaign delivery status
+- Marketing unsubscribe/suppression
+
+The local MyLocalTrade database remains the source of truth for consent.
+
+Create or reuse clearly separated Brevo lists, such as:
+
+- MyLocalTrade Early Access – Launch
+- MyLocalTrade Marketing Subscribers
+
+Only add a person to the marketing list when explicit marketing consent exists.
+
+Removing someone from marketing or unsubscribing them must not prevent transactional account-security emails such as password resets and verification codes. Verify this distinction in both the local suppression logic and Brevo configuration.
+
+Use the verified sender:
+
+MyLocalTrade <noreply@mylocaltrade.co.uk>
+
+Do not request another Brevo API key unless the existing production key genuinely cannot access Contacts and Marketing Campaign APIs. If another key is required, report the exact secret name and required access, but do not change production secrets yourself.
+
+CAMPAIGN INTERFACE
+
+Add these Admin Dashboard actions:
+
+- Preview launch announcement
+- Send launch test email
+- Queue launch announcement
+- Create marketing campaign
+- Preview marketing campaign
+- Send marketing test email
+- Queue marketing campaign
+- Pause campaign
+- Resume/continue next batch
+- Cancel unsent recipients
+- View campaign results
+
+Before starting a real campaign, display:
+
+- Subject
+- Preview/content
+- CTA destination
+- Exact eligible-recipient count
+- Number excluded by missing consent
+- Number excluded by unsubscribe/suppression
+- Estimated number of sending days
+- A strong confirmation such as: `SEND TO 123 PEOPLE`
+
+Double-clicking or retrying must never create duplicate campaigns or duplicate emails.
+
+Do not use CC or BCC. Recipients must never see other recipients’ addresses.
+
+Use a controlled campaign editor with:
+
+- Subject
+- Preview text
+- Heading
+- Body
+- CTA label
+- HTTPS CTA URL
+
+Do not allow unsafe, unsanitised arbitrary HTML.
+
+Personalise the greeting using the first name when available.
+
+The launch template should say that MyLocalTrade is now live and that customers and traders can begin signing up. Keep the final App Store/sign-up URL configurable and do not invent or hardcode an unconfirmed link.
+
+BREVO FREE-PLAN LIMIT
+
+The current account permits 300 email sends per day, shared by marketing and transactional email.
+
+Set a conservative configurable default:
+
+`MARKETING_DAILY_SEND_CAP=200`
+
+This reserves approximately 100 daily sends for password resets, verification, invitations and other important transactional emails.
+
+The administrator may queue the entire audience in one action, but the interface must clearly explain that delivery can take multiple days.
+
+Do not claim that all recipients were sent successfully when Brevo only processed the daily allowance.
+
+Store durable campaign and recipient states:
+
+- Draft
+- Queued
+- Sending
+- Waiting for daily quota
+- Sent
+- Delivered, when available
+- Failed
+- Bounced
+- Suppressed
+- Unsubscribed
+- Cancelled
+
+If the existing deployment has a reliable scheduled-job/worker mechanism, campaigns may resume automatically after the daily quota resets.
+
+If no reliable scheduler exists, do not invent unreliable background behaviour. Show a clear “Continue next batch” action in the Admin Dashboard and preserve campaign progress safely between deployments/restarts.
+
+Use the official Brevo behaviour and API capabilities discovered during implementation. Do not assume that Brevo Free automatically sends the remainder of a campaign on following days.
+
+UNSUBSCRIBE, BOUNCES AND SUPPRESSION
+
+Every launch announcement and marketing email must include:
+
+- Clear MyLocalTrade identity
+- Valid contact information
+- Privacy Policy link
+- Visible unsubscribe link
+- Appropriate List-Unsubscribe support when available through Brevo
+
+Unsubscribe must:
+
+- Work without login
+- Use a secure non-guessable token
+- Take effect immediately
+- Prevent all future launch/marketing campaigns
+- Not disable transactional security emails
+- Be stored in a permanent/minimal suppression record
+- Be checked before every campaign
+
+Process or synchronise Brevo hard bounces, spam complaints and marketing blocks. These addresses must not be retried repeatedly.
+
+Do not allow ordinary subscriber cleanup to delete the minimal suppression information needed to honour an unsubscribe.
+
+PRIVACY AND RETENTION
+
+Update the Privacy Policy and landing-page privacy wording to explain:
+
+- What Early Access information is collected
+- Why it is collected
+- The difference between launch updates and ongoing marketing
+- Brevo’s role as email provider/processor
+- How to withdraw consent
+- How unsubscribe works
+- The retention approach
+- The right to object to direct marketing
+
+Do not keep launch-only data indefinitely after the Early Access purpose has ended.
+
+Add a documented/configurable retention policy or review date for launch-only registrations. Marketing subscribers may remain while consent is valid, subject to unsubscribe and periodic review.
+
+SECURITY AND LOGGING
+
+- Admin-only actions enforced server-side
+- Validate and normalise all inputs
+- Rate-limit public and campaign endpoints
+- Never log campaign recipient lists, consent tokens, unsubscribe tokens, email bodies, OTPs or API keys
+- Audit campaign creation, send, pause, resume, cancel, export and manual suppression
+- Do not include complete recipient lists in audit-event payloads
+- Protect against simultaneous send requests and campaign double execution
+- Tests must never access real Brevo credentials or consume real email credits
+- Preserve the existing test-email isolation protections
+- Do not mix Early Access records with registered application accounts unless explicitly required
+
+TESTS
+
+Add focused tests for:
+
+- Public form validation
+- Duplicate registrations
+- Case-insensitive email matching
+- Separate launch and marketing consent
+- Consent wording/version storage
+- Existing-data migration
+- Unknown consent excluded safely
+- Unsubscribed contacts not silently resubscribed
+- Admin-only access
+- Recipient eligibility filtering
+- CSV export protection
+- Campaign confirmation
+- Campaign idempotency/double-click prevention
+- Daily batching and quota waiting
+- Transactional-email reserve
+- Restart-safe campaign progress
+- Pause/resume/cancel
+- Unsubscribe
+- Hard-bounce/suppression handling
+- No CC/BCC recipient exposure
+- No real Brevo traffic during automated tests
+
+Run all relevant API, Admin Dashboard and landing-page tests/typechecks.
+
+Perform a final security/privacy review before committing.
+
+DO NOT CHANGE
+
+Do not change:
+
+- Mobile-app behaviour
+- RevenueCat
+- Subscriptions or pricing
+- Company Teams
+- Password-reset behaviour
+- Verification email behaviour
+- Trader/customer application accounts
+- Unrelated landing-page design
+
+DELIVERY
+
+Commit and push the completed implementation to main.
+
+Report:
+
+1. Commit hash
+2. Files and migrations changed
+3. Existing Early Access records found and recovered
+4. Exact consent classification used
+5. Brevo lists/campaign integration created
+6. Daily marketing cap and transactional reserve
+7. Campaign behaviour above the daily allowance
+8. Unsubscribe and suppression behaviour
+9. Privacy Policy changes
+10. Tests and review results
+11. Any production secret or Brevo configuration I must add manually
+12. Exact production migration/publish order
+13. Manual acceptance checklist
+
+Do not deploy or publish anything.
+
+Do not change production variables.
+
+Do not run EAS builds or submit to TestFlight.
+
+Do not perform my local Git sync. I handle publishing, production settings, builds, TestFlight and Git sync manually.

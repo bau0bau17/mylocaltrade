@@ -22,6 +22,7 @@ import {
   UserCog,
   UsersRound,
   BellOff,
+  Rocket,
   Sun,
   Moon,
 } from "lucide-react";
@@ -59,6 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Overview",
     items: [
       { href: "/", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/early-access", label: "Early Access", icon: Rocket },
       { href: "/enquiries", label: "Enquiries", icon: Mail },
     ],
   },

@@ -1,0 +1,217 @@
+Implement Phase 1 only of the MyLocalTrade Early Access management feature.
+
+This phase covers:
+
+- Collecting and safely storing Early Access registrations
+- Separate launch and marketing consent
+- Displaying and managing the list in the Admin Dashboard
+
+Do not implement bulk-email campaigns yet. That will be Phase 2 after I review and approve Phase 1.
+
+FIRST: INSPECT THE EXISTING IMPLEMENTATION
+
+Before changing anything, inspect:
+
+- The Early Access form on mylocaltrade.co.uk
+- `POST /api/early-access`
+- Where current submissions are stored or sent
+- Existing database conventions
+- Admin Dashboard authentication and permissions
+- Current Privacy Policy wording
+
+Reuse the existing architecture. Do not duplicate an existing solution and do not refactor unrelated code.
+
+DATABASE
+
+Create or extend the appropriate database structure for:
+
+- ID
+- Name
+- Normalised email, unique case-insensitively
+- Audience type: Customer, Trader or Other
+- Town/postcode area
+- Optional message
+- Source page
+- Date joined
+- Launch-update consent status and timestamp
+- Exact launch-consent wording/version
+- Separate ongoing-marketing consent status and timestamp
+- Exact marketing-consent wording/version
+- Unsubscribed/suppressed status and timestamp
+- Created and updated dates
+
+Repeated submissions must not create duplicate records.
+
+A repeated registration may update basic details, but it must never silently restore marketing consent after someone has unsubscribed. Re-subscription requires a new explicit action and new consent evidence.
+
+EXISTING EARLY ACCESS RECORDS
+
+Determine:
+
+- Whether existing registrations are stored
+- Where they are stored
+- How many can be recovered
+- Whether consent evidence exists
+- How many qualify only for launch updates
+- How many have unknown consent
+
+The existing wording about “launch updates and early access” may qualify a record for a future launch announcement only when there is evidence that the person submitted that form.
+
+Do not infer missing consent.
+
+Never classify existing registrations as ongoing marketing subscribers unless a separate explicit marketing agreement already exists.
+
+If existing submissions cannot be recovered, report that clearly. Do not fabricate records or attempt to scrape private inboxes.
+
+LANDING-PAGE FORM
+
+Keep the current fields and design:
+
+- Name
+- Email
+- Customer/Trader/Other
+- Town/postcode area
+- Optional message
+
+Use these two clearly separated purposes.
+
+Required Early Access agreement:
+
+“I’d like MyLocalTrade to email me when early access opens and the app goes live.”
+
+Separate optional checkbox, unchecked by default:
+
+“Yes, send me occasional MyLocalTrade news, updates and offers by email.”
+
+The marketing checkbox must:
+
+- Be optional
+- Be unchecked by default
+- Never be bundled with Early Access registration
+- Link visibly to the Privacy Policy
+- Store its own consent timestamp and wording version
+
+Add clear validation, duplicate-registration and success states.
+
+Keep or improve the existing rate limiting, validation, honeypot and spam protection.
+
+Do not reveal whether the email belongs to an existing MyLocalTrade application account.
+
+ADMIN DASHBOARD
+
+Add an administrator-only section called “Early Access”.
+
+All permissions must be enforced by the API, not only hidden in the interface.
+
+Show summary counts for:
+
+- Total registrations
+- Customers
+- Traders
+- Other
+- Launch-update consent
+- Marketing consent
+- Unsubscribed/suppressed
+- Unknown legacy consent
+
+Display a table containing:
+
+- Name
+- Email
+- Type
+- Area
+- Date joined
+- Launch consent
+- Marketing consent
+- Unsubscribe/suppression status
+
+Add:
+
+- Search by name or email
+- Filter by type
+- Filter by registration date
+- Filter by launch consent
+- Filter by marketing consent
+- Filter by subscribed/unsubscribed/suppressed
+- Subscriber detail view with consent history
+- Manual unsubscribe/suppress action with confirmation
+- Safe CSV export
+
+CSV export must exclude unsubscribed/suppressed contacts by default. Exporting all records requires an additional confirmation and must create an audit event.
+
+Audit manual suppression changes and exports, but do not store complete recipient lists in audit payloads.
+
+PRIVACY AND SECURITY
+
+Update the Privacy Policy and landing-page wording to explain:
+
+- What Early Access information is collected
+- Why it is collected
+- The difference between launch updates and ongoing marketing
+- How consent can be withdrawn
+- The general retention approach
+- That Brevo will be used as the email provider/processor in the future campaign phase
+
+Security requirements:
+
+- Admin permissions enforced server-side
+- Public inputs validated and normalised
+- Rate limiting retained
+- No consent tokens, API keys, complete exported lists or sensitive form content in logs
+- Do not connect this list automatically to registered customer/trader accounts
+- Preserve all existing protection preventing automated tests from sending real emails
+
+TESTS
+
+Add focused tests for:
+
+- Form validation
+- Case-insensitive duplicate prevention
+- Separate launch and marketing consent
+- Consent wording/version storage
+- Existing-data migration
+- Unknown legacy consent remaining unknown
+- Unsubscribed contacts not being silently resubscribed
+- Admin-only API access
+- Search and filters
+- CSV export protection
+- No real Brevo/email traffic during tests
+
+Run all relevant API, Admin Dashboard and landing-page tests/typechecks.
+
+Conduct a focused privacy/security review of Phase 1.
+
+DO NOT DO IN THIS PHASE
+
+Do not:
+
+- Send any launch or marketing campaign
+- Create Brevo campaigns
+- Change Brevo production contacts
+- Add or modify production secrets
+- Change transactional emails
+- Change password resets or verification emails
+- Change RevenueCat, subscriptions, pricing or Company Teams
+- Change the mobile application
+- Deploy or publish anything
+- Change production variables
+- Run EAS or TestFlight
+- Perform my local Git sync
+
+DELIVERY
+
+Commit and push Phase 1 to main.
+
+Report:
+
+1. Commit hash
+2. Files and database migrations changed
+3. Existing records found and recovered
+4. Consent classification used
+5. Admin Dashboard functionality added
+6. Privacy Policy changes
+7. Tests and review results
+8. Exact production migration/publish steps that will eventually be required
+9. Anything that must be decided before Phase 2
+
+After completing and reporting Phase 1, stop completely and wait for my approval. Do not start Phase 2 automatically.

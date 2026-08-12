@@ -14,6 +14,7 @@ import TraderDetail from "@/pages/TraderDetail";
 import AuditReportPage from "@/pages/AuditReport";
 import ExpiringDocs from "@/pages/ExpiringDocs";
 import EnquiriesPage from "@/pages/Enquiries";
+import EarlyAccess from "@/pages/EarlyAccess";
 import ReviewsPage from "@/pages/Reviews";
 import ConversationReportsPage from "@/pages/ConversationReports";
 import UserReportsPage from "@/pages/UserReports";
@@ -40,6 +41,7 @@ function ProtectedRoutes() {
           <Route path="/audit-report" component={AuditReportPage} />
           <Route path="/expiring-documents" component={ExpiringDocs} />
           <Route path="/enquiries" component={EnquiriesPage} />
+          <Route path="/early-access" component={EarlyAccess} />
           <Route path="/reviews" component={ReviewsPage} />
           <Route path="/conversation-reports" component={ConversationReportsPage} />
           <Route path="/user-reports" component={UserReportsPage} />
