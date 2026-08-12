@@ -15,6 +15,7 @@ import AuditReportPage from "@/pages/AuditReport";
 import ExpiringDocs from "@/pages/ExpiringDocs";
 import EnquiriesPage from "@/pages/Enquiries";
 import EarlyAccess from "@/pages/EarlyAccess";
+import Campaigns, { CampaignDetail } from "@/pages/Campaigns";
 import ReviewsPage from "@/pages/Reviews";
 import ConversationReportsPage from "@/pages/ConversationReports";
 import UserReportsPage from "@/pages/UserReports";
@@ -42,6 +43,10 @@ function ProtectedRoutes() {
           <Route path="/expiring-documents" component={ExpiringDocs} />
           <Route path="/enquiries" component={EnquiriesPage} />
           <Route path="/early-access" component={EarlyAccess} />
+          <Route path="/early-access/campaigns" component={Campaigns} />
+          <Route path="/early-access/campaigns/:id">
+            {(params) => <CampaignDetail id={Number(params.id)} />}
+          </Route>
           <Route path="/reviews" component={ReviewsPage} />
           <Route path="/conversation-reports" component={ConversationReportsPage} />
           <Route path="/user-reports" component={UserReportsPage} />

@@ -485,6 +485,13 @@ export default function EarlyAccess() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate("/early-access/campaigns")}
+            data-testid="button-campaigns"
+          >
+            <Rocket className="w-4 h-4 mr-1.5" /> Campaigns
+          </Button>
           <Button variant="outline" onClick={() => handleExport(false)} data-testid="button-export-csv">
             <Download className="w-4 h-4 mr-1.5" /> Export CSV
           </Button>

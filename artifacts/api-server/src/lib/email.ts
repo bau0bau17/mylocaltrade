@@ -885,6 +885,32 @@ Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC
   });
 }
 
+/**
+ * Campaign TEST email (Phase 2B) — a single preview copy sent to an
+ * authorised administrator, never to list recipients. This is not a bulk
+ * marketing send, so the shared dispatcher is appropriate; real campaign
+ * delivery goes through the Brevo marketing-campaign pipeline instead.
+ * The caller renders the full branded campaign HTML and counts this send
+ * against the daily marketing quota (test emails burn real credits).
+ */
+export async function sendEarlyAccessCampaignTestEmail(opts: {
+  toEmail: string;
+  toName: string;
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<"brevo" | "smtp" | "none" | "skipped"> {
+  return dispatchEmail({
+    category: "contact",
+    to: { email: opts.toEmail, name: opts.toName },
+    from: { email: FROM_EMAIL, name: FROM_NAME },
+    subject: `[TEST] ${sanitizeHeaderValue(opts.subject)}`,
+    html: opts.html,
+    text: opts.text,
+    tag: "early-access-campaign-test",
+  });
+}
+
 const ENQUIRY_PROPERTY_TYPE_LABELS: Record<string, string> = {
   house: "House",
   flat: "Flat",

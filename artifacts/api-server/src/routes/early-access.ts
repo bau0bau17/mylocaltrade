@@ -23,6 +23,10 @@ import {
   hashConfirmationToken,
   reserveConfirmationSend,
 } from "../lib/early-access-confirmation";
+import { verifyUnsubscribeToken } from "../lib/early-access-unsubscribe";
+import crypto from "node:crypto";
+import { and, inArray, isNull } from "drizzle-orm";
+import { earlyAccessCampaignRecipientsTable } from "@workspace/db/schema";
 
 const router: IRouter = Router();
 
@@ -173,15 +177,21 @@ router.post("/early-access", async (req, res) => {
           row.unsubscribedAt !== null && row.unsubscribeSource === "admin";
         const userUnsubscribed =
           row.unsubscribedAt !== null && row.unsubscribeSource === "user";
+        // Deliverability suppression (hard bounce / complaint / block) is a
+        // separate axis: the mailbox is known-bad or actively complained, so
+        // the public form must NOT trigger new email to it (Phase 2B).
+        const emailSuppressed = row.emailSuppressedAt !== null;
 
         // Is there anything the person could newly confirm?
         // - never confirmed at all (incl. Phase 1 legacy + expired pendings)
         // - a NEW marketing request (box ticked, marketing not active)
         // - verified resubscription after a voluntary unsubscribe
         // Admin suppression is NOT overridable through the public form: no
-        // confirmation flow is even started (and no email sent).
+        // confirmation flow is even started (and no email sent). Same for
+        // bounce/complaint/block suppression.
         const somethingToConfirm =
           !adminSuppressed &&
+          !emailSuppressed &&
           (row.confirmedAt === null ||
             (marketingTicked && row.marketingConsentAt === null) ||
             userUnsubscribed);
@@ -219,7 +229,9 @@ router.post("/early-access", async (req, res) => {
             marketingRequested: marketingTicked,
             ...(adminSuppressed
               ? { confirmationWithheld: "admin_suppressed" }
-              : {}),
+              : emailSuppressed
+                ? { confirmationWithheld: "email_suppressed" }
+                : {}),
             ...(somethingToConfirm && !startFlow
               ? { confirmationWithheld: "send_cap" }
               : {}),
@@ -387,6 +399,222 @@ router.post("/early-access/confirm", async (req, res) => {
   } catch (error: unknown) {
     req.log.error({ err: error }, "Early access confirmation failed");
     res.status(500).json({ error: "Failed to confirm. Please try again later." });
+  }
+});
+
+/**
+ * Self-service unsubscribe from launch/marketing emails (Phase 2B).
+ *
+ * POST-only mutation BY DESIGN — the static /unsubscribe landing page shows
+ * a confirm button on GET and only this deliberate POST changes state, so
+ * link-prefetching mail scanners can never unsubscribe someone. The signed
+ * stateless token identifies exactly one registration and authorises ONLY
+ * this idempotent opt-out. The raw token is never logged or stored.
+ *
+ * Never lifts or masks anything: admin suppression and bounce/complaint
+ * suppression are separate axes that remain untouched. All invalid-token
+ * shapes collapse to one generic 400.
+ */
+router.post("/early-access/unsubscribe", async (req, res) => {
+  try {
+    const registrationId = verifyUnsubscribeToken(
+      (req.body as Record<string, unknown>)?.token,
+    );
+    if (registrationId === null) {
+      res.status(400).json({ error: "This unsubscribe link is invalid." });
+      return;
+    }
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({
+          id: earlyAccessRegistrationsTable.id,
+          unsubscribedAt: earlyAccessRegistrationsTable.unsubscribedAt,
+        })
+        .from(earlyAccessRegistrationsTable)
+        .where(eq(earlyAccessRegistrationsTable.id, registrationId))
+        .for("update");
+      // Unknown id (deleted row) or already unsubscribed (any source):
+      // idempotent success — repeat clicks must not error or flip sources.
+      if (!row || row.unsubscribedAt !== null) return;
+      await tx
+        .update(earlyAccessRegistrationsTable)
+        .set({ unsubscribedAt: now, unsubscribeSource: "user", updatedAt: now })
+        .where(eq(earlyAccessRegistrationsTable.id, registrationId));
+      await tx.insert(earlyAccessEventsTable).values({
+        registrationId,
+        kind: "UNSUBSCRIBED",
+        details: { source: "link" },
+      });
+    });
+    res.json({ success: true });
+  } catch (error: unknown) {
+    req.log.error({ err: error }, "Early access unsubscribe failed");
+    res.status(500).json({ error: "Failed to process. Please try again later." });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Brevo marketing webhook — sync unsubscribes / bounces / complaints back
+// ---------------------------------------------------------------------------
+
+/** Constant-time shared-secret check; false when the feature is unset. */
+function webhookSecretValid(given: unknown): boolean {
+  const expected = process.env.BREVO_WEBHOOK_SECRET;
+  if (!expected || typeof given !== "string") return false;
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+/** Normalised Brevo marketing event names → local effect. */
+function classifyBrevoEvent(
+  event: string,
+):
+  | { kind: "unsubscribe" }
+  | { kind: "suppress"; reason: "hard_bounce" | "complaint" | "blocked" }
+  | { kind: "delivered" }
+  | null {
+  switch (event) {
+    case "unsubscribe":
+    case "unsubscribed":
+      return { kind: "unsubscribe" };
+    case "hard_bounce":
+    case "hardBounce":
+    case "invalid_email":
+    case "invalid":
+      return { kind: "suppress", reason: "hard_bounce" };
+    case "spam":
+    case "complaint":
+      return { kind: "suppress", reason: "complaint" };
+    case "blocked":
+      return { kind: "suppress", reason: "blocked" };
+    case "delivered":
+      return { kind: "delivered" };
+    default:
+      return null; // opens, clicks, soft bounces etc. — ignored on purpose
+  }
+}
+
+/**
+ * Brevo webhook receiver (Phase 2B). Configure in Brevo as a MARKETING
+ * webhook pointing at /api/early-access/brevo-events?secret=<value of
+ * BREVO_WEBHOOK_SECRET>. Returns 404 while the secret env is unset (feature
+ * off) and a generic 401 for a wrong secret.
+ *
+ * Local DB stays the source of truth: Brevo events only ever TIGHTEN state
+ * (unsubscribe, suppress, mark delivered) — they never re-enable anyone.
+ * Idempotent: replays hit conditional updates and change nothing.
+ * Response is always minimal; recipient details are never echoed or logged.
+ */
+router.post("/early-access/brevo-events", async (req, res) => {
+  if (!process.env.BREVO_WEBHOOK_SECRET) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (!webhookSecretValid(req.query.secret)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const body = req.body as Record<string, unknown> | null;
+    const event = typeof body?.event === "string" ? body.event : "";
+    const email = typeof body?.email === "string" ? body.email : "";
+    const effect = classifyBrevoEvent(event);
+    if (!effect || !email) {
+      res.json({ received: true });
+      return;
+    }
+    const normalized = email.trim().toLowerCase();
+    const now = new Date();
+
+    await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(earlyAccessRegistrationsTable)
+        .where(
+          eq(earlyAccessRegistrationsTable.emailNormalized, normalized),
+        )
+        .for("update");
+      if (!row) return;
+
+      const recipientStatusUpdate = async (
+        from: string[],
+        to: string,
+      ): Promise<void> => {
+        await tx
+          .update(earlyAccessCampaignRecipientsTable)
+          .set({ status: to, statusDetail: "brevo_webhook", updatedAt: now })
+          .where(
+            and(
+              eq(
+                earlyAccessCampaignRecipientsTable.registrationId,
+                row.id,
+              ),
+              inArray(earlyAccessCampaignRecipientsTable.status, from),
+            ),
+          );
+      };
+
+      if (effect.kind === "delivered") {
+        await recipientStatusUpdate(["sent"], "delivered");
+        return;
+      }
+
+      if (effect.kind === "unsubscribe") {
+        if (row.unsubscribedAt === null) {
+          await tx
+            .update(earlyAccessRegistrationsTable)
+            .set({
+              unsubscribedAt: now,
+              unsubscribeSource: "user",
+              updatedAt: now,
+            })
+            .where(eq(earlyAccessRegistrationsTable.id, row.id));
+          await tx.insert(earlyAccessEventsTable).values({
+            registrationId: row.id,
+            kind: "UNSUBSCRIBED",
+            details: { source: "brevo" },
+          });
+        }
+        await recipientStatusUpdate(["sent", "delivered"], "unsubscribed");
+        return;
+      }
+
+      // Deliverability suppression: keep the FIRST reason (conditional on
+      // null) — a complaint after a bounce changes nothing.
+      if (row.emailSuppressedAt === null) {
+        await tx
+          .update(earlyAccessRegistrationsTable)
+          .set({
+            emailSuppressedAt: now,
+            emailSuppressionReason: effect.reason,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(earlyAccessRegistrationsTable.id, row.id),
+              isNull(earlyAccessRegistrationsTable.emailSuppressedAt),
+            ),
+          );
+        await tx.insert(earlyAccessEventsTable).values({
+          registrationId: row.id,
+          kind: "EMAIL_SUPPRESSED",
+          details: { reason: effect.reason, source: "brevo_webhook" },
+        });
+      }
+      await recipientStatusUpdate(
+        ["sent", "delivered"],
+        effect.reason === "complaint" ? "complained" : "bounced",
+      );
+    });
+
+    res.json({ received: true });
+  } catch (error: unknown) {
+    req.log.error({ err: error }, "Brevo webhook processing failed");
+    // 500 lets Brevo retry the delivery later.
+    res.status(500).json({ error: "Processing failed" });
   }
 });
 

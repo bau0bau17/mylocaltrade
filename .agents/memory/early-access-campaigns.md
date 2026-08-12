@@ -1,0 +1,15 @@
+---
+name: Early Access campaigns (Phase 2B)
+description: Invariants for the launch/marketing bulk-email campaign system — Brevo marketing pipeline, batch idempotency, suppression axes, unsubscribe tokens, quotas.
+---
+
+# Early Access campaigns — invariants
+
+- **Two independent negative axes** on `early_access_registrations`: voluntary/admin unsubscribe (`unsubscribedAt`+`unsubscribeSource`) vs deliverability suppression (`emailSuppressedAt`+`emailSuppressionReason`: hard_bounce|complaint|blocked). Never conflate; the public form lifts NEITHER (email_suppressed also withholds confirmation emails), and only verified re-confirmation lifts a *user* unsubscribe.
+- **Bulk sends use Brevo's MARKETING pipeline** (contact lists + email campaigns), never the transactional dispatcher. All real Brevo calls are gated on `MARKETING_BREVO_ENABLED=true` + a key; otherwise `BrevoMarketingDisabledError` before any network traffic — dev/tests can never create prod Brevo objects. Test sends (single copy to the acting admin only) are the one legitimate transactional-route use.
+- **Batch idempotency contract**: recipients reserved queued→sending under FOR UPDATE SKIP LOCKED; the Brevo campaign id is stored on the batch row BEFORE sendNow. Recovery rule: pending batch WITHOUT brevoCampaignId → release to queued (provably unsent); WITH id → mark `recovered_assumed_sent` and NEVER resend. Duplicates are treated as worse than skips.
+- **Snapshot vs re-check**: queue-time snapshot fixes WHO (immutable, typed `SEND TO N PEOPLE` phrase must match the server count computed under the campaign row lock); every batch re-checks live unsubscribe/suppression and downgrades instead of sending. Content is immutable once queued (draft-only PATCH, conditional update).
+- **Quota is local + conservative**: Brevo free plan has no reliable remaining-quota API. `effectiveDailyCap = min(MARKETING_DAILY_SEND_CAP, 300 − TRANSACTIONAL_EMAIL_DAILY_RESERVE)` per UTC day, counting sent recipients + successful TEST_SENT events. No scheduler exists — continuation is the manual "send next batch" admin action (deliberate; don't invent an in-memory cron).
+- **Unsubscribe tokens are stateless HMAC** (`u1.<id>.<sig>`, key derived from SESSION_SECRET): nothing stored, no expiry (old email links must keep working), verify with timingSafeEqual, raw token never logged. Landing page `/unsubscribe` mirrors `/confirm-early-access` (GET inert, POST mutates, token stripped from history, no-store/no-referrer in serve.js). Per-recipient links in bulk mail ride Brevo contact attribute `EA_UNSUB_TOKEN`; Brevo's native `{{ unsubscribe }}` is also kept in the HTML (required by Brevo + keeps List-Unsubscribe).
+- **Brevo webhook** (`/api/early-access/brevo-events?secret=` = `BREVO_WEBHOOK_SECRET`, 404 while unset) only ever TIGHTENS state (unsubscribe/suppress/delivered), first-suppression-reason wins, idempotent conditional updates.
+- **Campaign audit events hold counts/ids/flags only** — never recipient lists, content, keys or tokens.

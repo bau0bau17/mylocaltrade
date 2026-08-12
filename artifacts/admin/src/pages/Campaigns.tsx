@@ -1,0 +1,1207 @@
+import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api, ApiError } from "@/lib/api";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { formatDate, formatDateTime } from "@/lib/format";
+import {
+  ArrowLeft,
+  Rocket,
+  Plus,
+  Eye,
+  Send,
+  Pause,
+  Play,
+  Ban,
+  PlayCircle,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
+
+// ---------------------------------------------------------------------------
+// Types (local — mirrors the admin-early-access-campaigns contract).
+// ---------------------------------------------------------------------------
+
+type CampaignType = "launch" | "marketing";
+
+type CampaignStatus =
+  | "draft"
+  | "queued"
+  | "sending"
+  | "waiting_quota"
+  | "paused"
+  | "completed"
+  | "partially_failed"
+  | "cancelled"
+  | string;
+
+interface BrevoSending {
+  enabled: boolean;
+  reason?: string;
+}
+
+interface Quota {
+  dailyCap: number;
+  sentToday: number;
+  remainingToday: number;
+  brevoSending: BrevoSending;
+}
+
+interface CampaignProgress {
+  total: number;
+  sent: number;
+  queued: number;
+}
+
+interface Campaign {
+  id: number;
+  type: CampaignType | string;
+  name: string;
+  subject: string;
+  previewText: string;
+  heading: string;
+  bodyText: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  status: CampaignStatus;
+  snapshotCount: number | null;
+  queuedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface CampaignListItem extends Campaign {
+  progress: CampaignProgress;
+}
+
+interface CampaignListResponse {
+  campaigns: CampaignListItem[];
+  quota: Quota;
+}
+
+interface RecipientCounts {
+  total: number;
+  queued: number;
+  sending: number;
+  sent: number;
+  delivered: number;
+  failed: number;
+  bounced: number;
+  complained: number;
+  unsubscribed: number;
+  suppressed: number;
+  cancelled: number;
+}
+
+interface CampaignBatch {
+  id: number;
+  campaignId: number;
+  batchNumber: number;
+  recipientCount: number;
+  status: string;
+  sentAt: string | null;
+  statusDetail: string | null;
+  createdAt: string;
+}
+
+interface CampaignEvent {
+  id: number;
+  campaignId: number;
+  kind: string;
+  performedBy: number | null;
+  details: unknown;
+  createdAt: string;
+}
+
+interface AudienceBreakdown {
+  eligible: number;
+  excludedConsentMissing: number;
+  excludedConfirmationPending: number;
+  excludedUnsubscribedOrSuppressed: number;
+  total: number;
+}
+
+interface CampaignDetailResponse {
+  campaign: Campaign;
+  recipients: RecipientCounts;
+  batches: CampaignBatch[];
+  events: CampaignEvent[];
+  contentErrors: string[];
+  audience?: AudienceBreakdown;
+  quota: Quota;
+  testSendsToday: number;
+  testSendDailyLimit: number;
+}
+
+interface AudienceResponse {
+  audience: AudienceBreakdown;
+  dailyCap: number;
+  estimatedDays: number | null;
+  confirmationPhrase: string;
+  quota: Quota;
+}
+
+interface BatchResult {
+  ok: true;
+  batchNumber: number;
+  attempted: number;
+  sent: number;
+  skipped: number;
+  failed: number;
+  remaining: number;
+  campaignStatus: string;
+}
+
+// ---------------------------------------------------------------------------
+// Shared labels + badges.
+// ---------------------------------------------------------------------------
+
+const TYPE_LABELS: Record<string, string> = {
+  launch: "Launch",
+  marketing: "Marketing",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  draft: "Draft",
+  queued: "Queued",
+  sending: "Sending",
+  waiting_quota: "Waiting for quota",
+  paused: "Paused",
+  completed: "Completed",
+  partially_failed: "Partially failed",
+  cancelled: "Cancelled",
+};
+
+const EVENT_LABELS: Record<string, string> = {
+  CAMPAIGN_CREATED: "Campaign created",
+  CAMPAIGN_UPDATED: "Content updated",
+  TEST_SENT: "Test email sent",
+  CAMPAIGN_QUEUED: "Campaign queued",
+  CAMPAIGN_PAUSED: "Campaign paused",
+  CAMPAIGN_RESUMED: "Campaign resumed",
+  BATCH_SENT: "Batch sent",
+  CAMPAIGN_CANCELLED: "Campaign cancelled",
+  CAMPAIGN_COMPLETED: "Campaign completed",
+};
+
+function TypeBadge({ type }: { type: string }) {
+  const isLaunch = type === "launch";
+  const cls = isLaunch
+    ? "bg-[hsl(var(--success-tint))] text-[hsl(var(--success))] border-transparent font-medium"
+    : "bg-muted text-muted-foreground border-transparent font-medium";
+  return (
+    <Badge variant="outline" className={cls} data-testid={`badge-type-${type}`}>
+      {TYPE_LABELS[type] ?? type}
+    </Badge>
+  );
+}
+
+function StatusBadge({ status }: { status: CampaignStatus }) {
+  const successClass =
+    "bg-[hsl(var(--success-tint))] text-[hsl(var(--success))] border-transparent font-medium";
+  const mutedClass = "bg-muted text-muted-foreground border-transparent font-medium";
+  const destructiveClass =
+    "bg-[hsl(var(--destructive-tint))] text-[hsl(var(--destructive))] border-transparent font-medium";
+  const warnClass =
+    "bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))] border-transparent font-medium";
+  const infoClass =
+    "bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] border-transparent font-medium";
+
+  let cls = mutedClass;
+  if (status === "completed") cls = successClass;
+  else if (status === "sending") cls = infoClass;
+  else if (status === "queued") cls = infoClass;
+  else if (status === "waiting_quota" || status === "paused") cls = warnClass;
+  else if (status === "partially_failed") cls = destructiveClass;
+  else if (status === "cancelled") cls = mutedClass;
+  else if (status === "draft") cls = mutedClass;
+
+  return (
+    <Badge variant="outline" className={cls} data-testid={`badge-status-${status}`}>
+      {STATUS_LABELS[status] ?? status}
+    </Badge>
+  );
+}
+
+function QuotaBanner({ quota }: { quota: Quota | undefined }) {
+  if (!quota) return null;
+  return (
+    <div className="space-y-2" data-testid="quota-banner">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <StatCard label="Daily send cap" value={quota.dailyCap} testId="stat-daily-cap" />
+        <StatCard label="Sent today" value={quota.sentToday} testId="stat-sent-today" />
+        <StatCard label="Remaining today" value={quota.remainingToday} testId="stat-remaining-today" />
+      </div>
+      {!quota.brevoSending.enabled && (
+        <Alert
+          className="border-transparent bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))]"
+          data-testid="notice-sending-disabled"
+        >
+          <AlertDescription>
+            Real sending is disabled
+            {quota.brevoSending.reason ? ` (${quota.brevoSending.reason})` : ""}.
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// List page.
+// ---------------------------------------------------------------------------
+
+export default function Campaigns() {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newType, setNewType] = useState<CampaignType>("launch");
+  const [newName, setNewName] = useState("");
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin", "early-access", "campaigns", "list"],
+    queryFn: () =>
+      api<CampaignListResponse>("/api/admin/early-access/campaigns"),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (input: { type: CampaignType; name: string }) =>
+      api<{ campaign: Campaign }>("/api/admin/early-access/campaigns", {
+        method: "POST",
+        body: input,
+      }),
+    onSuccess: (res) => {
+      setCreateOpen(false);
+      setNewName("");
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "early-access", "campaigns", "list"],
+      });
+      navigate(`/early-access/campaigns/${res.campaign.id}`);
+    },
+    onError: (err) => {
+      toast({
+        title: "Could not create campaign",
+        description: err instanceof ApiError ? err.message : "Unknown error",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const campaigns = data?.campaigns ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/early-access")}
+              data-testid="button-back-early-access"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1.5" /> Early Access
+            </Button>
+          </div>
+          <h1 className="text-2xl font-semibold mt-1">Campaigns</h1>
+          <p className="text-sm text-muted-foreground">
+            Launch &amp; marketing email campaigns to the early-access list.
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)} data-testid="button-new-campaign">
+          <Plus className="w-4 h-4 mr-1.5" /> New campaign
+        </Button>
+      </div>
+
+      <QuotaBanner quota={data?.quota} />
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            {error instanceof ApiError ? error.message : "Could not load campaigns."}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-4 space-y-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-12" />
+              ))}
+            </div>
+          ) : campaigns.length === 0 ? (
+            <div className="p-10 text-center text-muted-foreground text-sm" data-testid="empty-campaigns">
+              No campaigns yet. Create one to get started.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium">Name</th>
+                    <th className="text-left px-4 py-2.5 font-medium">Type</th>
+                    <th className="text-left px-4 py-2.5 font-medium">Status</th>
+                    <th className="text-left px-4 py-2.5 font-medium">Progress</th>
+                    <th className="text-left px-4 py-2.5 font-medium">Created</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {campaigns.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="hover:bg-muted/30 cursor-pointer"
+                      onClick={() => navigate(`/early-access/campaigns/${row.id}`)}
+                      data-testid={`row-campaign-${row.id}`}
+                    >
+                      <td className="px-4 py-3 font-medium">{row.name || "—"}</td>
+                      <td className="px-4 py-3"><TypeBadge type={row.type} /></td>
+                      <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                      <td className="px-4 py-3 tabular-nums" data-testid={`progress-campaign-${row.id}`}>
+                        {row.progress.sent} / {row.progress.total}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {formatDate(row.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* New campaign dialog */}
+      <Dialog open={createOpen} onOpenChange={(open) => { if (!createMutation.isPending) setCreateOpen(open); }}>
+        <DialogContent data-testid="dialog-new-campaign">
+          <DialogHeader>
+            <DialogTitle>New campaign</DialogTitle>
+            <DialogDescription>
+              Pick a type and an internal name. You can edit the content next.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select value={newType} onValueChange={(v) => setNewType(v as CampaignType)}>
+                <SelectTrigger data-testid="select-new-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="launch">Launch</SelectItem>
+                  <SelectItem value="marketing">Marketing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-name">Internal name</Label>
+              <Input
+                id="new-name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="e.g. Launch announcement — March"
+                data-testid="input-new-name"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createMutation.mutate({ type: newType, name: newName.trim() })}
+              disabled={createMutation.isPending || !newName.trim()}
+              data-testid="button-create-campaign"
+            >
+              <Rocket className="w-4 h-4 mr-1.5" />
+              {createMutation.isPending ? "Creating…" : "Create campaign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Detail page.
+// ---------------------------------------------------------------------------
+
+const EDITOR_FIELDS = [
+  "name",
+  "subject",
+  "previewText",
+  "heading",
+  "bodyText",
+  "ctaLabel",
+  "ctaUrl",
+] as const;
+type EditorField = (typeof EDITOR_FIELDS)[number];
+
+function apiErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) return err.message;
+  if (err instanceof Error) return err.message;
+  return "Unknown error";
+}
+
+export function CampaignDetail({ id }: { id: number }) {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const detailKey = ["admin", "early-access", "campaigns", "detail", id];
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: detailKey,
+    queryFn: () =>
+      api<CampaignDetailResponse>(`/api/admin/early-access/campaigns/${id}`),
+  });
+
+  const campaign = data?.campaign;
+  const isDraft = campaign?.status === "draft";
+
+  const [form, setForm] = useState<Record<EditorField, string>>({
+    name: "",
+    subject: "",
+    previewText: "",
+    heading: "",
+    bodyText: "",
+    ctaLabel: "",
+    ctaUrl: "",
+  });
+  const [editorError, setEditorError] = useState<string | null>(null);
+
+  // Seed the editor from the loaded campaign (once per campaign identity).
+  useEffect(() => {
+    if (!campaign) return;
+    setForm({
+      name: campaign.name ?? "",
+      subject: campaign.subject ?? "",
+      previewText: campaign.previewText ?? "",
+      heading: campaign.heading ?? "",
+      bodyText: campaign.bodyText ?? "",
+      ctaLabel: campaign.ctaLabel ?? "",
+      ctaUrl: campaign.ctaUrl ?? "",
+    });
+  }, [campaign?.id, campaign?.updatedAt]);
+
+  const setField = (field: EditorField, value: string) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: detailKey });
+    queryClient.invalidateQueries({
+      queryKey: ["admin", "early-access", "campaigns", "list"],
+    });
+  };
+
+  // ---- Save (PATCH) ----
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      api<{ campaign: Campaign }>(`/api/admin/early-access/campaigns/${id}`, {
+        method: "PATCH",
+        body: { ...form },
+      }),
+    onSuccess: () => {
+      setEditorError(null);
+      toast({ title: "Content saved" });
+      invalidate();
+    },
+    onError: (err) => {
+      const conflict = err instanceof ApiError && err.status === 409;
+      setEditorError(apiErrorMessage(err));
+      toast({
+        title: conflict ? "No longer editable" : "Could not save",
+        description: apiErrorMessage(err),
+        variant: "destructive",
+      });
+      if (conflict) invalidate();
+    },
+  });
+
+  // ---- Preview ----
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const previewMutation = useMutation({
+    mutationFn: () =>
+      api<{ html: string; text: string }>(
+        `/api/admin/early-access/campaigns/${id}/preview`,
+      ),
+    onSuccess: (res) => {
+      setPreviewHtml(res.html);
+      setPreviewOpen(true);
+    },
+    onError: (err) => {
+      toast({
+        title: "Could not render preview",
+        description: apiErrorMessage(err),
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ---- Test send ----
+  const testSendMutation = useMutation({
+    mutationFn: () =>
+      api<{ success: boolean; channel: string }>(
+        `/api/admin/early-access/campaigns/${id}/test-send`,
+        { method: "POST", body: {} },
+      ),
+    onSuccess: (res) => {
+      toast({
+        title: "Test email sent",
+        description: `Delivered to you via ${res.channel}.`,
+      });
+      invalidate();
+    },
+    onError: (err) => {
+      let description = apiErrorMessage(err);
+      if (err instanceof ApiError && err.status === 429 && data) {
+        description = `${err.message} (${data.testSendsToday}/${data.testSendDailyLimit} today)`;
+      }
+      toast({
+        title: "Test send failed",
+        description,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ---- Queue ----
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [queueAudience, setQueueAudience] = useState<AudienceResponse | null>(null);
+  const [confirmationText, setConfirmationText] = useState("");
+  const [queueError, setQueueError] = useState<string | null>(null);
+
+  const loadAudienceMutation = useMutation({
+    mutationFn: () =>
+      api<AudienceResponse>(`/api/admin/early-access/campaigns/${id}/audience`),
+    onSuccess: (res) => {
+      setQueueAudience(res);
+      setConfirmationText("");
+      setQueueError(null);
+      setQueueOpen(true);
+    },
+    onError: (err) => {
+      toast({
+        title: "Could not load audience",
+        description: apiErrorMessage(err),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const queueMutation = useMutation({
+    mutationFn: () =>
+      api<{ success: boolean; snapshotCount: number }>(
+        `/api/admin/early-access/campaigns/${id}/queue`,
+        { method: "POST", body: { confirmation: confirmationText } },
+      ),
+    onSuccess: (res) => {
+      setQueueOpen(false);
+      toast({
+        title: "Campaign queued",
+        description: `${res.snapshotCount} recipients snapshotted.`,
+      });
+      invalidate();
+    },
+    onError: async (err) => {
+      const message = apiErrorMessage(err);
+      setQueueError(message);
+      // 409 = phrase mismatch / audience changed → refetch fresh numbers.
+      if (err instanceof ApiError && err.status === 409) {
+        try {
+          const fresh = await api<AudienceResponse>(
+            `/api/admin/early-access/campaigns/${id}/audience`,
+          );
+          setQueueAudience(fresh);
+          setConfirmationText("");
+        } catch {
+          /* keep the dialog open with the error */
+        }
+      }
+    },
+  });
+
+  // ---- Batch + lifecycle ----
+  const batchMutation = useMutation({
+    mutationFn: () =>
+      api<BatchResult>(`/api/admin/early-access/campaigns/${id}/send-batch`, {
+        method: "POST",
+        body: {},
+      }),
+    onSuccess: (res) => {
+      toast({
+        title: `Batch ${res.batchNumber} sent`,
+        description: `Sent ${res.sent}, skipped ${res.skipped}, failed ${res.failed}. ${res.remaining} remaining. Status: ${STATUS_LABELS[res.campaignStatus] ?? res.campaignStatus}.`,
+      });
+      invalidate();
+    },
+    onError: (err) => {
+      let title = "Batch send failed";
+      let description = apiErrorMessage(err);
+      if (err instanceof ApiError) {
+        if (err.status === 429) {
+          title = "Daily quota exhausted";
+          description = "Daily quota exhausted — continue tomorrow.";
+        }
+        // 502 (brevo_error / needs_recovery_review) → verbatim server message
+        // contains recovery guidance; keep description as err.message.
+      }
+      toast({ title, description, variant: "destructive" });
+      invalidate();
+    },
+  });
+
+  const lifecycleMutation = useMutation({
+    mutationFn: (action: "pause" | "resume") =>
+      api<{ campaign: Campaign }>(
+        `/api/admin/early-access/campaigns/${id}/${action}`,
+        { method: "POST", body: {} },
+      ),
+    onSuccess: (_res, action) => {
+      toast({ title: action === "pause" ? "Campaign paused" : "Campaign resumed" });
+      invalidate();
+    },
+    onError: (err) => {
+      toast({
+        title: "Action failed",
+        description: apiErrorMessage(err),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const cancelMutation = useMutation({
+    mutationFn: () =>
+      api<{ success: boolean; cancelledRecipients: number }>(
+        `/api/admin/early-access/campaigns/${id}/cancel`,
+        { method: "POST", body: {} },
+      ),
+    onSuccess: (res) => {
+      setCancelOpen(false);
+      toast({
+        title: "Campaign cancelled",
+        description: `${res.cancelledRecipients} queued recipients cancelled.`,
+      });
+      invalidate();
+    },
+    onError: (err) => {
+      setCancelOpen(false);
+      toast({
+        title: "Could not cancel",
+        description: apiErrorMessage(err),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const status = campaign?.status ?? "";
+  const canQueue = status === "draft";
+  const showSendingControls =
+    status === "queued" ||
+    status === "waiting_quota" ||
+    status === "sending" ||
+    status === "paused";
+  const canPause = status === "queued" || status === "waiting_quota";
+  const canResume = status === "paused";
+  const canSendBatch =
+    status === "queued" || status === "waiting_quota" || status === "sending";
+
+  const confirmationPhrase = queueAudience?.confirmationPhrase ?? "";
+  const phraseMatches = confirmationText === confirmationPhrase && !!confirmationPhrase;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-40" />
+        <Skeleton className="h-40" />
+      </div>
+    );
+  }
+
+  if (error || !campaign) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/early-access/campaigns")} data-testid="button-back-list">
+          <ArrowLeft className="w-4 h-4 mr-1.5" /> Campaigns
+        </Button>
+        <Alert variant="destructive">
+          <AlertDescription>
+            {error instanceof ApiError ? error.message : "Campaign not found."}
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  const recipients = data.recipients;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <Button variant="ghost" size="sm" onClick={() => navigate("/early-access/campaigns")} data-testid="button-back-list">
+            <ArrowLeft className="w-4 h-4 mr-1.5" /> Campaigns
+          </Button>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <h1 className="text-2xl font-semibold" data-testid="text-campaign-name">{campaign.name}</h1>
+            <TypeBadge type={campaign.type} />
+            <StatusBadge status={campaign.status} />
+          </div>
+        </div>
+      </div>
+
+      <QuotaBanner quota={data.quota} />
+
+      {/* Content errors checklist */}
+      {data.contentErrors.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm font-semibold mb-2">Before you can send</div>
+            <ul className="space-y-1" data-testid="content-errors">
+              {data.contentErrors.map((err) => (
+                <li key={err} className="flex items-center gap-2 text-sm text-[hsl(var(--warning,var(--foreground)))]">
+                  <XCircle className="w-4 h-4 shrink-0" /> {err}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Editor */}
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-base font-semibold">Content</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => previewMutation.mutate()}
+                disabled={previewMutation.isPending}
+                data-testid="button-preview"
+              >
+                <Eye className="w-4 h-4 mr-1.5" />
+                {previewMutation.isPending ? "Rendering…" : "Preview"}
+              </Button>
+              {isDraft && (
+                <Button
+                  size="sm"
+                  onClick={() => saveMutation.mutate()}
+                  disabled={saveMutation.isPending}
+                  data-testid="button-save-content"
+                >
+                  {saveMutation.isPending ? "Saving…" : "Save content"}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {editorError && (
+            <Alert variant="destructive" data-testid="editor-error">
+              <AlertDescription>{editorError}</AlertDescription>
+            </Alert>
+          )}
+
+          {!isDraft && (
+            <p className="text-xs text-muted-foreground">
+              Content is read-only — it becomes immutable once the campaign is queued.
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="f-name">Internal name</Label>
+              <Input id="f-name" value={form.name} disabled={!isDraft} onChange={(e) => setField("name", e.target.value)} data-testid="input-name" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="f-subject">Subject</Label>
+              <Input id="f-subject" value={form.subject} disabled={!isDraft} onChange={(e) => setField("subject", e.target.value)} data-testid="input-subject" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="f-preview">Preview text</Label>
+              <Input id="f-preview" value={form.previewText} disabled={!isDraft} onChange={(e) => setField("previewText", e.target.value)} data-testid="input-preview-text" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="f-heading">Heading</Label>
+              <Input id="f-heading" value={form.heading} disabled={!isDraft} onChange={(e) => setField("heading", e.target.value)} data-testid="input-heading" />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="f-body">Message body</Label>
+              <Textarea id="f-body" rows={6} value={form.bodyText} disabled={!isDraft} onChange={(e) => setField("bodyText", e.target.value)} data-testid="input-body-text" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="f-cta-label">CTA label</Label>
+              <Input id="f-cta-label" value={form.ctaLabel} disabled={!isDraft} onChange={(e) => setField("ctaLabel", e.target.value)} data-testid="input-cta-label" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="f-cta-url">CTA URL</Label>
+              <Input id="f-cta-url" value={form.ctaUrl} disabled={!isDraft} onChange={(e) => setField("ctaUrl", e.target.value)} placeholder="https://…" data-testid="input-cta-url" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Test send */}
+      <Card>
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-base font-semibold">Test send</h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => testSendMutation.mutate()}
+              disabled={testSendMutation.isPending}
+              data-testid="button-test-send"
+            >
+              <Send className="w-4 h-4 mr-1.5" />
+              {testSendMutation.isPending ? "Sending…" : "Send test to me"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground" data-testid="test-send-note">
+            Sends to your admin email only. Counts toward the daily send quota. Limit {data.testSendDailyLimit}/day per campaign
+            {" "}({data.testSendsToday} used today).
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Queue (draft only) */}
+      {canQueue && (
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="text-base font-semibold">Queue campaign</h2>
+                <p className="text-xs text-muted-foreground">
+                  Snapshots the eligible audience and starts the sending workflow.
+                </p>
+              </div>
+              <Button
+                onClick={() => loadAudienceMutation.mutate()}
+                disabled={loadAudienceMutation.isPending || data.contentErrors.length > 0}
+                data-testid="button-open-queue"
+              >
+                <PlayCircle className="w-4 h-4 mr-1.5" />
+                {loadAudienceMutation.isPending ? "Loading…" : "Queue campaign"}
+              </Button>
+            </div>
+            {data.audience && (
+              <div className="text-xs text-muted-foreground" data-testid="audience-preview">
+                {data.audience.eligible} eligible of {data.audience.total} registrations.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sending controls */}
+      {showSendingControls && (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <h2 className="text-base font-semibold">Sending controls</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                onClick={() => batchMutation.mutate()}
+                disabled={!canSendBatch || batchMutation.isPending}
+                data-testid="button-send-batch"
+              >
+                <Send className="w-4 h-4 mr-1.5" />
+                {batchMutation.isPending ? "Sending…" : "Send next batch"}
+              </Button>
+              {canPause && (
+                <Button
+                  variant="outline"
+                  onClick={() => lifecycleMutation.mutate("pause")}
+                  disabled={lifecycleMutation.isPending}
+                  data-testid="button-pause"
+                >
+                  <Pause className="w-4 h-4 mr-1.5" /> Pause
+                </Button>
+              )}
+              {canResume && (
+                <Button
+                  variant="outline"
+                  onClick={() => lifecycleMutation.mutate("resume")}
+                  disabled={lifecycleMutation.isPending}
+                  data-testid="button-resume"
+                >
+                  <Play className="w-4 h-4 mr-1.5" /> Resume
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                className="text-[hsl(var(--destructive))]"
+                onClick={() => setCancelOpen(true)}
+                data-testid="button-cancel"
+              >
+                <Ban className="w-4 h-4 mr-1.5" /> Cancel remaining
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Delivery summary */}
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <h2 className="text-base font-semibold">Delivery summary</h2>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3" data-testid="recipient-counts">
+            <StatCard label="Queued" value={recipients.queued} testId="stat-r-queued" />
+            <StatCard label="Sent" value={recipients.sent} testId="stat-r-sent" />
+            <StatCard label="Delivered" value={recipients.delivered} testId="stat-r-delivered" />
+            <StatCard label="Failed" value={recipients.failed} testId="stat-r-failed" />
+            <StatCard label="Bounced" value={recipients.bounced} testId="stat-r-bounced" />
+            <StatCard label="Complained" value={recipients.complained} testId="stat-r-complained" />
+            <StatCard label="Unsubscribed" value={recipients.unsubscribed} testId="stat-r-unsubscribed" />
+            <StatCard label="Suppressed" value={recipients.suppressed} testId="stat-r-suppressed" />
+            <StatCard label="Cancelled" value={recipients.cancelled} testId="stat-r-cancelled" />
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold mb-2">Batches</h3>
+            {data.batches.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No batches sent yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium">#</th>
+                      <th className="text-left px-3 py-2 font-medium">Recipients</th>
+                      <th className="text-left px-3 py-2 font-medium">Status</th>
+                      <th className="text-left px-3 py-2 font-medium">Sent at</th>
+                      <th className="text-left px-3 py-2 font-medium">Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {data.batches.map((batch) => (
+                      <tr key={batch.id} data-testid={`row-batch-${batch.batchNumber}`}>
+                        <td className="px-3 py-2 tabular-nums">{batch.batchNumber}</td>
+                        <td className="px-3 py-2 tabular-nums">{batch.recipientCount}</td>
+                        <td className="px-3 py-2">{batch.status}</td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">{formatDateTime(batch.sentAt)}</td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">{batch.statusDetail || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold mb-2">Activity</h3>
+            {data.events.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activity recorded.</p>
+            ) : (
+              <ul className="space-y-2" data-testid="event-list">
+                {data.events.map((ev) => (
+                  <li key={ev.id} className="rounded-md border bg-muted/40 p-3 space-y-1">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-sm font-medium">{EVENT_LABELS[ev.kind] ?? ev.kind}</span>
+                      <span className="text-xs text-muted-foreground">{formatDateTime(ev.createdAt)}</span>
+                    </div>
+                    <EventDetails details={ev.details} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Preview dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" data-testid="dialog-preview">
+          <DialogHeader>
+            <DialogTitle>Email preview</DialogTitle>
+            <DialogDescription>Rendered with sample recipient values.</DialogDescription>
+          </DialogHeader>
+          {previewHtml != null && (
+            <iframe
+              title="Campaign email preview"
+              srcDoc={previewHtml}
+              sandbox=""
+              className="w-full h-[60vh] rounded-md border bg-white"
+              data-testid="preview-frame"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Queue confirmation dialog */}
+      <Dialog open={queueOpen} onOpenChange={(open) => { if (!queueMutation.isPending) setQueueOpen(open); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="dialog-queue">
+          <DialogHeader>
+            <DialogTitle>Queue this campaign?</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Review the audience carefully — the recipient snapshot is fixed when you queue.
+            </DialogDescription>
+          </DialogHeader>
+          {queueAudience && (
+            <div className="space-y-4 text-slate-900">
+              <div className="rounded-md border bg-slate-50 p-3 space-y-2 text-sm">
+                <SummaryRow label="Type" value={TYPE_LABELS[campaign.type] ?? campaign.type} />
+                <SummaryRow label="Subject" value={campaign.subject || "—"} />
+                <SummaryRow label="Preview text" value={campaign.previewText || "—"} />
+                <SummaryRow label="CTA" value={`${campaign.ctaLabel || "—"} → ${campaign.ctaUrl || "—"}`} />
+              </div>
+
+              <div className="rounded-md border bg-slate-50 p-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between font-semibold text-slate-900">
+                  <span>Eligible recipients</span>
+                  <span className="tabular-nums" data-testid="queue-eligible">{queueAudience.audience.eligible}</span>
+                </div>
+                <SummaryRow label="No consent for this email type" value={String(queueAudience.audience.excludedConsentMissing)} />
+                <SummaryRow label="Confirmation still pending" value={String(queueAudience.audience.excludedConfirmationPending)} />
+                <SummaryRow label="Unsubscribed or suppressed" value={String(queueAudience.audience.excludedUnsubscribedOrSuppressed)} />
+                <div className="border-t border-slate-200 pt-2">
+                  <SummaryRow label="Daily cap" value={String(queueAudience.dailyCap)} />
+                  <SummaryRow
+                    label="Estimated sending days"
+                    value={queueAudience.estimatedDays == null ? "—" : String(queueAudience.estimatedDays)}
+                  />
+                </div>
+              </div>
+
+              {queueError && (
+                <Alert variant="destructive" data-testid="queue-error">
+                  <AlertDescription>{queueError}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="queue-confirm" className="text-slate-900">
+                  Type <span className="font-mono font-semibold">{confirmationPhrase}</span> to confirm
+                </Label>
+                <Input
+                  id="queue-confirm"
+                  value={confirmationText}
+                  onChange={(e) => setConfirmationText(e.target.value)}
+                  placeholder={confirmationPhrase}
+                  className="text-slate-900"
+                  data-testid="input-confirmation"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQueueOpen(false)} disabled={queueMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => queueMutation.mutate()}
+              disabled={!phraseMatches || queueMutation.isPending}
+              data-testid="button-confirm-queue"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-1.5" />
+              {queueMutation.isPending ? "Queueing…" : "Queue campaign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel confirmation */}
+      <AlertDialog open={cancelOpen} onOpenChange={(open) => { if (!cancelMutation.isPending) setCancelOpen(open); }}>
+        <AlertDialogContent data-testid="dialog-cancel">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel remaining recipients?</AlertDialogTitle>
+            <AlertDialogDescription>
+              All queued recipients will be cancelled and the campaign stopped. Recipients already sent
+              are unaffected. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelMutation.isPending}>Keep sending</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); cancelMutation.mutate(); }}
+              disabled={cancelMutation.isPending}
+              data-testid="button-confirm-cancel"
+            >
+              {cancelMutation.isPending ? "Cancelling…" : "Cancel campaign"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function StatCard({ label, value, testId }: { label: string; value: number | undefined; testId: string }) {
+  return (
+    <Card data-testid={testId}>
+      <CardContent className="p-4">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="text-2xl font-semibold tabular-nums mt-1">
+          {value == null ? "—" : value.toLocaleString("en-GB")}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-slate-600">{label}</span>
+      <span className="text-slate-900 text-right break-words">{value}</span>
+    </div>
+  );
+}
+
+function EventDetails({ details }: { details: unknown }) {
+  if (!details || typeof details !== "object") return null;
+  const rec = details as Record<string, unknown>;
+  const entries = Object.entries(rec).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (entries.length === 0) return null;
+  return (
+    <div className="text-xs text-muted-foreground space-y-0.5">
+      {entries.map(([k, v]) => (
+        <div key={k}>
+          <span className="font-medium">{k}:</span>{" "}
+          {typeof v === "object" ? JSON.stringify(v) : String(v)}
+        </div>
+      ))}
+    </div>
+  );
+}

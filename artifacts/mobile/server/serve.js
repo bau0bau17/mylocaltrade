@@ -220,16 +220,19 @@ const server = http.createServer((req, res) => {
   if (hasLandingSite && (req.method === "GET" || req.method === "HEAD")) {
     const resolved = resolveLandingFile(pathname === "" ? "/" : pathname);
     if (resolved) {
-      // The early-access confirmation page URL carries a single-use token:
-      // never cache it and never let the token leak via the Referer header
-      // (belt-and-braces with the page's own <meta name="referrer">).
-      const isConfirmPage =
+      // The early-access confirmation and unsubscribe page URLs carry
+      // tokens: never cache them and never let the token leak via the
+      // Referer header (belt-and-braces with the pages' own
+      // <meta name="referrer">).
+      const isTokenPage =
         pathname === "/confirm-early-access" ||
-        pathname.startsWith("/confirm-early-access/");
+        pathname.startsWith("/confirm-early-access/") ||
+        pathname === "/unsubscribe" ||
+        pathname.startsWith("/unsubscribe/");
       res.writeHead(200, {
         "content-type": resolved.contentType,
-        "cache-control": isConfirmPage ? "no-store" : resolved.cacheControl,
-        ...(isConfirmPage ? { "referrer-policy": "no-referrer" } : {}),
+        "cache-control": isTokenPage ? "no-store" : resolved.cacheControl,
+        ...(isTokenPage ? { "referrer-policy": "no-referrer" } : {}),
       });
       if (req.method === "HEAD") {
         res.end();

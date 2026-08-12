@@ -96,6 +96,19 @@ export const earlyAccessRegistrationsTable = pgTable(
     /** Last successful email-ownership confirmation. */
     confirmedAt: timestamp("confirmed_at"),
 
+    /**
+     * Deliverability suppression (Phase 2B) — INDEPENDENT of the consent
+     * axis. Set from Brevo hard-bounce / spam-complaint / block events.
+     * Blocks all launch/marketing campaign sends AND new confirmation
+     * emails; NOT liftable through the public form (only an explicit admin
+     * decision after investigating). Reasons: 'hard_bounce' | 'complaint'
+     * | 'blocked'.
+     */
+    emailSuppressedAt: timestamp("email_suppressed_at"),
+    emailSuppressionReason: varchar("email_suppression_reason", {
+      length: 20,
+    }),
+
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -127,6 +140,13 @@ export const EARLY_ACCESS_EVENT_KINDS = [
   "CONFIRMATION_SENT",
   /** Explicit ownership confirmation via the confirm POST. */
   "EMAIL_CONFIRMED",
+  /**
+   * Deliverability suppression applied (Phase 2B). details: { reason:
+   * 'hard_bounce'|'complaint'|'blocked', source: 'brevo_webhook'|'batch' }.
+   */
+  "EMAIL_SUPPRESSED",
+  /** Self-service unsubscribe via signed link. details: { source: 'link'|'brevo' }. */
+  "UNSUBSCRIBED",
 ] as const;
 
 export type EarlyAccessEventKind = (typeof EARLY_ACCESS_EVENT_KINDS)[number];

@@ -6,6 +6,7 @@ export * from "./subscriptions";
 export * from "./cancellation-requests";
 export * from "./contact-messages";
 export * from "./early-access";
+export * from "./early-access-campaigns";
 export * from "./trader-audit-log";
 export * from "./trader-documents";
 export * from "./reviews";

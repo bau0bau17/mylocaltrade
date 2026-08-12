@@ -159,10 +159,13 @@ const earlyAccessLimiter = rateLimit({
   message: { error: "Too many signups from this connection. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
-  // Mounted on the /api/early-access prefix, so the confirm endpoint would
-  // otherwise share (and starve) the 5/hour form bucket — it has its own
-  // limiter below. req.path is mount-relative here.
-  skip: (req) => req.path.startsWith("/confirm"),
+  // Mounted on the /api/early-access prefix, so the confirm, unsubscribe and
+  // webhook endpoints would otherwise share (and starve) the 5/hour form
+  // bucket — each has its own limiter below. req.path is mount-relative here.
+  skip: (req) =>
+    req.path.startsWith("/confirm") ||
+    req.path.startsWith("/unsubscribe") ||
+    req.path.startsWith("/brevo-events"),
   store: createPgStore("early-access"),
 });
 
@@ -176,6 +179,30 @@ const earlyAccessConfirmLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: createPgStore("early-access-confirm"),
+});
+
+// Unsubscribe POST (Phase 2B): takes a signed token from anyone on the
+// internet. Tokens are HMAC-signed (unguessable), so this limiter only
+// throttles brute-force noise while leaving room for legitimate retries.
+const earlyAccessUnsubscribeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 15,
+  message: { error: "Too many attempts. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createPgStore("early-access-unsub"),
+});
+
+// Brevo marketing webhook (Phase 2B): server-to-server, shared-secret
+// gated. Brevo can burst events after a batch send, so the budget is
+// deliberately generous — the limiter only caps runaway abuse.
+const brevoWebhookLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 1000,
+  message: { error: "Too many requests." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createPgStore("brevo-webhook"),
 });
 
 const enquiriesLimiter = rateLimit({
@@ -263,6 +290,8 @@ app.use("/api/profile/phone-change/send-otp", phoneOtpIpLimiter);
 app.use("/api/customer/phone/send-otp", phoneOtpIpLimiter);
 app.use("/api/contact", contactLimiter);
 app.use("/api/early-access/confirm", earlyAccessConfirmLimiter);
+app.use("/api/early-access/unsubscribe", earlyAccessUnsubscribeLimiter);
+app.use("/api/early-access/brevo-events", brevoWebhookLimiter);
 app.use("/api/early-access", earlyAccessLimiter);
 app.use("/api/enquiries", enquiriesLimiter);
 app.use(/^\/api\/conversations\/\d+\/messages$/, messagesLimiter);
