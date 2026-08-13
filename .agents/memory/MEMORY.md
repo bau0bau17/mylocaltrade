@@ -68,3 +68,5 @@
 - [Early Access consent model](early-access-consent-model.md) — separate launch/marketing consent + versions; unauthenticated form NEVER lifts opt-outs; exports purpose-constrained server-side; audit events hold counts only.
 - [Early Access campaigns](early-access-campaigns.md) — bulk mail via Brevo MARKETING pipeline gated on MARKETING_BREVO_ENABLED; batch idempotency (brevoCampaignId-before-sendNow, assumed-sent recovery); stateless HMAC unsub tokens; local conservative daily quota.
 - [Job reassignment & handover](job-reassignment-invariants.md) — conv FOR UPDATE = serialization point; handovers gated by conditional flips (removal + account deletion); reassign re-checks target membership+availability; side effects post-commit winner-only.
+- [Prod executeSql masks errors](prod-executesql-error-masking.md) — prod query returning only "START TRANSACTION\nROLLBACK" with success=true means the SQL FAILED, not empty data.
+- [Campaign retention lifecycle](campaign-retention-lifecycle.md) — delete = never-queued drafts only (TEST_SENT blocks it); terminal → archive; anonymise keeps status/sentAt for quota; schedule in docs/data-retention.md.
