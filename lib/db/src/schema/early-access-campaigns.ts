@@ -85,6 +85,17 @@ export const earlyAccessCampaignsTable = pgTable(
     snapshotCount: integer("snapshot_count"),
     completedAt: timestamp("completed_at"),
 
+    /**
+     * Retention model (see docs/data-retention.md):
+     * - A DRAFT that was never queued (no recipient snapshot, no batches)
+     *   may be hard-deleted; a CAMPAIGN_DELETED audit event is kept.
+     * - Anything that was ever queued/sent/cancelled is NEVER hard-deleted
+     *   from admin — it is ARCHIVED instead (hidden from the default list),
+     *   preserving the full audit trail.
+     */
+    archivedAt: timestamp("archived_at"),
+    archivedBy: integer("archived_by"),
+
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -228,6 +239,15 @@ export const EARLY_ACCESS_CAMPAIGN_EVENT_KINDS = [
   "BATCH_REJECTED",
   "CAMPAIGN_CANCELLED",
   "CAMPAIGN_COMPLETED",
+  /** Terminal campaign hidden from the default admin list (reversible). */
+  "CAMPAIGN_ARCHIVED",
+  "CAMPAIGN_UNARCHIVED",
+  /** Never-queued draft hard-deleted. details: non-identifying facts only
+   *  (name/type/audience/createdAt) — this event outlives the campaign row. */
+  "CAMPAIGN_DELETED",
+  /** Recipient rows stripped of personal data (email/name/source links);
+   *  statuses and counts kept for aggregate stats. details: counts only. */
+  "RECIPIENTS_ANONYMISED",
 ] as const;
 export type EarlyAccessCampaignEventKind =
   (typeof EARLY_ACCESS_CAMPAIGN_EVENT_KINDS)[number];

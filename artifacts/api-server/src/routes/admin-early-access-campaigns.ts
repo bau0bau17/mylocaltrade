@@ -12,7 +12,7 @@ import {
   type EarlyAccessCampaign,
   type EarlyAccessCampaignType,
 } from "@workspace/db/schema";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { authMiddleware, adminOnly } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import {
@@ -140,8 +140,18 @@ async function quotaInfo() {
 
 // --------------------------- list + create ---------------------------------
 
-router.get("/admin/early-access/campaigns", async (_req, res) => {
-  const campaigns = await db.select().from(c).orderBy(desc(c.createdAt));
+router.get("/admin/early-access/campaigns", async (req, res) => {
+  // Archived campaigns are hidden by default; ?includeArchived=1 shows them.
+  const includeArchived = req.query.includeArchived === "1";
+  const campaigns = await db
+    .select()
+    .from(c)
+    .where(includeArchived ? undefined : isNull(c.archivedAt))
+    .orderBy(desc(c.createdAt));
+  const [archivedRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(c)
+    .where(sql`${c.archivedAt} is not null`);
   const counts =
     campaigns.length > 0
       ? await db
@@ -161,6 +171,7 @@ router.get("/admin/early-access/campaigns", async (_req, res) => {
       ...row,
       progress: byId.get(row.id) ?? { total: 0, sent: 0, queued: 0 },
     })),
+    archivedCount: archivedRow?.count ?? 0,
     quota: await quotaInfo(),
   });
 });
@@ -382,6 +393,18 @@ router.post("/admin/early-access/campaigns/:id/test-send", async (req, res) => {
   // batch reservation can never double-spend the same remaining quota.
   const gate = await db.transaction(async (tx) => {
     await acquireQuotaLock(tx);
+    // Lock the campaign row so a concurrent hard-delete serializes with this
+    // reservation: either the delete sees the TEST_SENT event and refuses,
+    // or we see the row gone and refuse. (Lock order quota→row never cycles
+    // with delete, which takes only the row lock.)
+    const [lockedRow] = await tx
+      .select({ id: c.id })
+      .from(c)
+      .where(eq(c.id, campaign.id))
+      .for("update");
+    if (!lockedRow) {
+      return { error: "gone" as const };
+    }
     if (
       (await testSendsTodayForCampaign(tx, campaign.id)) >=
       TEST_SEND_DAILY_LIMIT_PER_CAMPAIGN
@@ -409,6 +432,10 @@ router.post("/admin/early-access/campaigns/:id/test-send", async (req, res) => {
       .returning({ id: e.id });
     return { error: null, eventId: event.id };
   });
+  if (gate.error === "gone") {
+    res.status(404).json({ error: "Campaign not found." });
+    return;
+  }
   if (gate.error === "limit") {
     res.status(429).json({
       error: `Test-send limit reached for this campaign (${TEST_SEND_DAILY_LIMIT_PER_CAMPAIGN}/day).`,
@@ -700,5 +727,207 @@ router.post("/admin/early-access/campaigns/:id/cancel", async (req, res) => {
   }
   res.json({ success: true, cancelledRecipients: result.cancelledRecipients });
 });
+
+// --------------------------- retention lifecycle ----------------------------
+//
+// Documented in docs/data-retention.md. The rules enforced here:
+// - Hard delete is allowed ONLY for a draft that was never queued and has
+//   no recipient snapshot, batch or send activity. A CAMPAIGN_DELETED audit
+//   event (non-identifying facts only) outlives the row.
+// - Anything ever queued / sent / partially sent / cancelled is archived
+//   instead — hidden from the default list, audit history fully preserved.
+// - Neither operation touches outreach suppressions, unsubscribe records,
+//   contact rows, registrations or consent evidence in any way.
+
+const TERMINAL_STATUSES = ["completed", "partially_failed", "cancelled"];
+
+router.delete("/admin/early-access/campaigns/:id", async (req, res) => {
+  const authReq = req as unknown as AuthenticatedRequest;
+  const id = Number(req.params.id);
+  const result = await db.transaction(async (tx) => {
+    const [campaign] = await tx.select().from(c).where(eq(c.id, id)).for("update");
+    if (!campaign) return { status: 404 as const, error: "Campaign not found." };
+    if (campaign.status !== "draft" || campaign.queuedAt !== null) {
+      return {
+        status: 409 as const,
+        error:
+          "Only never-queued drafts can be deleted. Queued, sent or cancelled campaigns keep their audit history — archive them instead.",
+      };
+    }
+    // Belt and braces: a draft should have no snapshot or batches, but the
+    // audit rules matter enough to verify rather than assume.
+    const [snapshot] = await tx
+      .select({ recipients: sql<number>`count(*)::int` })
+      .from(r)
+      .where(eq(r.campaignId, id));
+    const [batches] = await tx
+      .select({ batches: sql<number>`count(*)::int` })
+      .from(b)
+      .where(eq(b.campaignId, id));
+    const [sendActivity] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(e)
+      .where(
+        and(
+          eq(e.campaignId, id),
+          // TEST_SENT counts as send activity too: a real email left the
+          // system (to the acting admin), so the draft is no longer
+          // activity-free and must keep its full history.
+          inArray(e.kind, [
+            "CAMPAIGN_QUEUED",
+            "BATCH_SENT",
+            "BATCH_REJECTED",
+            "TEST_SENT",
+          ]),
+        ),
+      );
+    if (
+      (snapshot?.recipients ?? 0) > 0 ||
+      (batches?.batches ?? 0) > 0 ||
+      (sendActivity?.count ?? 0) > 0
+    ) {
+      return {
+        status: 409 as const,
+        error:
+          "This campaign has recipient, batch or send activity (test emails included) and cannot be deleted — its audit history must be preserved.",
+      };
+    }
+    await tx.delete(c).where(eq(c.id, id));
+    // The audit event OUTLIVES the campaign row on purpose: minimum
+    // non-identifying record of what was deleted, by whom, when.
+    await tx.insert(e).values({
+      campaignId: id,
+      kind: "CAMPAIGN_DELETED",
+      performedBy: authReq.userId,
+      details: {
+        name: campaign.name,
+        type: campaign.type,
+        audience: campaign.audience,
+        createdAt: campaign.createdAt.toISOString(),
+      },
+    });
+    return { status: 200 as const };
+  });
+  if (result.status !== 200) {
+    res.status(result.status).json(result);
+    return;
+  }
+  res.json({ success: true });
+});
+
+router.post("/admin/early-access/campaigns/:id/archive", async (req, res) => {
+  const authReq = req as unknown as AuthenticatedRequest;
+  const id = Number(req.params.id);
+  const campaign = await loadCampaign(id);
+  if (!campaign) {
+    res.status(404).json({ error: "Campaign not found." });
+    return;
+  }
+  if (!TERMINAL_STATUSES.includes(campaign.status)) {
+    res.status(409).json({
+      error:
+        "Only finished campaigns (completed, finished with failures or cancelled) can be archived. Cancel the campaign first if it is still active.",
+    });
+    return;
+  }
+  const now = new Date();
+  // Conditional on archivedAt so a double-click archives (and audits) once.
+  const [updated] = await db
+    .update(c)
+    .set({ archivedAt: now, archivedBy: authReq.userId, updatedAt: now })
+    .where(and(eq(c.id, id), isNull(c.archivedAt)))
+    .returning();
+  if (!updated) {
+    res.status(409).json({ error: "Campaign is already archived." });
+    return;
+  }
+  await db.insert(e).values({
+    campaignId: id,
+    kind: "CAMPAIGN_ARCHIVED",
+    performedBy: authReq.userId,
+    details: {},
+  });
+  res.json({ campaign: updated });
+});
+
+router.post("/admin/early-access/campaigns/:id/unarchive", async (req, res) => {
+  const authReq = req as unknown as AuthenticatedRequest;
+  const id = Number(req.params.id);
+  const [updated] = await db
+    .update(c)
+    .set({ archivedAt: null, archivedBy: null, updatedAt: new Date() })
+    .where(and(eq(c.id, id), sql`${c.archivedAt} is not null`))
+    .returning();
+  if (!updated) {
+    res.status(409).json({ error: "Campaign is not archived." });
+    return;
+  }
+  await db.insert(e).values({
+    campaignId: id,
+    kind: "CAMPAIGN_UNARCHIVED",
+    performedBy: authReq.userId,
+    details: {},
+  });
+  res.json({ campaign: updated });
+});
+
+/**
+ * Strip recipient-identifying personal data from a finished campaign's
+ * snapshot, per the documented retention schedule (docs/data-retention.md).
+ *
+ * What it does: blanks emailNormalized + name and unlinks
+ * registrationId/outreachContactId on this campaign's recipient rows.
+ * What it keeps: per-recipient status, batch number and sentAt — the
+ * aggregate delivery statistics and daily-quota accounting stay intact.
+ * What it NEVER touches: outreach_suppressions, unsubscribe/complaint/
+ * bounce evidence, outreach_contacts, registrations or consent records.
+ */
+router.post(
+  "/admin/early-access/campaigns/:id/anonymise-recipients",
+  async (req, res) => {
+    const authReq = req as unknown as AuthenticatedRequest;
+    const id = Number(req.params.id);
+    const result = await db.transaction(async (tx) => {
+      const [campaign] = await tx.select().from(c).where(eq(c.id, id)).for("update");
+      if (!campaign) return { status: 404 as const, error: "Campaign not found." };
+      if (!TERMINAL_STATUSES.includes(campaign.status)) {
+        return {
+          status: 409 as const,
+          error:
+            "Recipient data can only be anonymised once the campaign is finished (completed, finished with failures or cancelled).",
+        };
+      }
+      const anonymised = await tx
+        .update(r)
+        .set({
+          emailNormalized: "",
+          name: "",
+          registrationId: null,
+          outreachContactId: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(r.campaignId, id), ne(r.emailNormalized, "")))
+        .returning({ status: r.status });
+      if (anonymised.length > 0) {
+        const countsByStatus: Record<string, number> = {};
+        for (const row of anonymised) {
+          countsByStatus[row.status] = (countsByStatus[row.status] ?? 0) + 1;
+        }
+        await tx.insert(e).values({
+          campaignId: id,
+          kind: "RECIPIENTS_ANONYMISED",
+          performedBy: authReq.userId,
+          details: { anonymised: anonymised.length, countsByStatus },
+        });
+      }
+      return { status: 200 as const, anonymised: anonymised.length };
+    });
+    if (result.status !== 200) {
+      res.status(result.status).json(result);
+      return;
+    }
+    res.json({ success: true, anonymised: result.anonymised });
+  },
+);
 
 export default router;

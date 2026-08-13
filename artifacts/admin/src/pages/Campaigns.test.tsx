@@ -761,3 +761,240 @@ describe("Campaigns dialog theming", () => {
     expect(dialog.style.backgroundColor).toBe("");
   });
 });
+
+describe("Campaign retention: delete draft / archive / anonymise", () => {
+  beforeEach(() => {
+    apiMock.mockReset();
+    navigateMock.mockReset();
+    toastMock.mockReset();
+  });
+
+  it("shows the archived filter toggle and refetches with includeArchived", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns")
+        return Promise.resolve({ campaigns: [], archivedCount: 2, quota: QUOTA });
+      if (path === "/api/admin/early-access/campaigns?includeArchived=1")
+        return Promise.resolve({
+          campaigns: [
+            {
+              ...makeCampaign({
+                id: 5,
+                name: "Old cancelled push",
+                status: "cancelled",
+                archivedAt: "2026-08-01T00:00:00.000Z",
+              }),
+              progress: { total: 3, sent: 0, queued: 0 },
+            },
+          ],
+          archivedCount: 2,
+          quota: QUOTA,
+        });
+      return Promise.resolve({});
+    });
+    renderPage(<Campaigns />);
+
+    const toggle = await screen.findByTestId("button-toggle-archived");
+    expect(toggle).toHaveTextContent("Show archived (2)");
+    fireEvent.click(toggle);
+
+    // Archived campaigns become visible, marked with the Archived badge.
+    const row = await screen.findByTestId("row-campaign-5");
+    expect(within(row).getByTestId("badge-archived")).toBeInTheDocument();
+    expect(screen.getByTestId("button-toggle-archived")).toHaveTextContent("Hide archived");
+    expect(
+      apiMock.mock.calls.some(([p]) => p === "/api/admin/early-access/campaigns?includeArchived=1"),
+    ).toBe(true);
+  });
+
+  it("deletes a never-queued draft after confirmation and navigates back to the list", async () => {
+    apiMock.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path === "/api/admin/early-access/campaigns/1" && init?.method === "DELETE")
+        return Promise.resolve({ success: true });
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(detailResponse());
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    fireEvent.click(await screen.findByTestId("button-delete-draft"));
+    const dialog = await screen.findByTestId("dialog-delete-draft");
+    // Same dark AlertDialog surface as the other confirmations.
+    expect(dialog.className).toContain("bg-background");
+    expect(dialog.style.backgroundColor).toBe("");
+    fireEvent.click(within(dialog).getByTestId("button-confirm-delete"));
+
+    await waitFor(() =>
+      expect(
+        apiMock.mock.calls.some(
+          ([p, init]) =>
+            p === "/api/admin/early-access/campaigns/1" &&
+            (init as { method?: string })?.method === "DELETE",
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/early-access/campaigns"));
+  });
+
+  it("hides delete for a draft that already produced a test email", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(
+          detailResponse({
+            events: [
+              {
+                id: 1,
+                kind: "TEST_SENT",
+                performedBy: 1,
+                performedByName: "Admin",
+                details: { channel: "email", ok: true },
+                createdAt: "2026-08-12T00:00:00.000Z",
+              },
+            ],
+          }),
+        );
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    await screen.findByTestId("text-campaign-name");
+    expect(screen.queryByTestId("button-delete-draft")).not.toBeInTheDocument();
+  });
+
+  it("offers delete only for never-queued drafts without a snapshot", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(
+          detailResponse({
+            campaign: { status: "cancelled", queuedAt: "2026-08-01T00:00:00.000Z" },
+            recipients: { ...EMPTY_RECIPIENTS, total: 3, cancelled: 3 },
+          }),
+        );
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    await screen.findByTestId("text-campaign-name");
+    expect(screen.queryByTestId("button-delete-draft")).not.toBeInTheDocument();
+    // Finished campaign gets Archive instead.
+    expect(screen.getByTestId("button-archive")).toBeInTheDocument();
+  });
+
+  it("archives a finished campaign and unarchives an archived one", async () => {
+    apiMock.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path === "/api/admin/early-access/campaigns/1/archive" && init?.method === "POST")
+        return Promise.resolve({ campaign: makeCampaign({ status: "cancelled", archivedAt: "2026-08-13T00:00:00.000Z" }) });
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(
+          detailResponse({ campaign: { status: "cancelled", queuedAt: "2026-08-01T00:00:00.000Z" } }),
+        );
+      return Promise.resolve({});
+    });
+    const first = renderPage(<CampaignDetail id={1} />);
+
+    fireEvent.click(await screen.findByTestId("button-archive"));
+    await waitFor(() =>
+      expect(
+        apiMock.mock.calls.some(
+          ([p, init]) =>
+            p === "/api/admin/early-access/campaigns/1/archive" &&
+            (init as { method?: string })?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+    // The success toast reassures about audit/suppression preservation.
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Campaign archived" }),
+      ),
+    );
+
+    first.unmount();
+    apiMock.mockReset();
+    apiMock.mockImplementation((path: string, init?: { method?: string }) => {
+      if (path === "/api/admin/early-access/campaigns/2/unarchive" && init?.method === "POST")
+        return Promise.resolve({ campaign: makeCampaign({ id: 2, status: "cancelled" }) });
+      if (path === "/api/admin/early-access/campaigns/2")
+        return Promise.resolve(
+          detailResponse({
+            campaign: {
+              id: 2,
+              status: "cancelled",
+              queuedAt: "2026-08-01T00:00:00.000Z",
+              archivedAt: "2026-08-13T00:00:00.000Z",
+            },
+          }),
+        );
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={2} />);
+
+    // Archived state: badge shown, Archive replaced by Unarchive.
+    expect(await screen.findByTestId("badge-archived")).toBeInTheDocument();
+    expect(screen.queryByTestId("button-archive")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("button-unarchive"));
+    await waitFor(() =>
+      expect(
+        apiMock.mock.calls.some(
+          ([p, init]) =>
+            p === "/api/admin/early-access/campaigns/2/unarchive" &&
+            (init as { method?: string })?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("anonymises recipient data on finished campaigns after confirmation", async () => {
+    apiMock.mockImplementation((path: string, init?: { method?: string }) => {
+      if (
+        path === "/api/admin/early-access/campaigns/1/anonymise-recipients" &&
+        init?.method === "POST"
+      )
+        return Promise.resolve({ success: true, anonymised: 3 });
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(
+          detailResponse({
+            campaign: { status: "cancelled", queuedAt: "2026-08-01T00:00:00.000Z" },
+            recipients: { ...EMPTY_RECIPIENTS, total: 3, cancelled: 3 },
+          }),
+        );
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    const card = await screen.findByTestId("retention-card");
+    // The card spells out what is kept: stats, audit, suppression records.
+    expect(card).toHaveTextContent(/suppression/i);
+    fireEvent.click(within(card).getByTestId("button-anonymise"));
+    const dialog = await screen.findByTestId("dialog-anonymise");
+    expect(dialog).toHaveTextContent(/not touched/i);
+    fireEvent.click(within(dialog).getByTestId("button-confirm-anonymise"));
+
+    await waitFor(() =>
+      expect(
+        apiMock.mock.calls.some(
+          ([p, init]) =>
+            p === "/api/admin/early-access/campaigns/1/anonymise-recipients" &&
+            (init as { method?: string })?.method === "POST",
+        ),
+      ).toBe(true),
+    );
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "Recipient data anonymised" }),
+      ),
+    );
+  });
+
+  it("hides the retention card for drafts and campaigns without recipients", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(detailResponse());
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    await screen.findByTestId("text-campaign-name");
+    expect(screen.queryByTestId("retention-card")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("button-anonymise")).not.toBeInTheDocument();
+  });
+});

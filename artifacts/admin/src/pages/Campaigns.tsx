@@ -51,6 +51,9 @@ import {
   CheckCircle2,
   XCircle,
   Trash2,
+  Archive,
+  ArchiveRestore,
+  EyeOff,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -119,6 +122,7 @@ interface Campaign {
   snapshotCount: number | null;
   queuedAt: string | null;
   completedAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -129,6 +133,7 @@ interface CampaignListItem extends Campaign {
 
 interface CampaignListResponse {
   campaigns: CampaignListItem[];
+  archivedCount: number;
   quota: Quota;
 }
 
@@ -270,7 +275,23 @@ const EVENT_LABELS: Record<string, string> = {
   BATCH_SENT: "Batch sent",
   CAMPAIGN_CANCELLED: "Campaign cancelled",
   CAMPAIGN_COMPLETED: "Campaign completed",
+  CAMPAIGN_ARCHIVED: "Campaign archived",
+  CAMPAIGN_UNARCHIVED: "Campaign unarchived",
+  CAMPAIGN_DELETED: "Draft deleted",
+  RECIPIENTS_ANONYMISED: "Recipient data anonymised",
 };
+
+function ArchivedBadge() {
+  return (
+    <Badge
+      variant="outline"
+      className="bg-muted text-muted-foreground border-transparent font-medium"
+      data-testid="badge-archived"
+    >
+      <EyeOff className="w-3 h-3 mr-1" /> Archived
+    </Badge>
+  );
+}
 
 function TypeBadge({ type }: { type: string }) {
   const isLaunch = type === "launch";
@@ -411,11 +432,14 @@ export default function Campaigns() {
   const [newType, setNewType] = useState<CampaignType>("launch");
   const [newAudience, setNewAudience] = useState<CampaignAudience>("early_access");
   const [newName, setNewName] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["admin", "early-access", "campaigns", "list"],
+    queryKey: ["admin", "early-access", "campaigns", "list", { showArchived }],
     queryFn: () =>
-      api<CampaignListResponse>("/api/admin/early-access/campaigns"),
+      api<CampaignListResponse>(
+        `/api/admin/early-access/campaigns${showArchived ? "?includeArchived=1" : ""}`,
+      ),
   });
 
   const createMutation = useMutation({
@@ -462,9 +486,23 @@ export default function Campaigns() {
             Launch &amp; marketing email campaigns to the early-access list.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} data-testid="button-new-campaign">
-          <Plus className="w-4 h-4 mr-1.5" /> New campaign
-        </Button>
+        <div className="flex items-center gap-2">
+          {(data?.archivedCount ?? 0) > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setShowArchived((v) => !v)}
+              data-testid="button-toggle-archived"
+            >
+              <Archive className="w-4 h-4 mr-1.5" />
+              {showArchived
+                ? "Hide archived"
+                : `Show archived (${data?.archivedCount ?? 0})`}
+            </Button>
+          )}
+          <Button onClick={() => setCreateOpen(true)} data-testid="button-new-campaign">
+            <Plus className="w-4 h-4 mr-1.5" /> New campaign
+          </Button>
+        </div>
       </div>
 
       <QuotaBanner quota={data?.quota} />
@@ -510,7 +548,12 @@ export default function Campaigns() {
                       onClick={() => navigate(`/early-access/campaigns/${row.id}`)}
                       data-testid={`row-campaign-${row.id}`}
                     >
-                      <td className="px-4 py-3 font-medium">{row.name || "—"}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <span className="inline-flex items-center gap-2">
+                          {row.name || "—"}
+                          {row.archivedAt && <ArchivedBadge />}
+                        </span>
+                      </td>
                       <td className="px-4 py-3"><TypeBadge type={row.type} /></td>
                       <td className="px-4 py-3"><AudienceBadge audience={row.audience} /></td>
                       <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
@@ -891,6 +934,86 @@ export function CampaignDetail({ id }: { id: number }) {
     },
   });
 
+  // ---- Retention lifecycle: delete draft / archive / anonymise ----
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      api<{ success: boolean }>(`/api/admin/early-access/campaigns/${id}`, {
+        method: "DELETE",
+        body: {},
+      }),
+    onSuccess: () => {
+      setDeleteOpen(false);
+      toast({ title: "Draft deleted" });
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "early-access", "campaigns", "list"],
+      });
+      navigate("/early-access/campaigns");
+    },
+    onError: (err) => {
+      setDeleteOpen(false);
+      toast({
+        title: "Could not delete draft",
+        description: apiErrorMessage(err),
+        variant: "destructive",
+      });
+      invalidate();
+    },
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (action: "archive" | "unarchive") =>
+      api<{ campaign: Campaign }>(
+        `/api/admin/early-access/campaigns/${id}/${action}`,
+        { method: "POST", body: {} },
+      ),
+    onSuccess: (_res, action) => {
+      toast({
+        title: action === "archive" ? "Campaign archived" : "Campaign unarchived",
+        description:
+          action === "archive"
+            ? "Hidden from the campaign list. Audit history, delivery statistics and suppression records are fully preserved."
+            : undefined,
+      });
+      invalidate();
+    },
+    onError: (err) => {
+      toast({
+        title: "Action failed",
+        description: apiErrorMessage(err),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const [anonymiseOpen, setAnonymiseOpen] = useState(false);
+  const anonymiseMutation = useMutation({
+    mutationFn: () =>
+      api<{ success: boolean; anonymised: number }>(
+        `/api/admin/early-access/campaigns/${id}/anonymise-recipients`,
+        { method: "POST", body: {} },
+      ),
+    onSuccess: (res) => {
+      setAnonymiseOpen(false);
+      toast({
+        title: "Recipient data anonymised",
+        description:
+          res.anonymised > 0
+            ? `${res.anonymised} recipient record(s) stripped of personal data. Aggregate statistics kept.`
+            : "Nothing left to anonymise — recipient data was already removed.",
+      });
+      invalidate();
+    },
+    onError: (err) => {
+      setAnonymiseOpen(false);
+      toast({
+        title: "Could not anonymise",
+        description: apiErrorMessage(err),
+        variant: "destructive",
+      });
+    },
+  });
+
   // ---- Retry Brevo cleanup ----
   const cleanupMutation = useMutation({
     mutationFn: () =>
@@ -936,6 +1059,18 @@ export function CampaignDetail({ id }: { id: number }) {
     status === "waiting_rate_limit" ||
     status === "needs_attention" ||
     status === "sending";
+  const isTerminal =
+    status === "completed" || status === "partially_failed" || status === "cancelled";
+  // Hard delete is offered only for never-queued drafts with no snapshot and
+  // no send activity (test emails count) — mirrors the server rule, which
+  // re-verifies all of it inside the delete transaction.
+  const hasSendActivity = (data?.events ?? []).some((ev) => ev.kind === "TEST_SENT");
+  const canDelete =
+    status === "draft" &&
+    !campaign?.queuedAt &&
+    (data?.recipients.total ?? 0) === 0 &&
+    !hasSendActivity;
+  const isArchived = !!campaign?.archivedAt;
 
   const confirmationPhrase = queueAudience?.confirmationPhrase ?? "";
   const phraseMatches = confirmationText === confirmationPhrase && !!confirmationPhrase;
@@ -979,7 +1114,40 @@ export function CampaignDetail({ id }: { id: number }) {
             <TypeBadge type={campaign.type} />
             <AudienceBadge audience={campaign.audience} />
             <StatusBadge status={campaign.status} />
+            {isArchived && <ArchivedBadge />}
           </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {canDelete && (
+            <Button
+              variant="outline"
+              className="text-[hsl(var(--destructive))]"
+              onClick={() => setDeleteOpen(true)}
+              data-testid="button-delete-draft"
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" /> Delete draft
+            </Button>
+          )}
+          {isTerminal && !isArchived && (
+            <Button
+              variant="outline"
+              onClick={() => archiveMutation.mutate("archive")}
+              disabled={archiveMutation.isPending}
+              data-testid="button-archive"
+            >
+              <Archive className="w-4 h-4 mr-1.5" /> Archive campaign
+            </Button>
+          )}
+          {isArchived && (
+            <Button
+              variant="outline"
+              onClick={() => archiveMutation.mutate("unarchive")}
+              disabled={archiveMutation.isPending}
+              data-testid="button-unarchive"
+            >
+              <ArchiveRestore className="w-4 h-4 mr-1.5" /> Unarchive
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1327,6 +1495,30 @@ export function CampaignDetail({ id }: { id: number }) {
             )}
           </div>
 
+          {isTerminal && recipients.total > 0 && (
+            <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2" data-testid="retention-card">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <div className="text-sm font-semibold">Data retention</div>
+                  <p className="text-xs text-muted-foreground max-w-prose">
+                    Per the retention schedule, recipient personal data (emails and names) can be
+                    anonymised once it is no longer needed. Delivery statistics, the audit trail and
+                    all suppression/unsubscribe records are kept. This cannot be undone.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAnonymiseOpen(true)}
+                  disabled={anonymiseMutation.isPending}
+                  data-testid="button-anonymise"
+                >
+                  <EyeOff className="w-4 h-4 mr-1.5" /> Anonymise recipient data
+                </Button>
+              </div>
+            </div>
+          )}
+
           <div>
             <h3 className="text-sm font-semibold mb-2">Activity</h3>
             {data.events.length === 0 ? (
@@ -1494,6 +1686,53 @@ export function CampaignDetail({ id }: { id: number }) {
               data-testid="button-confirm-cancel"
             >
               {cancelMutation.isPending ? "Cancelling…" : "Cancel campaign"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete draft confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={(open) => { if (!deleteMutation.isPending) setDeleteOpen(open); }}>
+        <AlertDialogContent data-testid="dialog-delete-draft">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this draft permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This draft was never queued and has no recipients, so it can be permanently deleted.
+              An audit record of the deletion is kept. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Keep draft</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); deleteMutation.mutate(); }}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete draft"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Anonymise recipients confirmation */}
+      <AlertDialog open={anonymiseOpen} onOpenChange={(open) => { if (!anonymiseMutation.isPending) setAnonymiseOpen(open); }}>
+        <AlertDialogContent data-testid="dialog-anonymise">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Anonymise recipient data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Removes recipient emails and names from this campaign's snapshot and unlinks them from
+              contacts/registrations. Delivery statistics and the audit trail are kept. Suppression,
+              unsubscribe, complaint and consent records are not touched. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={anonymiseMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); anonymiseMutation.mutate(); }}
+              disabled={anonymiseMutation.isPending}
+              data-testid="button-confirm-anonymise"
+            >
+              {anonymiseMutation.isPending ? "Anonymising…" : "Anonymise"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
