@@ -67,7 +67,7 @@ bd7b16e5fd401551b9912b327c354b3ea8522f7ac7f7931fcb4721d1d51f4cfd  attached_asset
 
 No banner image (any file named "banner" or at RCS banner dimensions, e.g. 1440×448) exists
 anywhere in the repository or its Git history. The banner shown in the RCS approval form
-(user-supplied capture: `attached_assets/Screenshot_2026-08-13_at_21.53.57_1786654440493.png`)
+(user-supplied capture, preserved at `docs/evidence/rcs-form-capture-2026-08-13.png`; original upload `attached_assets/Screenshot_2026-08-13_at_21.53.57_1786654440493.png` is gitignored)
 visually composites the project logo with MyLocalTrade text on a blue gradient, but **its source
 file is not in this project and its provenance is unverified**. Its ownership must not be treated
 as confirmed until the exact uploaded file and its creation source are provided and checked.
