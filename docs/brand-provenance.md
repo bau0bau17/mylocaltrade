@@ -63,14 +63,47 @@ bd7b16e5fd401551b9912b327c354b3ea8522f7ac7f7931fcb4721d1d51f4cfd  attached_asset
    Terms exactly as they stood on 20 March 2026; Service Provider LTD should retain an archived
    copy of the Terms version in force on that date (see §3).
 
-## 2. The RCS banner — UNVERIFIED
+## 2. The RCS banner
 
 No banner image (any file named "banner" or at RCS banner dimensions, e.g. 1440×448) exists
 anywhere in the repository or its Git history. The banner shown in the RCS approval form
 (user-supplied capture, preserved at `docs/evidence/rcs-form-capture-2026-08-13.png`; original upload `attached_assets/Screenshot_2026-08-13_at_21.53.57_1786654440493.png` is gitignored)
-visually composites the project logo with MyLocalTrade text on a blue gradient, but **its source
-file is not in this project and its provenance is unverified**. Its ownership must not be treated
-as confirmed until the exact uploaded file and its creation source are provided and checked.
+visually composites the project logo with MyLocalTrade text on a blue gradient.
+
+### Addendum — 13 August 2026: Google-hosted RCS asset inspected (read-only)
+
+The user supplied the public Google-hosted asset URL used by the RCS agent:
+`https://agent-logos.storage.googleapis.com/_/mrda0gwxrsia6VMDenOlov9P`
+
+Properties of the downloaded file, unmodified:
+
+- MIME type: `image/jpeg` (Content-Type header and file signature agree)
+- Pixel dimensions: **1440×448** — RCS **banner** dimensions (despite the "agent-logos" hostname)
+- File size: 40,177 bytes
+- SHA-256: `188d6abf3c35273b1061340bd081e162ec7a76c40ef99df1c6e3ab1b2cf65b9f`
+- Exif notes `software=Picasa`, indicating Google's asset pipeline **re-encoded** the upload; this
+  hash therefore identifies Google's stored copy, not necessarily the byte-exact file originally
+  uploaded to the form.
+
+Content findings:
+
+- This asset **is the banner, not the logo**. Its content matches the banner in the RCS form
+  capture: the MyLocalTrade logo tile, the wordmark "MyLocalTrade", the tagline
+  "Find Trusted Local Trades Near You", and a "UK Local Trades Platform" pill on a blue gradient.
+- It is **not byte-identical** to any repository logo file (expected: it is a JPEG composite,
+  the repository logos are standalone PNGs), and it is not a plain resize of any single one.
+- The logo tile embedded in the banner is **visually identical in every inspected detail** to the
+  repository mark first committed in `bf4da0f` (crossed screwdriver-and-wrench glyph, dot on the
+  screwdriver handle, slot on the wrench handle, white on blue rounded square, same proportions).
+  The banner is therefore assessed as a composite **derived from the project's own logo** plus
+  brand text; no third-party imagery, watermark, or stock element was identified in it.
+- **Remaining gap:** the original banner source file (and the tool used to compose it) is still
+  not in this project, and Google's re-encoding prevents byte-level matching to the original
+  upload. The banner's creation source remains to be stated by Service Provider LTD, and the
+  original design/export file should be retained as evidence (§3 item 2).
+- The **standalone RCS logo asset** (the square logo file/URL submitted in the form) has **not**
+  yet been provided for byte-level comparison; only the repository logo files themselves are
+  hash-documented in §1.
 
 ## 3. Evidence Service Provider LTD should retain
 
