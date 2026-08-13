@@ -25,6 +25,7 @@
 - [Admin white-dialog text colors](admin-white-dialog-text-colors.md) — admin is dark-themed; on forced-white dialogs, muted-foreground/foreground-based classes render light-on-white; use explicit slate classes.
 - [Admin account bootstrap](admin-account-bootstrap.md) — no admin self-signup; admins are promoted. First prod admin via secret-gated startup bootstrap (ADMIN_BOOTSTRAP_EMAIL), since prod DB is read-only & every admin route is adminOnly.
 - [Production public base URL](prod-public-base-url.md) — email/link host must prefer REPLIT_DOMAINS; REPLIT_DEV_DOMAIN is dev-only & absent in deployment, so links silently fall back to localhost in prod.
+- [Email design system (shared shell)](email-design-system.md) — all emails render via the table-based branded shell with server-picked neutral/trader/customer variants; capture hook is test-only (prod-hard-disabled); plain text auto-derived.
 - [Email deliverability (Brevo)](email-deliverability.md) — free-plan quota at 0 ⇒ Brevo 201-accepts & silently DROPS (no events); tests must never hold transport creds; DNS auth verified; no List-Unsubscribe on OTP.
 - [EAS iOS builds](eas-ios-builds.md) — profiles→backends; "Unable to install"=simulator/device-profile issue; EAS_NO_VCS=1 needed in sandbox (Git ref None tradeoff); preview points at dev domain.
 - [Monorepo project-reference stale .d.ts](monorepo-project-reference-dts.md) — editing lib/* src isn't enough; dependents typecheck against emitted dist .d.ts. Rebuild: `tsc -b lib/<pkg>/tsconfig.json --force`.
