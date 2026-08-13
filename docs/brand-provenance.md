@@ -101,9 +101,45 @@ Content findings:
   not in this project, and Google's re-encoding prevents byte-level matching to the original
   upload. The banner's creation source remains to be stated by Service Provider LTD, and the
   original design/export file should be retained as evidence (§3 item 2).
-- The **standalone RCS logo asset** (the square logo file/URL submitted in the form) has **not**
-  yet been provided for byte-level comparison; only the repository logo files themselves are
-  hash-documented in §1.
+- ~~The **standalone RCS logo asset** (the square logo file/URL submitted in the form) has **not**
+  yet been provided for byte-level comparison.~~ Provided and inspected later the same day — see
+  the addendum below.
+
+### Addendum — 13 August 2026 (later): Google-hosted RCS logo asset inspected (read-only)
+
+The user supplied the second Google-hosted asset URL used by the RCS agent:
+`https://agent-logos.storage.googleapis.com/_/mrda0guzD3fkztjEqB6krl9B`
+
+Properties of the downloaded file, unmodified:
+
+- MIME type: `image/png` (Content-Type header and file signature agree)
+- Pixel dimensions: **224×224**, RGBA — the standard RCS **logo** format
+- File size: 19,631 bytes
+- SHA-256: `a35a304ca87c2f9fe2b9c97595372b0d1dacc258f2efa2bf003295999b9f66ed`
+
+Comparison with the repository logo files (§1):
+
+- **Not byte-identical** to any repository file — expected, since no repository variant is
+  224×224 and Google's asset pipeline re-encodes uploads (see the banner addendum), so the hash
+  identifies Google's stored copy rather than necessarily the original upload.
+- **Same mark**: white crossed screwdriver-and-wrench glyph on the same blue
+  (centre pixel `rgb(37,99,235)`, matching the repository icon exactly), in a rounded-square
+  treatment with transparent corners like the repository's rounded `logo.png` family.
+- A pixel-level RMSE comparison against repository variants resized to 224×224 measures ~8%
+  difference, and the difference image shows the deviation is **confined to the glyph edges**
+  (anti-aliasing/scale of the outline) — no structural difference, no added or removed element,
+  no third-party content. Assessment: the RCS logo asset is a **rendering/resize of the same
+  MyLocalTrade mark documented in §1**, not an exact byte-copy of any single repository file.
+
+**Verdicts (13 August 2026):**
+
+- **RCS logo (224×224 PNG)** — comparison **PASSED**: same project mark as documented in §1;
+  no external or third-party asset identified. Caveat: byte-level identity with the original
+  upload cannot be established because Google re-encodes hosted assets.
+- **RCS banner (1440×448 JPEG)** — content **verified as project-derived** (composite of the §1
+  logo plus MyLocalTrade brand text; no third-party element identified). The original banner
+  source/export file and the tool used to compose it remain to be stated and retained by
+  Service Provider LTD (§3 item 2).
 
 ## 3. Evidence Service Provider LTD should retain
 
