@@ -16,6 +16,7 @@ import {
   type DispatchOpts,
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendEarlyAccessConfirmationEmail,
   sendNewEnquiryEmail,
   sendEnquirySentToCustomerEmail,
   sendLeadReminderEmail,
@@ -51,6 +52,12 @@ async function main() {
   grab("1. Signup email verification (neutral + security note)");
   await sendPasswordResetEmail("preview@example.com", "Ana", "935174", 10);
   grab("2. Password reset OTP (neutral + security note)");
+  await sendEarlyAccessConfirmationEmail({
+    toEmail: "preview@example.com",
+    toName: "Ana",
+    confirmUrl: "https://mylocaltrade.co.uk/confirm-early-access?token=SAMPLE",
+  });
+  grab("2b. Early Access confirmation (neutral, double opt-in)");
   await sendNewEnquiryEmail({
     toEmail: "preview@example.com",
     toName: "Dan",
@@ -158,7 +165,16 @@ async function main() {
     <section style="margin:0 0 48px;">
       <h2 style="font:600 16px system-ui;color:#e2e8f0;margin:0 0 4px;">${esc(p.label)}</h2>
       <p style="font:12px system-ui;color:#94a3b8;margin:0 0 10px;">Subject: ${esc(p.subject)}</p>
-      <iframe srcdoc="${p.html.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" style="width:100%;max-width:680px;height:760px;border:1px solid #334155;border-radius:8px;background:#07111F;"></iframe>
+      <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+        <div>
+          <p style="font:11px system-ui;color:#64748b;margin:0 0 4px;">Desktop (680px)</p>
+          <iframe srcdoc="${p.html.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" style="width:680px;height:760px;border:1px solid #334155;border-radius:8px;background:#07111F;"></iframe>
+        </div>
+        <div>
+          <p style="font:11px system-ui;color:#64748b;margin:0 0 4px;">Mobile (390px)</p>
+          <iframe srcdoc="${p.html.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" style="width:390px;height:760px;border:1px solid #334155;border-radius:8px;background:#07111F;"></iframe>
+        </div>
+      </div>
       <details style="margin-top:8px;max-width:680px;"><summary style="font:12px system-ui;color:#94a3b8;cursor:pointer;">Plain-text version</summary><pre style="font:12px ui-monospace,monospace;color:#cbd5e1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:12px;white-space:pre-wrap;">${esc(p.text)}</pre></details>
     </section>`,
     )

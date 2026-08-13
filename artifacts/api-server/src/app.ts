@@ -307,14 +307,20 @@ app.use("/api", apiLimiter);
 // Public, unauthenticated logo endpoint used by transactional emails. Brevo
 // only renders <img src="..."> from absolute URLs (no CID embedding), so we
 // host the brand logo here and reference it in every email shell.
+//
+// The asset is the canonical MyLocalTrade mark (byte-identical copy of the
+// mobile app's logo@2x.png). The versioned "-v2" path busts email-client /
+// CDN caches that stored the old pre-v2 icon; the legacy /api/public/logo.png
+// path is kept as an alias to the SAME canonical file so images in
+// already-delivered emails continue to load (and now show the correct mark).
 const PUBLIC_LOGO_CANDIDATES = [
-  path.resolve(process.cwd(), "dist/assets/logo.png"),
-  path.resolve(process.cwd(), "src/assets/logo.png"),
-  path.resolve(process.cwd(), "artifacts/api-server/dist/assets/logo.png"),
-  path.resolve(process.cwd(), "artifacts/api-server/src/assets/logo.png"),
+  path.resolve(process.cwd(), "dist/assets/mylocaltrade-logo-v2.png"),
+  path.resolve(process.cwd(), "src/assets/mylocaltrade-logo-v2.png"),
+  path.resolve(process.cwd(), "artifacts/api-server/dist/assets/mylocaltrade-logo-v2.png"),
+  path.resolve(process.cwd(), "artifacts/api-server/src/assets/mylocaltrade-logo-v2.png"),
 ];
 const PUBLIC_LOGO_PATH = PUBLIC_LOGO_CANDIDATES.find((p) => fs.existsSync(p));
-app.get("/api/public/logo.png", (_req, res) => {
+const serveCanonicalLogo = (_req: express.Request, res: express.Response) => {
   if (!PUBLIC_LOGO_PATH) {
     res.status(404).end();
     return;
@@ -322,7 +328,10 @@ app.get("/api/public/logo.png", (_req, res) => {
   res.setHeader("Cache-Control", "public, max-age=86400, immutable");
   res.setHeader("Content-Type", "image/png");
   res.sendFile(PUBLIC_LOGO_PATH);
-});
+};
+app.get("/api/public/mylocaltrade-logo-v2.png", serveCanonicalLogo);
+// Legacy path referenced by emails sent before the v2 rename.
+app.get("/api/public/logo.png", serveCanonicalLogo);
 
 app.use("/api", router);
 

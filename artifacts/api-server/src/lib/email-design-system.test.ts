@@ -94,7 +94,11 @@ function expectBaseShell(opts: DispatchOpts) {
   // Hosted logo with fixed dimensions + alt text (works when images blocked).
   expect(opts.html).toContain(`src="${getEmailLogoUrl()}"`);
   expect(opts.html).toContain('alt="MyLocalTrade logo"');
-  expect(getEmailLogoUrl()).toMatch(/^https?:\/\/.+\/api\/public\/logo\.png$/);
+  expect(getEmailLogoUrl()).toMatch(
+    /^https?:\/\/.+\/api\/public\/mylocaltrade-logo-v2\.png$/,
+  );
+  // Never the pre-v2 asset path (old house-and-tools icon cache key).
+  expect(opts.html).not.toContain("/api/public/logo.png");
   // Complete plain-text alternative.
   expect(opts.text).toBeTruthy();
   expect((opts.text ?? "").length).toBeGreaterThan(40);

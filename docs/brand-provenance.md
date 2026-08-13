@@ -16,7 +16,7 @@ rounded-square background. All in-repo variants carry the same mark.
 |---|---|---|---|---|
 | `artifacts/mobile/assets/images/icon.png` | 1024×1024 | `bf4da0f` | 2026-03-20 | feat: MyLocalTrade.co.uk - full mobile app + API server |
 | `artifacts/mobile/assets/images/splash-icon.png` | 1024×1024 | `bf4da0f` | 2026-03-20 | (same — initial build commit) |
-| `artifacts/api-server/src/assets/logo.png` (email logo) | 256×256 | `e080a28` | 2026-05-08 | Update emails to use the application logo and improve asset handling |
+| `artifacts/api-server/src/assets/logo.png` (email logo) † | 256×256 | `e080a28` | 2026-05-08 | Update emails to use the application logo and improve asset handling |
 | `artifacts/mobile/assets/images/logo.png` | 160×160 | `41330fb` | 2026-05-30 | Improve loading speed for the account screen logo |
 | `artifacts/mobile/assets/images/logo@2x.png` / `logo@3x.png` | 320/480 px | `41330fb` | 2026-05-30 | (same) |
 | `attached_assets/mylocaltrade-logo.png` | 160×160 | `41330fb` | 2026-05-30 | (byte-identical to `logo.png`) |
@@ -32,6 +32,17 @@ cccd9b1b086d2c3ffa369c7c2c75e0425e543d339410b21fb50e20aa2aeaf44c  artifacts/mobi
 21dd16f8ec93aa35f2d21db6c4a04383deec13ff5fd9d15ca8aba815fe682c79  artifacts/api-server/src/assets/logo.png
 bd7b16e5fd401551b9912b327c354b3ea8522f7ac7f7931fcb4721d1d51f4cfd  attached_assets/mylocaltrade-logo.png
 ```
+
+† **Correction (13 August 2026).** Visual inspection during an email bug fix showed that this
+256×256 email asset (SHA-256 `21dd16f8…682c79`) did **not** carry the canonical mark: it was a
+different "house containing tools" icon, despite the commit subject of `e080a28`. The statement
+below that "all later logo files are derived resizes of the same mark" must be read as excluding
+this file. On 13 August 2026 the file was removed from the repository and replaced by
+`artifacts/api-server/src/assets/mylocaltrade-logo-v2.png`, a **byte-identical copy** of the
+canonical `artifacts/mobile/assets/images/logo@2x.png` (320×320, SHA-256
+`34d63ae899856c9d8741e49175959a58dea6b40ad87c0770cef96cf109c4bb12`), served publicly at
+`/api/public/mylocaltrade-logo-v2.png` (the legacy `/api/public/logo.png` path now aliases the
+same canonical file). Every email rendered through the shared shell references the versioned URL.
 
 ### Findings
 

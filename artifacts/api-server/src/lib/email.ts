@@ -34,17 +34,17 @@ const FROM_EMAIL = process.env.SMTP_FROM ?? "noreply@mylocaltrade.co.uk";
 // The legacy SMTP path keeps using the CID attachment for back-compat with
 // any inboxes that prefer inline images.
 const LOGO_CANDIDATES = [
-  path.resolve(process.cwd(), "dist/assets/logo.png"),
-  path.resolve(process.cwd(), "src/assets/logo.png"),
-  path.resolve(process.cwd(), "artifacts/api-server/dist/assets/logo.png"),
-  path.resolve(process.cwd(), "artifacts/api-server/src/assets/logo.png"),
+  path.resolve(process.cwd(), "dist/assets/mylocaltrade-logo-v2.png"),
+  path.resolve(process.cwd(), "src/assets/mylocaltrade-logo-v2.png"),
+  path.resolve(process.cwd(), "artifacts/api-server/dist/assets/mylocaltrade-logo-v2.png"),
+  path.resolve(process.cwd(), "artifacts/api-server/src/assets/mylocaltrade-logo-v2.png"),
 ];
 const LOGO_PATH = LOGO_CANDIDATES.find((p) => fs.existsSync(p)) ?? LOGO_CANDIDATES[0];
 const LOGO_CID = "mylocaltrade-logo";
 
 function logoAttachment() {
   return {
-    filename: "logo.png",
+    filename: "mylocaltrade-logo-v2.png",
     path: LOGO_PATH,
     cid: LOGO_CID,
   };
@@ -426,9 +426,18 @@ async function dispatchEmail(opts: DispatchOpts): Promise<"brevo" | "smtp" | "no
 // Shared branded shell (see lib/email-shell.ts for the design system)
 // ---------------------------------------------------------------------------
 
-/** Absolute HTTPS logo URL served by the API at /api/public/logo.png. */
+/**
+ * Absolute HTTPS logo URL served by the API at
+ * /api/public/mylocaltrade-logo-v2.png.
+ *
+ * The versioned filename exists to bust email-client/CDN image caches: the
+ * pre-v2 asset at /api/public/logo.png was an old house-and-tools icon, so
+ * new emails must reference a URL those proxies have never cached. The
+ * legacy path stays registered (serving the same canonical file) so
+ * already-delivered emails keep rendering the correct brand mark.
+ */
 export function getEmailLogoUrl(): string {
-  return `${getApiBaseUrl()}/api/public/logo.png`;
+  return `${getApiBaseUrl()}/api/public/mylocaltrade-logo-v2.png`;
 }
 
 /** Render with the shared shell + the hosted logo. */
