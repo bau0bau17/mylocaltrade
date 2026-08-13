@@ -1,0 +1,54 @@
+The email design implementation and commit 9619b21 are approved at code-review level. Do not deploy yet.
+
+Before production rollout, please close task #130 and provide one consolidated release assessment covering every commit currently on main since the production deployment at 9fe4cb7.
+
+Use this decision for task #130:
+
+A previous voluntary Outreach unsubscribe or objection remains permanently recorded in the Outreach suppression list and must never be silently removed.
+
+The same person may later register themselves through the genuine Early Access form. A new Early Access permission may become active only when:
+
+- the person submits the form themselves;
+- launch permission is activated only after email confirmation;
+- marketing permission is activated only if they explicitly tick the optional marketing box and complete double opt-in;
+- the new consent applies only to the exact Early Access scopes confirmed;
+- it does not restore Outreach eligibility;
+- the full history of the earlier objection and later consent is retained.
+
+A complaint, hard bounce, fraud/security block, legal block or Admin suppression must never be automatically overridden by a new form submission.
+
+Add or confirm regression tests for these rules and commit/push any required correction.
+
+Then audit the combined production rollout, because production is currently based on 9fe4cb7 while main now contains Outreach Contacts and the email redesign. Do not describe the email redesign as an API-only release without accounting for the other unreleased commits on main.
+
+Please provide a consolidated report confirming:
+
+1. The ordered list of every commit after 9fe4cb7 that will enter production.
+2. The complete production schema diff, including the three Outreach tables and campaign audience column.
+3. Which backend, Admin, landing-page and mobile files will change.
+4. Confirmation that publishing current main will deploy Outreach and the new email templates together.
+5. Confirmation that the email redesign alone needs no mobile build, but the combined release does need a new mobile build because the embedded Privacy Policy changed.
+6. Whether the Privacy Policy visible effective date is identical on:
+   - landing HTML;
+   - landing JS-rendered copy;
+   - embedded mobile copy.
+7. Confirmation that Terms remain unchanged and no forced legal re-acceptance is introduced.
+8. Verification of the public logo endpoint:
+   - accessible without authentication;
+   - absolute HTTPS production URL;
+   - correct PNG content type;
+   - sensible cache headers;
+   - stable after deployment;
+   - email remains understandable when the image is blocked.
+9. Confirmation that the Outreach/Trader email variant is intentional and that no customer recipient can be classified as Trader merely because the campaign uses the Outreach audience.
+10. Confirmation that all existing production data and the previously configured Early Access campaigns remain intact.
+11. Exact safe rollout order:
+   - schema/application Publish;
+   - production smoke checks with no real campaign;
+   - mobile EAS/TestFlight build for the updated Privacy Policy;
+   - final activation/use of Outreach.
+12. Exact rollback steps for backend, schema additions, Admin/landing and mobile.
+13. Proof that no real email or campaign will be sent automatically during Publish.
+14. Final API/Admin/typecheck results after task #130 is closed.
+
+Do not publish, deploy, build, change production variables or send any email. Commit and push only if task #130 requires code changes, then stop for my approval.
