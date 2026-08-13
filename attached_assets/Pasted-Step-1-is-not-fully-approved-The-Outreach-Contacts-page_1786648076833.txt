@@ -1,0 +1,43 @@
+Step 1 is not fully approved. The Outreach Contacts page loads correctly, the list is empty and all counters are 0, but I found two issues in the attached screenshots.
+
+1. The “Add outreach contact” modal is incorrectly styled with a white background. It clashes with the dark navy Admin design and makes the form look inconsistent and difficult to read.
+
+Please restyle this modal to use the existing Admin dark-theme tokens and patterns:
+
+- modal surface: the same dark navy/card colour used elsewhere in Admin;
+- modal header, labels and primary text: accessible light text;
+- descriptions and helper text: readable muted blue-grey;
+- inputs, textareas and selects: dark surfaces with visible borders;
+- dropdown controls and opened option menus: dark theme as well;
+- focus state: existing cyan accent;
+- placeholders: clearly visible but visually secondary;
+- close and Cancel controls: visible on the dark surface;
+- Save contact: existing cyan primary action;
+- validation, warning, blocked and error states: existing Admin semantic colours;
+- backdrop can remain darkened, but the modal itself must not be white.
+
+Use the existing shared Admin modal/form components or theme tokens where possible. Do not introduce a separate hardcoded palette.
+
+Check the complete Outreach UI for the same regression, especially:
+
+- Add contact;
+- Edit/view contact;
+- CSV import and validation preview;
+- Suppress;
+- Delete confirmation;
+- any nested dropdowns, date fields, tooltips and error states.
+
+Do not change eligibility logic, API behaviour, database records or campaign behaviour. This is a focused visual correction.
+
+2. The production screenshot does not show the expected warning that real marketing sending is disabled while `MARKETING_BREVO_ENABLED=false`.
+
+Please investigate this separately. The Outreach Contacts page should show a clear, persistent warning when real sending is disabled, consistent with the warning on Campaigns. This status must come from the server, not from a frontend assumption.
+
+Add regression tests for:
+
+- the Outreach page receiving/displaying the disabled state;
+- the warning disappearing only when the server reports marketing enabled;
+- the modal using the dark-theme class/tokens rather than a light/white surface;
+- no changes to contact eligibility or sending behaviour.
+
+Run Admin tests and typecheck, commit and push the correction, then stop and ask me to Publish again. Do not enable marketing, do not send any email and do not continue the smoke test until I verify the corrected production UI.
