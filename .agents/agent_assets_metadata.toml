@@ -53,3 +53,10 @@ id = "940R4Dlt_iumoQ5ROxxcS"
 uri = "file://artifacts/promo-video/TEXT_SIZING_GUIDE.md"
 type = "text"
 title = "Ghid mărire text & imagini în promo video"
+
+[[outputs]]
+id = "N0JQSkZpunu0nnBbGt1Z7"
+uri = "file://.local/email-previews/email-design-previews.html"
+type = "text"
+title = "Email design system — 13 previews"
+description = "Toate șabloanele de email redate cu renderer-ul de producție (nimic nu a fost trimis): OTP, lead-uri, mesaje, aprobare trader, ștergere cont, invitație echipă, campanii Early Access & Outreach."

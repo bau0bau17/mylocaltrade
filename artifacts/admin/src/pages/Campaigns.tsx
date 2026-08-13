@@ -693,6 +693,7 @@ export function CampaignDetail({ id }: { id: number }) {
   // ---- Preview ----
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewWidth, setPreviewWidth] = useState<"desktop" | "mobile">("desktop");
   const previewMutation = useMutation({
     mutationFn: () =>
       api<{ html: string; text: string }>(
@@ -1351,16 +1352,41 @@ export function CampaignDetail({ id }: { id: number }) {
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" data-testid="dialog-preview">
           <DialogHeader>
             <DialogTitle>Email preview</DialogTitle>
-            <DialogDescription>Rendered with sample recipient values.</DialogDescription>
+            <DialogDescription>
+              Rendered with sample recipient values, using the exact production email renderer.
+            </DialogDescription>
           </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={previewWidth === "desktop" ? "default" : "outline"}
+              onClick={() => setPreviewWidth("desktop")}
+              data-testid="button-preview-desktop"
+            >
+              Desktop
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={previewWidth === "mobile" ? "default" : "outline"}
+              onClick={() => setPreviewWidth("mobile")}
+              data-testid="button-preview-mobile"
+            >
+              Mobile
+            </Button>
+          </div>
           {previewHtml != null && (
-            <iframe
-              title="Campaign email preview"
-              srcDoc={previewHtml}
-              sandbox=""
-              className="w-full h-[60vh] rounded-md border bg-white"
-              data-testid="preview-frame"
-            />
+            <div className="flex justify-center">
+              <iframe
+                title="Campaign email preview"
+                srcDoc={previewHtml}
+                sandbox=""
+                style={{ width: previewWidth === "mobile" ? 375 : "100%" }}
+                className="h-[60vh] rounded-md border bg-white"
+                data-testid="preview-frame"
+              />
+            </div>
           )}
         </DialogContent>
       </Dialog>

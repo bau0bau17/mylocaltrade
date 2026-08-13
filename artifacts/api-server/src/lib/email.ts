@@ -2,6 +2,17 @@ import nodemailer from "nodemailer";
 import crypto from "crypto";
 import path from "path";
 import fs from "fs";
+import {
+  renderBrandedEmail,
+  em,
+  strongText,
+  escapeEmailHtml,
+  SECURITY_NOTE_COPY,
+  type BrandedEmailOptions,
+  type EmailBlock,
+  type EmailVariant,
+  type RenderedEmail,
+} from "./email-shell";
 
 // ---------------------------------------------------------------------------
 // Sender identity
@@ -159,17 +170,6 @@ export function getOpenLinkBase(): string {
   return status.base;
 }
 
-/** Hosted logo URL used in email HTML. Served by the API at /api/public/logo.png. */
-function logoImgHtml(): string {
-  const url = `${getApiBaseUrl()}/api/public/logo.png`;
-  return `<img src="${url}" alt="MyLocalTrade" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 16px; margin: 0 auto;">`;
-}
-
-// Backwards-compat: a few of the templates still reference the CID variant
-// when they need to inline a small icon. The function call now returns the
-// hosted version so both paths use the same artwork.
-const LOGO_IMG_HTML = logoImgHtml();
-
 // ---------------------------------------------------------------------------
 // Brevo HTTPS dispatcher with category-keyed API keys
 // ---------------------------------------------------------------------------
@@ -208,7 +208,7 @@ const BREVO_KEY_ENV: Record<EmailCategory, string> = {
   contact: "BREVO_API_KEY_CONTACT",
 };
 
-interface DispatchOpts {
+export interface DispatchOpts {
   category: EmailCategory;
   to: { email: string; name?: string | null };
   subject: string;
@@ -341,7 +341,34 @@ export function isNonDeliverableTestAddress(email: string): boolean {
   );
 }
 
+/**
+ * Test/preview-only capture hook. When set, `dispatchEmail` hands the fully
+ * rendered payload (subject/html/text/headers/…) to the hook and reports
+ * "brevo" WITHOUT contacting any transport. This lets the test suite and the
+ * preview generator assert on / render the exact production output of every
+ * sender — the dispatcher otherwise refuses reserved test addresses before
+ * any payload could be observed.
+ *
+ * Hard-disabled in production: the setter throws under NODE_ENV=production,
+ * and the dispatcher re-checks NODE_ENV on every send so a hook set before an
+ * environment flip can never intercept or suppress real mail — the normal
+ * placeholder/test-domain guards stay authoritative.
+ */
+let emailCaptureHook: ((opts: DispatchOpts) => void) | null = null;
+export function __setEmailCaptureHookForTests(
+  hook: ((opts: DispatchOpts) => void) | null,
+): void {
+  if (hook !== null && process.env.NODE_ENV === "production") {
+    throw new Error("email capture hook is disabled in production");
+  }
+  emailCaptureHook = hook;
+}
+
 async function dispatchEmail(opts: DispatchOpts): Promise<"brevo" | "smtp" | "none" | "skipped"> {
+  if (emailCaptureHook && process.env.NODE_ENV !== "production") {
+    emailCaptureHook(opts);
+    return "brevo";
+  }
   // Central safety net: no transactional email may ever be dispatched to a
   // wiped placeholder address, regardless of which flow triggered the send
   // (subscription webhooks, admin actions, etc. can fire after anonymisation).
@@ -394,53 +421,23 @@ async function dispatchEmail(opts: DispatchOpts): Promise<"brevo" | "smtp" | "no
   return "none";
 }
 
+
 // ---------------------------------------------------------------------------
-// Email shells (HTML scaffolding)
+// Shared branded shell (see lib/email-shell.ts for the design system)
 // ---------------------------------------------------------------------------
 
-function escapeHtml(input: string): string {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+/** Absolute HTTPS logo URL served by the API at /api/public/logo.png. */
+export function getEmailLogoUrl(): string {
+  return `${getApiBaseUrl()}/api/public/logo.png`;
 }
 
-function emailShell(opts: {
-  title: string;
-  preheader?: string;
-  bodyHtml: string;
-  /** Optional one-click unsubscribe link rendered in the footer (CAN-SPAM/PECR). */
-  unsubscribe?: { url: string; label: string };
-}): string {
-  const unsubscribeLine = opts.unsubscribe
-    ? `<br><a href="${opts.unsubscribe.url}" style="color: #6B7280; text-decoration: underline;">${escapeHtml(opts.unsubscribe.label)}</a>`
-    : "";
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${opts.title}</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
-  ${opts.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${opts.preheader}</div>` : ""}
-  <div style="max-width: 560px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
-    <div style="text-align: center; margin-bottom: 28px;">
-      <div style="margin-bottom: 12px;">${LOGO_IMG_HTML}</div>
-      <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0;">MyLocalTrade</h1>
-    </div>
-    ${opts.bodyHtml}
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 32px 0 16px;">
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      You are receiving this email because you have an account on MyLocalTrade.${unsubscribeLine}
-    </p>
-  </div>
-</body>
-</html>`;
+/** Render with the shared shell + the hosted logo. */
+function renderMlt(opts: Omit<BrandedEmailOptions, "logoUrl">): RenderedEmail {
+  return renderBrandedEmail({ ...opts, logoUrl: getEmailLogoUrl() });
 }
+
+const ACCOUNT_REASON_LINE =
+  "You are receiving this email because you have an account on MyLocalTrade.";
 
 // ---------------------------------------------------------------------------
 // Public senders
@@ -454,70 +451,34 @@ export async function sendVerificationEmail(
   codeExpiresInMinutes = 10,
 ): Promise<void> {
   const verifyUrl = `${getApiBaseUrl()}/api/auth/verify-email?token=${token}`;
-  const safeCode = escapeHtml(code);
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Verify your email</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
-  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
-    <div style="text-align: center; margin-bottom: 32px;">
-      <div style="margin-bottom: 16px;">${LOGO_IMG_HTML}</div>
-      <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 8px;">MyLocalTrade</h1>
-      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">Verify your email address</p>
-    </div>
-    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${escapeHtml(toName)},</p>
-    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-      Thanks for signing up to MyLocalTrade. Enter the code below in the app to verify your email address and activate your account.
-    </p>
-    <div style="text-align: center; margin: 0 0 12px;">
-      <div style="display: inline-block; background: #0B1120; border: 1px solid #1F2937; border-radius: 12px; padding: 18px 32px;">
-        <span style="color: #00B4D8; font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: 'Courier New', monospace;">${safeCode}</span>
-      </div>
-    </div>
-    <p style="color: #9CA3AF; font-size: 13px; text-align: center; line-height: 1.6; margin: 0 0 32px;">
-      This code expires in ${codeExpiresInMinutes} minutes.
-    </p>
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
-    <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 0 0 16px;">
-      Not using the app? You can verify in your browser instead:
-    </p>
-    <div style="text-align: center; margin-bottom: 24px;">
-      <a href="${verifyUrl}"
-         style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 16px; padding: 14px 40px; border-radius: 12px; text-decoration: none;">
-        Verify Email Address
-      </a>
-    </div>
-    <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
-      If the button above doesn't work, copy and paste this link into your browser:
-    </p>
-    <p style="color: #00B4D8; font-size: 13px; word-break: break-all; margin: 0 0 32px;">${verifyUrl}</p>
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      The verification link expires in 24 hours. If you didn't create an account, you can safely ignore this email.<br><br>
-      Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ
-    </p>
-  </div>
-</body>
-</html>`;
-  const text = `Hi ${toName},
-
-Thanks for signing up to MyLocalTrade. Enter this code in the app to verify your email address and activate your account:
-
-${code}
-
-This code expires in ${codeExpiresInMinutes} minutes.
-
-Not using the app? You can verify in your browser instead:
-${verifyUrl}
-
-The verification link expires in 24 hours. If you didn't create an account, you can safely ignore this email.
-
-Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ`;
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "Verify your email",
+    preheader: "Use this code to finish setting up your MyLocalTrade account.",
+    blocks: [
+      { kind: "greeting", name: toName },
+      {
+        kind: "paragraph",
+        text: "Thanks for signing up to MyLocalTrade. Enter the code below in the app to verify your email address and activate your account.",
+      },
+      { kind: "code", code, expiresMinutes: codeExpiresInMinutes },
+      { kind: "divider" },
+      {
+        kind: "paragraph",
+        text: "Not using the app? You can verify in your browser instead:",
+        muted: true,
+      },
+      { kind: "cta", label: "Verify Email Address", url: verifyUrl },
+      { kind: "linkFallback", url: verifyUrl },
+      {
+        kind: "paragraph",
+        text: "The verification link expires in 24 hours. If you didn't create an account, you can safely ignore this email.",
+        muted: true,
+      },
+    ],
+    footer: { companyIdentity: true },
+    securityNote: SECURITY_NOTE_COPY,
+  });
   await dispatchEmail({
     category: "verification",
     to: { email: toEmail, name: toName },
@@ -534,32 +495,26 @@ export async function sendPhoneVerificationCodeEmail(
   code: string,
   expiresInMinutes = 10,
 ): Promise<"brevo" | "smtp" | "none" | "skipped"> {
-  const safeName = escapeHtml(toName || "there");
-  const safeCode = escapeHtml(code);
-  const html = emailShell({
-    title: "Your phone verification code",
-    preheader: `Your MyLocalTrade verification code is ${safeCode}`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-        Use the code below to verify your phone number on MyLocalTrade.
-      </p>
-      <div style="text-align: center; margin: 0 0 24px;">
-        <div style="display: inline-block; background: #0B1120; border: 1px solid #1F2937; border-radius: 12px; padding: 18px 32px;">
-          <span style="color: #00B4D8; font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: 'Courier New', monospace;">${safeCode}</span>
-        </div>
-      </div>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
-        This code expires in ${expiresInMinutes} minutes. If you didn't request it, you can safely ignore this email.
-      </p>`,
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "Your phone verification code",
+    preheader: `Your MyLocalTrade verification code is ${code}`,
+    blocks: [
+      { kind: "greeting", name: toName },
+      {
+        kind: "paragraph",
+        text: "Use the code below to verify your phone number on MyLocalTrade.",
+      },
+      { kind: "code", code, expiresMinutes: expiresInMinutes },
+      {
+        kind: "paragraph",
+        text: "If you didn't request it, you can safely ignore this email.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
+    securityNote: SECURITY_NOTE_COPY,
   });
-  const text = `Hi ${toName || "there"},
-
-Use this code to verify your phone number on MyLocalTrade:
-
-${code}
-
-This code expires in ${expiresInMinutes} minutes. If you didn't request it, you can safely ignore this email.`;
   return dispatchEmail({
     category: "verification",
     to: { email: toEmail, name: toName },
@@ -576,32 +531,26 @@ export async function sendPasswordResetEmail(
   code: string,
   expiresInMinutes = 10,
 ): Promise<"brevo" | "smtp" | "none" | "skipped"> {
-  const safeName = escapeHtml(toName || "there");
-  const safeCode = escapeHtml(code);
-  const html = emailShell({
-    title: "Your password reset code",
-    preheader: `Your MyLocalTrade password reset code is ${safeCode}`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-        We received a request to reset your MyLocalTrade password. Enter the code below in the app to choose a new password.
-      </p>
-      <div style="text-align: center; margin: 0 0 24px;">
-        <div style="display: inline-block; background: #0B1120; border: 1px solid #1F2937; border-radius: 12px; padding: 18px 32px;">
-          <span style="color: #00B4D8; font-size: 32px; font-weight: 700; letter-spacing: 8px; font-family: 'Courier New', monospace;">${safeCode}</span>
-        </div>
-      </div>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
-        This code expires in ${expiresInMinutes} minutes. If you didn't request a password reset, you can safely ignore this email — your password will not be changed.
-      </p>`,
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "Your password reset code",
+    preheader: `Your MyLocalTrade password reset code is ${code}`,
+    blocks: [
+      { kind: "greeting", name: toName },
+      {
+        kind: "paragraph",
+        text: "We received a request to reset your MyLocalTrade password. Enter the code below in the app to choose a new password.",
+      },
+      { kind: "code", code, expiresMinutes: expiresInMinutes },
+      {
+        kind: "paragraph",
+        text: "If you didn't request a password reset, you can safely ignore this email — your password will not be changed.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
+    securityNote: SECURITY_NOTE_COPY,
   });
-  const text = `Hi ${toName || "there"},
-
-We received a request to reset your MyLocalTrade password. Enter this code in the app to choose a new password:
-
-${code}
-
-This code expires in ${expiresInMinutes} minutes. If you didn't request a password reset, you can safely ignore this email — your password will not be changed.`;
   return dispatchEmail({
     category: "verification",
     to: { email: toEmail, name: toName },
@@ -619,40 +568,27 @@ export async function sendBusinessEmailVerificationEmail(
   token: string,
 ): Promise<void> {
   const verifyUrl = `${getApiBaseUrl()}/api/profile/business-email/confirm?token=${token}`;
-  const safeName = escapeHtml(toName || "there");
-  const safeBusiness = escapeHtml(businessName);
-  const safeAddress = escapeHtml(toEmail);
-  const html = emailShell({
-    title: "Confirm your business email address",
-    preheader: `Confirm ${safeAddress} for ${safeBusiness} on MyLocalTrade`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        Please confirm that <strong style="color: #00B4D8;">${safeAddress}</strong> is a working
-        business email address for <strong>${safeBusiness}</strong>. Confirming it adds a trust
-        signal to your MyLocalTrade profile.
-      </p>
-      <div style="text-align: center; margin: 24px 0;">
-        <a href="${verifyUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 16px; padding: 14px 40px; border-radius: 12px; text-decoration: none;">
-          Confirm this email address
-        </a>
-      </div>
-      <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
-        If the button above doesn't work, copy and paste this link into your browser:
-      </p>
-      <p style="color: #00B4D8; font-size: 13px; word-break: break-all; margin: 0 0 8px;">${verifyUrl}</p>
-      <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 0;">
-        This link expires in 24 hours. If you didn't request this, you can safely ignore this email.
-      </p>`,
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "Confirm your business email address",
+    preheader: `Confirm ${toEmail} for ${businessName} on MyLocalTrade`,
+    blocks: [
+      { kind: "greeting", name: toName },
+      {
+        kind: "html",
+        html: `Please confirm that ${em(toEmail)} is a working business email address for ${strongText(businessName)}. Confirming it adds a trust signal to your MyLocalTrade profile.`,
+        text: `Please confirm that ${toEmail} is a working business email address for ${businessName}. Confirming it adds a trust signal to your MyLocalTrade profile.`,
+      },
+      { kind: "cta", label: "Confirm this email address", url: verifyUrl },
+      { kind: "linkFallback", url: verifyUrl },
+      {
+        kind: "paragraph",
+        text: "This link expires in 24 hours. If you didn't request this, you can safely ignore this email.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
-  const text = `Hi ${toName || "there"},
-
-Please confirm that ${toEmail} is a working business email address for ${businessName}. Confirming it adds a trust signal to your MyLocalTrade profile.
-
-Confirm this email address:
-${verifyUrl}
-
-This link expires in 24 hours. If you didn't request this, you can safely ignore this email.`;
   await dispatchEmail({
     category: "verification",
     to: { email: toEmail, name: toName },
@@ -672,41 +608,31 @@ export async function sendContactEmail(opts: {
   const SUPPORT_EMAIL = "contact@serviceproviderltd.co.uk";
   const CONTACT_FROM_EMAIL = "noreply@mylocaltrade.co.uk";
   const replyByDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toUTCString();
-  const safeFromName = escapeHtml(opts.fromName);
-  const safeFromEmail = escapeHtml(opts.fromEmail);
-  const safeSubject = escapeHtml(opts.subject);
-  const safeMessage = escapeHtml(opts.message);
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Contact Support</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
-  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
-    <div style="background: #F59E0B; color: #111827; padding: 12px 16px; border-radius: 10px; margin-bottom: 24px; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">
-      CONTACT SUPPORT — REPLY WITHIN 48 HOURS
-    </div>
-    <div style="text-align: center; margin-bottom: 24px;">
-      <div style="margin-bottom: 12px;">${LOGO_IMG_HTML}</div>
-      <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0 0 6px;">MyLocalTrade</h1>
-      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">New support message received via in-app form</p>
-    </div>
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 110px;">From</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeFromName} &lt;${safeFromEmail}&gt;</td></tr>
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Subject</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeSubject}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Reply by</td><td style="padding: 8px 0; color: #F59E0B; font-size: 13px; font-weight: 600;">${replyByDate}</td></tr>
-    </table>
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
-    <p style="color: #E5E7EB; font-size: 15px; line-height: 1.7; white-space: pre-wrap; margin: 0;">${safeMessage}</p>
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 24px 0 16px;">
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      Sent via MyLocalTrade app · Service Provider LTD · 48h SLA
-    </p>
-  </div>
-</body>
-</html>`;
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "New support message",
+    preheader: `Contact form: ${opts.subject}`,
+    blocks: [
+      { kind: "warningBanner", text: "Contact support — reply within 48 hours" },
+      {
+        kind: "paragraph",
+        text: "New support message received via the in-app contact form.",
+        muted: true,
+      },
+      {
+        kind: "rows",
+        rows: [
+          ["From", `${opts.fromName} <${opts.fromEmail}>`],
+          ["Subject", opts.subject],
+          ["Reply by", replyByDate],
+        ],
+      },
+      { kind: "panel", title: "Message", text: opts.message },
+    ],
+    footer: {
+      reasonLine: "Sent via the MyLocalTrade app · Service Provider LTD · 48h SLA",
+    },
+  });
   await dispatchEmail({
     category: "contact",
     to: { email: SUPPORT_EMAIL },
@@ -714,6 +640,7 @@ export async function sendContactEmail(opts: {
     replyTo: { email: opts.fromEmail, name: opts.fromName },
     subject: `[CONTACT - Reply within 48h] ${sanitizeHeaderValue(opts.subject)}`,
     html,
+    text,
     headers: {
       "X-Priority": "1",
       "X-MSMail-Priority": "High",
@@ -747,51 +674,35 @@ export async function sendEarlyAccessNotificationEmail(opts: {
 }): Promise<"brevo" | "smtp" | "none" | "skipped"> {
   const INBOX_EMAIL = "noreply@mylocaltrade.co.uk";
   const typeLabel = EARLY_ACCESS_TYPE_LABELS[opts.type] ?? opts.type;
-  const safeName = escapeHtml(opts.name);
-  const safeEmail = escapeHtml(opts.email);
-  const safeType = escapeHtml(typeLabel);
-  const safeTown = opts.town?.trim() ? escapeHtml(opts.town.trim()) : "—";
-  const safeMessage = opts.message?.trim() ? escapeHtml(opts.message.trim()) : "";
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Early Access Signup</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
-  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
-    <div style="background: #00B4D8; color: #0B1120; padding: 12px 16px; border-radius: 10px; margin-bottom: 24px; text-align: center; font-size: 13px; font-weight: 700; letter-spacing: 0.5px;">
-      NEW EARLY ACCESS SIGNUP
-    </div>
-    <div style="text-align: center; margin-bottom: 24px;">
-      <div style="margin-bottom: 12px;">${LOGO_IMG_HTML}</div>
-      <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0 0 6px;">MyLocalTrade</h1>
-      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">Someone joined the early access list on the website</p>
-    </div>
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 110px;">Name</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeName}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Email</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeEmail}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">I am a</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeType}</td></tr>
-      <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Town / area</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeTown}</td></tr>
-    </table>
-    ${safeMessage ? `<hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
-    <p style="color: #E5E7EB; font-size: 15px; line-height: 1.7; white-space: pre-wrap; margin: 0;">${safeMessage}</p>` : ""}
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 24px 0 16px;">
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      Sent via the mylocaltrade.co.uk early access form · reply goes straight to the signer-up
-    </p>
-  </div>
-</body>
-</html>`;
-  const text = `New early access signup
-
-Name: ${opts.name}
-Email: ${opts.email}
-I am a: ${typeLabel}
-Town / area: ${opts.town?.trim() || "—"}
-${opts.message?.trim() ? `\nMessage:\n${opts.message.trim()}\n` : ""}
-Sent via the mylocaltrade.co.uk early access form.`;
+  const blocks: EmailBlock[] = [
+    {
+      kind: "paragraph",
+      text: "Someone joined the early access list on the website.",
+      muted: true,
+    },
+    {
+      kind: "rows",
+      rows: [
+        ["Name", opts.name],
+        ["Email", opts.email],
+        ["I am a", typeLabel],
+        ["Town / area", opts.town?.trim() || "—"],
+      ],
+    },
+  ];
+  if (opts.message?.trim()) {
+    blocks.push({ kind: "panel", title: "Message", text: opts.message.trim() });
+  }
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "New early access signup",
+    preheader: `${opts.name} (${typeLabel}) joined the list`,
+    blocks,
+    footer: {
+      reasonLine:
+        "Sent via the mylocaltrade.co.uk early access form · reply goes straight to the signer-up",
+    },
+  });
   return dispatchEmail({
     category: "contact",
     to: { email: INBOX_EMAIL },
@@ -819,61 +730,31 @@ export async function sendEarlyAccessConfirmationEmail(opts: {
   toName: string;
   confirmUrl: string;
 }): Promise<"brevo" | "smtp" | "none" | "skipped"> {
-  const safeName = escapeHtml(opts.toName);
-  const safeUrl = escapeHtml(opts.confirmUrl);
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Confirm your email</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
-  <div style="max-width: 520px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
-    <div style="text-align: center; margin-bottom: 32px;">
-      <div style="margin-bottom: 16px;">${LOGO_IMG_HTML}</div>
-      <h1 style="color: #F9FAFB; font-size: 24px; font-weight: 700; margin: 0 0 8px;">MyLocalTrade</h1>
-      <p style="color: #9CA3AF; font-size: 14px; margin: 0;">Confirm your email address</p>
-    </div>
-    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
-      We received a request to receive MyLocalTrade Early Access emails at this
-      address. To confirm it was you, please press the button below.
-    </p>
-    <div style="text-align: center; margin: 0 0 24px;">
-      <a href="${safeUrl}" style="display: inline-block; background: #00B4D8; color: #06121F; font-size: 16px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 10px;">Confirm my email</a>
-    </div>
-    <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
-      This link expires in 48 hours. If the button doesn't work, copy and paste
-      this address into your browser:<br>
-      <span style="color: #6B7280; word-break: break-all;">${safeUrl}</span>
-    </p>
-    <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-      If you didn't request this, you can safely ignore this email — nothing
-      will be sent to you.
-    </p>
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 24px;">
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      This mailbox isn't monitored — if you need to reach us, use the contact form on mylocaltrade.co.uk.<br><br>
-      Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ
-    </p>
-  </div>
-</body>
-</html>`;
-  const text = `Hi ${opts.toName},
-
-We received a request to receive MyLocalTrade Early Access emails at this address. To confirm it was you, open this link:
-
-${opts.confirmUrl}
-
-This link expires in 48 hours.
-
-If you didn't request this, you can safely ignore this email — nothing will be sent to you.
-
-This mailbox isn't monitored — if you need to reach us, use the contact form on mylocaltrade.co.uk.
-
-Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ`;
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "Confirm your email address",
+    preheader: "Confirm your MyLocalTrade Early Access request.",
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "paragraph",
+        text: "We received a request to receive MyLocalTrade Early Access emails at this address. To confirm it was you, please press the button below.",
+      },
+      { kind: "cta", label: "Confirm my email", url: opts.confirmUrl },
+      {
+        kind: "paragraph",
+        text: "This link expires in 48 hours. If the button doesn't work, copy and paste this address into your browser:",
+        muted: true,
+      },
+      { kind: "linkFallback", url: opts.confirmUrl, note: "" },
+      {
+        kind: "paragraph",
+        text: "If you didn't request this, you can safely ignore this email — nothing will be sent to you.",
+        muted: true,
+      },
+    ],
+    footer: { notMonitored: true, companyIdentity: true },
+  });
   return dispatchEmail({
     category: "contact",
     to: { email: opts.toEmail, name: opts.toName },
@@ -946,61 +827,45 @@ export async function sendNewEnquiryEmail(opts: {
   // Deep-link bounce: opens the installed app at the trader's leads screen,
   // with an install fallback for users without the app.
   const dashboardUrl = `${getOpenLinkBase()}/open?t=leads`;
-  const safeName = escapeHtml(opts.toName);
-  const safeCustomer = escapeHtml(opts.customerName);
-  const safeService = escapeHtml(opts.serviceRequired);
-  const safeMessage = escapeHtml(opts.message);
   const sf = opts.specialistFields ?? null;
   const propertyTypeLabel = sf?.propertyType
     ? ENQUIRY_PROPERTY_TYPE_LABELS[sf.propertyType] ?? sf.propertyType
     : null;
-  const tenureLabel = sf?.tenure
-    ? ENQUIRY_TENURE_LABELS[sf.tenure] ?? sf.tenure
-    : null;
+  const tenureLabel = sf?.tenure ? ENQUIRY_TENURE_LABELS[sf.tenure] ?? sf.tenure : null;
   const urgencyLabel = sf?.urgency
     ? ENQUIRY_URGENCY_LABELS[sf.urgency] ?? sf.urgency
     : null;
   const detailsRows = [
-    ["From", safeCustomer],
-    ["Service required", safeService],
-    urgencyLabel ? ["Urgency", escapeHtml(urgencyLabel)] : null,
-    propertyTypeLabel ? ["Property type", escapeHtml(propertyTypeLabel)] : null,
-    tenureLabel ? ["Customer is", escapeHtml(tenureLabel)] : null,
-    opts.preferredDate ? ["Preferred date", escapeHtml(opts.preferredDate)] : null,
-    opts.phone ? ["Phone", escapeHtml(opts.phone)] : null,
-  ].filter(Boolean) as [string, string][];
-  const rowsHtml = detailsRows
-    .map(
-      ([k, v]) => `
-      <tr>
-        <td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 130px;">${k}</td>
-        <td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${v}</td>
-      </tr>`,
-    )
-    .join("");
-  const html = emailShell({
-    title: "New enquiry on MyLocalTrade",
-    preheader: `New enquiry from ${safeCustomer} for ${safeService}`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-        You have a new lead on MyLocalTrade. Reply quickly to win the job.
-      </p>
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">${rowsHtml}</table>
-      <div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 24px;">
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeMessage}</p>
-      </div>
-      <div style="text-align: center; margin-bottom: 8px;">
-        <a href="${dashboardUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
-          Open my leads
-        </a>
-      </div>`,
+    ["From", opts.customerName],
+    ["Service required", opts.serviceRequired],
+    urgencyLabel ? ["Urgency", urgencyLabel] : null,
+    propertyTypeLabel ? ["Property type", propertyTypeLabel] : null,
+    tenureLabel ? ["Customer is", tenureLabel] : null,
+    opts.preferredDate ? ["Preferred date", opts.preferredDate] : null,
+    opts.phone ? ["Phone", opts.phone] : null,
+  ].filter(Boolean) as Array<[string, string]>;
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "You have a new lead",
+    preheader: `New enquiry from ${opts.customerName} for ${opts.serviceRequired}`,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "paragraph",
+        text: "You have a new lead on MyLocalTrade. Reply quickly to win the job.",
+      },
+      { kind: "rows", rows: detailsRows },
+      { kind: "panel", title: "Customer message", text: opts.message },
+      { kind: "cta", label: "Open my leads", url: dashboardUrl },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: `New enquiry: ${sanitizeHeaderValue(opts.serviceRequired)}`,
     html,
+    text,
     tag: "new-enquiry",
   });
 }
@@ -1012,36 +877,37 @@ export async function sendEnquirySentToCustomerEmail(opts: {
   serviceRequired: string;
   message: string;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName || "there");
-  const safeTrader = escapeHtml(opts.traderBusinessName);
-  const safeService = escapeHtml(opts.serviceRequired);
-  const safeMessage = escapeHtml(opts.message);
-  const html = emailShell({
-    title: "Your enquiry has been sent",
-    preheader: `We've sent your enquiry to ${safeTrader}`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        Thanks for using MyLocalTrade. We've sent your enquiry to
-        <strong style="color: #00B4D8;">${safeTrader}</strong> for
-        <strong>${safeService}</strong>.
-      </p>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
-        Most verified traders reply within a day. You'll get a notification as soon as they respond, and you can chat with them directly in the app.
-      </p>
-      <div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #9CA3AF; font-size: 12px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.4px;">Your message</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeMessage}</p>
-      </div>
-      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0 0 8px;">
-        For your safety, please keep all conversation inside MyLocalTrade until you're confident in the trader. Never share your bank details, and don't pay for or deposit against any work before it's agreed.
-      </p>`,
+  const { html, text } = renderMlt({
+    variant: "customer",
+    heading: "Your enquiry has been sent",
+    preheader: `We've sent your enquiry to ${opts.traderBusinessName}`,
+    blocks: [
+      { kind: "greeting", name: opts.toName || "there" },
+      {
+        kind: "html",
+        html: `Thanks for using MyLocalTrade. We've sent your enquiry to ${em(opts.traderBusinessName)} for ${strongText(opts.serviceRequired)}.`,
+        text: `Thanks for using MyLocalTrade. We've sent your enquiry to ${opts.traderBusinessName} for ${opts.serviceRequired}.`,
+      },
+      {
+        kind: "paragraph",
+        text: "Most verified traders reply within a day. You'll get a notification as soon as they respond, and you can chat with them directly in the app.",
+        muted: true,
+      },
+      { kind: "panel", title: "Your message", text: opts.message },
+      {
+        kind: "paragraph",
+        text: "For your safety, please keep all conversation inside MyLocalTrade until you're confident in the trader. Never share your bank details, and don't pay for or deposit against any work before it's agreed.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName ?? undefined },
     subject: `We've sent your enquiry to ${sanitizeHeaderValue(opts.traderBusinessName)}`,
     html,
+    text,
     tag: "enquiry-sent-customer",
   });
 }
@@ -1061,34 +927,39 @@ export async function sendLeadReminderEmail(opts: {
   // Deep-link bounce: opens the installed app at the trader's leads screen,
   // with an install fallback for users without the app.
   const dashboardUrl = `${getOpenLinkBase()}/open?t=leads`;
-  const safeName = escapeHtml(opts.toName);
-  const safeCustomer = escapeHtml(opts.customerName);
-  const safeService = escapeHtml(opts.serviceRequired);
   const urgency = typeof opts.urgency === "string" ? opts.urgency : null;
   const isUrgent = urgency === "urgent";
-  const urgencyBanner = isUrgent
-    ? `<p style="background: #7F1D1D; color: #FEE2E2; font-size: 13px; font-weight: 700; padding: 10px 14px; border-radius: 8px; margin: 0 0 16px; text-transform: uppercase; letter-spacing: 0.5px;">Customer marked this job as ASAP</p>`
-    : "";
-  const html = emailShell({
-    title: "Unanswered lead on MyLocalTrade",
+  const blocks: EmailBlock[] = [{ kind: "greeting", name: opts.toName }];
+  if (isUrgent) {
+    blocks.push({ kind: "warningBanner", text: "Customer marked this job as ASAP" });
+  }
+  blocks.push(
+    {
+      kind: "html",
+      html: `You still have an unanswered lead from ${em(opts.customerName)} for ${strongText(opts.serviceRequired)}.`,
+      text: `You still have an unanswered lead from ${opts.customerName} for ${opts.serviceRequired}.`,
+    },
+    {
+      kind: "paragraph",
+      text: "Customers usually go with the first trader who replies. Open the lead and send a quick reply to win the job.",
+      muted: true,
+    },
+    { kind: "cta", label: "Open my leads", url: dashboardUrl },
+  );
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "Unanswered lead on MyLocalTrade",
     preheader: isUrgent
-      ? `${safeCustomer} marked this ${safeService} enquiry as ASAP`
-      : `You haven't opened ${safeCustomer}'s ${safeService} enquiry yet`,
-    unsubscribe: { url: opts.unsubscribeUrl, label: "Unsubscribe from these reminders" },
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      ${urgencyBanner}
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        You still have an unanswered lead from <strong style="color: #00B4D8;">${safeCustomer}</strong> for <strong>${safeService}</strong>.
-      </p>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 24px;">
-        Customers usually go with the first trader who replies. Open the lead and send a quick reply to win the job.
-      </p>
-      <div style="text-align: center; margin-bottom: 8px;">
-        <a href="${dashboardUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
-          Open my leads
-        </a>
-      </div>`,
+      ? `${opts.customerName} marked this ${opts.serviceRequired} enquiry as ASAP`
+      : `You haven't opened ${opts.customerName}'s ${opts.serviceRequired} enquiry yet`,
+    blocks,
+    footer: {
+      reasonLine: ACCOUNT_REASON_LINE,
+      unsubscribe: {
+        url: opts.unsubscribeUrl,
+        label: "Unsubscribe from these reminders",
+      },
+    },
   });
   const subjectBase = `Unanswered lead from ${sanitizeHeaderValue(opts.customerName)}`;
   const subjectWithService = `${subjectBase} — ${sanitizeHeaderValue(opts.serviceRequired)}`;
@@ -1098,6 +969,7 @@ export async function sendLeadReminderEmail(opts: {
     to: { email: opts.toEmail, name: opts.toName },
     subject,
     html,
+    text,
     headers: {
       "List-Unsubscribe": `<${opts.unsubscribeUrl}>`,
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -1119,30 +991,32 @@ export async function sendDocumentRejectedEmail(opts: {
   documentType: string;
   reason: string;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeType = escapeHtml(opts.documentType);
-  const safeReason = escapeHtml(opts.reason);
-  const html = emailShell({
-    title: "Document needs your attention",
-    preheader: `Your ${safeType} could not be approved`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        Your <strong style="color: #F59E0B;">${safeType}</strong> document could not be approved.
-      </p>
-      <div style="background: #2A1810; border-left: 3px solid #F59E0B; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #FCD34D; font-size: 13px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Reviewer note</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
-      </div>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
-        Please open the app, go to your trader dashboard, and upload a replacement ${safeType} document to resolve this.
-      </p>`,
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "Document needs your attention",
+    preheader: `Your ${opts.documentType} could not be approved`,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "html",
+        html: `Your ${strongText(opts.documentType)} document could not be approved.`,
+        text: `Your ${opts.documentType} document could not be approved.`,
+      },
+      { kind: "panel", title: "Reviewer note", text: opts.reason, tone: "warning" },
+      {
+        kind: "paragraph",
+        text: `Please open the app, go to your trader dashboard, and upload a replacement ${opts.documentType} document to resolve this.`,
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "verification",
     to: { email: opts.toEmail, name: opts.toName },
     subject: `Action required: ${opts.documentType} not approved`,
     html,
+    text,
     tag: "doc-rejected",
   });
 }
@@ -1154,32 +1028,37 @@ export async function sendReviewApprovedEmail(opts: {
   rating: number;
   reviewText: string;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeCustomer = escapeHtml(opts.customerName);
-  const safeText = escapeHtml(opts.reviewText);
   const stars = "★".repeat(opts.rating) + "☆".repeat(5 - opts.rating);
-  const html = emailShell({
-    title: "A new review was approved",
-    preheader: `${safeCustomer} left you a ${opts.rating}-star review`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-        A new review on your MyLocalTrade profile has been approved by our moderation team and is now public.
-      </p>
-      <div style="background: #0E1A2A; border-left: 3px solid #06D6A0; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #FBBF24; font-size: 16px; margin: 0 0 4px; letter-spacing: 2px;">${stars}</p>
-        <p style="color: #9CA3AF; font-size: 12px; margin: 0 0 8px;">${safeCustomer}</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeText}</p>
-      </div>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
-        Open the trader dashboard to reply publicly — a quick, friendly response builds trust with future customers.
-      </p>`,
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "A new review was approved",
+    preheader: `${opts.customerName} left you a ${opts.rating}-star review`,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "paragraph",
+        text: "A new review on your MyLocalTrade profile has been approved by our moderation team and is now public.",
+      },
+      {
+        kind: "panel",
+        title: `${stars} — ${opts.customerName}`,
+        text: opts.reviewText,
+        tone: "success",
+      },
+      {
+        kind: "paragraph",
+        text: "Open the trader dashboard to reply publicly — a quick, friendly response builds trust with future customers.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: `New ${opts.rating}-star review on your profile`,
     html,
+    text,
     tag: "review-approved",
   });
 }
@@ -1191,35 +1070,33 @@ export async function sendReviewReplyEmail(opts: {
   reviewText: string;
   replyText: string;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeTrader = escapeHtml(opts.traderName);
-  const safeReview = escapeHtml(opts.reviewText);
-  const safeReply = escapeHtml(opts.replyText);
-  const html = emailShell({
-    title: "The trader replied to your review",
-    preheader: `${safeTrader} replied to your review on MyLocalTrade`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-        <strong style="color: #00B4D8;">${safeTrader}</strong> just posted a public reply to your review.
-      </p>
-      <div style="background: #0B1120; border: 1px solid #1F2937; border-radius: 10px; padding: 14px 16px; margin: 0 0 12px;">
-        <p style="color: #6B7280; font-size: 11px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Your review</p>
-        <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReview}</p>
-      </div>
-      <div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #00B4D8; font-size: 11px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Trader's reply</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReply}</p>
-      </div>
-      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
-        You can view the full conversation on the trader's profile in the MyLocalTrade app.
-      </p>`,
+  const { html, text } = renderMlt({
+    variant: "customer",
+    heading: "The trader replied to your review",
+    preheader: `${opts.traderName} replied to your review on MyLocalTrade`,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "html",
+        html: `${em(opts.traderName)} just posted a public reply to your review.`,
+        text: `${opts.traderName} just posted a public reply to your review.`,
+      },
+      { kind: "panel", title: "Your review", text: opts.reviewText },
+      { kind: "panel", title: "Trader's reply", text: opts.replyText },
+      {
+        kind: "paragraph",
+        text: "You can view the full conversation on the trader's profile in the MyLocalTrade app.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: `${sanitizeHeaderValue(opts.traderName)} replied to your review`,
     html,
+    text,
     tag: "review-reply",
   });
 }
@@ -1231,44 +1108,50 @@ export async function sendTraderApprovedEmail(opts: {
   /** Optional admin note shown to the trader (e.g. welcome message). */
   adminNotes?: string | null;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : null;
-  const safeNotes = opts.adminNotes ? escapeHtml(opts.adminNotes) : null;
-  const html = emailShell({
-    title: "Your MyLocalTrade profile has been approved",
+  const blocks: EmailBlock[] = [
+    { kind: "greeting", name: opts.toName },
+    opts.businessName
+      ? {
+          kind: "html",
+          html: `Good news — your MyLocalTrade trader profile for ${em(opts.businessName)} has been approved.`,
+          text: `Good news — your MyLocalTrade trader profile for ${opts.businessName} has been approved.`,
+        }
+      : {
+          kind: "paragraph",
+          text: "Good news — your MyLocalTrade trader profile has been approved.",
+        },
+    {
+      kind: "panel",
+      title: "What this means",
+      text: "Your profile is visible to customers searching on MyLocalTrade, provided you have an active subscription and your required documents remain valid.",
+      tone: "success",
+    },
+  ];
+  if (opts.adminNotes) {
+    blocks.push({ kind: "panel", title: "Note from our team", text: opts.adminNotes });
+  }
+  blocks.push({
+    kind: "list",
+    title: "Next steps",
+    items: [
+      "Open the MyLocalTrade app and check your dashboard.",
+      "Make sure your subscription is active so customers can contact you.",
+      "Reply quickly to new leads — most customers go with the first trader who replies.",
+    ],
+  });
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "Your profile has been approved",
     preheader: "Your trader profile is now live on MyLocalTrade.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        Good news — your MyLocalTrade trader profile${safeBusiness ? ` for <strong style="color: #00B4D8;">${safeBusiness}</strong>` : ""} has been approved.
-      </p>
-      <div style="background: #0E1A2A; border-left: 3px solid #22C55E; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #22C55E; font-size: 13px; font-weight: 600; margin: 0 0 6px;">What this means</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">
-          Your profile is visible to customers searching on MyLocalTrade, provided you have an active subscription and your required documents remain valid.
-        </p>
-      </div>
-      ${
-        safeNotes
-          ? `<div style="background: #111A2E; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #00B4D8; font-size: 13px; font-weight: 600; margin: 0 0 6px;">Note from our team</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeNotes}</p>
-      </div>`
-          : ""
-      }
-      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 12px;"><strong>Next steps</strong></p>
-      <ul style="color: #E5E7EB; font-size: 14px; line-height: 1.7; margin: 0 0 20px; padding-left: 20px;">
-        <li>Open the MyLocalTrade app and check your dashboard.</li>
-        <li>Make sure your subscription is active so customers can contact you.</li>
-        <li>Reply quickly to new leads — most customers go with the first trader who replies.</li>
-      </ul>
-      `,
+    blocks,
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "verification",
     to: { email: opts.toEmail, name: opts.toName },
     subject: "Your MyLocalTrade profile has been approved",
     html,
+    text,
     tag: "trader-approved",
   });
 }
@@ -1280,35 +1163,46 @@ export async function sendTraderRevalidationDueEmail(opts: {
   /** Number of days the trader has to re-confirm before being hidden. */
   graceDays: number;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : null;
-  const html = emailShell({
-    title: "Time to re-confirm your MyLocalTrade details",
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "Time to re-confirm your details",
     preheader: "A quick check to keep your verified profile up to date.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        It's time for the periodic re-check of your MyLocalTrade trader profile${safeBusiness ? ` for <strong style="color: #00B4D8;">${safeBusiness}</strong>` : ""}. This keeps your "Documents reviewed" trust badge current for customers.
-      </p>
-      <div style="background: #0E1A2A; border-left: 3px solid #F59E0B; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #F59E0B; font-size: 13px; font-weight: 600; margin: 0 0 6px;">What we need</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">
-          Please open the app and confirm your key documents (such as your public liability insurance) are still valid and up to date.
-        </p>
-      </div>
-      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 12px;"><strong>Next steps</strong></p>
-      <ul style="color: #E5E7EB; font-size: 14px; line-height: 1.7; margin: 0 0 20px; padding-left: 20px;">
-        <li>Open the MyLocalTrade app and go to your trader dashboard.</li>
-        <li>Re-confirm your details, or upload a fresh document if anything has expired.</li>
-        <li>If you do not re-confirm within ${opts.graceDays} days, your profile will be temporarily hidden from search until you do.</li>
-      </ul>
-      `,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      opts.businessName
+        ? {
+            kind: "html",
+            html: `It's time for the periodic re-check of your MyLocalTrade trader profile for ${em(opts.businessName)}. This keeps your "Documents reviewed" trust badge current for customers.`,
+            text: `It's time for the periodic re-check of your MyLocalTrade trader profile for ${opts.businessName}. This keeps your "Documents reviewed" trust badge current for customers.`,
+          }
+        : {
+            kind: "paragraph",
+            text: 'It\'s time for the periodic re-check of your MyLocalTrade trader profile. This keeps your "Documents reviewed" trust badge current for customers.',
+          },
+      {
+        kind: "panel",
+        title: "What we need",
+        text: "Please open the app and confirm your key documents (such as your public liability insurance) are still valid and up to date.",
+        tone: "warning",
+      },
+      {
+        kind: "list",
+        title: "Next steps",
+        items: [
+          "Open the MyLocalTrade app and go to your trader dashboard.",
+          "Re-confirm your details, or upload a fresh document if anything has expired.",
+          `If you do not re-confirm within ${opts.graceDays} days, your profile will be temporarily hidden from search until you do.`,
+        ],
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: "Time to re-confirm your MyLocalTrade details",
     html,
+    text,
     tag: "trader-revalidation-due",
   });
 }
@@ -1318,29 +1212,37 @@ export async function sendTraderRevalidationOverdueEmail(opts: {
   toName: string;
   businessName?: string | null;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : null;
-  const html = emailShell({
-    title: "Your MyLocalTrade profile is hidden until you re-confirm",
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "Your profile is hidden until you re-confirm",
     preheader: "Re-confirm your details to restore your profile in search.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        We asked you to re-confirm the details on your MyLocalTrade trader profile${safeBusiness ? ` for <strong style="color: #00B4D8;">${safeBusiness}</strong>` : ""}, but we haven't heard back. To keep customers safe, your profile is now temporarily hidden from search.
-      </p>
-      <div style="background: #0E1A2A; border-left: 3px solid #EF4444; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #EF4444; font-size: 13px; font-weight: 600; margin: 0 0 6px;">How to restore your profile</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">
-          Open the app, re-confirm your key documents are still valid, and your profile will be visible to customers again straight away.
-        </p>
-      </div>
-      `,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      opts.businessName
+        ? {
+            kind: "html",
+            html: `We asked you to re-confirm the details on your MyLocalTrade trader profile for ${em(opts.businessName)}, but we haven't heard back. To keep customers safe, your profile is now temporarily hidden from search.`,
+            text: `We asked you to re-confirm the details on your MyLocalTrade trader profile for ${opts.businessName}, but we haven't heard back. To keep customers safe, your profile is now temporarily hidden from search.`,
+          }
+        : {
+            kind: "paragraph",
+            text: "We asked you to re-confirm the details on your MyLocalTrade trader profile, but we haven't heard back. To keep customers safe, your profile is now temporarily hidden from search.",
+          },
+      {
+        kind: "panel",
+        title: "How to restore your profile",
+        text: "Open the app, re-confirm your key documents are still valid, and your profile will be visible to customers again straight away.",
+        tone: "danger",
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: "Your MyLocalTrade profile is hidden until you re-confirm",
     html,
+    text,
     tag: "trader-revalidation-overdue",
   });
 }
@@ -1353,31 +1255,39 @@ export async function sendAdminRevalidationAlertEmail(opts: {
   stage: "due" | "overdue";
 }): Promise<void> {
   const SUPPORT_EMAIL = "contact@serviceproviderltd.co.uk";
-  const safeEmail = escapeHtml(opts.traderEmail);
-  const safeName = escapeHtml(opts.traderName);
-  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : "(none)";
   const isOverdue = opts.stage === "overdue";
-  const accent = isOverdue ? "#EF4444" : "#F59E0B";
   const headline = isOverdue
     ? "A verified trader missed their re-validation and has been hidden"
     : "A verified trader is due for re-validation";
-  const html = emailShell({
-    title: headline,
-    preheader: `${safeName} — re-validation ${opts.stage}`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">${escapeHtml(headline)}.</p>
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 130px;">Trader</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeName}</td></tr>
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Business</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeBusiness}</td></tr>
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Email</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeEmail}</td></tr>
-      </table>
-      <div style="background: #0E1A2A; border-left: 3px solid ${accent}; padding: 14px 16px; border-radius: 8px; margin: 0 0 16px;">
-        <p style="color: ${accent}; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Status</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">${isOverdue
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "Trader re-validation alert",
+    preheader: `${opts.traderName} — re-validation ${opts.stage}`,
+    blocks: [
+      { kind: "paragraph", text: `${headline}.` },
+      {
+        kind: "rows",
+        rows: [
+          ["Trader", opts.traderName],
+          ["Business", opts.businessName || "(none)"],
+          ["Email", opts.traderEmail],
+        ],
+      },
+      {
+        kind: "panel",
+        title: "Status",
+        text: isOverdue
           ? "The trader did not re-confirm within the grace period and is now hidden from public search."
-          : "The trader has been prompted to re-confirm their key documents."}</p>
-      </div>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">Open the admin console to review this trader if needed.</p>`,
+          : "The trader has been prompted to re-confirm their key documents.",
+        tone: isOverdue ? "danger" : "warning",
+      },
+      {
+        kind: "paragraph",
+        text: "Open the admin console to review this trader if needed.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: "Internal operations alert · MyLocalTrade admin" },
   });
   await dispatchEmail({
     category: "contact",
@@ -1385,6 +1295,7 @@ export async function sendAdminRevalidationAlertEmail(opts: {
     from: { email: FROM_EMAIL, name: "MyLocalTrade Re-validation" },
     subject: `[RE-VALIDATION ${isOverdue ? "OVERDUE" : "DUE"}] ${sanitizeHeaderValue(opts.traderEmail)}`,
     html,
+    text,
     headers: {
       "X-MyLocalTrade-Type": "trader-revalidation-admin-alert",
     },
@@ -1401,14 +1312,8 @@ export async function sendAdminCancellationRequestEmail(opts: {
   note?: string | null;
 }): Promise<void> {
   const SUPPORT_EMAIL = "contact@serviceproviderltd.co.uk";
-  const safeEmail = escapeHtml(opts.traderEmail);
-  const safeName = escapeHtml(opts.traderName);
-  const safeBusiness = opts.businessName ? escapeHtml(opts.businessName) : "(none)";
   const providerLabel =
-    opts.provider === "apple"
-      ? "Apple (App Store / in-app purchase)"
-      : "Demo";
-  const accent = opts.withinCoolingOff ? "#10B981" : "#F59E0B";
+    opts.provider === "apple" ? "Apple (App Store / in-app purchase)" : "Demo";
   const coolingLabel = opts.withinCoolingOff
     ? "Within 14-day cooling-off window"
     : "Outside cooling-off window";
@@ -1416,27 +1321,41 @@ export async function sendAdminCancellationRequestEmail(opts: {
     opts.provider === "apple"
       ? "Apple owns this subscription — any cancellation/refund is handled by Apple. Assist the trader; do not attempt to issue a refund from our side."
       : "Our team processes this cancellation/refund directly.";
-  const html = emailShell({
-    title: "A trader has requested to cancel",
-    preheader: `${safeName} — cancellation request (${coolingLabel.toLowerCase()})`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">A trader has filed a cancellation request from the app.</p>
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 150px;">Trader</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeName}</td></tr>
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Business</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeBusiness}</td></tr>
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Email</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeEmail}</td></tr>
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Provider</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${escapeHtml(providerLabel)}</td></tr>
-      </table>
-      <div style="background: #0E1A2A; border-left: 3px solid ${accent}; padding: 14px 16px; border-radius: 8px; margin: 0 0 16px;">
-        <p style="color: ${accent}; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">${escapeHtml(coolingLabel)}</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0;">${escapeHtml(handoff)}</p>
-      </div>
-      ${
-        opts.note
-          ? `<div style="margin: 0 0 16px;"><p style="color: #6B7280; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Trader note</p><p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${escapeHtml(opts.note)}</p></div>`
-          : ""
-      }
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">Open the admin console to action this request.</p>`,
+  const blocks: EmailBlock[] = [
+    {
+      kind: "paragraph",
+      text: "A trader has filed a cancellation request from the app.",
+    },
+    {
+      kind: "rows",
+      rows: [
+        ["Trader", opts.traderName],
+        ["Business", opts.businessName || "(none)"],
+        ["Email", opts.traderEmail],
+        ["Provider", providerLabel],
+      ],
+    },
+    {
+      kind: "panel",
+      title: coolingLabel,
+      text: handoff,
+      tone: opts.withinCoolingOff ? "success" : "warning",
+    },
+  ];
+  if (opts.note) {
+    blocks.push({ kind: "panel", title: "Trader note", text: opts.note });
+  }
+  blocks.push({
+    kind: "paragraph",
+    text: "Open the admin console to action this request.",
+    muted: true,
+  });
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "A trader has requested to cancel",
+    preheader: `${opts.traderName} — cancellation request (${coolingLabel.toLowerCase()})`,
+    blocks,
+    footer: { reasonLine: "Internal operations alert · MyLocalTrade admin" },
   });
   await dispatchEmail({
     category: "contact",
@@ -1444,6 +1363,7 @@ export async function sendAdminCancellationRequestEmail(opts: {
     from: { email: FROM_EMAIL, name: "MyLocalTrade Cancellations" },
     subject: `[CANCELLATION ${opts.withinCoolingOff ? "COOLING-OFF" : "REQUEST"}] ${sanitizeHeaderValue(opts.traderEmail)}`,
     html,
+    text,
     headers: {
       "X-MyLocalTrade-Type": "cancellation-request-admin-alert",
     },
@@ -1456,32 +1376,35 @@ export async function sendTraderRejectedEmail(opts: {
   toName: string;
   reason: string;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeReason = escapeHtml(opts.reason);
-  const html = emailShell({
-    title: "Update on your MyLocalTrade application",
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "Update on your application",
     preheader: "Your trader application was not approved.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        Thank you for applying to list your business on MyLocalTrade. After reviewing your application, we are not able to approve your trader profile at this time.
-      </p>
-      <div style="background: #0E1A2A; border-left: 3px solid #EF4444; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #EF4444; font-size: 13px; font-weight: 600; margin: 0 0 6px;">Reason</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
-      </div>
-      <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0 0 12px;">
-        You can update your information and re-apply at any time.
-      </p>
-      <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0;">
-        Your account remains active so you can update your details and apply again in the future.
-      </p>`,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "paragraph",
+        text: "Thank you for applying to list your business on MyLocalTrade. After reviewing your application, we are not able to approve your trader profile at this time.",
+      },
+      { kind: "panel", title: "Reason", text: opts.reason, tone: "danger" },
+      {
+        kind: "paragraph",
+        text: "You can update your information and re-apply at any time.",
+      },
+      {
+        kind: "paragraph",
+        text: "Your account remains active so you can update your details and apply again in the future.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "verification",
     to: { email: opts.toEmail, name: opts.toName },
     subject: "Update on your MyLocalTrade application",
     html,
+    text,
     tag: "trader-rejected",
   });
 }
@@ -1491,33 +1414,35 @@ export async function sendTraderMoreInfoRequestedEmail(opts: {
   toName: string;
   notes: string;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeNotes = escapeHtml(opts.notes);
-  const html = emailShell({
-    title: "More information needed for your MyLocalTrade application",
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "More information needed",
     preheader: "Our team needs a few more details to review your application.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        Thanks for submitting your trader application. Before we can complete our review, we need a little more information from you.
-      </p>
-      <div style="background: #0E1A2A; border-left: 3px solid #F59E0B; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #F59E0B; font-size: 13px; font-weight: 600; margin: 0 0 6px;">What we need</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeNotes}</p>
-      </div>
-      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 12px;"><strong>Next steps</strong></p>
-      <ul style="color: #E5E7EB; font-size: 14px; line-height: 1.7; margin: 0 0 20px; padding-left: 20px;">
-        <li>Open the MyLocalTrade app and go to your trader dashboard</li>
-        <li>Update or upload the requested information</li>
-        <li>Once submitted, our team will review your application again</li>
-      </ul>
-      `,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "paragraph",
+        text: "Thanks for submitting your trader application. Before we can complete our review, we need a little more information from you.",
+      },
+      { kind: "panel", title: "What we need", text: opts.notes, tone: "warning" },
+      {
+        kind: "list",
+        title: "Next steps",
+        items: [
+          "Open the MyLocalTrade app and go to your trader dashboard",
+          "Update or upload the requested information",
+          "Once submitted, our team will review your application again",
+        ],
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "verification",
     to: { email: opts.toEmail, name: opts.toName },
     subject: "More information needed for your MyLocalTrade application",
     html,
+    text,
     tag: "trader-more-info",
   });
 }
@@ -1527,27 +1452,26 @@ export async function sendTraderSuspendedEmail(opts: {
   toName: string;
   reason: string;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeReason = escapeHtml(opts.reason);
-  const html = emailShell({
-    title: "Your MyLocalTrade account has been suspended",
+  const { html, text } = renderMlt({
+    variant: "trader",
+    heading: "Your account has been suspended",
     preheader: "Your trader profile is no longer visible on MyLocalTrade.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        Your MyLocalTrade trader profile has been suspended by our team and is no longer visible to customers.
-      </p>
-      <div style="background: #0E1A2A; border-left: 3px solid #EF4444; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-        <p style="color: #EF4444; font-size: 13px; font-weight: 600; margin: 0 0 6px;">Reason</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
-      </div>
-      `,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "paragraph",
+        text: "Your MyLocalTrade trader profile has been suspended by our team and is no longer visible to customers.",
+      },
+      { kind: "panel", title: "Reason", text: opts.reason, tone: "danger" },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "verification",
     to: { email: opts.toEmail, name: opts.toName },
     subject: "Your MyLocalTrade account has been suspended",
     html,
+    text,
     tag: "trader-suspended",
   });
 }
@@ -1564,11 +1488,9 @@ export async function sendNewMessageEmail(opts: {
    * recipient instantly remembers which enquiry this reply is for. */
   serviceRequired?: string | null;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeSender = escapeHtml(opts.senderName);
   // Truncate preview to a safe length so we never leak entire long messages.
-  const trimmed = opts.preview.length > 140 ? opts.preview.slice(0, 140) + "…" : opts.preview;
-  const safePreview = escapeHtml(trimmed);
+  const trimmed =
+    opts.preview.length > 140 ? opts.preview.slice(0, 140) + "…" : opts.preview;
   const webBase = getOpenLinkBase();
   // Point the CTA at a deep-link redirect page that opens the installed app
   // straight to this conversation (mylocaltrade://messages/<id>), falling back
@@ -1579,46 +1501,59 @@ export async function sendNewMessageEmail(opts: {
     typeof opts.serviceRequired === "string" && opts.serviceRequired.trim().length > 0
       ? opts.serviceRequired.trim().slice(0, 80)
       : null;
-  const safeService = trimmedService ? escapeHtml(trimmedService) : null;
   const safeSenderHeader = sanitizeHeaderValue(opts.senderName);
   const safeServiceHeader = trimmedService ? sanitizeHeaderValue(trimmedService) : "";
   const subjectBase =
     opts.senderRole === "trader"
       ? `New reply from ${safeSenderHeader}`
       : `New message from ${safeSenderHeader}`;
-  const subject = safeServiceHeader ? `${subjectBase} — Re: ${safeServiceHeader}` : subjectBase;
-  const preheader = safeService
-    ? `${safeSender} replied about your ${safeService} enquiry`
-    : `${safeSender} sent you a message on MyLocalTrade`;
-  const contextLine = safeService
-    ? `<p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0 0 16px;">Re: <strong style="color: #E5E7EB;">${safeService}</strong></p>`
-    : "";
-  const html = emailShell({
-    title: "New message on MyLocalTrade",
-    preheader,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      ${contextLine}
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-        You have a new message from <strong style="color: #00B4D8;">${safeSender}</strong> on MyLocalTrade.
-      </p>
-      <div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 24px;">
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safePreview}</p>
-      </div>
-      <div style="text-align: center; margin-bottom: 8px;">
-        <a href="${openUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
-          Open conversation
-        </a>
-      </div>
-      <p style="color: #6B7280; font-size: 12px; line-height: 1.6; margin: 24px 0 0; text-align: center;">
-        For your safety, never share your bank details, and don't pay for any work before you've verified the trader and agreed what's being done.
-      </p>`,
+  const subject = safeServiceHeader
+    ? `${subjectBase} — Re: ${safeServiceHeader}`
+    : subjectBase;
+  // The RECIPIENT's role is the opposite side of the conversation — trusted
+  // server-side data, never a client-supplied value.
+  const recipientVariant: EmailVariant =
+    opts.senderRole === "trader" ? "customer" : "trader";
+  const blocks: EmailBlock[] = [{ kind: "greeting", name: opts.toName }];
+  if (trimmedService) {
+    blocks.push({
+      kind: "html",
+      html: `Re: ${strongText(trimmedService)}`,
+      text: `Re: ${trimmedService}`,
+      muted: true,
+    });
+  }
+  blocks.push(
+    {
+      kind: "html",
+      html: `You have a new message from ${em(opts.senderName)} on MyLocalTrade.`,
+      text: `You have a new message from ${opts.senderName} on MyLocalTrade.`,
+    },
+    { kind: "panel", text: trimmed },
+    { kind: "cta", label: "Open conversation", url: openUrl },
+  );
+  if (recipientVariant === "customer") {
+    blocks.push({
+      kind: "paragraph",
+      text: "For your safety, never share your bank details, and don't pay for any work before you've verified the trader and agreed what's being done.",
+      muted: true,
+    });
+  }
+  const { html, text } = renderMlt({
+    variant: recipientVariant,
+    heading: "New message on MyLocalTrade",
+    preheader: trimmedService
+      ? `${opts.senderName} replied about your ${trimmedService} enquiry`
+      : `${opts.senderName} sent you a message on MyLocalTrade`,
+    blocks,
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject,
     html,
+    text,
     tag: `new-message[conv=${opts.conversationId}]`,
   });
 }
@@ -1635,37 +1570,38 @@ export async function sendWorkMarkedCompleteEmail(opts: {
   jobReference?: string | null;
   conversationId: number;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeBusiness = escapeHtml(opts.businessName);
-  const refText = opts.jobReference ? ` (job ${escapeHtml(opts.jobReference)})` : "";
+  const refText = opts.jobReference ? ` (job ${opts.jobReference})` : "";
   const openUrl = `${getOpenLinkBase()}/open?c=${opts.conversationId}`;
-  const html = emailShell({
-    title: "Work marked as completed",
-    preheader: `${safeBusiness} marked your job as complete — please review and confirm.`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-        <strong style="color: #00B4D8;">${safeBusiness}</strong> has marked the work on your job${refText} as <strong>completed</strong>.
-      </p>
-      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 20px;">
-        Please take a moment to:
-      </p>
-      <ul style="color: #E5E7EB; font-size: 15px; line-height: 1.8; margin: 0 0 24px; padding-left: 20px;">
-        <li><strong>Confirm completion</strong> if you're happy the work is done</li>
-        <li><strong>Reply in the conversation</strong> if something isn't right</li>
-        <li><strong>Leave a review</strong> once you've confirmed — it helps other customers</li>
-      </ul>
-      <div style="text-align: center; margin-bottom: 8px;">
-        <a href="${openUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
-          Review the job
-        </a>
-      </div>`,
+  const { html, text } = renderMlt({
+    variant: "customer",
+    heading: "Work marked as completed",
+    preheader: `${opts.businessName} marked your job as complete — please review and confirm.`,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "html",
+        html: `${em(opts.businessName)} has marked the work on your job${escapeEmailHtml(refText)} as ${strongText("completed")}.`,
+        text: `${opts.businessName} has marked the work on your job${refText} as completed.`,
+      },
+      {
+        kind: "list",
+        title: "Please take a moment to:",
+        items: [
+          "Confirm completion if you're happy the work is done",
+          "Reply in the conversation if something isn't right",
+          "Leave a review once you've confirmed — it helps other customers",
+        ],
+      },
+      { kind: "cta", label: "Review the job", url: openUrl },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: `Work marked as completed${opts.jobReference ? ` — job ${sanitizeHeaderValue(opts.jobReference)}` : ""}`,
     html,
+    text,
     tag: `work-marked-complete[conv=${opts.conversationId}]`,
   });
 }
@@ -1678,31 +1614,32 @@ export async function sendReviewInviteEmail(opts: {
   traderProfileId: number;
   conversationId: number;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const safeBusiness = escapeHtml(opts.businessName);
   const openUrl = `${getOpenLinkBase()}/open?c=${opts.conversationId}`;
-  const html = emailShell({
-    title: "How did it go?",
-    preheader: `Leave a review for ${safeBusiness} on MyLocalTrade.`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-        Thanks for confirming your job with <strong style="color: #00B4D8;">${safeBusiness}</strong> is complete.
-      </p>
-      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
-        Your review is public and helps other customers hire with confidence. It only takes a minute.
-      </p>
-      <div style="text-align: center; margin-bottom: 8px;">
-        <a href="${openUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
-          Leave a review
-        </a>
-      </div>`,
+  const { html, text } = renderMlt({
+    variant: "customer",
+    heading: "How did it go?",
+    preheader: `Leave a review for ${opts.businessName} on MyLocalTrade.`,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "html",
+        html: `Thanks for confirming your job with ${em(opts.businessName)} is complete.`,
+        text: `Thanks for confirming your job with ${opts.businessName} is complete.`,
+      },
+      {
+        kind: "paragraph",
+        text: "Your review is public and helps other customers hire with confidence. It only takes a minute.",
+      },
+      { kind: "cta", label: "Leave a review", url: openUrl },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: `How did it go with ${sanitizeHeaderValue(opts.businessName)}?`,
     html,
+    text,
     tag: `review-invite[conv=${opts.conversationId}]`,
   });
 }
@@ -1720,37 +1657,49 @@ export async function sendAccountDeletionReceivedEmail(opts: {
   toName: string;
   reason?: string | null;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const reasonBlock = opts.reason
-    ? `<div style="background: #0E1A2A; border-left: 3px solid #00B4D8; padding: 14px 16px; border-radius: 8px; margin: 0 0 20px;">
-         <p style="color: #9CA3AF; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Reason you gave</p>
-         <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${escapeHtml(opts.reason)}</p>
-       </div>`
-    : "";
-  const html = emailShell({
-    title: "Account deletion request received",
+  const supportUrl = `${getOpenLinkBase()}/open?t=support`;
+  const blocks: EmailBlock[] = [
+    { kind: "greeting", name: opts.toName },
+    {
+      kind: "html",
+      html: `We've received your request to delete your MyLocalTrade account. Your account is now ${strongText("deactivated")} — you have been signed out of the app, your push notifications have been turned off, and your trader profile (if any) is no longer visible to customers.`,
+      text: "We've received your request to delete your MyLocalTrade account. Your account is now deactivated — you have been signed out of the app, your push notifications have been turned off, and your trader profile (if any) is no longer visible to customers.",
+    },
+  ];
+  if (opts.reason) {
+    blocks.push({ kind: "panel", title: "Reason you gave", text: opts.reason });
+  }
+  blocks.push(
+    {
+      kind: "paragraph",
+      text: "Our admin team will finalise the deletion once any required legal retention period has passed. We may keep a minimal record of certain data (for example, completed transactions) where the law requires us to do so.",
+    },
+    {
+      kind: "html",
+      html: `${strongText("Changed your mind?")} You can cancel this request from the app's "Delete account" screen for as long as the account is still in the deactivated state.`,
+      text: 'Changed your mind? You can cancel this request from the app\'s "Delete account" screen for as long as the account is still in the deactivated state.',
+      muted: true,
+    },
+    {
+      kind: "html",
+      html: `If you did not request this, please <a href="${supportUrl}" style="color: #12B8D4; text-decoration: underline;">contact us through the app's support form</a> immediately.`,
+      text: `If you did not request this, please contact us through the app's support form immediately: ${supportUrl}`,
+      muted: true,
+    },
+  );
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "Account deletion request received",
     preheader: "We've received your request to delete your MyLocalTrade account.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        We've received your request to delete your MyLocalTrade account. Your account is now <strong>deactivated</strong> — you have been signed out of the app, your push notifications have been turned off, and your trader profile (if any) is no longer visible to customers.
-      </p>
-      ${reasonBlock}
-      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">
-        Our admin team will finalise the deletion once any required legal retention period has passed. We may keep a minimal record of certain data (for example, completed transactions) where the law requires us to do so.
-      </p>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 8px;">
-        <strong style="color: #F9FAFB;">Changed your mind?</strong> You can cancel this request from the app's "Delete account" screen for as long as the account is still in the deactivated state.
-      </p>
-      <p style="color: #6B7280; font-size: 13px; line-height: 1.6; margin: 16px 0 0;">
-        If you did not request this, please <a href="${getOpenLinkBase()}/open?t=support" style="color: #00B4D8;">contact us through the app's support form</a> immediately.
-      </p>`,
+    blocks,
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: "Your MyLocalTrade account deletion request",
     html,
+    text,
     tag: "account-deletion-received",
   });
 }
@@ -1759,24 +1708,30 @@ export async function sendAccountDeletionCancelledEmail(opts: {
   toEmail: string;
   toName: string;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const html = emailShell({
-    title: "Account deletion cancelled",
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "Account deletion cancelled",
     preheader: "Your MyLocalTrade account has been restored.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        Welcome back. Your MyLocalTrade account is no longer scheduled for deletion and you can sign in again.
-      </p>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
-        Note: if you are a trader, your profile will only return to public listings once your verification status and subscription are still in good standing.
-      </p>`,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "paragraph",
+        text: "Welcome back. Your MyLocalTrade account is no longer scheduled for deletion and you can sign in again.",
+      },
+      {
+        kind: "paragraph",
+        text: "Note: if you are a trader, your profile will only return to public listings once your verification status and subscription are still in good standing.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: ACCOUNT_REASON_LINE },
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: "Your MyLocalTrade account has been restored",
     html,
+    text,
     tag: "account-deletion-cancelled",
   });
 }
@@ -1785,27 +1740,36 @@ export async function sendAccountDeletionCompletedEmail(opts: {
   toEmail: string;
   toName: string;
 }): Promise<void> {
-  const safeName = escapeHtml(opts.toName);
-  const html = emailShell({
-    title: "Your account has been deleted",
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "Your account has been deleted",
     preheader: "Your MyLocalTrade account has now been permanently deleted.",
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi ${safeName},</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
-        This is to confirm that your MyLocalTrade account has now been <strong>permanently deleted</strong>. Your personal details have been removed from our systems and your account can no longer be signed in to or restored.
-      </p>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
-        Where the law requires it, we may retain a minimal record of certain data (for example, completed transactions) for the applicable retention period.
-      </p>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">
-        You're welcome back any time — you can create a new account with this email address whenever you like. Thank you for having been part of MyLocalTrade.
-      </p>`,
+    blocks: [
+      { kind: "greeting", name: opts.toName },
+      {
+        kind: "html",
+        html: `This is to confirm that your MyLocalTrade account has now been ${strongText("permanently deleted")}. Your personal details have been removed from our systems and your account can no longer be signed in to or restored.`,
+        text: "This is to confirm that your MyLocalTrade account has now been permanently deleted. Your personal details have been removed from our systems and your account can no longer be signed in to or restored.",
+      },
+      {
+        kind: "paragraph",
+        text: "Where the law requires it, we may retain a minimal record of certain data (for example, completed transactions) for the applicable retention period.",
+        muted: true,
+      },
+      {
+        kind: "paragraph",
+        text: "You're welcome back any time — you can create a new account with this email address whenever you like. Thank you for having been part of MyLocalTrade.",
+        muted: true,
+      },
+    ],
+    footer: {},
   });
   await dispatchEmail({
     category: "notifications",
     to: { email: opts.toEmail, name: opts.toName },
     subject: "Your MyLocalTrade account has been permanently deleted",
     html,
+    text,
     tag: "account-deletion-completed",
   });
 }
@@ -1817,25 +1781,36 @@ export async function sendAdminAccountDeletionAlertEmail(opts: {
   reason?: string | null;
 }): Promise<void> {
   const SUPPORT_EMAIL = "contact@serviceproviderltd.co.uk";
-  const safeEmail = escapeHtml(opts.userEmail);
-  const safeName = escapeHtml(opts.userFullName);
-  const safeRole = escapeHtml(opts.userRole);
-  const safeReason = opts.reason ? escapeHtml(opts.reason) : "(none provided)";
-  const html = emailShell({
-    title: "New account deletion request",
-    preheader: `${safeName} has requested account deletion`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">A user has just requested account deletion. The account is already locked and the trader profile (if any) is hidden from customers.</p>
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px; width: 110px;">Name</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeName}</td></tr>
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Email</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeEmail}</td></tr>
-        <tr><td style="padding: 8px 0; color: #6B7280; font-size: 13px;">Role</td><td style="padding: 8px 0; color: #E5E7EB; font-size: 13px;">${safeRole}</td></tr>
-      </table>
-      <div style="background: #0E1A2A; border-left: 3px solid #F59E0B; padding: 14px 16px; border-radius: 8px; margin: 0 0 16px;">
-        <p style="color: #FCD34D; font-size: 12px; font-weight: 600; margin: 0 0 6px; text-transform: uppercase; letter-spacing: 0.5px;">Reason</p>
-        <p style="color: #E5E7EB; font-size: 14px; line-height: 1.6; margin: 0; white-space: pre-wrap;">${safeReason}</p>
-      </div>
-      <p style="color: #9CA3AF; font-size: 14px; line-height: 1.6; margin: 0;">Open the admin console → Account deletions to review and finalise the request.</p>`,
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: "New account deletion request",
+    preheader: `${opts.userFullName} has requested account deletion`,
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "A user has just requested account deletion. The account is already locked and the trader profile (if any) is hidden from customers.",
+      },
+      {
+        kind: "rows",
+        rows: [
+          ["Name", opts.userFullName],
+          ["Email", opts.userEmail],
+          ["Role", opts.userRole],
+        ],
+      },
+      {
+        kind: "panel",
+        title: "Reason",
+        text: opts.reason || "(none provided)",
+        tone: "warning",
+      },
+      {
+        kind: "paragraph",
+        text: "Open the admin console → Account deletions to review and finalise the request.",
+        muted: true,
+      },
+    ],
+    footer: { reasonLine: "Internal operations alert · MyLocalTrade admin" },
   });
   await dispatchEmail({
     category: "contact",
@@ -1843,6 +1818,7 @@ export async function sendAdminAccountDeletionAlertEmail(opts: {
     from: { email: FROM_EMAIL, name: "MyLocalTrade Account Deletions" },
     subject: `[ACCOUNT DELETION] ${sanitizeHeaderValue(opts.userEmail)}`,
     html,
+    text,
     headers: {
       "X-MyLocalTrade-Type": "account-deletion-admin-alert",
     },
@@ -1861,6 +1837,8 @@ export async function sendAdminAccountDeletionAlertEmail(opts: {
  * stored server-side) through the /open?j= deep-link bounce page into the
  * app's join screen. Account-setup mail → category "verification": no
  * unsubscribe header, same policy as OTP/verification email.
+ *
+ * Recipient has no account yet → neutral variant (never guess a role).
  */
 export async function sendCompanyInviteEmail(opts: {
   toEmail: string;
@@ -1869,37 +1847,37 @@ export async function sendCompanyInviteEmail(opts: {
   token: string;
   expiresInDays: number;
 }): Promise<void> {
-  const safeBusiness = escapeHtml(opts.businessName);
-  const safeInviter = escapeHtml(opts.inviterName);
   const joinUrl = `${getOpenLinkBase()}/open?j=${encodeURIComponent(opts.token)}`;
-  const html = emailShell({
-    title: `Join ${safeBusiness} on MyLocalTrade`,
-    preheader: `${safeInviter} has invited you to join ${safeBusiness}'s team.`,
-    bodyHtml: `
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">Hi,</p>
-      <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 20px;">
-        <strong style="color: #00B4D8;">${safeInviter}</strong> has invited you to join
-        <strong style="color: #00B4D8;">${safeBusiness}</strong> as a team member on MyLocalTrade.
-      </p>
-      <p style="color: #E5E7EB; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
-        Tap the button below on your phone to create your own login and start seeing the
-        business's enquiries and messages.
-      </p>
-      <div style="text-align: center; margin-bottom: 8px;">
-        <a href="${joinUrl}" style="display: inline-block; background: #00B4D8; color: #0B1120; font-weight: 700; font-size: 15px; padding: 12px 32px; border-radius: 12px; text-decoration: none;">
-          Join the team
-        </a>
-      </div>
-      <p style="color: #6B7280; font-size: 12px; line-height: 1.6; margin: 24px 0 0; text-align: center;">
-        This invitation expires in ${opts.expiresInDays} days and can only be used once.
-        If you weren't expecting it, you can safely ignore this email.
-      </p>`,
+  const { html, text } = renderMlt({
+    variant: "neutral",
+    heading: `Join ${opts.businessName} on MyLocalTrade`,
+    preheader: `${opts.inviterName} has invited you to join ${opts.businessName}'s team.`,
+    blocks: [
+      { kind: "greeting", name: "" },
+      {
+        kind: "html",
+        html: `${em(opts.inviterName)} has invited you to join ${em(opts.businessName)} as a team member on MyLocalTrade.`,
+        text: `${opts.inviterName} has invited you to join ${opts.businessName} as a team member on MyLocalTrade.`,
+      },
+      {
+        kind: "paragraph",
+        text: "Tap the button below on your phone to create your own login and start seeing the business's enquiries and messages.",
+      },
+      { kind: "cta", label: "Join the team", url: joinUrl },
+      {
+        kind: "paragraph",
+        text: `This invitation expires in ${opts.expiresInDays} days and can only be used once. If you weren't expecting it, you can safely ignore this email.`,
+        muted: true,
+      },
+    ],
+    footer: {},
   });
   await dispatchEmail({
     category: "verification",
     to: { email: opts.toEmail },
     subject: `${sanitizeHeaderValue(opts.inviterName)} invited you to join ${sanitizeHeaderValue(opts.businessName)} on MyLocalTrade`,
     html,
+    text,
     tag: "company-invite",
   });
 }

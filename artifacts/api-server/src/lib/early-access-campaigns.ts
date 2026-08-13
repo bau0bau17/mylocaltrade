@@ -7,6 +7,13 @@ import {
   type EarlyAccessCampaign,
   type EarlyAccessCampaignType,
 } from "@workspace/db/schema";
+import {
+  renderBrandedEmail,
+  escapeEmailHtml,
+  type EmailBlock,
+  type EmailVariant,
+} from "./email-shell";
+import { getEmailLogoUrl } from "./email";
 
 /**
  * Campaign engine helpers (Phase 2B): server-side recipient eligibility,
@@ -422,15 +429,6 @@ export function validateCampaignContent(c: EarlyAccessCampaign): string[] {
 // Branded template
 // ---------------------------------------------------------------------------
 
-function escapeHtml(input: string): string {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
 /** First word of the stored name, for the greeting. */
 export function firstNameOf(fullName: string): string {
   const first = fullName.trim().split(/\s+/)[0] ?? "";
@@ -478,41 +476,20 @@ export function renderCampaignEmail(
   opts: RenderOptions,
 ): { html: string; text: string } {
   const publicBase = "https://mylocaltrade.co.uk";
-  const greeting = opts.brevoMergeTags
+  const greetingHtml = opts.brevoMergeTags
     ? `Hi {{ contact.FIRSTNAME | default : "there" }},`
-    : `Hi ${escapeHtml(opts.greetingName || "there")},`;
+    : `Hi ${escapeEmailHtml(opts.greetingName || "there")},`;
   const greetingText = opts.brevoMergeTags
     ? `Hi {{ contact.FIRSTNAME | default : "there" }},`
     : `Hi ${opts.greetingName || "there"},`;
-  const unsubscribeHref = opts.brevoMergeTags
+  const unsubscribeUrl = opts.brevoMergeTags
     ? `${publicBase}/unsubscribe?token={{ contact.EA_UNSUB_TOKEN }}`
-    : escapeHtml(opts.unsubscribeUrl ?? `${publicBase}/unsubscribe`);
-
-  const paragraphsHtml = campaign.bodyText
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map(
-      (p) =>
-        `<p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`,
-    )
-    .join("\n    ");
-
-  const testBanner = opts.isTest
-    ? `<div style="background: #7C2D12; color: #FDBA74; font-size: 13px; font-weight: 700; text-align: center; padding: 8px; border-radius: 8px; margin-bottom: 20px;">TEST EMAIL — not sent to the campaign audience</div>`
-    : "";
-
-  // Brevo requires an unsubscribe mechanism in campaign HTML; the mirrored
-  // native tag keeps their one-click/List-Unsubscribe support intact while
-  // our signed link drives the local suppression state directly.
-  const brevoNativeUnsub = opts.brevoMergeTags
-    ? ` · <a href="{{ unsubscribe }}" style="color: #6B7280; text-decoration: underline;">One-click unsubscribe</a>`
-    : "";
+    : opts.unsubscribeUrl ?? `${publicBase}/unsubscribe`;
 
   const isOutreach = opts.audience === "outreach";
   const outreachSourceHtml = opts.brevoMergeTags
     ? `{{ contact.OC_SOURCE | default : "publicly available business sources" }}`
-    : escapeHtml(opts.sourceNote || "publicly available business sources");
+    : escapeEmailHtml(opts.sourceNote || "publicly available business sources");
   const outreachSourceText = opts.brevoMergeTags
     ? `{{ contact.OC_SOURCE | default : "publicly available business sources" }}`
     : opts.sourceNote || "publicly available business sources";
@@ -525,59 +502,61 @@ export function renderCampaignEmail(
     ? `This is a business message from MyLocalTrade. We obtained your business contact details from: ${outreachSourceText}. Our Privacy Policy explains what we hold and why. You have the right to object to direct marketing at any time — use the unsubscribe link below or contact us, and we will stop immediately.`
     : `You're receiving this because you joined the MyLocalTrade Early Access list and confirmed your email address.`;
 
-  const safeCtaUrl = escapeHtml(campaign.ctaUrl);
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(campaign.subject)}</title>
-</head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0B1120; margin: 0; padding: 40px 20px;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(campaign.previewText)}</div>
-  <div style="max-width: 560px; margin: 0 auto; background: #111827; border-radius: 16px; padding: 40px; border: 1px solid #1F2937;">
-    ${testBanner}
-    <div style="text-align: center; margin-bottom: 28px;">
-      <h1 style="color: #F9FAFB; font-size: 22px; font-weight: 700; margin: 0;">MyLocalTrade</h1>
-    </div>
-    <h2 style="color: #F9FAFB; font-size: 20px; font-weight: 700; margin: 0 0 16px;">${escapeHtml(campaign.heading)}</h2>
-    <p style="color: #E5E7EB; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">${greeting}</p>
-    ${paragraphsHtml}
-    <div style="text-align: center; margin: 28px 0;">
-      <a href="${safeCtaUrl}" style="display: inline-block; background: #00B4D8; color: #06121F; font-size: 16px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 10px;">${escapeHtml(campaign.ctaLabel)}</a>
-    </div>
-    <p style="color: #9CA3AF; font-size: 13px; line-height: 1.6; margin: 0 0 24px;">
-      If the button doesn't work, copy and paste this address into your browser:<br>
-      <span style="color: #6B7280; word-break: break-all;">${safeCtaUrl}</span>
-    </p>
-    <hr style="border: none; border-top: 1px solid #1F2937; margin: 0 0 20px;">
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0 0 8px;">
-      ${receivingHtml}
-    </p>
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0 0 8px;">
-      <a href="${unsubscribeHref}" style="color: #6B7280; text-decoration: underline;">Unsubscribe</a>${brevoNativeUnsub} · <a href="${publicBase}/privacy-policy" style="color: #6B7280; text-decoration: underline;">Privacy Policy</a> · <a href="${publicBase}/contact" style="color: #6B7280; text-decoration: underline;">Contact us</a>
-    </p>
-    <p style="color: #6B7280; font-size: 12px; text-align: center; margin: 0;">
-      MyLocalTrade · Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ
-    </p>
-  </div>
-</body>
-</html>`;
+  // Audience → footer variant, from trusted server-side campaign data only:
+  // outreach lists contain business contacts (trader tagline); the Early
+  // Access list mixes customers and traders, so it stays neutral.
+  const variant: EmailVariant = isOutreach ? "trader" : "neutral";
 
-  const text = `${opts.isTest ? "[TEST EMAIL]\n\n" : ""}${campaign.heading}
+  const paragraphBlocks: EmailBlock[] = campaign.bodyText
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => ({
+      kind: "raw" as const,
+      html: `<p style="color: #C6D4E7; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">${escapeEmailHtml(p).replace(/\n/g, "<br>")}</p>`,
+      text: p,
+    }));
 
-${greetingText}
+  const blocks: EmailBlock[] = [
+    // Greeting goes through a raw block: in bulk mode it carries the Brevo
+    // FIRSTNAME merge tag, which must not be HTML-escaped.
+    {
+      kind: "raw",
+      html: `<p style="color: #C6D4E7; font-size: 16px; line-height: 1.6; margin: 0 0 16px;">${greetingHtml}</p>`,
+      text: greetingText,
+    },
+    ...paragraphBlocks,
+    { kind: "cta", label: campaign.ctaLabel, url: campaign.ctaUrl },
+    { kind: "linkFallback", url: campaign.ctaUrl },
+  ];
 
-${campaign.bodyText.trim()}
-
-${campaign.ctaLabel}: ${campaign.ctaUrl}
-
-—
-${receivingText}
-Unsubscribe: ${opts.brevoMergeTags ? `${publicBase}/unsubscribe?token={{ contact.EA_UNSUB_TOKEN }}` : (opts.unsubscribeUrl ?? `${publicBase}/unsubscribe`)}
-Privacy Policy: ${publicBase}/privacy-policy · Contact: ${publicBase}/contact
-MyLocalTrade · Service Provider LTD · Company No: 15830141 · 71-75 Shelton Street, London, WC2H 9JQ`;
+  const { html, text } = renderBrandedEmail({
+    variant,
+    heading: campaign.heading,
+    title: campaign.subject,
+    preheader: campaign.previewText,
+    blocks,
+    logoUrl: getEmailLogoUrl(),
+    bannerHtml: opts.isTest
+      ? `<div style="background-color: #2A1F0E; color: #F5B83D; font-size: 13px; font-weight: 700; text-align: center; padding: 8px; border-radius: 8px; margin-bottom: 20px;">TEST EMAIL — not sent to the campaign audience</div>`
+      : undefined,
+    bannerText: opts.isTest ? "[TEST EMAIL]" : undefined,
+    footer: {
+      rawReason: { html: receivingHtml, text: receivingText },
+      unsubscribe: { url: unsubscribeUrl, raw: opts.brevoMergeTags },
+      // Brevo requires an unsubscribe mechanism in campaign HTML; the
+      // mirrored native tag keeps their one-click/List-Unsubscribe support
+      // intact while our signed link drives local suppression directly.
+      extraLinkHtml: opts.brevoMergeTags
+        ? ` · <a href="{{ unsubscribe }}" style="color: #8FA3BF; text-decoration: underline;">One-click unsubscribe</a>`
+        : undefined,
+      marketingLinks: {
+        privacyUrl: `${publicBase}/privacy-policy`,
+        contactUrl: `${publicBase}/contact`,
+      },
+      companyIdentity: true,
+    },
+  });
 
   return { html, text };
 }
