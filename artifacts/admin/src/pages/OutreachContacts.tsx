@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, downloadAuthed } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -170,6 +170,24 @@ const CATEGORY_LABELS: Record<string, string> = {
   OPTED_OUT: "Opted out",
 };
 
+/**
+ * The admin app is dark-themed but the shared DialogContent forces a white
+ * surface; outreach dialogs opt back into the theme tokens (same surface as
+ * AlertDialogContent) so they match the rest of the Admin UI.
+ */
+const DARK_DIALOG_CLASS = "bg-background text-foreground border-border";
+
+// The shared DialogContent/DialogTitle also force light colours via INLINE
+// styles (which beat any class). They spread `props.style` last, so these
+// call-site overrides restore the theme tokens without touching the shared
+// components. Inputs/textareas/selects are already theme-forced globally in
+// index.css with !important, which outranks their inline styles.
+const DARK_DIALOG_STYLE: CSSProperties = {
+  backgroundColor: "hsl(var(--background))",
+  color: "hsl(var(--foreground))",
+};
+const DARK_TITLE_STYLE: CSSProperties = { color: "hsl(var(--foreground))" };
+
 const IMPORT_STATUS_LABELS: Record<string, string> = {
   accepted: "Will import",
   invalid: "Invalid",
@@ -299,7 +317,7 @@ function FormField({
 }) {
   return (
     <div className="space-y-1">
-      <Label htmlFor={`oc-${name}`} className="text-slate-900 text-xs">
+      <Label htmlFor={`oc-${name}`} className="text-xs">
         {label}
       </Label>
       {textarea ? (
@@ -308,7 +326,7 @@ function FormField({
           value={form[name] ?? ""}
           onChange={(e) => setForm({ ...form, [name]: e.target.value })}
           placeholder={placeholder}
-          className="text-slate-900 min-h-[60px]"
+          className="min-h-[60px]"
           disabled={disabled}
           data-testid={`input-${name}`}
         />
@@ -319,7 +337,6 @@ function FormField({
           value={form[name] ?? ""}
           onChange={(e) => setForm({ ...form, [name]: e.target.value })}
           placeholder={placeholder}
-          className="text-slate-900"
           disabled={disabled}
           data-testid={`input-${name}`}
         />
@@ -339,15 +356,15 @@ function ContactFormFields({
 }) {
   const route = form.lawful_route;
   return (
-    <div className="space-y-3 text-slate-900">
+    <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <FormField form={form} setForm={setForm} name="email" label="Email *" disabled={emailLocked} />
         <FormField form={form} setForm={setForm} name="contact_name" label="Contact name" />
         <FormField form={form} setForm={setForm} name="company_name" label="Company name" />
         <div className="space-y-1">
-          <Label className="text-slate-900 text-xs">Business type *</Label>
+          <Label className="text-xs">Business type *</Label>
           <Select value={form.business_type} onValueChange={(v) => setForm({ ...form, business_type: v })}>
-            <SelectTrigger className="text-slate-900" data-testid="select-business-type"><SelectValue /></SelectTrigger>
+            <SelectTrigger data-testid="select-business-type"><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(BUSINESS_TYPE_LABELS).map(([value, label]) => (
                 <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -363,38 +380,38 @@ function ContactFormFields({
         <FormField form={form} setForm={setForm} name="country" label="Country *" />
       </div>
       <div className="space-y-1">
-        <Label className="text-slate-900 text-xs">Lawful route *</Label>
+        <Label className="text-xs">Lawful route *</Label>
         <Select value={form.lawful_route} onValueChange={(v) => setForm({ ...form, lawful_route: v })}>
-          <SelectTrigger className="text-slate-900" data-testid="select-lawful-route"><SelectValue /></SelectTrigger>
+          <SelectTrigger data-testid="select-lawful-route"><SelectValue /></SelectTrigger>
           <SelectContent>
             {Object.entries(ROUTE_LABELS).map(([value, label]) => (
               <SelectItem key={value} value={value}>{label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           Eligibility is decided by the server from the evidence below — a route claim without
           sufficient evidence is stored but BLOCKED.
         </p>
       </div>
       {route === "confirmed_consent" && (
-        <div className="rounded-md border border-slate-200 p-3 space-y-3">
-          <div className="text-xs font-medium text-slate-900">Confirmed consent evidence</div>
+        <div className="rounded-md border p-3 space-y-3">
+          <div className="text-xs font-medium">Confirmed consent evidence</div>
           <FormField form={form} setForm={setForm} name="consent_date" label="Consent date * (YYYY-MM-DD)" type="date" />
           <FormField form={form} setForm={setForm} name="consent_evidence" label="Consent evidence * (what exactly they agreed to, where it is recorded)" textarea />
         </div>
       )}
       {route === "soft_opt_in" && (
-        <div className="rounded-md border border-slate-200 p-3 space-y-3">
-          <div className="text-xs font-medium text-slate-900">Soft opt-in evidence (all three required)</div>
+        <div className="rounded-md border p-3 space-y-3">
+          <div className="text-xs font-medium">Soft opt-in evidence (all three required)</div>
           <FormField form={form} setForm={setForm} name="soi_sale_evidence" label="Sale / negotiation evidence *" textarea />
           <FormField form={form} setForm={setForm} name="soi_relevance_evidence" label="Similar products/services relevance *" textarea />
           <FormField form={form} setForm={setForm} name="soi_opt_out_evidence" label="Opt-out offered at collection *" textarea />
         </div>
       )}
       {route === "corporate_b2b" && (
-        <div className="rounded-md border border-slate-200 p-3 space-y-3">
-          <div className="text-xs font-medium text-slate-900">
+        <div className="rounded-md border p-3 space-y-3">
+          <div className="text-xs font-medium">
             Corporate B2B evidence (Ltd/LLP + company number + all three required)
           </div>
           <FormField form={form} setForm={setForm} name="b2b_company_evidence" label="Corporate status verification *" textarea />
@@ -444,6 +461,17 @@ export default function OutreachContacts() {
     queryKey: ["admin", "outreach-contacts", "stats"],
     queryFn: () => api<Stats>("/api/admin/outreach-contacts/stats"),
   });
+
+  // Server-reported sending status (same endpoint the Campaigns page uses) —
+  // the disabled warning must reflect the server flag, never a client guess.
+  const { data: campaignsMeta } = useQuery({
+    queryKey: ["admin", "early-access", "campaigns", "list"],
+    queryFn: () =>
+      api<{ quota?: { brevoSending?: { enabled: boolean; reason?: string | null } } }>(
+        "/api/admin/early-access/campaigns",
+      ),
+  });
+  const brevoSending = campaignsMeta?.quota?.brevoSending;
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["admin", "outreach-contacts"] });
@@ -521,6 +549,19 @@ export default function OutreachContacts() {
           </Button>
         </div>
       </div>
+
+      {brevoSending && !brevoSending.enabled && (
+        <Alert
+          className="border-transparent bg-[hsl(var(--warning-tint,var(--muted)))] text-[hsl(var(--warning,var(--foreground)))]"
+          data-testid="notice-sending-disabled"
+        >
+          <AlertDescription>
+            Real sending is disabled
+            {brevoSending.reason ? ` (${brevoSending.reason})` : ""}. Contacts can be
+            imported and managed, but no outreach email can be sent.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard label="Total" value={stats?.total} testId="stat-total" />
@@ -651,10 +692,10 @@ export default function OutreachContacts() {
 
       {/* Add contact dialog */}
       <Dialog open={addOpen} onOpenChange={(open) => { if (!addMutation.isPending) setAddOpen(open); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-add-contact">
+        <DialogContent className={`max-w-2xl max-h-[85vh] overflow-y-auto ${DARK_DIALOG_CLASS}`} style={DARK_DIALOG_STYLE} data-testid="dialog-add-contact">
           <DialogHeader>
-            <DialogTitle>Add outreach contact</DialogTitle>
-            <DialogDescription className="text-slate-500">
+            <DialogTitle style={DARK_TITLE_STYLE}>Add outreach contact</DialogTitle>
+            <DialogDescription>
               Record where and how the address was obtained, and the lawful route with its
               evidence. The server decides eligibility.
             </DialogDescription>
@@ -772,15 +813,15 @@ function ImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!busy && !o) { reset(); onClose(); } }}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" data-testid="dialog-import">
+      <DialogContent className={`max-w-3xl max-h-[85vh] overflow-y-auto ${DARK_DIALOG_CLASS}`} style={DARK_DIALOG_STYLE} data-testid="dialog-import">
         <DialogHeader>
-          <DialogTitle>Import contacts from CSV</DialogTitle>
-          <DialogDescription className="text-slate-500">
+          <DialogTitle style={DARK_TITLE_STYLE}>Import contacts from CSV</DialogTitle>
+          <DialogDescription>
             Step 1: choose the file. Step 2: review the per-row validation. Step 3: import.
             Nothing is saved until you press Import. Use the CSV template for the exact columns.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 text-slate-900">
+        <div className="space-y-4">
           {!committed && (
             <div className="flex items-center gap-2 flex-wrap">
               <input
@@ -797,7 +838,7 @@ function ImportDialog({
               <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={busy}>
                 <FileUp className="w-4 h-4 mr-1.5" /> Choose CSV file
               </Button>
-              {fileName && <span className="text-sm text-slate-600">{fileName}</span>}
+              {fileName && <span className="text-sm text-muted-foreground">{fileName}</span>}
               <Button
                 onClick={() => validateMutation.mutate(csvText)}
                 disabled={!csvText || busy}
@@ -809,21 +850,21 @@ function ImportDialog({
           )}
 
           {summary && (
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm space-y-1" data-testid="import-summary">
+            <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1" data-testid="import-summary">
               {committed ? (
-                <div className="font-semibold text-slate-900">
+                <div className="font-semibold">
                   Imported {committed.inserted} contact{committed.inserted === 1 ? "" : "s"}.
                 </div>
               ) : (
-                <div className="font-semibold text-slate-900">
+                <div className="font-semibold">
                   {summary.accepted} of {summary.total} rows will be imported.
                 </div>
               )}
-              <div className="text-slate-600">
+              <div className="text-muted-foreground">
                 Eligible: {summary.acceptedEligible} · Saved but blocked: {summary.acceptedBlocked} · Invalid: {summary.invalid} · Duplicates: {summary.duplicates} · On suppression list: {summary.suppressed}
               </div>
               {summary.acceptedBlocked > 0 && (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   Blocked rows are stored for the audit trail but can never receive email
                   unless their evidence is edited to meet a lawful route.
                 </p>
@@ -832,9 +873,9 @@ function ImportDialog({
           )}
 
           {results.length > 0 && (
-            <div className="max-h-72 overflow-y-auto rounded-md border border-slate-200">
+            <div className="max-h-72 overflow-y-auto rounded-md border">
               <table className="w-full text-xs">
-                <thead className="bg-slate-100 text-slate-600 uppercase sticky top-0">
+                <thead className="bg-muted/50 text-muted-foreground uppercase sticky top-0">
                   <tr>
                     <th className="text-left px-3 py-2 font-medium">Row</th>
                     <th className="text-left px-3 py-2 font-medium">Email</th>
@@ -842,7 +883,7 @@ function ImportDialog({
                     <th className="text-left px-3 py-2 font-medium">Detail</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-900">
+                <tbody className="divide-y divide-border">
                   {results.map((row) => (
                     <tr key={row.rowNumber} data-testid={`import-row-${row.rowNumber}`}>
                       <td className="px-3 py-2 tabular-nums">{row.rowNumber}</td>
@@ -850,12 +891,12 @@ function ImportDialog({
                       <td className="px-3 py-2 whitespace-nowrap">
                         {IMPORT_STATUS_LABELS[row.status] ?? row.status}
                         {row.status === "accepted" && row.eligibility && (
-                          <span className={row.eligibility.status === "eligible" ? " text-emerald-700" : " text-red-700"}>
+                          <span className={row.eligibility.status === "eligible" ? " text-[hsl(var(--success))]" : " text-[hsl(var(--destructive))]"}>
                             {" "}({row.eligibility.status})
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">{row.reason}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{row.reason}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -895,8 +936,8 @@ function ImportDialog({
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
   return (
     <div className="grid grid-cols-3 gap-2 text-sm">
-      <div className="text-slate-500">{label}</div>
-      <div className="col-span-2 text-slate-900 break-words">{value || "—"}</div>
+      <div className="text-muted-foreground">{label}</div>
+      <div className="col-span-2 break-words">{value || "—"}</div>
     </div>
   );
 }
@@ -999,11 +1040,11 @@ function ContactDetailDialog({
   return (
     <>
       <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-contact-detail">
+        <DialogContent className={`max-w-2xl max-h-[85vh] overflow-y-auto ${DARK_DIALOG_CLASS}`} style={DARK_DIALOG_STYLE} data-testid="dialog-contact-detail">
           <DialogHeader>
-            <DialogTitle className="break-all">{contact?.email ?? "Contact"}</DialogTitle>
+            <DialogTitle className="break-all" style={DARK_TITLE_STYLE}>{contact?.email ?? "Contact"}</DialogTitle>
             {contact && (
-              <DialogDescription className="text-slate-500">
+              <DialogDescription>
                 {contact.eligibilityReason}
               </DialogDescription>
             )}
@@ -1012,7 +1053,7 @@ function ContactDetailDialog({
             <Skeleton className="h-40" />
           ) : editing && form ? (
             <>
-              <Alert className="border-slate-200 bg-slate-50 text-slate-700">
+              <Alert className="bg-muted/40 text-muted-foreground">
                 <AlertDescription>
                   Email is immutable (it anchors dedupe and suppression). To change the address,
                   delete this contact and import the new one with its own evidence.
@@ -1029,14 +1070,14 @@ function ContactDetailDialog({
               </DialogFooter>
             </>
           ) : (
-            <div className="space-y-4 text-slate-900">
+            <div className="space-y-4">
               <div className="flex items-center gap-2 flex-wrap">
                 <EligibilityBadge contact={contact} />
-                <Badge variant="outline" className="bg-slate-100 text-slate-700 border-transparent">
+                <Badge variant="outline" className="bg-muted text-muted-foreground border-transparent">
                   {CATEGORY_LABELS[contact.eligibilityCategory] ?? contact.eligibilityCategory}
                 </Badge>
               </div>
-              <div className="rounded-md border border-slate-200 p-3 space-y-1.5">
+              <div className="rounded-md border p-3 space-y-1.5">
                 <DetailRow label="Contact" value={contact.contactName} />
                 <DetailRow label="Company" value={contact.companyName} />
                 <DetailRow label="Business type" value={BUSINESS_TYPE_LABELS[contact.businessType] ?? contact.businessType} />
@@ -1067,12 +1108,12 @@ function ContactDetailDialog({
               </div>
               {data.events.length > 0 && (
                 <div>
-                  <div className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-1.5">History</div>
-                  <div className="max-h-40 overflow-y-auto rounded-md border border-slate-200 divide-y divide-slate-100">
+                  <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1.5">History</div>
+                  <div className="max-h-40 overflow-y-auto rounded-md border divide-y divide-border">
                     {data.events.map((event) => (
                       <div key={event.id} className="px-3 py-1.5 text-xs flex items-center justify-between gap-2">
-                        <span className="text-slate-900">{event.kind}</span>
-                        <span className="text-slate-500 whitespace-nowrap">{formatDateTime(event.createdAt)}</span>
+                        <span>{event.kind}</span>
+                        <span className="text-muted-foreground whitespace-nowrap">{formatDateTime(event.createdAt)}</span>
                       </div>
                     ))}
                   </div>
@@ -1111,9 +1152,9 @@ function ContactDetailDialog({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-1.5">
-            <Label className="text-slate-900 text-xs">Reason</Label>
+            <Label className="text-xs">Reason</Label>
             <Select value={suppressReason} onValueChange={setSuppressReason}>
-              <SelectTrigger className="text-slate-900" data-testid="select-suppress-reason"><SelectValue /></SelectTrigger>
+              <SelectTrigger data-testid="select-suppress-reason"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="objection">Objection received</SelectItem>
                 <SelectItem value="complaint">Complaint</SelectItem>
