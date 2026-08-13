@@ -1,0 +1,45 @@
+I found the same dark-theme regression in Early Access. The attached “Registration detail” modal still uses a white surface, while the Admin dashboard uses the dark navy design system. Its grey Confirmation and Consent history cards also have poor contrast.
+
+Please apply the same focused dark-theme correction used for Outreach Contacts.
+
+Required styling for Registration detail:
+
+- modal background: existing Admin dark navy/card token;
+- title and primary values: accessible light text;
+- labels, descriptions and timestamps: readable muted blue-grey;
+- Confirmation panel: dark secondary card with subtle existing border;
+- Consent history cards: dark secondary cards, not grey;
+- Copy email and other neutral controls: dark-theme button styling;
+- Suppress: existing warning/destructive styling with accessible contrast;
+- status and role badges: preserve their semantic colours but ensure text remains readable;
+- close icon, separators, borders and scroll area: consistent with the dark Admin theme;
+- long email addresses, consent versions and text must wrap correctly;
+- no white, light-grey or hardcoded light surfaces.
+
+Please also audit every dialog/modal in the Early Access and Campaigns Admin sections for the same issue, including:
+
+- Registration detail;
+- resend/suppress confirmations;
+- campaign creation;
+- campaign preview container;
+- queue confirmation;
+- pause/cancel confirmations;
+- campaign detail/activity dialogs;
+- audience selector dropdowns;
+- Desktop/Mobile preview controls.
+
+The email rendered inside a campaign preview must keep its approved Midnight email design, but the Admin modal surrounding the preview must use the dark Admin theme.
+
+Use existing theme tokens or a reusable dark Admin dialog variant. Do not modify the common component in a way that breaks unrelated pages. Do not change consent, suppression, campaign, eligibility, API or database logic.
+
+Add regression tests that verify:
+
+- Registration detail uses dark surface tokens and no inline white background;
+- Confirmation and Consent history cards use dark-theme tokens;
+- important buttons and text remain accessible;
+- the reviewed Early Access/Campaign dialogs do not fall back to white;
+- no consent, suppression or campaign behaviour changes.
+
+Run Admin tests and typecheck, perform a focused visual review, commit and push the correction, then stop and ask me to Publish again.
+
+Keep MARKETING_BREVO_ENABLED=false. Do not send, queue or modify any campaign or registration during this work.
