@@ -1,0 +1,64 @@
+The email system is displaying the wrong MyLocalTrade logo.
+
+In the real Early Access confirmation email, the header currently shows an old/different icon: a house containing tools. That is not the approved MyLocalTrade logo.
+
+The correct canonical logo is the attached image: the white crossed screwdriver and wrench on the blue rounded-square background. This is the logo already used on the MyLocalTrade website and mobile app.
+
+Please replace the incorrect email logo and ensure that this exact canonical logo—the same existing asset used by the website and mobile app—is displayed consistently in every email sent by MyLocalTrade, regardless of whether the email is triggered from the website, mobile app, admin dashboard or backend.
+
+Requirements:
+
+1. Inspect the real image URL emitted by the shared email shell, including `/api/public/logo.png`, and identify why it currently serves the old house-and-tools icon.
+2. Use the existing canonical logo asset from the website/mobile app. Do not redraw, regenerate, reinterpret or replace it with another similar icon.
+3. Establish a single canonical source for the MyLocalTrade logo so the website, mobile app and email system cannot accidentally use different versions.
+4. Ensure this logo is used in every transactional and campaign email, including:
+   - account verification and OTP emails;
+   - password reset and security emails;
+   - Early Access registration and confirmation;
+   - trader and customer notifications;
+   - leads, quotes, appointments and message notifications;
+   - team invitations;
+   - subscription and account emails;
+   - admin-triggered test emails;
+   - Early Access launch and marketing campaigns;
+   - Outreach campaigns;
+   - every other email triggered by the website, mobile app, admin portal or backend.
+5. Confirm that all 28 transactional email types and the Early Access/Outreach campaign renderers obtain the logo through the shared email shell. Remove or replace any old hardcoded email-logo references.
+6. Serve the email logo from a stable, publicly accessible HTTPS URL on our own MyLocalTrade domain. Do not use the Google RCS storage URL.
+7. The public logo endpoint must:
+   - require no authentication;
+   - return no redirect;
+   - use the correct `image/png` MIME type;
+   - return the canonical logo file;
+   - have suitable cache headers.
+8. Prevent Gmail, Outlook, Apple Mail, Brevo or a CDN from continuing to display the cached old icon. Use a new versioned URL such as `/api/public/mylocaltrade-logo-v2.png`, or an equivalent cache-safe version.
+9. Keep the approved dimensions and spacing inside the email templates. Do not change the email design, colours, copy, CTA buttons, links, legal footers or functionality.
+10. Add regression tests that verify:
+    - the shared email shell references only the canonical versioned logo URL;
+    - every email category uses that shared shell;
+    - the public endpoint serves the expected canonical file;
+    - no reference to the old house-and-tools logo remains;
+    - if practical, the served file’s SHA-256 matches the canonical repository asset.
+11. Generate desktop and mobile previews for at least:
+    - Early Access confirmation;
+    - OTP/security;
+    - trader notification;
+    - customer notification;
+    - Early Access campaign;
+    - Outreach campaign.
+12. After the code review, send only one real transactional test email to my controlled test address so I can visually confirm the correct logo in Gmail. Do not send any bulk email or campaign.
+13. Report:
+    - the exact canonical source asset used;
+    - its SHA-256;
+    - the new public HTTPS URL;
+    - all affected files and email categories;
+    - tests and review results;
+    - the commit pushed to main;
+    - whether a backend Publish is required.
+14. This should be a backend/email-template correction only. Confirm that no new EAS/TestFlight mobile build is required.
+
+Also check the sender identity separately: if Gmail’s small avatar beside the sender name is controlled through Brevo sender settings, Google profile or BIMI rather than the HTML email template, report that separately. Do not claim that changing the logo inside the email will automatically change Gmail’s sender avatar.
+
+Security note: the screenshot supplied for diagnosis contains a real Early Access confirmation URL/token. Treat it as sensitive. Verify that it is already used, expired or invalidated, and never copy the token into source code, tests, logs, commits, previews or the final report.
+
+Do not modify or regenerate the approved MyLocalTrade logo. The objective is to use exactly the same existing logo across the website, app and all emails.
