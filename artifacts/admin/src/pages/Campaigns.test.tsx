@@ -637,3 +637,127 @@ describe("Campaign detail page", () => {
     );
   });
 });
+
+describe("Campaigns dialog theming", () => {
+  beforeEach(() => {
+    apiMock.mockReset();
+    navigateMock.mockReset();
+    toastMock.mockReset();
+  });
+
+  /**
+   * The shared DialogContent forces white via BOTH classes and inline styles,
+   * so asserting classes alone is not enough — the inline style override is
+   * what actually wins in the browser. Assert both layers.
+   */
+  function expectDarkSurface(dialog: HTMLElement) {
+    expect(dialog.className).toContain("bg-background");
+    expect(dialog.className).toContain("text-foreground");
+    expect(dialog.className).not.toContain("bg-white");
+    expect(dialog.className).not.toContain("text-slate-900");
+    expect(dialog.style.backgroundColor).toBe("hsl(var(--background))");
+    expect(dialog.style.color).toBe("hsl(var(--foreground))");
+    const title = dialog.querySelector("h2");
+    expect(title).not.toBeNull();
+    expect((title as HTMLElement).style.color).toBe("hsl(var(--foreground))");
+  }
+
+  it("renders the new-campaign dialog on the dark theme surface with both audiences", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns")
+        return Promise.resolve({ campaigns: [], quota: QUOTA });
+      return Promise.resolve({});
+    });
+    renderPage(<Campaigns />);
+
+    fireEvent.click(await screen.findByTestId("button-new-campaign"));
+    const dialog = await screen.findByTestId("dialog-new-campaign");
+    expectDarkSurface(dialog);
+    // Audience selector still offers both audiences (no behaviour change).
+    expect(within(dialog).getByTestId("select-new-audience")).toBeInTheDocument();
+  });
+
+  it("renders the preview dialog dark while the email iframe keeps its own design", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns/1/preview")
+        return Promise.resolve({ html: "<html><body>Midnight email</body></html>", text: "Midnight email" });
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(detailResponse());
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    fireEvent.click(await screen.findByTestId("button-preview"));
+    const dialog = await screen.findByTestId("dialog-preview");
+    expectDarkSurface(dialog);
+
+    // Desktop/Mobile controls live on the dark surface.
+    expect(within(dialog).getByTestId("button-preview-desktop")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("button-preview-mobile")).toBeInTheDocument();
+
+    // The email itself renders in a sandboxed iframe with the exact rendered
+    // HTML — its approved design is untouched by the Admin dark theme.
+    const frame = within(dialog).getByTestId("preview-frame");
+    expect(frame.getAttribute("srcdoc")).toContain("Midnight email");
+    expect(frame.getAttribute("sandbox")).toBe("");
+  });
+
+  it("renders the queue confirmation dialog with dark summary cards, not slate/white", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns/1/audience")
+        return Promise.resolve({
+          audience: {
+            eligible: 7,
+            excludedConsentMissing: 1,
+            excludedConfirmationPending: 0,
+            excludedUnsubscribedOrSuppressed: 0,
+            total: 8,
+          },
+          dailyCap: 300,
+          estimatedDays: 1,
+          confirmationPhrase: "SEND TO 7 PEOPLE",
+          quota: QUOTA,
+        });
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(detailResponse());
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    fireEvent.click(await screen.findByTestId("button-open-queue"));
+    const dialog = await screen.findByTestId("dialog-queue");
+    expectDarkSurface(dialog);
+
+    // No hardcoded light-surface or slate text classes on any layout element.
+    // (Inputs keep the shared component's light classes but are theme-forced
+    // globally in index.css with !important, which wins over inline styles.)
+    // (h2 excluded: DialogTitle keeps the shared text-slate-900 class but the
+    // inline-style override asserted in expectDarkSurface is what wins.)
+    const layoutEls = Array.from(dialog.querySelectorAll("div, span, label, p"));
+    for (const el of layoutEls) {
+      expect(el.className).not.toMatch(/bg-slate-50|border-slate-200|text-slate-900|text-slate-500|text-slate-600|bg-white/);
+    }
+    // Summary cards use the dark secondary-card tokens.
+    const cards = layoutEls.filter((el) => el.className.includes("bg-muted/40"));
+    expect(cards.length).toBeGreaterThanOrEqual(2);
+    for (const card of cards) expect(card.className).toContain("border-border");
+    // Behaviour unchanged: confirm stays disabled until the exact phrase.
+    expect(screen.getByTestId("button-confirm-queue")).toBeDisabled();
+  });
+
+  it("keeps the cancel confirmation on the dark AlertDialog surface", async () => {
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/admin/early-access/campaigns/1")
+        return Promise.resolve(detailResponse({ campaign: { status: "sending" } }));
+      return Promise.resolve({});
+    });
+    renderPage(<CampaignDetail id={1} />);
+
+    fireEvent.click(await screen.findByTestId("button-cancel"));
+    const dialog = await screen.findByTestId("dialog-cancel");
+    expect(dialog.className).toContain("bg-background");
+    expect(dialog.className).not.toMatch(/bg-white|bg-slate|text-slate-900/);
+    // No inline white forced on AlertDialogContent.
+    expect(dialog.style.backgroundColor).toBe("");
+  });
+});

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, downloadAuthed } from "@/lib/api";
+import { DARK_DIALOG_CLASS, DARK_DIALOG_STYLE, DARK_TITLE_STYLE } from "@/lib/dark-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -718,9 +719,9 @@ export default function EarlyAccess() {
 
       {/* Detail dialog */}
       <Dialog open={selectedId != null} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-detail">
+        <DialogContent className={`max-w-2xl max-h-[85vh] overflow-y-auto ${DARK_DIALOG_CLASS}`} style={DARK_DIALOG_STYLE} data-testid="dialog-detail">
           <DialogHeader>
-            <DialogTitle>Registration detail</DialogTitle>
+            <DialogTitle style={DARK_TITLE_STYLE}>Registration detail</DialogTitle>
             <DialogDescription>Full record and consent history.</DialogDescription>
           </DialogHeader>
 
@@ -779,7 +780,7 @@ export default function EarlyAccess() {
                 </div>
               </div>
 
-              <div className="rounded-md border bg-muted/40 p-3">
+              <div className="rounded-md border border-border bg-muted/40 p-3">
                 <h3 className="text-sm font-semibold mb-2">Confirmation</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
                   <DetailField
@@ -836,7 +837,7 @@ export default function EarlyAccess() {
                 {detailQuery.data && detailQuery.data.events.length > 0 ? (
                   <ul className="space-y-2" data-testid="event-list">
                     {detailQuery.data.events.map((e) => (
-                      <li key={e.id} className="rounded-md border bg-muted/40 p-3 space-y-1">
+                      <li key={e.id} className="rounded-md border border-border bg-muted/40 p-3 space-y-1">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="text-sm font-medium">{eventLabel(e)}</span>
                           <span className="text-xs text-muted-foreground">{formatDateTime(e.createdAt)}</span>

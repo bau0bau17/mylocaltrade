@@ -247,6 +247,94 @@ describe("EarlyAccess page", () => {
     expect(screen.queryByTestId("button-resend-confirmation")).not.toBeInTheDocument();
   });
 
+  /**
+   * The shared DialogContent forces white via BOTH classes and inline styles,
+   * so asserting classes alone is not enough — the inline style override is
+   * what actually wins in the browser. Assert both layers.
+   */
+  function expectDarkSurface(dialog: HTMLElement) {
+    expect(dialog.className).toContain("bg-background");
+    expect(dialog.className).toContain("text-foreground");
+    expect(dialog.className).not.toContain("bg-white");
+    expect(dialog.className).not.toContain("text-slate-900");
+    expect(dialog.style.backgroundColor).toBe("hsl(var(--background))");
+    expect(dialog.style.color).toBe("hsl(var(--foreground))");
+    const title = dialog.querySelector("h2");
+    expect(title).not.toBeNull();
+    expect((title as HTMLElement).style.color).toBe("hsl(var(--foreground))");
+  }
+
+  it("renders the registration detail dialog on the dark theme surface, not white", async () => {
+    setupApi(
+      [makeReg({ id: 50, name: "Dark Dana" })],
+      {
+        events: [
+          {
+            id: 1,
+            kind: "LAUNCH_CONSENT",
+            wordingVersion: "1",
+            wording: "I agree to be contacted about the launch.",
+            performedBy: null,
+            details: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByTestId("row-registration-50"));
+    const dialog = await screen.findByTestId("dialog-detail");
+    await within(dialog).findByText("Dark Dana");
+
+    expectDarkSurface(dialog);
+
+    // Confirmation panel: dark secondary card via theme tokens, no light greys.
+    const confirmationHeading = within(dialog).getByText("Confirmation");
+    const confirmationCard = confirmationHeading.closest("div") as HTMLElement;
+    expect(confirmationCard.className).toContain("bg-muted/40");
+    expect(confirmationCard.className).toContain("border-border");
+    expect(confirmationCard.className).not.toMatch(/bg-slate|bg-gray|bg-white/);
+
+    // Consent history cards: same dark secondary card treatment.
+    const eventList = within(dialog).getByTestId("event-list");
+    const eventCards = Array.from(eventList.querySelectorAll("li"));
+    expect(eventCards.length).toBeGreaterThan(0);
+    for (const card of eventCards) {
+      expect(card.className).toContain("bg-muted/40");
+      expect(card.className).toContain("border-border");
+      expect(card.className).not.toMatch(/bg-slate|bg-gray|bg-white/);
+    }
+
+    // Long values must be allowed to wrap (no clipping of emails/versions).
+    expect(dialog.innerHTML).toContain("break-words");
+  });
+
+  it("keeps the suppress confirmation on the dark AlertDialog surface", async () => {
+    setupApi([makeReg({ id: 60, name: "Suppress Sam" })]);
+    renderPage();
+
+    // Suppress confirmation (opened from the detail dialog).
+    fireEvent.click(await screen.findByTestId("row-registration-60"));
+    fireEvent.click(await screen.findByTestId("button-suppress"));
+    const suppressDialog = await screen.findByTestId("dialog-suppress");
+    expect(suppressDialog.className).toContain("bg-background");
+    expect(suppressDialog.className).not.toMatch(/bg-white|bg-slate|text-slate-900/);
+    // No inline white forced on AlertDialogContent.
+    expect(suppressDialog.style.backgroundColor).toBe("");
+  });
+
+  it("keeps the export-all confirmation on the dark AlertDialog surface", async () => {
+    setupApi([makeReg({ id: 61 })]);
+    renderPage();
+
+    fireEvent.click(await screen.findByTestId("button-export-all"));
+    const exportDialog = await screen.findByTestId("dialog-export-all");
+    expect(exportDialog.className).toContain("bg-background");
+    expect(exportDialog.className).not.toMatch(/bg-white|bg-slate|text-slate-900/);
+    expect(exportDialog.style.backgroundColor).toBe("");
+  });
+
   it("never renders confirmation-token-hash data in the detail view", async () => {
     const future = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     setupApi(

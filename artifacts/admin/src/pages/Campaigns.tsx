@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
+import { DARK_DIALOG_CLASS, DARK_DIALOG_STYLE, DARK_TITLE_STYLE } from "@/lib/dark-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -530,9 +531,9 @@ export default function Campaigns() {
 
       {/* New campaign dialog */}
       <Dialog open={createOpen} onOpenChange={(open) => { if (!createMutation.isPending) setCreateOpen(open); }}>
-        <DialogContent data-testid="dialog-new-campaign">
+        <DialogContent className={DARK_DIALOG_CLASS} style={DARK_DIALOG_STYLE} data-testid="dialog-new-campaign">
           <DialogHeader>
-            <DialogTitle>New campaign</DialogTitle>
+            <DialogTitle style={DARK_TITLE_STYLE}>New campaign</DialogTitle>
             <DialogDescription>
               Pick a type and an internal name. You can edit the content next.
             </DialogDescription>
@@ -1349,9 +1350,9 @@ export function CampaignDetail({ id }: { id: number }) {
 
       {/* Preview dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" data-testid="dialog-preview">
+        <DialogContent className={`max-w-3xl max-h-[85vh] overflow-y-auto ${DARK_DIALOG_CLASS}`} style={DARK_DIALOG_STYLE} data-testid="dialog-preview">
           <DialogHeader>
-            <DialogTitle>Email preview</DialogTitle>
+            <DialogTitle style={DARK_TITLE_STYLE}>Email preview</DialogTitle>
             <DialogDescription>
               Rendered with sample recipient values, using the exact production email renderer.
             </DialogDescription>
@@ -1393,16 +1394,16 @@ export function CampaignDetail({ id }: { id: number }) {
 
       {/* Queue confirmation dialog */}
       <Dialog open={queueOpen} onOpenChange={(open) => { if (!queueMutation.isPending) setQueueOpen(open); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" data-testid="dialog-queue">
+        <DialogContent className={`max-w-lg max-h-[85vh] overflow-y-auto ${DARK_DIALOG_CLASS}`} style={DARK_DIALOG_STYLE} data-testid="dialog-queue">
           <DialogHeader>
-            <DialogTitle>Queue this campaign?</DialogTitle>
-            <DialogDescription className="text-slate-500">
+            <DialogTitle style={DARK_TITLE_STYLE}>Queue this campaign?</DialogTitle>
+            <DialogDescription>
               Review the audience carefully — the recipient snapshot is fixed when you queue.
             </DialogDescription>
           </DialogHeader>
           {queueAudience && (
-            <div className="space-y-4 text-slate-900">
-              <div className="rounded-md border bg-slate-50 p-3 space-y-2 text-sm">
+            <div className="space-y-4 text-foreground">
+              <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2 text-sm">
                 <SummaryRow label="Type" value={TYPE_LABELS[campaign.type] ?? campaign.type} />
                 <SummaryRow label="Audience" value={AUDIENCE_LABELS[campaign.audience] ?? campaign.audience} />
                 <SummaryRow label="Subject" value={campaign.subject || "—"} />
@@ -1410,8 +1411,8 @@ export function CampaignDetail({ id }: { id: number }) {
                 <SummaryRow label="CTA" value={`${campaign.ctaLabel || "—"} → ${campaign.ctaUrl || "—"}`} />
               </div>
 
-              <div className="rounded-md border bg-slate-50 p-3 space-y-2 text-sm">
-                <div className="flex items-center justify-between font-semibold text-slate-900">
+              <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between font-semibold text-foreground">
                   <span>Eligible recipients</span>
                   <span className="tabular-nums" data-testid="queue-eligible">{queueAudience.audience.eligible}</span>
                 </div>
@@ -1430,7 +1431,7 @@ export function CampaignDetail({ id }: { id: number }) {
                     <SummaryRow label="Unsubscribed or suppressed" value={String(queueAudience.audience.excludedUnsubscribedOrSuppressed ?? 0)} />
                   </>
                 )}
-                <div className="border-t border-slate-200 pt-2">
+                <div className="border-t border-border pt-2">
                   <SummaryRow label="Daily cap" value={String(queueAudience.dailyCap)} />
                   <SummaryRow
                     label="Estimated sending days"
@@ -1446,7 +1447,7 @@ export function CampaignDetail({ id }: { id: number }) {
               )}
 
               <div className="space-y-1.5">
-                <Label htmlFor="queue-confirm" className="text-slate-900">
+                <Label htmlFor="queue-confirm" className="text-foreground">
                   Type <span className="font-mono font-semibold">{confirmationPhrase}</span> to confirm
                 </Label>
                 <Input
@@ -1454,7 +1455,6 @@ export function CampaignDetail({ id }: { id: number }) {
                   value={confirmationText}
                   onChange={(e) => setConfirmationText(e.target.value)}
                   placeholder={confirmationPhrase}
-                  className="text-slate-900"
                   data-testid="input-confirmation"
                 />
               </div>
@@ -1518,8 +1518,8 @@ function StatCard({ label, value, testId }: { label: string; value: number | und
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4">
-      <span className="text-slate-600">{label}</span>
-      <span className="text-slate-900 text-right break-words">{value}</span>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-foreground text-right break-words">{value}</span>
     </div>
   );
 }

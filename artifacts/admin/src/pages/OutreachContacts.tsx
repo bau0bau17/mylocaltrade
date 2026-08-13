@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState } from "react";
+import { DARK_DIALOG_CLASS, DARK_DIALOG_STYLE, DARK_TITLE_STYLE } from "@/lib/dark-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, downloadAuthed } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -169,24 +170,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   UNKNOWN: "Unknown",
   OPTED_OUT: "Opted out",
 };
-
-/**
- * The admin app is dark-themed but the shared DialogContent forces a white
- * surface; outreach dialogs opt back into the theme tokens (same surface as
- * AlertDialogContent) so they match the rest of the Admin UI.
- */
-const DARK_DIALOG_CLASS = "bg-background text-foreground border-border";
-
-// The shared DialogContent/DialogTitle also force light colours via INLINE
-// styles (which beat any class). They spread `props.style` last, so these
-// call-site overrides restore the theme tokens without touching the shared
-// components. Inputs/textareas/selects are already theme-forced globally in
-// index.css with !important, which outranks their inline styles.
-const DARK_DIALOG_STYLE: CSSProperties = {
-  backgroundColor: "hsl(var(--background))",
-  color: "hsl(var(--foreground))",
-};
-const DARK_TITLE_STYLE: CSSProperties = { color: "hsl(var(--foreground))" };
 
 const IMPORT_STATUS_LABELS: Record<string, string> = {
   accepted: "Will import",
