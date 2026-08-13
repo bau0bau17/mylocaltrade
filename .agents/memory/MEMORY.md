@@ -69,4 +69,5 @@
 - [Early Access campaigns](early-access-campaigns.md) — bulk mail via Brevo MARKETING pipeline gated on MARKETING_BREVO_ENABLED; batch idempotency (brevoCampaignId-before-sendNow, assumed-sent recovery); stateless HMAC unsub tokens; local conservative daily quota.
 - [Job reassignment & handover](job-reassignment-invariants.md) — conv FOR UPDATE = serialization point; handovers gated by conditional flips (removal + account deletion); reassign re-checks target membership+availability; side effects post-commit winner-only.
 - [Prod executeSql masks errors](prod-executesql-error-masking.md) — prod query returning only "START TRANSACTION\nROLLBACK" with success=true means the SQL FAILED, not empty data.
+- [Brand asset provenance](brand-provenance.md) — logo provenance record lives in docs/brand-provenance.md; no creation prompt survives, never overclaim ownership; RCS banner NOT in repo = unverified.
 - [Campaign retention lifecycle](campaign-retention-lifecycle.md) — delete = never-queued drafts only (TEST_SENT blocks it); terminal → archive; anonymise keeps status/sentAt for quota; schedule in docs/data-retention.md.
