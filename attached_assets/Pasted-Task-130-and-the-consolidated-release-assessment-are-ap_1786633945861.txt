@@ -1,0 +1,74 @@
+Task #130 and the consolidated release assessment are approved.
+
+The production rollout happened before the final smoke checks, and MARKETING_BREVO_ENABLED is currently true. I want to complete the remaining production validation safely.
+
+Please proceed in this order:
+
+1. Set the production variable MARKETING_BREVO_ENABLED=false and republish current main.
+
+2. Confirm after deployment that:
+- the backend is healthy;
+- Early Access continues to work;
+- existing campaigns and consent records are intact;
+- Outreach Contacts loads in Admin;
+- Campaigns loads and supports both Early Access and Outreach audiences;
+- the new email preview renderer loads in Desktop and Mobile modes;
+- https://mylocaltrade.co.uk/api/public/logo.png returns the expected logo;
+- the updated landing-page Privacy Policy is live;
+- no email or campaign was automatically sent during deployment.
+
+3. Run a controlled Outreach production smoke test without sending a real email:
+- download the CSV template;
+- verify malformed, duplicate and formula-injection rows are rejected safely;
+- verify the existing Early Access smoke-test address cannot be imported into Outreach;
+- manually add one controlled test contact using:
+  lucian.dpd+mylocaltrade-outreach-130826@gmail.com
+- I control this inbox and explicitly authorise it only for this smoke test;
+- record the lawful route as confirmed consent and clearly label the source and notes as a controlled production smoke test;
+- verify the eligibility result and audit history;
+- create an Outreach campaign draft addressed only to that controlled contact;
+- preview it in Desktop and Mobile modes;
+- verify the Outreach source disclosure, company identity, unsubscribe, Privacy Policy and Contact links;
+- queue the campaign;
+- click Send next batch while MARKETING_BREVO_ENABLED=false and confirm it fails closed;
+- verify Sent remains 0 and no Brevo campaign/email was created or delivered;
+- cancel the queued smoke campaign;
+- remove the controlled contact after the test without creating a false unsubscribe or objection record;
+- preserve the campaign/audit history as a smoke-test record.
+
+4. Confirm the Early Access/Outreach separation:
+- the existing Early Access address remains rejected from Outreach;
+- the controlled Outreach test does not appear as Early Access;
+- a prior Outreach suppression cannot be removed through Early Access registration;
+- no existing suppression, complaint or hard-bounce record changed.
+
+5. Check production logs for:
+- server errors;
+- failed migrations;
+- token/code leakage;
+- unexpected email attempts;
+- webhook failures;
+- repeated background processing.
+
+6. If and only if every smoke check passes:
+- set MARKETING_BREVO_ENABLED=true;
+- republish;
+- verify that the disabled warning disappears;
+- verify there are zero queued Outreach recipients;
+- verify no campaign starts automatically;
+- do not send any real campaign or test email.
+
+7. Give me a final report with:
+- both deployment timestamps;
+- flag status;
+- smoke-test results;
+- proof Sent remained 0;
+- proof no Brevo send was created;
+- production data-integrity status;
+- final Outreach/EA separation status;
+- final API/Admin health;
+- exact rollback steps.
+
+Do not create or send any other campaign. Do not use any customer, trader, Early Access or imported address except the controlled test alias specified above.
+
+Do not start an EAS/TestFlight build. I will perform the mobile build manually after the production smoke checks pass.
