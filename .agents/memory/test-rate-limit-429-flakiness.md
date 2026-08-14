@@ -17,3 +17,5 @@ first and the test's own insertMembership hits 23505 on company_members_profile_
 ("ownersBackfilled: 1" in the server boot log is the tell).
 **How to apply:** a company-jobs duplicate-membership failure right after a simultaneous
 boot is this race, not a code bug — rerun api-test once before investigating.
+
+- Verifying a rerun: `/tmp/logs/*` files are drain snapshots — they update ONLY when logs are refreshed via the log tool. Tailing the newest file without refreshing re-reads the PREVIOUS run and fakes an identical failure.
