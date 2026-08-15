@@ -31,7 +31,8 @@ description: Company Teams access rules — the single membership resolver, the 
 
 ## Phase B (team billing, dormant)
 - `TEAM_BILLING_ENFORCED` (default off) gates ALL plan-derived behaviour. Flag off = byte-identical legacy responses (team-context stays exactly `{enabled, role}`; caps use owner-inclusive countSeatsInUse vs COMPANY_MAX_ACTIVE_MEMBERS).
-- `artifacts/api-server/src/lib/team-billing.ts` is the seat/tier choke point: PRODUCT_TIER_MAP (solo=0 seats, team5/10/20; unknown product fails closed to solo + error log; clamp 20), `getCompanyPlanContext(traderProfileId)`, EMPLOYEE-only seat counting (owner never uses a seat — different semantics from legacy countSeatsInUse!).
+- `artifacts/api-server/src/lib/team-billing.ts` is the seat/tier choke point: `getCompanyPlanContext(traderProfileId)`, EMPLOYEE-only seat counting (owner never uses a seat — different semantics from legacy countSeatsInUse!), unknown product fails closed to solo + error log, clamp 20.
+- NO future Team product id is hardcoded (user rejected invented ids pre-App Store Connect). Only confirmed Solo ids (trader.monthly/yearly) are baked in; Team products activate ONLY via TEAM_PRODUCT_SEAT_MAP env JSON (seats 5/10/20, fail closed). RevenueCat Test Store ids sit in an isolated map never consulted in production AND rejected from the env map — they must never grant prod seats. Phase C = user creates real ids in ASC, then they get configured/hardcoded.
 - `subscriptions.product_identifier` persisted by revenuecat-sync + webhook grants (preserve stored value when event/sync lacks it). PROD SCHEMA PUSH MUST PRECEDE ANY SERVER DEPLOY of this code.
 - Billing metadata (tier, seat counts) is owner-only in team-context; employees get gating booleans only (architect flagged the leak — don't reintroduce).
 - COMPANY_MAX_ACTIVE_MEMBERS: with enforcement it clamps ONLY when explicitly set (kill-switch); default-unset must not cap team20 at the legacy 10.

@@ -73,3 +73,4 @@
 - [Brand asset provenance](brand-provenance.md) — logo provenance record lives in docs/brand-provenance.md; no creation prompt survives, never overclaim ownership; RCS banner NOT in repo = unverified.
 - [Account deletion storage gap](account-deletion-storage-gap.md) — deletion is a soft delete: DB refs cleared but storage objects & trader_documents remain; pre-launch blocker to fix; RC ids/proxyFetch quirks inside.
 - [Campaign retention lifecycle](campaign-retention-lifecycle.md) — delete = never-queued drafts only (TEST_SENT blocks it); terminal → archive; anonymise keeps status/sentAt for quota; schedule in docs/data-retention.md.
+- [No test files under Expo app/](expo-route-tree-test-files.md) — Metro bundles app/**/*.test.* as routes → device crash; jest+typecheck stay green; guard test + clean-cache bundle are the tripwires.
