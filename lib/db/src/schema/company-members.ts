@@ -39,6 +39,19 @@ export const companyMembersTable = pgTable(
     invitedByUserId: integer("invited_by_user_id").references(() => usersTable.id),
     revokedAt: timestamp("revoked_at"),
     revokedByUserId: integer("revoked_by_user_id").references(() => usersTable.id),
+    // --- Seat suspension (Team billing) ---
+    // A seat-suspended employee KEEPS their ACTIVE membership (so the
+    // one-active-company constraint, read access to historical company work
+    // and all attribution survive) but cannot ACT for the company: no
+    // claiming, messaging, quoting, booking or editing. NULL = seat active.
+    // This is deliberately a column, not a new status value — every existing
+    // status check ("ACTIVE" = member of the company) stays correct.
+    seatSuspendedAt: timestamp("seat_suspended_at"),
+    // Who suspended the seat: 'SYSTEM' (automatic downgrade/expiry
+    // reconciliation — eligible for automatic reactivation when the
+    // allowance recovers) or 'OWNER' (explicit owner choice — only the
+    // owner reverses it). NULL when seatSuspendedAt is NULL.
+    seatSuspensionSource: varchar("seat_suspension_source", { length: 20 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

@@ -9,12 +9,14 @@ import {
   cancellationRequestsTable,
   promoCodesTable,
   promoRedemptionsTable,
+  revenuecatEventsTable,
   PLAN_PRICING_GBP,
   PLAN_CURRENCY,
 } from "@workspace/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { companyOwnerGate } from "../lib/company-membership";
+import { reconcileCompanySeats } from "../lib/team-billing";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
 import { getCoolingOffState } from "../lib/cooling-off";
@@ -375,6 +377,11 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, subscr
         .limit(1);
       if (existing && existing.status === "active") {
         await downgradeExpiredSubscription(userId);
+        // Plan-derived seat allowance may have dropped to 0 — bring seated
+        // employees in line (no-op unless team billing is enforced).
+        await reconcileCompanySeats(profile.id, "revenuecat-sync:no_active_entitlement").catch(
+          (err) => req.log.error({ err }, "seat reconciliation after sync downgrade failed"),
+        );
         await logAudit({
           userId,
           action: "SUBSCRIPTION_CANCELLED",
@@ -453,6 +460,12 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, subscr
         .set({ plan: RC_PLAN_ID, isFeatured: true, updatedAt: new Date() })
         .where(eq(traderProfilesTable.userId, userId));
     });
+
+    // The grant (or a product change picked up by this sync) may have changed
+    // the seat allowance — reconcile seats now (no-op unless enforced).
+    await reconcileCompanySeats(profile.id, "revenuecat-sync:grant").catch((err) =>
+      req.log.error({ err }, "seat reconciliation after sync grant failed"),
+    );
 
     await logAudit({
       userId,
@@ -898,9 +911,13 @@ router.post("/webhooks/revenuecat", async (req, res) => {
       type === "UNCANCELLATION";
     const scheduleCancel = type === "CANCELLATION";
     const revoke = type === "EXPIRATION" || type === "SUBSCRIPTION_PAUSED";
+    // Payment failed but access continues (Apple grace/retry period). We only
+    // RECORD it — revocation stays EXPIRATION's job, exactly per Apple's own
+    // grace handling. The flag powers "check your payment method" messaging.
+    const billingIssue = type === "BILLING_ISSUE";
 
-    // TEST pings, BILLING_ISSUE, TRANSFER, etc. — nothing to enforce.
-    if (!grant && !scheduleCancel && !revoke) {
+    // TEST pings, TRANSFER, etc. — nothing to enforce.
+    if (!grant && !scheduleCancel && !revoke && !billingIssue) {
       res.json({ success: true, ignored: "type" });
       return;
     }
@@ -942,6 +959,9 @@ router.post("/webhooks/revenuecat", async (req, res) => {
     let applied = false;
     let newlyActivated = false;
     let newlyCancelled = false;
+    let duplicate = false;
+    let outOfOrder = false;
+    let billingIssueRecorded = false;
 
     // Store product that triggered this event — persisted on grants so the
     // team tier can be derived server-side (PRODUCT_CHANGE updates it too).
@@ -950,12 +970,66 @@ router.post("/webhooks/revenuecat", async (req, res) => {
         ? event.product_id
         : null;
 
+    // RevenueCat event id (UUID) — the idempotency key — and the event's own
+    // timestamp — the ordering authority (arrival order is meaningless under
+    // retries).
+    const eventId = typeof event.id === "string" && event.id.length > 0 ? event.id : null;
+    const eventTsRaw = Number(event.event_timestamp_ms);
+    const eventTsMs = Number.isFinite(eventTsRaw) && eventTsRaw > 0 ? eventTsRaw : null;
+
     await db.transaction(async (tx) => {
+      // Idempotency: record the event id IN THE SAME TRANSACTION as the
+      // mutation. A redelivery hits the unique index and is skipped; a crash
+      // mid-processing rolls the ledger row back too, so the retry genuinely
+      // reprocesses. Events without an id (never seen in practice) process
+      // without dedupe rather than being dropped.
+      if (eventId) {
+        const inserted = await tx
+          .insert(revenuecatEventsTable)
+          .values({
+            eventId,
+            eventType: type,
+            appUserId,
+            productId: eventProductId,
+            eventTimestampMs: eventTsMs,
+          })
+          .onConflictDoNothing({ target: revenuecatEventsTable.eventId })
+          .returning({ id: revenuecatEventsTable.id });
+        if (inserted.length === 0) {
+          duplicate = true;
+          return;
+        }
+      }
+
       const [existing] = await tx
         .select()
         .from(subscriptionsTable)
         .where(eq(subscriptionsTable.userId, userId))
         .limit(1);
+
+      // Out-of-order guard: a delayed event older than the newest one already
+      // applied must not mutate state (e.g. a late EXPIRATION arriving after
+      // a newer re-subscribe grant would otherwise destroy it). The ledger
+      // row above still commits, so the stale event is consumed for good.
+      //
+      // Equal-timestamp policy (deterministic — do not let arrival order pick
+      // the final state): at an exact provider-timestamp tie, only a REVOKE
+      // may apply; every non-revoke event at the tied timestamp is skipped.
+      // Both delivery orders of a tied grant+revoke pair therefore converge
+      // on "revoked" — the fail-safe state — and a genuinely active
+      // entitlement self-heals on the next device sync, which reads live
+      // RevenueCat state.
+      if (
+        existing &&
+        eventTsMs !== null &&
+        existing.lastProviderEventAtMs !== null &&
+        (eventTsMs < existing.lastProviderEventAtMs ||
+          (eventTsMs === existing.lastProviderEventAtMs && !revoke))
+      ) {
+        outOfOrder = true;
+        return;
+      }
+      const eventClockPatch = eventTsMs !== null ? { lastProviderEventAtMs: eventTsMs } : {};
 
       if (grant) {
         // Notify only on a real inactive -> active transition (skip renewals).
@@ -971,6 +1045,9 @@ router.post("/webhooks/revenuecat", async (req, res) => {
               cancelAtPeriodEnd: false,
               originalPurchaseAt: existing.originalPurchaseAt ?? originalAnchor,
               productIdentifier: eventProductId ?? existing.productIdentifier ?? null,
+              // A successful grant supersedes any earlier payment trouble.
+              billingIssueDetectedAt: null,
+              ...eventClockPatch,
               updatedAt: new Date(),
             })
             .where(eq(subscriptionsTable.userId, userId));
@@ -983,6 +1060,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
             currentPeriodEnd: periodEnd,
             originalPurchaseAt: originalAnchor,
             productIdentifier: eventProductId,
+            lastProviderEventAtMs: eventTsMs,
           });
         }
         await tx
@@ -999,9 +1077,23 @@ router.post("/webhooks/revenuecat", async (req, res) => {
         if (existing) {
           await tx
             .update(subscriptionsTable)
-            .set({ cancelAtPeriodEnd: true, updatedAt: new Date() })
+            .set({ cancelAtPeriodEnd: true, ...eventClockPatch, updatedAt: new Date() })
             .where(eq(subscriptionsTable.userId, userId));
           applied = true;
+        }
+      } else if (billingIssue) {
+        // Record only — no perk/status change, no push. Cleared by the next
+        // successful grant (or when expiry finally revokes).
+        if (existing) {
+          await tx
+            .update(subscriptionsTable)
+            .set({
+              billingIssueDetectedAt: eventTsMs !== null ? new Date(eventTsMs) : new Date(),
+              ...eventClockPatch,
+              updatedAt: new Date(),
+            })
+            .where(eq(subscriptionsTable.userId, userId));
+          billingIssueRecorded = true;
         }
       } else if (revoke) {
         // Notify only on a real active -> cancelled transition (skip repeats).
@@ -1019,12 +1111,50 @@ router.post("/webhooks/revenuecat", async (req, res) => {
         if (existing) {
           await tx
             .update(subscriptionsTable)
-            .set({ status: "cancelled", cancelAtPeriodEnd: false, updatedAt: new Date() })
+            .set({
+              status: "cancelled",
+              cancelAtPeriodEnd: false,
+              billingIssueDetectedAt: null,
+              ...eventClockPatch,
+              updatedAt: new Date(),
+            })
             .where(eq(subscriptionsTable.userId, userId));
         }
         applied = true;
       }
     });
+
+    if (duplicate) {
+      res.json({ success: true, ignored: "duplicate" });
+      return;
+    }
+    if (outOfOrder) {
+      req.log.info(
+        { type, userId, eventTsMs },
+        "revenuecat webhook event arrived out of order — skipped",
+      );
+      res.json({ success: true, ignored: "out_of_order" });
+      return;
+    }
+
+    // Seat allowance may have changed (grant/product change/expiry) — bring
+    // seated employees in line. Post-commit and best-effort: a reconciliation
+    // hiccup must not fail the webhook ack (the next lifecycle event or owner
+    // action reconciles again).
+    if (applied && (grant || revoke)) {
+      try {
+        const [ownerProfile] = await db
+          .select({ id: traderProfilesTable.id })
+          .from(traderProfilesTable)
+          .where(eq(traderProfilesTable.userId, userId))
+          .limit(1);
+        if (ownerProfile) {
+          await reconcileCompanySeats(ownerProfile.id, `webhook:${type}`);
+        }
+      } catch (err) {
+        req.log.error({ err }, "seat reconciliation after webhook failed");
+      }
+    }
 
     if (applied) {
       await logAudit({
@@ -1047,7 +1177,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
       }
     }
 
-    res.json({ success: true, type, applied });
+    res.json({ success: true, type, applied: applied || billingIssueRecorded });
   } catch (error) {
     req.log.error({ err: error }, "RevenueCat webhook failed");
     res.status(500).json({ success: false, message: "Webhook processing failed" });

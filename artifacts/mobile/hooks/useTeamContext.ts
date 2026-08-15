@@ -2,7 +2,28 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
 
-export type TeamContext = { enabled: boolean; role: 'OWNER' | 'EMPLOYEE' | null };
+export type TeamContext = {
+  enabled: boolean;
+  role: 'OWNER' | 'EMPLOYEE' | null;
+  // Present only when team billing is enforced server-side.
+  viewerRole?: 'OWNER' | 'EMPLOYEE';
+  viewerCanManageBilling?: boolean;
+  viewerCanManageTeam?: boolean;
+  viewerCanInvite?: boolean;
+  // Employee-only: this member's seat is suspended (read-only mode — they
+  // keep their login and history but can't act until reactivated).
+  seatSuspended?: boolean;
+  // Owner-only seat utilisation (enforced mode).
+  effectiveBusinessPlan?: string | null;
+  employeeSeatLimit?: number;
+  effectiveSeatAllowance?: number;
+  activeEmployeeCount?: number;
+  suspendedEmployeeCount?: number;
+  pendingInviteCount?: number;
+  availableSeats?: number;
+  overCapacity?: boolean;
+  seatExemption?: { seatLimit: number; expiresAt: string | null } | null;
+};
 
 // Company Teams: which role the signed-in trader plays for their company.
 // Server-derived (GET /api/company/team-context) — never inferred from the

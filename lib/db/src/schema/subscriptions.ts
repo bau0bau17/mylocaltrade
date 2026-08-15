@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, varchar, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, varchar, boolean, timestamp, bigint } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 export const subscriptionsTable = pgTable("subscriptions", {
@@ -25,6 +25,18 @@ export const subscriptionsTable = pgTable("subscriptions", {
   // renewal does not start a fresh right to cancel. Existing rows are backfilled
   // from createdAt; the read path falls back to createdAt when this is null.
   originalPurchaseAt: timestamp("original_purchase_at"),
+  // Timestamp (ms) of the newest RevenueCat webhook event applied to this
+  // row. Ordering guard: an arriving event whose event timestamp is OLDER
+  // than this value must not mutate state (late/out-of-order delivery —
+  // e.g. a delayed EXPIRATION after a newer re-subscribe grant). NULL for
+  // rows that predate the guard: first event wins and sets it.
+  lastProviderEventAtMs: bigint("last_provider_event_at_ms", { mode: "number" }),
+  // Set when RevenueCat reports a BILLING_ISSUE for the current period and
+  // cleared by the next successful grant (renewal/uncancellation/purchase).
+  // Access is NOT revoked here — Apple's own grace handling decides that via
+  // expiration; this only powers user-facing "check your payment method"
+  // messaging.
+  billingIssueDetectedAt: timestamp("billing_issue_detected_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

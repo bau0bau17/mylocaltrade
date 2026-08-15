@@ -32,6 +32,7 @@ import {
   traderProfilesTable,
   subscriptionsTable,
   traderAuditLogTable,
+  revenuecatEventsTable,
 } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import app from "../app";
@@ -632,6 +633,265 @@ describe("RevenueCat subscription syncing", () => {
         });
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ success: true, ignored: "entitlement" });
+    });
+  });
+
+  describe("POST /webhooks/revenuecat — hardening (Phase D)", () => {
+    const sendEvent = (event: Record<string, unknown>) =>
+      request(app)
+        .post("/api/webhooks/revenuecat")
+        .set("Authorization", WEBHOOK_SECRET)
+        .send({ event });
+
+    it("deduplicates by event id: a redelivered event is skipped entirely", async () => {
+      const trader = await createVerifiedTrader("wh-dedupe");
+      const now = Date.now();
+      const grant = {
+        id: `evt-dedupe-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: now + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: now,
+        event_timestamp_ms: now,
+      };
+
+      const first = await sendEvent(grant);
+      await settle();
+      expect(first.status).toBe(200);
+      expect(first.body).toMatchObject({ success: true, applied: true });
+      expect(activationPushes(trader.id)).toHaveLength(1);
+
+      // Exact redelivery (same event id): consumed by the ledger, nothing
+      // reprocessed — not even a second activation-side audit or push.
+      const second = await sendEvent(grant);
+      await settle();
+      expect(second.status).toBe(200);
+      expect(second.body).toMatchObject({ success: true, ignored: "duplicate" });
+      expect(activationPushes(trader.id)).toHaveLength(1);
+
+      const events = await db
+        .select()
+        .from(revenuecatEventsTable)
+        .where(eq(revenuecatEventsTable.eventId, grant.id));
+      expect(events).toHaveLength(1);
+    });
+
+    it("rejects out-of-order events: a late older grant cannot resurrect a newer expiration", async () => {
+      const trader = await createVerifiedTrader("wh-order");
+      const tGrant = Date.now() - 120_000; // original purchase
+      const t0 = Date.now() - 60_000; // old renewal timestamp
+      const t1 = Date.now(); // newer expiration timestamp
+
+      // Establish the subscription (and its event clock) first.
+      const initial = await sendEvent({
+        id: `evt-order-initial-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: tGrant + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: tGrant,
+        event_timestamp_ms: tGrant,
+      });
+      await settle();
+      expect(initial.body).toMatchObject({ success: true, applied: true });
+
+      const expire = await sendEvent({
+        id: `evt-order-expire-${SUFFIX}`,
+        type: "EXPIRATION",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        expiration_at_ms: t1,
+        event_timestamp_ms: t1,
+      });
+      await settle();
+      expect(expire.status).toBe(200);
+
+      // The RENEWAL that predates the expiration arrives late (retry queue).
+      const lateRenewal = await sendEvent({
+        id: `evt-order-renew-${SUFFIX}`,
+        type: "RENEWAL",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: t0 + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: t0,
+        event_timestamp_ms: t0,
+      });
+      await settle();
+      expect(lateRenewal.status).toBe(200);
+      expect(lateRenewal.body).toMatchObject({ success: true, ignored: "out_of_order" });
+
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub.status).toBe("cancelled");
+
+      // A genuinely NEWER re-subscribe still works (first event wins only
+      // against OLDER timestamps, not against progress).
+      const t2 = t1 + 60_000;
+      const resub = await sendEvent({
+        id: `evt-order-resub-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: t2 + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: t2,
+        event_timestamp_ms: t2,
+      });
+      await settle();
+      expect(resub.body).toMatchObject({ success: true, applied: true });
+      const [sub2] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub2.status).toBe("active");
+    });
+
+    it("BILLING_ISSUE records the flag without revoking; the next grant clears it", async () => {
+      const trader = await createVerifiedTrader("wh-billing-issue");
+      const t0 = Date.now();
+      await sendEvent({
+        id: `evt-bi-grant-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: t0 + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: t0,
+        event_timestamp_ms: t0,
+      });
+      await settle();
+      mockSendPush.mockClear();
+
+      const issue = await sendEvent({
+        id: `evt-bi-issue-${SUFFIX}`,
+        type: "BILLING_ISSUE",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        event_timestamp_ms: t0 + 1_000,
+      });
+      await settle();
+      expect(issue.status).toBe(200);
+      expect(issue.body).toMatchObject({ success: true, applied: true });
+
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      // Access continues (Apple grace/retry) — status untouched, flag set.
+      expect(sub.status).toBe("active");
+      expect(sub.billingIssueDetectedAt).not.toBeNull();
+      // No status-change push for a billing issue.
+      expect(mockSendPush).not.toHaveBeenCalled();
+
+      // Payment recovered → RENEWAL clears the flag.
+      const t1 = t0 + 2_000;
+      await sendEvent({
+        id: `evt-bi-renew-${SUFFIX}`,
+        type: "RENEWAL",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: t1 + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: t1,
+        event_timestamp_ms: t1,
+      });
+      await settle();
+      const [after] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(after.status).toBe("active");
+      expect(after.billingIssueDetectedAt).toBeNull();
+    });
+
+    it("equal-timestamp tie-break is deterministic: revoke wins, a tied grant is skipped", async () => {
+      const trader = await createVerifiedTrader("wh-tie");
+      const t0 = Date.now() - 120_000;
+      await sendEvent({
+        id: `evt-tie-grant0-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: t0 + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: t0,
+        event_timestamp_ms: t0,
+      });
+      await settle();
+
+      // EXPIRATION at t1 applies; a different grant event with the SAME
+      // timestamp must be skipped — arrival order must not pick the state.
+      const t1 = t0 + 60_000;
+      const expire = await sendEvent({
+        id: `evt-tie-expire-${SUFFIX}`,
+        type: "EXPIRATION",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        event_timestamp_ms: t1,
+      });
+      await settle();
+      expect(expire.body).toMatchObject({ success: true, applied: true });
+
+      const tiedGrant = await sendEvent({
+        id: `evt-tie-grant1-${SUFFIX}`,
+        type: "RENEWAL",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: t1 + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: t1,
+        event_timestamp_ms: t1, // exact tie with the expiration
+      });
+      await settle();
+      expect(tiedGrant.body).toMatchObject({ success: true, ignored: "out_of_order" });
+      const [afterTie] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(afterTie.status).toBe("cancelled");
+
+      // Opposite order at a fresh tie: grant applies first, then a revoke
+      // with the SAME timestamp still applies → both orders end revoked.
+      const t2 = t1 + 60_000;
+      const regrant = await sendEvent({
+        id: `evt-tie-grant2-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: t2 + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: t2,
+        event_timestamp_ms: t2,
+      });
+      await settle();
+      expect(regrant.body).toMatchObject({ success: true, applied: true });
+
+      const tiedRevoke = await sendEvent({
+        id: `evt-tie-expire2-${SUFFIX}`,
+        type: "EXPIRATION",
+        app_user_id: String(trader.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        event_timestamp_ms: t2, // exact tie with the grant
+      });
+      await settle();
+      expect(tiedRevoke.body).toMatchObject({ success: true, applied: true });
+      const [final] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(final.status).toBe("cancelled");
     });
   });
 });

@@ -23,6 +23,7 @@ import {
 } from "../lib/company-membership";
 import { sendCompanyInviteEmail } from "../lib/email";
 import {
+  COMPANY_SEAT_LOCK_NAMESPACE,
   countCompanySeats,
   getCompanyPlanContext,
   resolveInviteSeatLimit,
@@ -110,9 +111,36 @@ const TEAM_PLAN_REQUIRED_RESPONSE = {
   code: "TEAM_PLAN_REQUIRED",
 } as const;
 
-// Advisory-lock namespace for per-company seat-cap serialisation (arbitrary
-// app-unique int4; pairs with the trader_profiles id as the second key).
-const CAP_LOCK_NAMESPACE = 812004101;
+// Advisory-lock namespace for per-company seat-cap serialisation (pairs with
+// the trader_profiles id as the second key). Shared with the reconciliation
+// engine in team-billing.ts so subscription-driven seat changes and
+// invite/seat operations can never interleave.
+const CAP_LOCK_NAMESPACE = COMPANY_SEAT_LOCK_NAMESPACE;
+
+/** Sentinel: valid invite token, but the company has no free seat (enforcement on). */
+class SeatUnavailableError extends Error {
+  constructor() {
+    super("seat unavailable");
+  }
+}
+
+const SEAT_UNAVAILABLE_RESPONSE = {
+  error:
+    "This business doesn't have a free team seat right now. Ask the business owner to free up a seat or upgrade their plan, then try the link again.",
+  code: "SEAT_UNAVAILABLE",
+} as const;
+
+/** Enforcement gate for seat-management routes: they exist only when team
+ *  billing is enforced (404 otherwise, mirroring teamsGate — suspensions can
+ *  then ONLY come from enforcement-aware code paths, which is what keeps
+ *  flag-off behaviour byte-identical). */
+function seatEnforcementGate(_req: Request, res: Response, next: NextFunction): void {
+  if (!teamBillingEnforced()) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  next();
+}
 
 /** Feature-flag gate: while teams are disabled these routes do not exist. */
 function teamsGate(_req: Request, res: Response, next: NextFunction): void {
@@ -267,6 +295,18 @@ router.get(
       if (!isOwner) {
         // Employees get their own gating state only — never the owner's
         // billing tier or seat utilisation (billing metadata is owner-only).
+        // seatSuspended is the employee's OWN state, so it belongs here: it
+        // drives the read-only banner and hides purchase/restore prompts.
+        const [selfRow] = await db
+          .select({ seatSuspendedAt: companyMembersTable.seatSuspendedAt })
+          .from(companyMembersTable)
+          .where(
+            and(
+              eq(companyMembersTable.userId, (req as AuthenticatedRequest).userId!),
+              eq(companyMembersTable.status, "ACTIVE"),
+            ),
+          )
+          .limit(1);
         res.json({
           enabled: true,
           role: membership.role,
@@ -274,6 +314,7 @@ router.get(
           viewerCanManageBilling: false,
           viewerCanManageTeam: false,
           viewerCanInvite: false,
+          seatSuspended: selfRow?.seatSuspendedAt != null,
         });
         return;
       }
@@ -284,12 +325,24 @@ router.get(
         viewerRole: membership.role,
         effectiveBusinessPlan: plan.effectiveBusinessPlan,
         employeeSeatLimit: plan.employeeSeatLimit,
+        effectiveSeatAllowance: plan.effectiveSeatAllowance,
         activeEmployeeCount: plan.activeEmployeeCount,
+        suspendedEmployeeCount: plan.suspendedEmployeeCount,
         pendingInviteCount: plan.pendingInviteCount,
+        availableSeats: plan.availableSeats,
+        overCapacity: plan.overLimit,
+        // Grandfathering visibility (owner-only): the exemption that is
+        // currently propping up the allowance, if any.
+        seatExemption: plan.exemption
+          ? {
+              seatLimit: plan.exemption.seatLimit,
+              expiresAt: plan.exemption.expiresAt?.toISOString() ?? null,
+            }
+          : null,
         viewerCanManageBilling: true,
         viewerCanManageTeam: true,
         viewerCanInvite:
-          plan.active && plan.employeeSeatLimit > 0 && !plan.overLimit,
+          plan.effectiveSeatAllowance > 0 && !plan.overLimit && plan.availableSeats > 0,
       });
     } catch (error) {
       req.log.error({ err: error }, "team-context failed");
@@ -341,12 +394,28 @@ router.get("/company/team", authMiddleware, traderOnly, teamsGate, async (req, r
     // With enforcement on, seats use the plan's EMPLOYEE-only semantics
     // (owner never occupies a seat) so used/max stay comparable; otherwise
     // the legacy owner-inclusive count against the env cap (today's shape).
-    let seatUsage: { used: number; max: number };
+    let seatUsage: Record<string, unknown>;
     if (teamBillingEnforced()) {
       const plan = await getCompanyPlanContext(profileId);
       seatUsage = {
         used: plan.activeEmployeeCount + plan.pendingInviteCount,
-        max: plan.employeeSeatLimit,
+        max: plan.effectiveSeatAllowance,
+        // Full owner-facing breakdown: plan / allowance / active / reserved /
+        // available / suspended / over-capacity.
+        plan: plan.effectiveBusinessPlan,
+        planActive: plan.active,
+        allowance: plan.effectiveSeatAllowance,
+        activeEmployees: plan.activeEmployeeCount,
+        suspendedEmployees: plan.suspendedEmployeeCount,
+        reservedInvites: plan.pendingInviteCount,
+        available: plan.availableSeats,
+        overCapacity: plan.overLimit,
+        exemption: plan.exemption
+          ? {
+              seatLimit: plan.exemption.seatLimit,
+              expiresAt: plan.exemption.expiresAt?.toISOString() ?? null,
+            }
+          : null,
       };
     } else {
       const seats = await countSeatsInUse(profileId);
@@ -369,6 +438,9 @@ router.get("/company/team", authMiddleware, traderOnly, teamsGate, async (req, r
         // avatar-file route only.
         avatarUrl: r.avatarUrl,
         status: r.member.status,
+        seatSuspended: r.member.seatSuspendedAt != null,
+        seatSuspendedAt: r.member.seatSuspendedAt?.toISOString() ?? null,
+        seatSuspensionSource: r.member.seatSuspensionSource ?? null,
       })),
       invites: inviteRows.map(serializeInvite),
       seats: seatUsage,
@@ -899,6 +971,21 @@ router.post("/company/invites/accept", teamsGate, async (req, res) => {
 
   try {
     const result = await db.transaction(async (tx) => {
+      // Resolve the company BEFORE claiming so the advisory seat lock can be
+      // taken first: lock → claim → seat check all inside one transaction.
+      // Taking the lock before touching the invite row also avoids a
+      // lock-order inversion with resend (which locks first, then updates
+      // the row).
+      const [pre] = await tx
+        .select({ traderProfileId: companyInvitesTable.traderProfileId })
+        .from(companyInvitesTable)
+        .where(eq(companyInvitesTable.tokenHash, sha256Hex(body.token)))
+        .limit(1);
+      if (!pre) throw new InviteInvalidError();
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(${CAP_LOCK_NAMESPACE}, ${pre.traderProfileId})`,
+      );
+
       // Single-use claim: exactly one concurrent accept can flip the row.
       const claimed = await tx
         .update(companyInvitesTable)
@@ -920,6 +1007,21 @@ router.post("/company/invites/accept", teamsGate, async (req, res) => {
         .where(eq(traderProfilesTable.id, invite.traderProfileId))
         .limit(1);
       if (!profile) throw new InviteInvalidError();
+
+      // Seat re-check AT ACCEPT TIME (enforcement on): the allowance may
+      // have shrunk since the invite was sent (downgrade/expiry), or other
+      // invitees may have taken the remaining seats. Throwing rolls the
+      // claim back, so the invite stays PENDING and can be accepted later
+      // once the owner frees a seat or upgrades. Only SEATED employees
+      // count — a suspended seat is free by definition, and other PENDING
+      // invites don't block (first to accept wins the seat).
+      if (teamBillingEnforced()) {
+        const rule = await resolveInviteSeatLimit(invite.traderProfileId, tx);
+        const counts = await countCompanySeats(invite.traderProfileId, tx);
+        if (counts.activeEmployees >= rule.max) {
+          throw new SeatUnavailableError();
+        }
+      }
 
       // Re-check at accept time: someone may have registered this email since
       // the invite was sent. Rolling back leaves the invite PENDING (visible
@@ -999,6 +1101,14 @@ router.post("/company/invites/accept", teamsGate, async (req, res) => {
       company: { name: result.profile.businessName },
     });
   } catch (err) {
+    if (err instanceof SeatUnavailableError) {
+      // Deliberately NOT the generic body: the caller proved possession of a
+      // VALID token (the claim succeeded before rollback), so telling them
+      // the real blocker is safe and actionable — while token-validity
+      // failures below stay indistinguishable from each other.
+      res.status(409).json(SEAT_UNAVAILABLE_RESPONSE);
+      return;
+    }
     if (err instanceof InviteInvalidError || isUniqueViolation(err)) {
       // Uniform cost + uniform body for every failure mode.
       await bcryptjs.compare(body.password, DUMMY_PASSWORD_HASH);
@@ -1009,5 +1119,163 @@ router.post("/company/invites/accept", teamsGate, async (req, res) => {
     res.status(500).json({ error: "Failed to accept the invitation" });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Owner seat management (TEAM_BILLING_ENFORCED only — 404 otherwise).
+//
+// Suspend = the member stays in the company with full read access to
+// historical work but cannot act (messages/quotes/bookings refuse with
+// SEAT_SUSPENDED); their seat is freed for someone else. Reactivate needs a
+// free seat. Both are serialised under the company seat lock, so they cannot
+// race invites, acceptance, or subscription-driven reconciliation.
+// ---------------------------------------------------------------------------
+
+/** Load the profile-scoped ACTIVE EMPLOYEE row or answer 404. */
+async function findEmployeeMember(
+  res: Response,
+  profileId: number,
+  memberIdRaw: string,
+): Promise<typeof companyMembersTable.$inferSelect | null> {
+  const memberId = Number.parseInt(memberIdRaw, 10);
+  if (!Number.isFinite(memberId)) {
+    res.status(400).json({ error: "Invalid member id" });
+    return null;
+  }
+  const [member] = await db
+    .select()
+    .from(companyMembersTable)
+    .where(
+      and(
+        eq(companyMembersTable.id, memberId),
+        eq(companyMembersTable.traderProfileId, profileId),
+        eq(companyMembersTable.status, "ACTIVE"),
+      ),
+    )
+    .limit(1);
+  if (!member) {
+    res.status(404).json({ error: "Team member not found" });
+    return null;
+  }
+  if (member.role === "OWNER") {
+    // The owner never occupies a seat and can never be suspended.
+    res.status(400).json({ error: "The business owner doesn't use a seat." });
+    return null;
+  }
+  return member;
+}
+
+router.post(
+  "/company/members/:id/seat-suspend",
+  authMiddleware,
+  traderOnly,
+  teamsGate,
+  seatEnforcementGate,
+  async (req, res) => {
+    try {
+      const ctx = await requireOwner(req, res);
+      if (!ctx) return;
+      const profileId = ctx.membership.traderProfileId;
+      const member = await findEmployeeMember(res, profileId, String(req.params.id));
+      if (!member) return;
+
+      const updated = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${CAP_LOCK_NAMESPACE}, ${profileId})`,
+        );
+        // Conditional flip: zero rows = already suspended (idempotent).
+        return tx
+          .update(companyMembersTable)
+          .set({
+            seatSuspendedAt: new Date(),
+            seatSuspensionSource: "OWNER",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(companyMembersTable.id, member.id),
+              eq(companyMembersTable.status, "ACTIVE"),
+              sql`${companyMembersTable.seatSuspendedAt} IS NULL`,
+            ),
+          )
+          .returning();
+      });
+
+      if (updated.length > 0) {
+        await db.insert(traderAuditLogTable).values({
+          userId: ctx.membership.profile.userId,
+          action: "MEMBER_SEAT_SUSPENDED",
+          performedBy: ctx.userId,
+          details: { memberUserId: member.userId, source: "OWNER" },
+        });
+      }
+      res.json({ ok: true, alreadySuspended: updated.length === 0 });
+    } catch (error) {
+      req.log.error({ err: error }, "seat suspend failed");
+      res.status(500).json({ error: "Failed to suspend the seat" });
+    }
+  },
+);
+
+router.post(
+  "/company/members/:id/seat-reactivate",
+  authMiddleware,
+  traderOnly,
+  teamsGate,
+  seatEnforcementGate,
+  async (req, res) => {
+    try {
+      const ctx = await requireOwner(req, res);
+      if (!ctx) return;
+      const profileId = ctx.membership.traderProfileId;
+      const member = await findEmployeeMember(res, profileId, String(req.params.id));
+      if (!member) return;
+
+      const outcome = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(${CAP_LOCK_NAMESPACE}, ${profileId})`,
+        );
+        // Free-seat check INSIDE the lock: reactivation takes a seat, so the
+        // seated count must be under the allowance right now.
+        const plan = await getCompanyPlanContext(profileId, tx);
+        if (plan.activeEmployeeCount >= plan.effectiveSeatAllowance) {
+          return { kind: "no_seat" as const };
+        }
+        const rows = await tx
+          .update(companyMembersTable)
+          .set({ seatSuspendedAt: null, seatSuspensionSource: null, updatedAt: new Date() })
+          .where(
+            and(
+              eq(companyMembersTable.id, member.id),
+              eq(companyMembersTable.status, "ACTIVE"),
+              sql`${companyMembersTable.seatSuspendedAt} IS NOT NULL`,
+            ),
+          )
+          .returning();
+        return { kind: rows.length > 0 ? ("reactivated" as const) : ("noop" as const) };
+      });
+
+      if (outcome.kind === "no_seat") {
+        res.status(409).json({
+          error:
+            "No free seat available. Free up another seat or upgrade your plan first.",
+          code: "NO_SEAT_AVAILABLE",
+        });
+        return;
+      }
+      if (outcome.kind === "reactivated") {
+        await db.insert(traderAuditLogTable).values({
+          userId: ctx.membership.profile.userId,
+          action: "MEMBER_SEAT_REACTIVATED",
+          performedBy: ctx.userId,
+          details: { memberUserId: member.userId, source: "OWNER" },
+        });
+      }
+      res.json({ ok: true, alreadyActive: outcome.kind === "noop" });
+    } catch (error) {
+      req.log.error({ err: error }, "seat reactivate failed");
+      res.status(500).json({ error: "Failed to reactivate the seat" });
+    }
+  },
+);
 
 export default router;

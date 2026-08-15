@@ -24,6 +24,11 @@ type TeamMember = {
   // logo). Served by the membership-gated avatar-file route; null → initials.
   avatarUrl: string | null;
   status: string;
+  // Seat suspension (Team billing): suspended members keep their login and
+  // can read past work, but can't act until a seat is free again.
+  seatSuspended?: boolean;
+  seatSuspendedAt?: string | null;
+  seatSuspensionSource?: 'OWNER' | 'SYSTEM' | null;
 };
 type TeamInvite = {
   id: number;
@@ -32,10 +37,25 @@ type TeamInvite = {
   expiresAt: string;
   createdAt: string;
 };
+type TeamSeats = {
+  used: number;
+  max: number;
+  // Present ONLY when team billing is enforced server-side; their presence is
+  // what switches this screen into seat-management mode.
+  plan?: string | null;
+  planActive?: boolean;
+  allowance?: number;
+  activeEmployees?: number;
+  suspendedEmployees?: number;
+  reservedInvites?: number;
+  available?: number;
+  overCapacity?: boolean;
+  exemption?: { seatLimit: number; expiresAt: string | null } | null;
+};
 type TeamData = {
   members: TeamMember[];
   invites: TeamInvite[];
-  seats: { used: number; max: number };
+  seats: TeamSeats;
 };
 
 function daysUntil(iso: string): number {
@@ -143,6 +163,29 @@ export default function TeamScreen() {
     onError: (e: Error) => Alert.alert('Could not remove member', e.message),
   });
 
+  const suspendSeatMutation = useMutation({
+    mutationFn: (id: number) => post(`/api/company/members/${id}/seat-suspend`),
+    onSuccess: invalidate,
+    onError: (e: Error) => Alert.alert('Could not suspend the seat', e.message),
+  });
+
+  const reactivateSeatMutation = useMutation({
+    mutationFn: (id: number) => post(`/api/company/members/${id}/seat-reactivate`),
+    onSuccess: invalidate,
+    onError: (e: Error) => Alert.alert('Could not reactivate the seat', e.message),
+  });
+
+  const confirmSuspendSeat = (member: TeamMember) => {
+    Alert.alert(
+      'Suspend this seat?',
+      `${member.fullName} will keep their login and can still see past work, but won't be able to send messages, quotes or manage bookings until you reactivate them. Their seat becomes free for someone else.`,
+      [
+        { text: 'Keep active', style: 'cancel' },
+        { text: 'Suspend seat', style: 'destructive', onPress: () => suspendSeatMutation.mutate(member.id) },
+      ],
+    );
+  };
+
   const confirmCancel = (invite: TeamInvite) => {
     Alert.alert('Cancel invitation?', `The invitation to ${invite.email} will stop working immediately.`, [
       { text: 'Keep it', style: 'cancel' },
@@ -196,6 +239,10 @@ export default function TeamScreen() {
 
   const data = teamQuery.data!;
   const seatsFull = data.seats.used >= data.seats.max;
+  // Server includes the enforced-billing seat breakdown only when Team
+  // billing is switched on — its presence toggles seat management below.
+  const enforced = typeof data.seats.allowance === 'number';
+  const suspendedCount = data.seats.suspendedEmployees ?? 0;
 
   return (
     <>
@@ -246,8 +293,23 @@ export default function TeamScreen() {
         </View>
         <Text style={[styles.seatsLine, seatsFull && { color: Colors.light.warning }]}>
           {data.seats.used} of {data.seats.max} seats used
-          {seatsFull ? ' — remove a member or cancel an invitation to free one up' : ''}
+          {seatsFull
+            ? enforced
+              ? ' — suspend a seat, cancel an invitation or upgrade your plan to free one up'
+              : ' — remove a member or cancel an invitation to free one up'
+            : ''}
         </Text>
+        {enforced && suspendedCount > 0 ? (
+          <Text style={[styles.seatsLine, { color: Colors.light.warning }]}>
+            {suspendedCount} team member{suspendedCount === 1 ? "'s seat is" : "s' seats are"} suspended —
+            they keep their login and history, and you can reactivate them when a seat is free.
+          </Text>
+        ) : null}
+        {enforced && data.seats.overCapacity ? (
+          <Text style={[styles.seatsLine, { color: Colors.light.warning }]}>
+            Your team is over your plan's seat allowance. Upgrade your plan to reactivate everyone.
+          </Text>
+        ) : null}
       </View>
 
       {/* Pending invitations */}
@@ -328,12 +390,50 @@ export default function TeamScreen() {
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle} numberOfLines={1}>{member.fullName}</Text>
                 <Text style={styles.rowSub} numberOfLines={1}>{member.email}</Text>
+                {member.seatSuspended ? (
+                  <Text style={[styles.rowSub, { color: Colors.light.warning }]} numberOfLines={1}>
+                    Seat suspended{member.seatSuspensionSource === 'SYSTEM' ? ' (plan change)' : ''}
+                  </Text>
+                ) : null}
               </View>
-              <View style={[styles.roleChip, member.role === 'OWNER' && styles.roleChipOwner]}>
-                <Text style={[styles.roleChipText, member.role === 'OWNER' && styles.roleChipTextOwner]}>
-                  {member.role === 'OWNER' ? 'Owner' : 'Employee'}
+              <View
+                style={[
+                  styles.roleChip,
+                  member.role === 'OWNER' && styles.roleChipOwner,
+                  member.seatSuspended && styles.roleChipSuspended,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.roleChipText,
+                    member.role === 'OWNER' && styles.roleChipTextOwner,
+                    member.seatSuspended && styles.roleChipTextSuspended,
+                  ]}
+                >
+                  {member.role === 'OWNER' ? 'Owner' : member.seatSuspended ? 'Suspended' : 'Employee'}
                 </Text>
               </View>
+              {member.role === 'EMPLOYEE' && enforced ? (
+                member.seatSuspended ? (
+                  <Pressable
+                    style={[styles.smallBtn, { marginLeft: 8 }]}
+                    onPress={() => reactivateSeatMutation.mutate(member.id)}
+                    disabled={reactivateSeatMutation.isPending}
+                    hitSlop={6}
+                  >
+                    <Text style={styles.smallBtnText}>Reactivate</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={[styles.smallBtn, { marginLeft: 8 }]}
+                    onPress={() => confirmSuspendSeat(member)}
+                    disabled={suspendSeatMutation.isPending}
+                    hitSlop={6}
+                  >
+                    <Text style={styles.smallBtnText}>Suspend</Text>
+                  </Pressable>
+                )
+              ) : null}
               {member.role === 'EMPLOYEE' ? (
                 <Pressable
                   style={[styles.smallBtn, styles.smallBtnDanger, { marginLeft: 8 }]}
@@ -391,8 +491,21 @@ export default function TeamScreen() {
                 <View style={styles.modalMetaDivider} />
                 <View style={styles.modalMetaRow}>
                   <Text style={styles.modalMetaLabel}>Status</Text>
-                  <Text style={[styles.modalMetaValue, { color: Colors.light.success }]}>
-                    {selectedMember.status === 'ACTIVE' ? 'Active' : selectedMember.status}
+                  <Text
+                    style={[
+                      styles.modalMetaValue,
+                      {
+                        color: selectedMember.seatSuspended
+                          ? Colors.light.warning
+                          : Colors.light.success,
+                      },
+                    ]}
+                  >
+                    {selectedMember.seatSuspended
+                      ? 'Seat suspended'
+                      : selectedMember.status === 'ACTIVE'
+                        ? 'Active'
+                        : selectedMember.status}
                   </Text>
                 </View>
                 <View style={styles.modalMetaDivider} />
@@ -493,8 +606,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
   },
   roleChipOwner: { backgroundColor: 'rgba(0, 180, 216, 0.10)', borderColor: 'rgba(0, 180, 216, 0.35)' },
+  roleChipSuspended: { backgroundColor: 'rgba(245, 158, 11, 0.10)', borderColor: 'rgba(245, 158, 11, 0.35)' },
   roleChipText: { fontSize: 11.5, fontWeight: '600', color: Colors.light.tabIconDefault },
   roleChipTextOwner: { color: Colors.light.primary },
+  roleChipTextSuspended: { color: Colors.light.warning },
   smallBtn: {
     borderRadius: 8,
     paddingHorizontal: 10,

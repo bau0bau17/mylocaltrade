@@ -584,6 +584,36 @@ export default function PricingScreen() {
                   <Pressable style={styles.restoreBtn} onPress={handleRestore} disabled={!!purchasing}>
                     <Text style={styles.restoreBtnText}>Restore purchases</Text>
                   </Pressable>
+
+                  {/* Apple-required subscription disclosure (Schedule 2 / App
+                      Review 3.1.2): renewal terms, cancellation, and legal
+                      links directly alongside the purchase buttons. */}
+                  <View style={styles.complianceBox}>
+                    <Text style={styles.complianceText}>
+                      All plans are auto-renewing subscriptions billed to your Apple ID at the
+                      price shown, for the period shown (monthly or yearly), until cancelled.
+                      Your subscription renews automatically unless auto-renew is turned off at
+                      least 24 hours before the end of the current period. Manage or cancel
+                      anytime in your App Store account settings; you keep access until the end
+                      of the paid period.
+                    </Text>
+                    {availableTeamPlans.length > 0 ? (
+                      <Text style={styles.complianceText}>
+                        Team plans are single business subscriptions purchased by the business
+                        owner: one price covers the owner (who never uses a seat) plus the number
+                        of employee seats shown. They are not priced or billed per employee.
+                      </Text>
+                    ) : null}
+                    <View style={styles.complianceLinksRow}>
+                      <Pressable onPress={() => router.push('/(tabs)/privacy')} hitSlop={8}>
+                        <Text style={styles.complianceLink}>Privacy Policy</Text>
+                      </Pressable>
+                      <Text style={styles.complianceLinkDot}>·</Text>
+                      <Pressable onPress={() => router.push('/(tabs)/terms')} hitSlop={8}>
+                        <Text style={styles.complianceLink}>Terms of Use</Text>
+                      </Pressable>
+                    </View>
+                  </View>
                 </>
               )}
             </>
@@ -646,6 +676,35 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+  },
+  complianceBox: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
+    gap: 8,
+  },
+  complianceText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: Colors.light.textSecondary,
+  },
+  complianceLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  complianceLink: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: Colors.light.primary,
+  },
+  complianceLinkDot: {
+    color: Colors.light.textSecondary,
+    fontSize: 12,
   },
   centerContainer: {
     flex: 1,

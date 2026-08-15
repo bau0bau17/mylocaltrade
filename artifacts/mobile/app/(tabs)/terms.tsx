@@ -147,6 +147,9 @@ export default function TermsScreen() {
         <Text style={styles.paragraph}>
           Basic listings are free. Tradespeople may upgrade to Premium for additional features, billed either monthly or yearly through the Apple App Store, and renewing automatically until cancelled. Subscriptions are billed and managed by Apple: you can cancel at any time in your App Store subscription settings, and access continues until the end of the current billing period. Prices are subject to change with 30 days' notice. Cancellations and refunds are set out on our Subscription &amp; Billing page.
         </Text>
+        <Text style={styles.paragraph}>
+          Premium is available as a Solo plan or as a Team plan. A Team plan is a single business subscription purchased by the business owner that additionally includes a fixed number of employee seats for the business's team members; it is not billed per employee. If a Team subscription ends, lapses or changes to a plan with fewer seats, employee seats above the new allowance are suspended, not deleted: suspended team members keep their login and can view their past enquiries, messages and bookings, but cannot act for the business until a seat becomes available again. A plan change never deletes team members or their history.
+        </Text>
       </View>
 
       <View style={styles.section}>

@@ -96,6 +96,23 @@ export const TRADER_AUDIT_ACTIONS = [
   // still held live jobs — those were handed to the owner (one row per
   // handover operation; details carry the affected conversation ids).
   "JOBS_HANDED_TO_OWNER_ON_ACCOUNT_DELETION",
+  // --- Team billing seat lifecycle (Phase D). userId = the company owner,
+  // performedBy = the acting user (owner for manual changes, owner again for
+  // system reconciliation triggered by their subscription change, or the
+  // admin for exemptions). ---
+  // An employee's seat was suspended (details: memberUserId, source
+  // SYSTEM|OWNER, reason). The membership row stays ACTIVE — read-only.
+  "MEMBER_SEAT_SUSPENDED",
+  // A suspended employee's seat was reactivated (details: memberUserId,
+  // source SYSTEM|OWNER).
+  "MEMBER_SEAT_REACTIVATED",
+  // One row per seat reconciliation run that CHANGED something (details:
+  // allowance, suspended/reactivated member ids, trigger).
+  "COMPANY_SEATS_RECONCILED",
+  // Admin granted/revoked a grandfathering seat exemption (details:
+  // seatLimit, expiresAt, reason).
+  "SEAT_EXEMPTION_GRANTED",
+  "SEAT_EXEMPTION_REVOKED",
 ] as const;
 export type TraderAuditAction = (typeof TRADER_AUDIT_ACTIONS)[number];
 

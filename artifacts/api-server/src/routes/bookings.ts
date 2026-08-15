@@ -10,6 +10,9 @@ import {
   JobClaimedByOtherError,
   jobClaimedByOtherBody,
   requireAssignedInTx,
+  respondCannotActOnJob,
+  SeatSuspendedError,
+  SEAT_SUSPENDED_RESPONSE,
 } from "../lib/job-assignment";
 import {
   bookingsTable,
@@ -148,7 +151,7 @@ router.post("/conversations/:id/bookings", authMiddleware, async (req, res) => {
     if (role === "trader") {
       const act = await canActOnJob(conv, userId);
       if (!act.ok) {
-        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        respondCannotActOnJob(res, act);
         return;
       }
     }
@@ -241,6 +244,10 @@ router.post("/conversations/:id/bookings", authMiddleware, async (req, res) => {
       res.status(400).json({ error: "Invalid booking", details: error.issues });
       return;
     }
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+      return;
+    }
     if (error instanceof JobClaimedByOtherError) {
       res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
@@ -292,7 +299,7 @@ router.post("/bookings/:id/confirm", authMiddleware, async (req, res) => {
     if (role === "trader") {
       const act = await canActOnJob(row.conv, userId);
       if (!act.ok) {
-        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        respondCannotActOnJob(res, act);
         return;
       }
     }
@@ -366,6 +373,10 @@ router.post("/bookings/:id/confirm", authMiddleware, async (req, res) => {
 
     res.json({ booking: serializeBooking(updated) });
   } catch (error) {
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+      return;
+    }
     if (error instanceof JobClaimedByOtherError) {
       res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
@@ -405,7 +416,7 @@ router.post("/bookings/:id/cancel", authMiddleware, async (req, res) => {
     if (role === "trader") {
       const act = await canActOnJob(row.conv, userId);
       if (!act.ok) {
-        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        respondCannotActOnJob(res, act);
         return;
       }
     }
@@ -455,6 +466,10 @@ router.post("/bookings/:id/cancel", authMiddleware, async (req, res) => {
 
     res.json({ booking: serializeBooking(updated) });
   } catch (error) {
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+      return;
+    }
     if (error instanceof JobClaimedByOtherError) {
       res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;

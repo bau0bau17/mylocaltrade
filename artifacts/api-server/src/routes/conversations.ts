@@ -18,6 +18,9 @@ import {
   ReassignmentError,
   logJobReassigned,
   jobIsActive,
+  respondCannotActOnJob,
+  SeatSuspendedError,
+  SEAT_SUSPENDED_RESPONSE,
 } from "../lib/job-assignment";
 import {
   conversationsTable,
@@ -788,6 +791,10 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
       res.status(400).json({ error: "Invalid message", details: error.issues });
       return;
     }
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+      return;
+    }
     if (error instanceof JobClaimedByOtherError) {
       res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
@@ -828,7 +835,7 @@ router.post("/conversations/:id/close", authMiddleware, async (req, res) => {
     if (isTrader) {
       const act = await canActOnJob(conv, userId);
       if (!act.ok) {
-        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        respondCannotActOnJob(res, act);
         return;
       }
     }
@@ -850,6 +857,10 @@ router.post("/conversations/:id/close", authMiddleware, async (req, res) => {
 
     res.json({ ok: true });
   } catch (error) {
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+      return;
+    }
     if (error instanceof JobClaimedByOtherError) {
       res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
@@ -1041,7 +1052,7 @@ router.patch("/conversations/:id/trader-status", authMiddleware, async (req, res
     // able to flip it (flag OFF this always passes; legacy unchanged).
     const act = await canActOnJob(conv, userId);
     if (!act.ok) {
-      res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+      respondCannotActOnJob(res, act);
       return;
     }
 
@@ -1069,6 +1080,10 @@ router.patch("/conversations/:id/trader-status", authMiddleware, async (req, res
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "Invalid status", details: error.issues });
+      return;
+    }
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
       return;
     }
     if (error instanceof JobClaimedByOtherError) {
@@ -1334,7 +1349,7 @@ router.post("/conversations/:id/trader-mark-done", authMiddleware, async (req, r
     {
       const act = await canActOnJob(conv, userId);
       if (!act.ok) {
-        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        respondCannotActOnJob(res, act);
         return;
       }
     }
@@ -1420,6 +1435,10 @@ router.post("/conversations/:id/trader-mark-done", authMiddleware, async (req, r
 
     res.json({ ok: true });
   } catch (error) {
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+      return;
+    }
     if (error instanceof JobClaimedByOtherError) {
       res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
@@ -1465,7 +1484,7 @@ router.post("/conversations/:id/cancel", authMiddleware, async (req, res) => {
     if (isTrader) {
       const act = await canActOnJob(conv, userId);
       if (!act.ok) {
-        res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+        respondCannotActOnJob(res, act);
         return;
       }
     }
@@ -1511,6 +1530,10 @@ router.post("/conversations/:id/cancel", authMiddleware, async (req, res) => {
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "A short reason is required to cancel.", details: error.issues });
+      return;
+    }
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
       return;
     }
     if (error instanceof JobClaimedByOtherError) {

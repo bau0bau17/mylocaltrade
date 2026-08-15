@@ -1,0 +1,249 @@
+Phase D is approved. Implement the complete Team subscription lifecycle, hardening and release-readiness work described below. Stop after Phase D and do not publish or build anything.
+
+CURRENT CONFIRMED CONFIGURATION
+
+Apple subscription group:
+
+- Name: Trader Subscription
+- Group ID: 22124207
+
+Products:
+
+- com.mylocaltrade.app.trader.monthly → Solo, 0 employees
+- com.mylocaltrade.app.trader.yearly → Solo, 0 employees
+- com.mylocaltrade.app.trader.team5.yearly → 5 employees
+- com.mylocaltrade.app.trader.team10.yearly → 10 employees
+- com.mylocaltrade.app.trader.team20.yearly → 20 employees
+
+Apple service levels:
+
+- Level 1: Team 20 Annual
+- Level 2: Team 10 Annual
+- Level 3: Team 5 Annual
+- Level 4: Solo Monthly and Solo Yearly
+
+RevenueCat:
+
+- Existing entitlement: Trader Subscription
+- Active offering: default
+- Packages: $rc_monthly, $rc_annual, team_5_annual, team_10_annual, team_20_annual
+
+TEAM_BILLING_ENFORCED must remain false throughout this phase.
+
+PHASE D REQUIREMENTS
+
+1. Subscription lifecycle
+
+Implement the complete server-controlled lifecycle for:
+
+- Team upgrade;
+- Team downgrade;
+- Team → Solo;
+- subscription expiry;
+- billing issue/grace period;
+- subscription cancellation while access remains valid until the paid period ends;
+- resubscription/reactivation;
+- RevenueCat webhook retries and out-of-order events;
+- unknown or missing product identifiers.
+
+Never trust client-supplied plan or seat values. The backend and verified RevenueCat product identifier remain the source of truth.
+
+2. Downgrade and expiry behaviour
+
+Never delete employees, memberships, jobs, quotes, conversations or historical attribution because a subscription expires or is downgraded.
+
+If the new employee allowance is lower than current active employees plus pending invitations:
+
+- block new invitations immediately;
+- prevent accepting an invitation when no seat is available;
+- release seats when invitations expire or are cancelled;
+- suspend only the employees exceeding the paid allowance;
+- suspended employees become read-only and cannot claim, message, quote, book, edit or otherwise act for the company;
+- preserve all historical names, photos, messages, quotes and job attribution;
+- allow the owner to select which employees remain active;
+- make suspension and reactivation reversible;
+- never count the owner as an employee seat;
+- keep an absolute maximum of 20 employees.
+
+If deterministic temporary selection is necessary during a downgrade, preserve the longest-standing active memberships and suspend the newest ones until the owner changes the selection. Document and test this rule.
+
+3. Owner seat-management UI
+
+Add an owner-only seat-management section to the Team screen showing:
+
+- current plan;
+- employee allowance;
+- active employee seats;
+- reserved pending-invite seats;
+- available seats;
+- suspended employees;
+- clear explanation when the business is over capacity.
+
+The owner must be able to activate or suspend employees within the paid allowance. All changes must be transactional and race-safe.
+
+Employees must never see billing details, product identifiers, prices, subscription-management controls or seat-selection controls.
+
+4. Employee experience
+
+An employee suspended because of billing or seat limits must:
+
+- remain able to sign in;
+- see a clear read-only explanation;
+- retain access to their own account, profile photo, legal pages, support, password/security settings and account deletion;
+- retain read-only access to appropriate historical company work;
+- be unable to perform any company action;
+- never see a purchase or restore-purchases prompt.
+
+A removed/revoked employee must still lose company access immediately, including existing sessions.
+
+5. Existing teams and grandfathering
+
+Inspect existing production-compatible data assumptions without modifying production.
+
+Implement a safe, explicit grandfathering strategy for companies that already had active employees before Team billing enforcement. Do not silently remove or suspend existing people when the flag is first enabled.
+
+The grandfathering state must be:
+
+- server-controlled;
+- auditable;
+- time-bounded or explicitly removable;
+- clearly visible to the owner/admin;
+- unable to grant more than the absolute 20-employee maximum.
+
+Document the exact migration and removal strategy.
+
+6. Concurrency and security
+
+Protect with database transactions/locks:
+
+- two invitations competing for the final seat;
+- invitation acceptance versus cancellation/expiry;
+- downgrade versus invitation acceptance;
+- employee activation versus another activation;
+- employee removal versus seat reassignment;
+- webhook plan change versus owner seat selection;
+- repeated or out-of-order RevenueCat webhooks.
+
+No race may create more active/reserved employees than the effective allowance.
+
+7. App Store subscription presentation
+
+Review the owner purchase screen against Apple’s auto-renewable subscription requirements.
+
+It must clearly display, using live StoreKit/RevenueCat information:
+
+- plan name;
+- total price;
+- billing period;
+- number of employee seats;
+- that the owner is included and does not consume a seat;
+- auto-renewal information;
+- cancellation/management information;
+- Restore Purchases;
+- Privacy Policy;
+- Terms of Use/EULA.
+
+Do not describe Team prices as a per-employee charge. They are annual business plans covering the stated employee allowance.
+
+Prepare the exact App Review notes needed for Solo and Team subscriptions, but do not submit anything to Apple.
+
+8. Legal documents
+
+Review the Privacy Policy, Terms and in-app subscription/legal copy.
+
+Change them only where genuinely required to reflect:
+
+- owner-paid Team subscriptions;
+- invited employee access;
+- employee suspension on downgrade/expiry;
+- retained job and audit history;
+- RevenueCat/Apple subscription processing;
+- account and company-role separation.
+
+Do not force legal re-acceptance unless there is a specific documented legal reason. If re-acceptance is required, explain why and use the existing versioning mechanism.
+
+Keep website and app legal text synchronized where applicable. Report the exact legal wording changed.
+
+9. Feature flag and rollback
+
+Keep `TEAM_BILLING_ENFORCED=false`.
+
+With the flag off, existing production behaviour must remain unchanged.
+
+Provide a complete rollout sequence covering:
+
+- production schema migration;
+- required production environment variables;
+- backend Publish;
+- final TestFlight build;
+- sandbox subscription tests;
+- flag enablement;
+- post-enable smoke checks.
+
+Rollback must be possible by turning the flag off and republishing, without deleting subscription or membership data.
+
+10. Required tests
+
+Add complete regression coverage for:
+
+- Solo, Team 5, Team 10 and Team 20;
+- upgrade and downgrade paths;
+- Team → Solo;
+- cancellation with paid access remaining;
+- expiry and reactivation;
+- billing issue/grace-period behaviour;
+- owner not consuming a seat;
+- pending invitations reserving seats;
+- invitation expiry/cancellation releasing seats;
+- concurrent final-seat operations;
+- owner employee-selection controls;
+- suspended employee permission matrix;
+- revoked employee stale-session denial;
+- unknown products failing closed;
+- webhook retries and out-of-order delivery;
+- feature flag OFF preserving legacy behaviour;
+- shared-device account switching without owner-content flashes;
+- all prices coming dynamically from RevenueCat.
+
+Run:
+
+- complete API suite;
+- complete mobile suite;
+- complete admin suite;
+- all typechecks;
+- clean Metro bundle;
+- production iOS export;
+- security/architecture review.
+
+Fix every material review finding before committing.
+
+RESTRICTIONS
+
+Do not:
+
+- enable TEAM_BILLING_ENFORCED;
+- modify App Store Connect or RevenueCat;
+- click Add for Review;
+- modify production data or environment variables;
+- migrate the production database;
+- Publish the backend;
+- run EAS Build or TestFlight submission;
+- begin unrelated refactoring.
+
+FINAL REPORT
+
+Provide:
+
+- commit and GitHub verification;
+- schema changes;
+- complete lifecycle behaviour;
+- suspension/reactivation rules;
+- grandfathering strategy;
+- owner and employee UI behaviour;
+- exact legal changes;
+- tests and review results;
+- production variables required, including the exact TEAM_PRODUCT_SEAT_MAP value;
+- rollout and rollback sequence;
+- remaining blockers before the final build.
+
+Stop after Phase D and wait for approval.

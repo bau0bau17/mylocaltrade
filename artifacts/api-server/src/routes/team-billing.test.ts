@@ -7,15 +7,20 @@ import {
   traderProfilesTable,
   companyMembersTable,
   companyInvitesTable,
+  companySeatExemptionsTable,
   subscriptionsTable,
   traderAuditLogTable,
+  enquiriesTable,
+  conversationsTable,
 } from "@workspace/db/schema";
-import { eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import app from "../app";
 import { generateToken } from "../lib/auth";
 import {
   resolveProductTier,
   getCompanyPlanContext,
+  reconcileCompanySeats,
+  sweepCompanySeatReconciliation,
   ABSOLUTE_MAX_EMPLOYEE_SEATS,
 } from "../lib/team-billing";
 
@@ -45,6 +50,8 @@ const TEAM_MAP = { [FUTURE_TEAM5_PRODUCT]: 5 };
 
 const createdUserIds: number[] = [];
 const createdProfileIds: number[] = [];
+const createdEnquiryIds: number[] = [];
+const createdConversationIds: number[] = [];
 
 const EXT_TEAMS = process.env["COMPANY_TEAMS_ENABLED"];
 const EXT_BILLING = process.env["TEAM_BILLING_ENFORCED"];
@@ -186,7 +193,20 @@ afterAll(async () => {
       .delete(subscriptionsTable)
       .where(inArray(subscriptionsTable.userId, createdUserIds));
   }
+  if (createdConversationIds.length > 0) {
+    await db
+      .delete(conversationsTable)
+      .where(inArray(conversationsTable.id, createdConversationIds));
+  }
+  if (createdEnquiryIds.length > 0) {
+    await db
+      .delete(enquiriesTable)
+      .where(inArray(enquiriesTable.id, createdEnquiryIds));
+  }
   if (createdProfileIds.length > 0) {
+    await db
+      .delete(companySeatExemptionsTable)
+      .where(inArray(companySeatExemptionsTable.traderProfileId, createdProfileIds));
     await db
       .delete(companyInvitesTable)
       .where(inArray(companyInvitesTable.traderProfileId, createdProfileIds));
@@ -475,7 +495,20 @@ describe("TEAM_BILLING_ENFORCED on", () => {
       .set("Authorization", `Bearer ${ctx.teamOwner.token}`);
     expect(res.status).toBe(200);
     // 1 active employee, 0 pending — the owner never occupies a seat.
-    expect(res.body.seats).toEqual({ used: 1, max: 5 });
+    // Phase D: enforced mode exposes the full seat block for the owner UI.
+    expect(res.body.seats).toEqual({
+      used: 1,
+      max: 5,
+      plan: "team_5",
+      planActive: true,
+      allowance: 5,
+      activeEmployees: 1,
+      suspendedEmployees: 0,
+      reservedInvites: 0,
+      available: 4,
+      overCapacity: false,
+      exemption: null,
+    });
   });
 
   it("employees get gating booleans only — no billing tier or seat counts", async () => {
@@ -499,6 +532,8 @@ describe("TEAM_BILLING_ENFORCED on", () => {
         viewerCanManageBilling: false,
         viewerCanManageTeam: false,
         viewerCanInvite: false,
+        // Phase D: employees learn their own seat state — nothing else.
+        seatSuspended: false,
       });
     } finally {
       await db
@@ -648,5 +683,397 @@ describe("Phase C confirmed products", () => {
       }
       await setSubscription(ctx.teamOwner.id, FUTURE_TEAM5_PRODUCT);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase D — reconciliation, exemptions, owner seat routes, write gate
+// ---------------------------------------------------------------------------
+
+async function addEmployee(
+  profileId: number,
+  label: string,
+  createdAt: Date,
+  seat?: { suspendedAt: Date; source: "OWNER" | "SYSTEM" },
+): Promise<{ userId: number; memberId: number; token: string }> {
+  const emp = await createTrader(label);
+  const [m] = await db
+    .insert(companyMembersTable)
+    .values({
+      traderProfileId: profileId,
+      userId: emp.id,
+      role: "EMPLOYEE",
+      status: "ACTIVE",
+      createdAt,
+      seatSuspendedAt: seat?.suspendedAt ?? null,
+      seatSuspensionSource: seat?.source ?? null,
+    })
+    .returning({ id: companyMembersTable.id });
+  return { userId: emp.id, memberId: m.id, token: emp.token };
+}
+
+async function grantExemptionRow(
+  profileId: number,
+  seatLimit: number,
+  grantedBy: number,
+): Promise<number> {
+  const [row] = await db
+    .insert(companySeatExemptionsTable)
+    .values({
+      traderProfileId: profileId,
+      seatLimit,
+      reason: `test grandfathering ${SUFFIX}`,
+      createdByAdminId: grantedBy,
+    })
+    .returning({ id: companySeatExemptionsTable.id });
+  return row.id;
+}
+
+async function memberSeatState(memberId: number) {
+  const [row] = await db
+    .select({
+      seatSuspendedAt: companyMembersTable.seatSuspendedAt,
+      seatSuspensionSource: companyMembersTable.seatSuspensionSource,
+    })
+    .from(companyMembersTable)
+    .where(eq(companyMembersTable.id, memberId))
+    .limit(1);
+  return row;
+}
+
+describe("reconcileCompanySeats — deterministic suspension rule", () => {
+  it("is a no-op (null) while TEAM_BILLING_ENFORCED is off", async () => {
+    setFlags({ teams: true });
+    expect(await reconcileCompanySeats(ctx.teamProfileId, "test:flag-off")).toBeNull();
+  });
+
+  it("suspends only the NEWEST seated employees beyond the allowance; reactivates longest-standing first; never auto-reactivates OWNER-suspended seats", async () => {
+    setFlags({ teams: true, billing: true, teamMap: TEAM_MAP });
+    const owner = await createTrader("rec-owner");
+    const profileId = await createProfile(owner.id, "rec");
+    // Inactive plan → 0 plan seats; allowance comes from the exemption (2).
+    await setSubscription(owner.id, null, "cancelled");
+    const exemptionId = await grantExemptionRow(profileId, 2, owner.id);
+
+    const day = 24 * 60 * 60 * 1000;
+    const e1 = await addEmployee(profileId, "rec-e1", new Date(Date.now() - 3 * day));
+    const e2 = await addEmployee(profileId, "rec-e2", new Date(Date.now() - 2 * day));
+    const e3 = await addEmployee(profileId, "rec-e3", new Date(Date.now() - 1 * day));
+
+    // 3 seated > allowance 2 → exactly the newest (e3) is suspended.
+    const first = await reconcileCompanySeats(profileId, "test:downgrade");
+    expect(first).toMatchObject({
+      changed: true,
+      allowance: 2,
+      suspendedMemberUserIds: [e3.userId],
+      reactivatedMemberUserIds: [],
+    });
+    expect((await memberSeatState(e1.memberId)).seatSuspendedAt).toBeNull();
+    expect((await memberSeatState(e2.memberId)).seatSuspendedAt).toBeNull();
+    const e3State = await memberSeatState(e3.memberId);
+    expect(e3State.seatSuspendedAt).not.toBeNull();
+    expect(e3State.seatSuspensionSource).toBe("SYSTEM");
+
+    // Deterministic and idempotent: a second run changes nothing.
+    const second = await reconcileCompanySeats(profileId, "test:again");
+    expect(second).toMatchObject({ changed: false, allowance: 2 });
+
+    // Owner parks e2 manually; the allowance grows to 3. Reconciliation may
+    // only reactivate SYSTEM-suspended seats (e3) — e2 stays down.
+    await db
+      .update(companyMembersTable)
+      .set({ seatSuspendedAt: new Date(), seatSuspensionSource: "OWNER" })
+      .where(eq(companyMembersTable.id, e2.memberId));
+    await db
+      .update(companySeatExemptionsTable)
+      .set({ seatLimit: 3 })
+      .where(eq(companySeatExemptionsTable.id, exemptionId));
+
+    const third = await reconcileCompanySeats(profileId, "test:upgrade");
+    expect(third).toMatchObject({
+      changed: true,
+      allowance: 3,
+      suspendedMemberUserIds: [],
+      reactivatedMemberUserIds: [e3.userId],
+    });
+    expect((await memberSeatState(e3.memberId)).seatSuspendedAt).toBeNull();
+    const e2State = await memberSeatState(e2.memberId);
+    expect(e2State.seatSuspendedAt).not.toBeNull();
+    expect(e2State.seatSuspensionSource).toBe("OWNER");
+
+    // Suspension never deletes anyone: all three memberships remain ACTIVE.
+    const members = await db
+      .select({ status: companyMembersTable.status })
+      .from(companyMembersTable)
+      .where(eq(companyMembersTable.traderProfileId, profileId));
+    expect(members.filter((m) => m.status === "ACTIVE")).toHaveLength(3);
+
+    // Audit trail: per-member suspension + the reconciliation summary.
+    const audits = await db
+      .select({ action: traderAuditLogTable.action })
+      .from(traderAuditLogTable)
+      .where(eq(traderAuditLogTable.userId, owner.id));
+    const actions = audits.map((a) => a.action);
+    expect(actions).toContain("MEMBER_SEAT_SUSPENDED");
+    expect(actions).toContain("MEMBER_SEAT_REACTIVATED");
+    expect(actions).toContain("COMPANY_SEATS_RECONCILED");
+  });
+});
+
+describe("exemption expiry & the reconciliation sweep", () => {
+  it("an expired exemption stops contributing to the allowance — reconcile suspends the over-allowance employee", async () => {
+    setFlags({ teams: true, billing: true, teamMap: TEAM_MAP });
+    const owner = await createTrader("expired-ex-owner");
+    const profileId = await createProfile(owner.id, "expired-ex");
+    await setSubscription(owner.id, null, "cancelled"); // no plan seats
+    const emp = await addEmployee(profileId, "expired-ex-e1", new Date(Date.now() - 1000));
+
+    // Live-but-time-bounded exemption whose window has already lapsed.
+    await db.insert(companySeatExemptionsTable).values({
+      traderProfileId: profileId,
+      seatLimit: 1,
+      reason: `expired grandfathering ${SUFFIX}`,
+      createdByAdminId: owner.id,
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+
+    const planCtx = await getCompanyPlanContext(profileId);
+    expect(planCtx.effectiveSeatAllowance).toBe(0);
+
+    // This is exactly what the hourly scheduler sweep runs per company —
+    // no subscription event fires when an exemption merely times out.
+    const result = await reconcileCompanySeats(profileId, "scheduler:seat-sweep");
+    expect(result).toMatchObject({ changed: true, allowance: 0 });
+    const seat = await memberSeatState(emp.memberId);
+    expect(seat.seatSuspendedAt).not.toBeNull();
+    expect(seat.seatSuspensionSource).toBe("SYSTEM");
+  });
+
+  it("the sweep is a hard no-op while either flag is off", async () => {
+    setFlags({ teams: true }); // billing off
+    expect(await sweepCompanySeatReconciliation()).toEqual({
+      companies: 0,
+      changed: 0,
+      errors: 0,
+    });
+    setFlags({ billing: true, teamMap: TEAM_MAP }); // teams off
+    expect(await sweepCompanySeatReconciliation()).toEqual({
+      companies: 0,
+      changed: 0,
+      errors: 0,
+    });
+  });
+});
+
+describe("admin seat exemptions (grandfathering)", () => {
+  let adminToken: string;
+
+  beforeAll(async () => {
+    const [admin] = await db
+      .insert(usersTable)
+      .values({
+        email: emailFor("seat-admin"),
+        passwordHash: "$2a$10$test.hash.not.used.for.login",
+        fullName: "Seat Admin",
+        role: "admin",
+        isActive: true,
+        emailVerified: true,
+      })
+      .returning({ id: usersTable.id });
+    createdUserIds.push(admin.id);
+    adminToken = generateToken(admin.id, "admin", 1);
+  });
+
+  it("is admin-only", async () => {
+    const res = await request(app)
+      .post("/api/admin/seat-exemptions")
+      .set("Authorization", `Bearer ${ctx.teamOwner.token}`)
+      .send({ traderProfileId: ctx.teamProfileId, seatLimit: 5, reason: "nope" });
+    expect(res.status).toBe(403);
+  });
+
+  it("grant raises the effective allowance, duplicates are refused, revoke reconciles immediately", async () => {
+    setFlags({ teams: true, billing: true, teamMap: TEAM_MAP });
+    const owner = await createTrader("ex-owner");
+    const profileId = await createProfile(owner.id, "ex");
+    await setSubscription(owner.id, null, "cancelled"); // no plan seats
+    const emp = await addEmployee(profileId, "ex-e1", new Date(Date.now() - 1000));
+
+    const grant = await request(app)
+      .post("/api/admin/seat-exemptions")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        traderProfileId: profileId,
+        seatLimit: 1,
+        reason: `grandfathered: 1 employee at launch ${SUFFIX}`,
+      });
+    expect(grant.status).toBeLessThan(300);
+
+    const planCtx = await getCompanyPlanContext(profileId);
+    expect(planCtx.effectiveSeatAllowance).toBe(1);
+    expect(planCtx.overLimit).toBe(false);
+
+    // One live exemption per company.
+    const dup = await request(app)
+      .post("/api/admin/seat-exemptions")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ traderProfileId: profileId, seatLimit: 2, reason: "second attempt" });
+    expect(dup.status).toBe(409);
+    expect(dup.body.code).toBe("EXEMPTION_EXISTS");
+
+    const [exemption] = await db
+      .select({ id: companySeatExemptionsTable.id })
+      .from(companySeatExemptionsTable)
+      .where(
+        and(
+          eq(companySeatExemptionsTable.traderProfileId, profileId),
+          eq(companySeatExemptionsTable.seatLimit, 1),
+        ),
+      )
+      .limit(1);
+
+    // Revoke → allowance drops to 0 → the employee is suspended right away
+    // (read-only, reversible — the membership row stays ACTIVE).
+    const revoke = await request(app)
+      .post(`/api/admin/seat-exemptions/${exemption.id}/revoke`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({});
+    expect(revoke.status).toBeLessThan(300);
+
+    const seat = await memberSeatState(emp.memberId);
+    expect(seat.seatSuspendedAt).not.toBeNull();
+    expect(seat.seatSuspensionSource).toBe("SYSTEM");
+
+    const audits = await db
+      .select({ action: traderAuditLogTable.action })
+      .from(traderAuditLogTable)
+      .where(eq(traderAuditLogTable.userId, owner.id));
+    const actions = audits.map((a) => a.action);
+    expect(actions).toContain("SEAT_EXEMPTION_GRANTED");
+    expect(actions).toContain("SEAT_EXEMPTION_REVOKED");
+  });
+});
+
+describe("owner seat-suspend / seat-reactivate routes", () => {
+  it("404 while TEAM_BILLING_ENFORCED is off — suspensions cannot originate from a non-enforcement world", async () => {
+    setFlags({ teams: true });
+    const res = await request(app)
+      .post("/api/company/members/1/seat-suspend")
+      .set("Authorization", `Bearer ${ctx.teamOwner.token}`)
+      .send({});
+    expect(res.status).toBe(404);
+  });
+
+  it("owner suspends (idempotent) and reactivates; reactivation refuses without a free seat", async () => {
+    setFlags({ teams: true, billing: true, teamMap: TEAM_MAP });
+    const owner = await createTrader("seatroute-owner");
+    const profileId = await createProfile(owner.id, "seatroute");
+    await setSubscription(owner.id, FUTURE_TEAM5_PRODUCT); // 5 seats
+    const emp = await addEmployee(profileId, "seatroute-e1", new Date(Date.now() - 1000));
+
+    // Employees cannot drive seat state — owner-only.
+    const notOwner = await request(app)
+      .post(`/api/company/members/${emp.memberId}/seat-suspend`)
+      .set("Authorization", `Bearer ${emp.token}`)
+      .send({});
+    expect(notOwner.status).toBe(403);
+
+    const suspend = await request(app)
+      .post(`/api/company/members/${emp.memberId}/seat-suspend`)
+      .set("Authorization", `Bearer ${owner.token}`)
+      .send({});
+    expect(suspend.status).toBe(200);
+    expect(suspend.body).toMatchObject({ ok: true, alreadySuspended: false });
+    expect((await memberSeatState(emp.memberId)).seatSuspensionSource).toBe("OWNER");
+
+    const again = await request(app)
+      .post(`/api/company/members/${emp.memberId}/seat-suspend`)
+      .set("Authorization", `Bearer ${owner.token}`)
+      .send({});
+    expect(again.status).toBe(200);
+    expect(again.body).toMatchObject({ ok: true, alreadySuspended: true });
+
+    // Downgrade to Solo (0 seats): reactivation must refuse — no free seat.
+    await setSubscription(owner.id, "com.mylocaltrade.app.trader.yearly");
+    const refused = await request(app)
+      .post(`/api/company/members/${emp.memberId}/seat-reactivate`)
+      .set("Authorization", `Bearer ${owner.token}`)
+      .send({});
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe("NO_SEAT_AVAILABLE");
+
+    // Back on the Team plan the same seat comes back up.
+    await setSubscription(owner.id, FUTURE_TEAM5_PRODUCT);
+    const reactivate = await request(app)
+      .post(`/api/company/members/${emp.memberId}/seat-reactivate`)
+      .set("Authorization", `Bearer ${owner.token}`)
+      .send({});
+    expect(reactivate.status).toBe(200);
+    expect(reactivate.body).toMatchObject({ ok: true, alreadyActive: false });
+    expect((await memberSeatState(emp.memberId)).seatSuspendedAt).toBeNull();
+  });
+});
+
+describe("seat-suspended write gate", () => {
+  it("blocks job actions with 403 SEAT_SUSPENDED even when enforcement is later switched off", async () => {
+    // Deliberately: teams ON, billing OFF. A suspension that exists in the
+    // database is act-blocking regardless of the enforcement flag (rollback
+    // clears seats explicitly — see docs/team-billing-rollout.md).
+    setFlags({ teams: true });
+    const owner = await createTrader("gate-owner");
+    const profileId = await createProfile(owner.id, "gate");
+    const emp = await addEmployee(profileId, "gate-e1", new Date(Date.now() - 1000), {
+      suspendedAt: new Date(),
+      source: "SYSTEM",
+    });
+
+    const [customer] = await db
+      .insert(usersTable)
+      .values({
+        email: emailFor("gate-customer"),
+        passwordHash: "$2a$10$test.hash.not.used.for.login",
+        fullName: "Gate Customer",
+        role: "customer",
+        isActive: true,
+        emailVerified: true,
+        phone: "+447000000032",
+        phoneVerified: true,
+        phoneVerifiedAt: new Date(),
+      })
+      .returning({ id: usersTable.id });
+    createdUserIds.push(customer.id);
+
+    const [enquiry] = await db
+      .insert(enquiriesTable)
+      .values({
+        traderId: profileId,
+        customerId: customer.id,
+        message: "Need a quote for boiler service",
+        serviceRequired: "Boiler service",
+        status: "pending",
+      })
+      .returning({ id: enquiriesTable.id });
+    createdEnquiryIds.push(enquiry.id);
+
+    const [conv] = await db
+      .insert(conversationsTable)
+      .values({
+        customerId: customer.id,
+        traderUserId: owner.id,
+        traderProfileId: profileId,
+        enquiryId: enquiry.id,
+        serviceRequired: "Boiler service",
+        status: "AWAITING_TRADER_REPLY",
+        traderStatus: "NEW",
+      })
+      .returning({ id: conversationsTable.id });
+    createdConversationIds.push(conv.id);
+
+    const res = await request(app)
+      .post(`/api/conversations/${conv.id}/messages`)
+      .set("Authorization", `Bearer ${emp.token}`)
+      .send({ body: "Hello, I can help with that boiler." });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("SEAT_SUSPENDED");
   });
 });

@@ -12,6 +12,7 @@ import {
   FileWarning,
   ClipboardList,
   Mail,
+  Armchair,
   CreditCard,
   Star,
   LogOut,
@@ -87,6 +88,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Billing",
     items: [
       { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
+      { href: "/seat-exemptions", label: "Seat exemptions", icon: Armchair },
       { href: "/promo-codes", label: "Promo codes", icon: Tag },
     ],
   },

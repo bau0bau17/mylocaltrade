@@ -1,4 +1,4 @@
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, notInArray } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
   companyMembersTable,
@@ -43,6 +43,54 @@ export class JobClaimedByOtherError extends Error {
   }
 }
 
+/**
+ * The caller's employee seat is suspended (Team billing): they remain a
+ * member with read access, but every company-acting write must refuse.
+ */
+export class SeatSuspendedError extends Error {
+  constructor() {
+    super("Your seat is currently inactive.");
+    this.name = "SeatSuspendedError";
+  }
+}
+
+/** Stable response body for seat-suspended members (403). */
+export const SEAT_SUSPENDED_RESPONSE = {
+  error:
+    "Your seat is currently inactive, so you can't act on jobs right now. Ask the business owner about seat availability.",
+  code: "SEAT_SUSPENDED",
+} as const;
+
+/**
+ * True when the user's ACTIVE EMPLOYEE membership has a suspended seat. The
+ * one-active-company-per-user unique index guarantees at most one row, so a
+ * userId-only lookup is exact. Owners are never seat-suspended (role filter
+ * — the owner never occupies a seat).
+ *
+ * Deliberately independent of TEAM_BILLING_ENFORCED: a suspension row means
+ * a suspension, whether it was written by the system (enforcement) or by the
+ * owner. With no suspensions in the table this is a pure no-op, which is
+ * what keeps flag-off behaviour byte-identical.
+ */
+export async function userSeatSuspended(
+  executor: Executor,
+  userId: number,
+): Promise<boolean> {
+  const [row] = await executor
+    .select({ id: companyMembersTable.id })
+    .from(companyMembersTable)
+    .where(
+      and(
+        eq(companyMembersTable.userId, userId),
+        eq(companyMembersTable.status, "ACTIVE"),
+        eq(companyMembersTable.role, "EMPLOYEE"),
+        isNotNull(companyMembersTable.seatSuspendedAt),
+      ),
+    )
+    .limit(1);
+  return row != null;
+}
+
 /** Stable response body for “someone else holds this job”. */
 export function jobClaimedByOtherBody(assignedName: string) {
   return {
@@ -50,6 +98,22 @@ export function jobClaimedByOtherBody(assignedName: string) {
     code: "JOB_CLAIMED_BY_OTHER",
     assignedName,
   } as const;
+}
+
+/**
+ * One responder for every canActOnJob refusal: 403 SEAT_SUSPENDED for a
+ * suspended seat, 409 JOB_CLAIMED_BY_OTHER otherwise. Keeps the status/body
+ * mapping in one place instead of 9 route sites.
+ */
+export function respondCannotActOnJob(
+  res: { status(code: number): { json(body: unknown): unknown } },
+  act: { ok: false; assignedName: string } | { ok: false; seatSuspended: true },
+): void {
+  if ("seatSuspended" in act) {
+    res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+    return;
+  }
+  res.status(409).json(jobClaimedByOtherBody(act.assignedName));
 }
 
 async function displayNameOf(
@@ -101,6 +165,9 @@ export async function claimOrRequireAssigned(
   userId: number,
 ): Promise<{ claimedNow: boolean }> {
   if (!companyTeamsEnabled()) return { claimedNow: false };
+  // Seat gate BEFORE any claim/assignment logic: a suspended seat is
+  // read-only even on jobs the member already holds.
+  if (await userSeatSuspended(tx, userId)) throw new SeatSuspendedError();
   const assigned = await lockAssignment(tx, conv.id);
   if (assigned === userId) return { claimedNow: false };
   if (assigned != null) {
@@ -130,6 +197,7 @@ export async function requireAssignedInTx(
   userId: number,
 ): Promise<void> {
   if (!companyTeamsEnabled()) return;
+  if (await userSeatSuspended(tx, userId)) throw new SeatSuspendedError();
   const assigned = await lockAssignment(tx, conversationId);
   if (assigned != null && assigned !== userId) {
     throw new JobClaimedByOtherError(assigned, await displayNameOf(tx, assigned));
@@ -146,8 +214,9 @@ export async function requireAssignedInTx(
 export async function canActOnJob(
   conv: ConversationRow,
   userId: number,
-): Promise<{ ok: true } | { ok: false; assignedName: string }> {
+): Promise<{ ok: true } | { ok: false; assignedName: string } | { ok: false; seatSuspended: true }> {
   if (!companyTeamsEnabled()) return { ok: true };
+  if (await userSeatSuspended(db, userId)) return { ok: false, seatSuspended: true };
   if (conv.assignedTraderUserId == null || conv.assignedTraderUserId === userId) {
     return { ok: true };
   }

@@ -21,6 +21,7 @@ import ReviewsPage from "@/pages/Reviews";
 import ConversationReportsPage from "@/pages/ConversationReports";
 import UserReportsPage from "@/pages/UserReports";
 import Subscriptions from "@/pages/Subscriptions";
+import SeatExemptions from "@/pages/SeatExemptions";
 import PromoCodes from "@/pages/PromoCodes";
 import AccountDeletions from "@/pages/AccountDeletions";
 import ProfileChangeRequestsPage from "@/pages/ProfileChangeRequests";
@@ -53,6 +54,7 @@ function ProtectedRoutes() {
           <Route path="/conversation-reports" component={ConversationReportsPage} />
           <Route path="/user-reports" component={UserReportsPage} />
           <Route path="/subscriptions" component={Subscriptions} />
+          <Route path="/seat-exemptions" component={SeatExemptions} />
           <Route path="/promo-codes" component={PromoCodes} />
           <Route path="/account-deletions" component={AccountDeletions} />
           <Route path="/profile-change-requests" component={ProfileChangeRequestsPage} />

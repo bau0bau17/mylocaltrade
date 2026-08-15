@@ -13,6 +13,9 @@ import {
   logJobClaimed,
   logCompanyQuoteSubmitted,
   requireAssignedInTx,
+  respondCannotActOnJob,
+  SeatSuspendedError,
+  SEAT_SUSPENDED_RESPONSE,
 } from "../lib/job-assignment";
 import {
   quotesTable,
@@ -240,6 +243,10 @@ router.post("/conversations/:id/quotes", authMiddleware, async (req, res) => {
       });
       return;
     }
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+      return;
+    }
     if (error instanceof JobClaimedByOtherError) {
       res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
@@ -274,7 +281,7 @@ router.post("/quotes/:id/revise", authMiddleware, async (req, res) => {
     // (flag OFF this always passes — legacy behaviour unchanged).
     const act = await canActOnJob(row.conv, userId);
     if (!act.ok) {
-      res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+      respondCannotActOnJob(res, act);
       return;
     }
     const closedReason = conversationClosedReason(row.conv);
@@ -339,6 +346,10 @@ router.post("/quotes/:id/revise", authMiddleware, async (req, res) => {
       res.status(400).json({ error: "Invalid quote", details: error.issues });
       return;
     }
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+      return;
+    }
     if (error instanceof JobClaimedByOtherError) {
       res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;
@@ -372,7 +383,7 @@ router.post("/quotes/:id/withdraw", authMiddleware, async (req, res) => {
     }
     const act = await canActOnJob(row.conv, userId);
     if (!act.ok) {
-      res.status(409).json(jobClaimedByOtherBody(act.assignedName));
+      respondCannotActOnJob(res, act);
       return;
     }
 
@@ -405,6 +416,10 @@ router.post("/quotes/:id/withdraw", authMiddleware, async (req, res) => {
 
     res.json({ quote: serializeQuote(updated) });
   } catch (error) {
+    if (error instanceof SeatSuspendedError) {
+      res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+      return;
+    }
     if (error instanceof JobClaimedByOtherError) {
       res.status(409).json(jobClaimedByOtherBody(error.assignedName));
       return;

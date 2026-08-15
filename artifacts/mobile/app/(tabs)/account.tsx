@@ -258,7 +258,7 @@ function AccountScreenInner() {
   // → { enabled: false } and the menu is exactly the classic single-login
   // layout. Owners additionally get the Team row; employees get a reduced
   // menu (no business profile / billing / team — those are owner-only).
-  const { isEmployee, isTeamOwner: showTeamRow } = useTeamContext();
+  const { isEmployee, isTeamOwner: showTeamRow, teamContext } = useTeamContext();
 
   const { data: reminderSettings } = useGetLeadReminderSettings({
     query: {
@@ -443,6 +443,24 @@ function AccountScreenInner() {
             <MenuRow icon="user-x" label="Account Deletion Reviews" sub="Review customer & trader deletion requests" onPress={() => router.push('/admin/account-deletions')} accent badge={accountDeletionCount} />
           </View>
         </>
+      ) : null}
+
+      {isTrader && isEmployee && teamContext?.seatSuspended ? (
+        // Seat suspended (Team billing): the login and all history stay, but
+        // acting on jobs is paused until the owner reactivates the seat. No
+        // purchase prompts — billing is the owner's, not the employee's.
+        <View style={styles.suspendedBanner}>
+          <Feather name="pause-circle" size={18} color={Colors.light.warning} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.suspendedTitle}>Your seat is paused</Text>
+            <Text style={styles.suspendedBody}>
+              Your business owner's plan doesn't currently cover your seat. You can still sign
+              in and view your past enquiries, messages and bookings, but sending messages,
+              quotes and managing bookings is paused until your seat is reactivated. Ask your
+              business owner if you think this is a mistake.
+            </Text>
+          </View>
+        </View>
       ) : null}
 
       {isTrader ? (
@@ -880,6 +898,19 @@ const styles = StyleSheet.create({
   traderRoleText: {
     color: Colors.light.featured,
   },
+  suspendedBanner: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+  },
+  suspendedTitle: { fontSize: 15, fontWeight: '700', color: Colors.light.text, marginBottom: 4 },
+  suspendedBody: { fontSize: 13, color: Colors.light.textSecondary, lineHeight: 19 },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',

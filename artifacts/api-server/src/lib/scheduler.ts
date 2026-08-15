@@ -13,6 +13,7 @@ import {
   REVALIDATION_GRACE_MS,
 } from "./trader-status";
 import { sweepLeadReminders } from "./lead-reminders";
+import { sweepCompanySeatReconciliation } from "./team-billing";
 import { sweepExpiredMutes } from "./mute-sweep";
 import { sweepOrphanUploads } from "./upload-sweep";
 import { sweepTraderGeocoding } from "./trader-geocoding";
@@ -243,6 +244,7 @@ export async function sweepRevalidations(): Promise<{
 }
 
 let scheduledTimer: NodeJS.Timeout | null = null;
+let companySeatTimer: NodeJS.Timeout | null = null;
 let leadReminderTimer: NodeJS.Timeout | null = null;
 let muteSweepTimer: NodeJS.Timeout | null = null;
 let revalidationTimer: NodeJS.Timeout | null = null;
@@ -274,6 +276,23 @@ export function startScheduler(): void {
   }, HOUR_MS);
   // Don't keep the event loop alive just for this timer.
   scheduledTimer.unref?.();
+
+  // Company-seat reconciliation sweep: the durable safety net for the
+  // event-driven seat reconciliation — catches time-bounded exemptions whose
+  // expiresAt lapsed (no event fires for those) and retries post-commit
+  // reconciles that failed transiently. No-op unless COMPANY_TEAMS_ENABLED
+  // and TEAM_BILLING_ENFORCED are both on.
+  companySeatTimer = setInterval(async () => {
+    try {
+      const result = await sweepCompanySeatReconciliation();
+      if (result.changed > 0 || result.errors > 0) {
+        logger.info({ ...result }, "Company-seat reconciliation sweep");
+      }
+    } catch (err) {
+      logger.error({ err }, "Company-seat reconciliation sweep failed");
+    }
+  }, HOUR_MS);
+  companySeatTimer.unref?.();
 
   // Lead-reminder sweep: nudge traders who haven't opened a new enquiry
   // within an hour. Runs frequently so the latency stays close to ~60 min.
@@ -389,6 +408,10 @@ export function stopScheduler(): void {
   if (scheduledTimer) {
     clearInterval(scheduledTimer);
     scheduledTimer = null;
+  }
+  if (companySeatTimer) {
+    clearInterval(companySeatTimer);
+    companySeatTimer = null;
   }
   if (leadReminderTimer) {
     clearInterval(leadReminderTimer);

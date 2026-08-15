@@ -7,6 +7,7 @@ import {
   traderProfilesTable,
   companyMembersTable,
   companyInvitesTable,
+  companySeatExemptionsTable,
   traderAuditLogTable,
 } from "@workspace/db/schema";
 import { eq, inArray, and, or } from "drizzle-orm";
@@ -635,6 +636,51 @@ describe("POST /company/invites/accept", () => {
     expect(weak.status).toBe(400);
     expect(weak.body.error).toContain("at least 8 characters");
     expect((await getInvite(inviteId)).status).toBe("PENDING");
+  });
+
+  it("Phase D: a seat filled after the invite went out fails acceptance with SEAT_UNAVAILABLE and keeps the invite alive", async () => {
+    setFlag(true);
+    process.env["TEAM_BILLING_ENFORCED"] = "true";
+    const [exemption] = await db
+      .insert(companySeatExemptionsTable)
+      .values({
+        traderProfileId: ctx.companyProfileId,
+        // Owner has no subscription row here, so the exemption IS the
+        // allowance: 1 seat, already taken by ctx's standing employee.
+        seatLimit: 1,
+        reason: `accept-race test ${SUFFIX}`,
+        createdByAdminId: ctx.ownerUserId,
+      })
+      .returning({ id: companySeatExemptionsTable.id });
+    const raw = `accept-no-seat-${SUFFIX}-0000`;
+    const inviteId = await insertInvite({
+      profileId: ctx.companyProfileId,
+      email: emailFor("accept-no-seat"),
+      rawToken: raw,
+      invitedBy: ctx.ownerUserId,
+    });
+    try {
+      const res = await accept(raw, "Seatless Sam");
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("SEAT_UNAVAILABLE");
+      // The token holder proved a valid invite — the invite survives so the
+      // owner can free a seat (or upgrade) and the link still works.
+      expect((await getInvite(inviteId)).status).toBe("PENDING");
+      // No half-created account.
+      const users = await db
+        .select({ id: usersTable.id })
+        .from(usersTable)
+        .where(eq(usersTable.email, emailFor("accept-no-seat").toLowerCase()));
+      expect(users).toHaveLength(0);
+    } finally {
+      delete process.env["TEAM_BILLING_ENFORCED"];
+      await db
+        .delete(companySeatExemptionsTable)
+        .where(eq(companySeatExemptionsTable.id, exemption.id));
+      // Remove the (deliberately) surviving PENDING invite so it doesn't
+      // reserve a seat in later cap-math tests in this shared fixture set.
+      await db.delete(companyInvitesTable).where(eq(companyInvitesTable.id, inviteId));
+    }
   });
 });
 
