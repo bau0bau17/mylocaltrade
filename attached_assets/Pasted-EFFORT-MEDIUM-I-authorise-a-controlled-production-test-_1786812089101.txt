@@ -1,0 +1,74 @@
+EFFORT: MEDIUM
+
+I authorise a controlled production test-account reset for exactly these two email addresses:
+
+- lucian.dpd@gmail.com
+- sabaulucian@live.com
+
+The purpose is to register both addresses again and repeat the complete customer/trader launch test from the beginning.
+
+Do not perform ad-hoc SQL deletes and do not delete anything until the complete dependency inventory has been checked.
+
+Required process:
+
+1. Perform a read-only inventory for these exact accounts, including:
+
+   - user IDs and roles
+   - customer/trader profiles
+   - company ownership and memberships
+   - conversations, quotes, bookings, reviews and job assignments
+   - documents, avatars, logos and stored files
+   - active sessions, verification/reset tokens and push tokens
+   - account-deletion state
+   - RevenueCat App User IDs and whether receipts are sandbox or production
+   - active subscriptions or entitlements
+
+2. Stop and report without deleting anything if either account has:
+
+   - a real production Apple subscription or transaction;
+   - ownership of business data that belongs to another real user;
+   - financial/legal records that cannot safely be anonymised;
+   - dependencies not handled by the existing account-deletion/finalisation service.
+
+3. If safe, use the existing application account-deletion and admin-finalisation services. Do not bypass lifecycle hooks with manual table-by-table deletion.
+
+4. The reset must:
+
+   - revoke every session immediately;
+   - remove or anonymise the old application identity according to the existing retention policy;
+   - release both email addresses so they can register again immediately;
+   - safely resolve company membership and assigned jobs;
+   - remove verification/reset tokens and push tokens;
+   - clean test-only uploaded files through the existing storage cleanup;
+   - prevent the new accounts from inheriting old conversations, roles, entitlements or sessions.
+
+5. Preserve records that must legally remain, but disconnect/anonymise them so the newly registered accounts start clean.
+
+6. Do not delete or alter:
+
+   - Early Access consent evidence;
+   - marketing consent records;
+   - outreach suppression records;
+   - unsubscribe/complaint records;
+   - audit history;
+   - data belonging to any other user.
+
+7. RevenueCat:
+
+   - verify whether all associated purchases are Sandbox/TestFlight;
+   - never delete or alter a production Apple transaction;
+   - explain separately if I must remove old sandbox customers in RevenueCat or use a fresh Apple Sandbox tester;
+   - ensure a newly created MyLocalTrade account receives a new App User ID and does not inherit an old entitlement incorrectly.
+
+8. After completion, verify:
+
+   - login with the previous passwords fails;
+   - registration accepts both exact email addresses;
+   - no old role/profile/session is returned;
+   - unrelated production row counts are unchanged;
+   - no email campaign or push notification was sent;
+   - the backend remains healthy.
+
+Provide a before/after report with affected record counts, without exposing passwords, tokens, document contents or unnecessary personal data.
+
+Do not commit database exports, credentials or personal data to Git. Do not run an EAS build, deploy code or enable marketing. If a code correction is unexpectedly required, stop and explain it before changing production.
