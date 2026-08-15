@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert, RefreshControl, Image, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { getApiUrl } from '@/lib/api-url';
+import { getApiUrl, avatarImageUrl } from '@/lib/api-url';
 
 // Owner-only team management (Company Teams Phase 1): active members,
 // pending invitations, invite / resend / cancel / remove. The API enforces
@@ -20,6 +20,10 @@ type TeamMember = {
   email: string;
   role: 'OWNER' | 'EMPLOYEE';
   joinedAt: string;
+  // The member's OWN personal photo (never the owner's, never the business
+  // logo). Served by the membership-gated avatar-file route; null → initials.
+  avatarUrl: string | null;
+  status: string;
 };
 type TeamInvite = {
   id: number;
@@ -38,6 +42,22 @@ function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 }
 
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : '';
+  return (first + last).toUpperCase() || '?';
+}
+
+function formatJoined(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
@@ -47,6 +67,7 @@ export default function TeamScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [emailFocused, setEmailFocused] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
 
   const authHeaders = { Authorization: `Bearer ${token}` };
   const teamKey = ['company', 'team'];
@@ -177,6 +198,7 @@ export default function TeamScreen() {
   const seatsFull = data.seats.used >= data.seats.max;
 
   return (
+    <>
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ padding: 16, paddingBottom: tabBarHeight + insets.bottom + 24 }}
@@ -216,9 +238,9 @@ export default function TeamScreen() {
             disabled={inviteMutation.isPending || seatsFull || !inviteEmail.trim()}
           >
             {inviteMutation.isPending ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color={Colors.light.white} size="small" />
             ) : (
-              <Feather name="send" size={16} color="#fff" />
+              <Feather name="send" size={16} color={Colors.light.white} />
             )}
           </Pressable>
         </View>
@@ -278,13 +300,30 @@ export default function TeamScreen() {
         {data.members.map((member, i) => (
           <View key={member.id}>
             {i > 0 ? <View style={styles.separator} /> : null}
-            <View style={styles.row}>
+            <Pressable
+              style={styles.row}
+              onPress={() => setSelectedMember(member)}
+              accessibilityLabel={`View ${member.fullName}'s details`}
+            >
               <View style={[styles.avatar, member.role === 'OWNER' && styles.avatarOwner]}>
-                <Feather
-                  name={member.role === 'OWNER' ? 'award' : 'user'}
-                  size={16}
-                  color={member.role === 'OWNER' ? Colors.light.primary : Colors.light.tabIconDefault}
-                />
+                {member.avatarUrl ? (
+                  <Image
+                    source={{
+                      uri: avatarImageUrl(member.avatarUrl)!,
+                      headers: { Authorization: `Bearer ${token}` },
+                    }}
+                    style={styles.avatarImg}
+                  />
+                ) : (
+                  <Text
+                    style={[
+                      styles.avatarInitials,
+                      member.role === 'OWNER' && { color: Colors.light.primary },
+                    ]}
+                  >
+                    {initialsOf(member.fullName)}
+                  </Text>
+                )}
               </View>
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle} numberOfLines={1}>{member.fullName}</Text>
@@ -305,7 +344,7 @@ export default function TeamScreen() {
                   <Text style={[styles.smallBtnText, styles.smallBtnDangerText]}>Remove</Text>
                 </Pressable>
               ) : null}
-            </View>
+            </Pressable>
           </View>
         ))}
       </View>
@@ -315,6 +354,62 @@ export default function TeamScreen() {
         business profile, manage documents, billing and the team itself.
       </Text>
     </ScrollView>
+
+    {/* Member detail — dark-themed sheet matching the app theme. */}
+    <Modal
+      visible={selectedMember != null}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setSelectedMember(null)}
+    >
+      <Pressable style={styles.modalBackdrop} onPress={() => setSelectedMember(null)}>
+        <Pressable style={styles.modalCard} onPress={() => {}}>
+          {selectedMember ? (
+            <>
+              <View style={styles.modalAvatar}>
+                {selectedMember.avatarUrl ? (
+                  <Image
+                    source={{
+                      uri: avatarImageUrl(selectedMember.avatarUrl)!,
+                      headers: { Authorization: `Bearer ${token}` },
+                    }}
+                    style={styles.modalAvatarImg}
+                  />
+                ) : (
+                  <Text style={styles.modalInitials}>{initialsOf(selectedMember.fullName)}</Text>
+                )}
+              </View>
+              <Text style={styles.modalName}>{selectedMember.fullName}</Text>
+              <Text style={styles.modalEmail}>{selectedMember.email}</Text>
+              <View style={styles.modalMeta}>
+                <View style={styles.modalMetaRow}>
+                  <Text style={styles.modalMetaLabel}>Role</Text>
+                  <Text style={styles.modalMetaValue}>
+                    {selectedMember.role === 'OWNER' ? 'Owner' : 'Employee'}
+                  </Text>
+                </View>
+                <View style={styles.modalMetaDivider} />
+                <View style={styles.modalMetaRow}>
+                  <Text style={styles.modalMetaLabel}>Status</Text>
+                  <Text style={[styles.modalMetaValue, { color: Colors.light.success }]}>
+                    {selectedMember.status === 'ACTIVE' ? 'Active' : selectedMember.status}
+                  </Text>
+                </View>
+                <View style={styles.modalMetaDivider} />
+                <View style={styles.modalMetaRow}>
+                  <Text style={styles.modalMetaLabel}>Joined</Text>
+                  <Text style={styles.modalMetaValue}>{formatJoined(selectedMember.joinedAt)}</Text>
+                </View>
+              </View>
+              <Pressable style={styles.modalCloseBtn} onPress={() => setSelectedMember(null)}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </Pressable>
+            </>
+          ) : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+    </>
   );
 }
 
@@ -384,8 +479,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    overflow: 'hidden',
   },
-  avatarOwner: { backgroundColor: 'rgba(0, 180, 216, 0.12)' },
+  avatarOwner: { backgroundColor: Colors.light.primaryMuted },
+  avatarImg: { width: 34, height: 34, borderRadius: 17 },
+  avatarInitials: { fontSize: 12, fontWeight: '700', color: Colors.light.textSecondaryStrong },
   roleChip: {
     borderRadius: 999,
     paddingHorizontal: 8,
@@ -427,4 +525,63 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 17, fontWeight: '700', color: Colors.light.text, marginBottom: 6, textAlign: 'center' },
   cardBody: { fontSize: 14, color: Colors.light.textSecondary, textAlign: 'center', lineHeight: 20 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(3, 7, 18, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    alignSelf: 'stretch',
+    backgroundColor: Colors.light.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalAvatar: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: Colors.light.cardElevated,
+    borderWidth: 1,
+    borderColor: Colors.light.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginBottom: 14,
+  },
+  modalAvatarImg: { width: 84, height: 84, borderRadius: 42 },
+  modalInitials: { fontSize: 28, fontWeight: '700', color: Colors.light.textSecondaryStrong },
+  modalName: { fontSize: 19, fontWeight: '700', color: Colors.light.text, textAlign: 'center' },
+  modalEmail: { fontSize: 13.5, color: Colors.light.textSecondary, marginTop: 3, textAlign: 'center' },
+  modalMeta: {
+    alignSelf: 'stretch',
+    backgroundColor: Colors.light.cardElevated,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginTop: 18,
+  },
+  modalMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  modalMetaDivider: { height: 1, backgroundColor: Colors.light.border },
+  modalMetaLabel: { fontSize: 13, color: Colors.light.textSecondary },
+  modalMetaValue: { fontSize: 13.5, fontWeight: '600', color: Colors.light.text },
+  modalCloseBtn: {
+    alignSelf: 'stretch',
+    marginTop: 18,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    backgroundColor: Colors.light.primary,
+  },
+  modalCloseText: { fontSize: 15, fontWeight: '700', color: Colors.light.white },
 });

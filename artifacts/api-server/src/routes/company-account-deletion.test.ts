@@ -627,11 +627,15 @@ describe("Employees stay blocked from billing", () => {
     expect(res.status).toBe(403);
   });
 
-  it("subscription cancel refuses an employee (no subscription of their own)", async () => {
+  it("subscription cancel refuses an employee with an explicit 403 OWNER_ONLY", async () => {
+    // Phase A: employees used to be blocked only incidentally (400 — no
+    // subscription row of their own). The subscriptionsOwnerGate now refuses
+    // them explicitly before the handler runs.
     const res = await request(app)
       .post("/api/subscriptions/cancel")
       .set("Authorization", `Bearer ${empSixToken}`)
       .send({});
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("OWNER_ONLY");
   });
 });

@@ -10,6 +10,7 @@ import {
 } from '@workspace/api-client-react';
 import { PlanCard } from '@/components/PlanCard';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamContext } from '@/hooks/useTeamContext';
 import { useRouter } from 'expo-router';
 import { getApiUrl } from '@/lib/api-url';
 import { useSubscription, isUserCancelledError } from '@/lib/revenuecat';
@@ -33,6 +34,10 @@ export default function PricingScreen() {
   const { token, isTrader, isAuthenticated } = useAuth();
   const router = useRouter();
   const subscription = useSubscription();
+  // Company Teams: billing is owner-only. Employees never see plans/prices —
+  // including via a deep link straight to /pricing — and we fail closed
+  // (spinner) while the role is still loading.
+  const { isEmployee, roleUnknown } = useTeamContext();
 
   const [promoInput, setPromoInput] = useState('');
   const [promoApplied, setPromoApplied] = useState<PromoPreview | null>(null);
@@ -120,6 +125,13 @@ export default function PricingScreen() {
       Alert.alert('Trade account needed', 'Register as a tradesperson to subscribe to a plan.');
       return;
     }
+    // Defense in depth: the whole screen is already replaced for employees,
+    // but never let a purchase start unless we positively know the caller
+    // isn't one. The server enforces the same rule with 403 OWNER_ONLY.
+    if (isEmployee || roleUnknown) {
+      Alert.alert('Owner only', 'Subscriptions are managed by your business owner.');
+      return;
+    }
     if (verifiedStatus !== 'verified') {
       Alert.alert('Get verified first', 'Finish your trader verification before subscribing.');
       return;
@@ -146,6 +158,13 @@ export default function PricingScreen() {
   };
 
   const handleRestore = async () => {
+    // Same positive-authorization rule as purchases: never start an Apple
+    // restore unless we know the caller is not an employee. (Restore is an
+    // Apple-side action — the server gate alone can't stop the sheet.)
+    if (isEmployee || roleUnknown) {
+      Alert.alert('Owner only', 'Subscriptions are managed by your business owner.');
+      return;
+    }
     try {
       const active = await subscription.restore();
       Alert.alert(
@@ -159,7 +178,7 @@ export default function PricingScreen() {
     }
   };
 
-  if (isLoadingPlans || verifiedStatus === 'unknown') {
+  if (isLoadingPlans || verifiedStatus === 'unknown' || roleUnknown) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={Colors.light.primary} />
@@ -189,6 +208,34 @@ export default function PricingScreen() {
             <Pressable style={styles.gateBtn} onPress={() => router.push('/(tabs)/traders')}>
               <Text style={styles.gateBtnText}>Browse local traders</Text>
             </Pressable>
+          </View>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  // Company Teams: invited employees are trader accounts, but subscriptions
+  // belong to the business owner. Show a calm explainer instead of plans —
+  // no prices, no purchase buttons, no verification prompts (employees are
+  // never individually verified; that card would be misleading).
+  if (isEmployee) {
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: 16, paddingBottom: tabBarHeight + insets.bottom + 32 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.gateBanner}>
+          <Feather name="lock" size={18} color={Colors.light.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.gateTitle}>Managed by your business owner</Text>
+            <Text style={styles.gateBody}>
+              The subscription and billing for your business are handled by the business owner.
+              Your team access already includes everything you need — there's nothing to buy here.
+            </Text>
           </View>
         </View>
       </ScrollView>

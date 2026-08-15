@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { traderProfilesTable, usersTable, conversationsTable } from "@workspace/db/schema";
 import { authMiddleware } from "../lib/auth";
+import { usersShareActiveCompany } from "../lib/company-membership";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { publicTraderSqlConditions } from "../lib/trader-status";
@@ -195,8 +196,15 @@ router.get("/customer/uploads/avatar-file", authMiddleware, async (req, res) => 
         )
         .limit(1);
       if (!shared) {
-        res.status(404).json({ error: "Not found" });
-        return;
+        // Company Teams: colleagues may load each other's headshots (Team
+        // screen / member detail). "Same company" = profile ownership or an
+        // ACTIVE membership on both sides; REVOKED members lose access.
+        // Flag-independent like the other membership-scoped serving paths.
+        const colleagues = await usersShareActiveCompany(userId, owner.id);
+        if (!colleagues) {
+          res.status(404).json({ error: "Not found" });
+          return;
+        }
       }
     }
 

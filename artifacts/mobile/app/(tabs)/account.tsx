@@ -8,6 +8,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { getApiUrl, avatarImageUrl } from '@/lib/api-url';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamContext } from '@/hooks/useTeamContext';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import type { FeatherIconName } from '@/types/feather-icons';
@@ -76,6 +77,16 @@ function computeOnboardingPill(
 }
 
 export default function AccountScreen() {
+  const { user } = useAuth();
+  // Full remount per signed-in identity: (tabs) screens stay mounted across
+  // logout/login on the same device, so component-local state (avatarPreview,
+  // banners, …) would otherwise leak from the previous account — e.g. the
+  // previous user's photo flashing on the next login before their own data
+  // loads. Same pattern as the verify-email screen.
+  return <AccountScreenInner key={user?.id ?? 'anon'} />;
+}
+
+function AccountScreenInner() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, isAuthenticated, isTrader, isAdmin, logout, token: adminToken, refreshUser } = useAuth();
@@ -247,19 +258,7 @@ export default function AccountScreen() {
   // → { enabled: false } and the menu is exactly the classic single-login
   // layout. Owners additionally get the Team row; employees get a reduced
   // menu (no business profile / billing / team — those are owner-only).
-  const { data: teamContext } = useQuery({
-    queryKey: ['company', 'team-context'],
-    enabled: isAuthenticated && isTrader && !!adminToken,
-    queryFn: async (): Promise<{ enabled: boolean; role: string | null }> => {
-      const res = await fetch(`${getApiUrl()}/api/company/team-context`, {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      });
-      if (!res.ok) return { enabled: false, role: null };
-      return res.json();
-    },
-  });
-  const isEmployee = teamContext?.enabled === true && teamContext.role === 'EMPLOYEE';
-  const showTeamRow = teamContext?.enabled === true && teamContext.role === 'OWNER';
+  const { isEmployee, isTeamOwner: showTeamRow } = useTeamContext();
 
   const { data: reminderSettings } = useGetLeadReminderSettings({
     query: {

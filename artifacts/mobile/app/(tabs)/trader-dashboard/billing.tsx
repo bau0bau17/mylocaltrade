@@ -12,6 +12,7 @@ import {
   useResumeSubscription,
 } from '@workspace/api-client-react';
 import { useSubscription } from '@/lib/revenuecat';
+import { useTeamContext } from '@/hooks/useTeamContext';
 import { getYearlySavings } from '@/lib/pricing';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
@@ -20,8 +21,13 @@ export default function BillingScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
 
+  // Company Teams: billing is owner-only. Employees get an explainer card
+  // instead of the billing surface (and we skip the status call — the server
+  // answers 403 OWNER_ONLY for them anyway).
+  const { isEmployee, roleUnknown } = useTeamContext();
+
   const { data: status, isLoading, refetch } = useGetSubscriptionStatus({
-    query: { queryKey: ['/api/subscriptions/status'] },
+    query: { queryKey: ['/api/subscriptions/status'], enabled: !isEmployee && !roleUnknown },
   });
   const { data: plansData } = useGetSubscriptionPlans();
   const { mutateAsync: cancelSub, isPending: cancelling } = useCancelSubscription();
@@ -41,9 +47,13 @@ export default function BillingScreen() {
   // as a large empty gap between the header and the Current Plan card.
   const { refreshing, onRefresh } = usePullToRefresh(refetch, ...(subSupported ? [subRefresh] : []));
   useFocusEffect(useCallback(() => {
+    // refetch() bypasses the query's `enabled` flag, so guard explicitly:
+    // employees (and unknown roles) must not fire the status call the
+    // server will 403 anyway.
+    if (isEmployee || roleUnknown) return;
     refetch();
     if (subSupported) subRefresh();
-  }, [refetch, subSupported, subRefresh]));
+  }, [refetch, subSupported, subRefresh, isEmployee, roleUnknown]));
 
   const manageApple = async () => {
     // Customer Center is the full self-service surface (manage, cancel, refund,
@@ -99,7 +109,24 @@ export default function BillingScreen() {
     }
   };
 
-  if (isLoading) {
+  if (isEmployee) {
+    return (
+      <View style={[s.center, { paddingHorizontal: 20 }]}>
+        <View style={[s.card, { marginBottom: 0, alignItems: 'center', alignSelf: 'stretch' }]}>
+          <Feather name="lock" size={26} color={Colors.light.tabIconDefault} style={{ marginBottom: 10 }} />
+          <Text style={{ fontSize: 17, fontWeight: '700', color: Colors.light.text, marginBottom: 6, textAlign: 'center' }}>
+            Managed by your business owner
+          </Text>
+          <Text style={{ fontSize: 14, color: Colors.light.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+            Billing and the Premium subscription for your business are handled by the business
+            owner. Your team access doesn't require anything here.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (isLoading || roleUnknown) {
     return (
       <View style={s.center}><ActivityIndicator size="large" color={Colors.light.primary} /></View>
     );

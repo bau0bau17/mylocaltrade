@@ -14,6 +14,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
+import { companyOwnerGate } from "../lib/company-membership";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
 import { getCoolingOffState } from "../lib/cooling-off";
@@ -27,6 +28,15 @@ import {
 import { getUncachableRevenueCatClient } from "../lib/revenueCatClient";
 
 const router: IRouter = Router();
+
+// Company Teams: every billing surface is owner-only. Invited employees
+// (role=trader, no owned profile) were previously blocked only incidentally —
+// missing profile/subscription rows — which leaked generic errors instead of
+// an explicit refusal, and GET /status wasn't blocked at all. The gate makes
+// the rule explicit and future-proof: employees get 403 OWNER_ONLY on every
+// subscription route, including via deep links. GET /plans stays public
+// (static marketing data).
+const subscriptionsOwnerGate = companyOwnerGate("subscriptions");
 
 // Subscription model: Basic (free, limited) + a single paid Premium tier,
 // billed either Monthly or Yearly. Both premium cards map to the same stored
@@ -89,7 +99,7 @@ router.get("/subscriptions/plans", (_req, res) => {
 // endpoint exists so local/dev environments (no App Store available) can flip
 // a verified trader to Premium for testing. It writes a plain local
 // subscription row — no external billing provider is involved.
-router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, async (req, res) => {
+router.post("/subscriptions/demo-activate", authMiddleware, traderOnly, subscriptionsOwnerGate, async (req, res) => {
   try {
     // Hard-block in production so this endpoint can never bypass payments.
     // Returns 404 to avoid leaking the existence of the demo path to live
@@ -260,7 +270,7 @@ interface RevenueCatActiveEntitlement {
   product_identifier?: string;
 }
 
-router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async (req, res) => {
+router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, subscriptionsOwnerGate, async (req, res) => {
   try {
     if (!REVENUECAT_PROJECT_ID) {
       res.status(503).json({ error: "In-app purchases are not configured yet." });
@@ -470,7 +480,7 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, async 
 // LOCAL record only. Apple-managed subscriptions are cancelled with Apple (the
 // app hands off to the App Store); RevenueCat's CANCELLATION webhook mirrors
 // that into the same cancelAtPeriodEnd flag. This endpoint serves demo subs.
-router.post("/subscriptions/cancel", authMiddleware, traderOnly, async (req, res) => {
+router.post("/subscriptions/cancel", authMiddleware, traderOnly, subscriptionsOwnerGate, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const [sub] = await db
@@ -502,7 +512,7 @@ router.post("/subscriptions/cancel", authMiddleware, traderOnly, async (req, res
 });
 
 // POST /api/subscriptions/resume — undo a scheduled cancellation
-router.post("/subscriptions/resume", authMiddleware, traderOnly, async (req, res) => {
+router.post("/subscriptions/resume", authMiddleware, traderOnly, subscriptionsOwnerGate, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const [sub] = await db
@@ -527,7 +537,7 @@ router.post("/subscriptions/resume", authMiddleware, traderOnly, async (req, res
   }
 });
 
-router.get("/subscriptions/status", authMiddleware, async (req, res) => {
+router.get("/subscriptions/status", authMiddleware, subscriptionsOwnerGate, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
@@ -647,6 +657,7 @@ router.post(
   "/subscriptions/cancellation-request",
   authMiddleware,
   traderOnly,
+  subscriptionsOwnerGate,
   async (req, res) => {
     try {
       const { userId } = req as AuthenticatedRequest;

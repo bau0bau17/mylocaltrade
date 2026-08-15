@@ -16,12 +16,18 @@ import { getApiUrl } from '@/lib/api-url';
 // this invitation is not for this account — invites are for brand-new email
 // addresses — so we ask the user to log out first instead of mixing accounts.
 export default function JoinTeamScreen() {
+  const params = useLocalSearchParams<{ token?: string }>();
+  const token = typeof params.token === 'string' ? params.token : '';
+  // Remount per invitation token: (tabs) screens stay mounted, so form state
+  // (name/password/error) must never leak from a previously opened invite
+  // link into a new one. Same pattern as the verify-email screen.
+  return <JoinTeamInner key={token || 'none'} token={token} />;
+}
+
+function JoinTeamInner({ token }: { token: string }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ token?: string }>();
   const { isAuthenticated, user, applyToken, logout } = useAuth();
-
-  const token = typeof params.token === 'string' ? params.token : '';
 
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState('');
@@ -110,7 +116,7 @@ export default function JoinTeamScreen() {
     return (
       <View style={[styles.container, { paddingTop: 24 }]}>
         <View style={styles.card}>
-          <Feather name="alert-circle" size={28} color="#B91C1C" style={{ marginBottom: 12 }} />
+          <Feather name="alert-circle" size={28} color={Colors.light.error} style={{ marginBottom: 12 }} />
           <Text style={styles.cardTitle}>Invitation not valid</Text>
           <Text style={styles.cardBody}>
             This invitation link is no longer valid. It may have expired, been cancelled,
@@ -205,7 +211,7 @@ export default function JoinTeamScreen() {
         disabled={submitting}
       >
         {submitting ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={Colors.light.white} />
         ) : (
           <Text style={styles.primaryBtnText}>Join the team</Text>
         )}
@@ -226,7 +232,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: 'rgba(0, 180, 216, 0.12)',
+    backgroundColor: Colors.light.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -242,28 +248,31 @@ const styles = StyleSheet.create({
   },
   fieldGroup: { marginBottom: 16 },
   label: { fontSize: 13, fontWeight: '600', color: Colors.light.text, marginBottom: 6 },
+  // Dark navy theme throughout — inputs/cards sit on Colors.light.card, never
+  // hardcoded white (the app is dark-mode-only; white surfaces with light
+  // text are unreadable).
   input: {
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: Colors.light.borderLight,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
     color: Colors.light.text,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.light.card,
   },
-  inputDisabled: { backgroundColor: Colors.light.background, justifyContent: 'center' },
+  inputDisabled: { backgroundColor: Colors.light.surface, justifyContent: 'center' },
   inputDisabledText: { fontSize: 15, color: Colors.light.tabIconDefault },
   hint: { fontSize: 12, color: Colors.light.tabIconDefault, marginTop: 4 },
   passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   eyeBtn: {
     padding: 10,
     borderWidth: 1,
-    borderColor: Colors.light.border,
+    borderColor: Colors.light.borderLight,
     borderRadius: 10,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.light.card,
   },
-  errorText: { color: '#B91C1C', fontSize: 13, marginBottom: 12 },
+  errorText: { color: Colors.light.error, fontSize: 13, marginBottom: 12 },
   primaryBtn: {
     backgroundColor: Colors.light.primary,
     borderRadius: 12,
@@ -271,7 +280,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  primaryBtnText: { color: Colors.light.white, fontSize: 16, fontWeight: '700' },
   legalNote: {
     fontSize: 12,
     color: Colors.light.tabIconDefault,
@@ -281,7 +290,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginHorizontal: 16,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.light.card,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: Colors.light.border,

@@ -250,7 +250,12 @@ router.get("/company/team", authMiddleware, traderOnly, teamsGate, async (req, r
     const profileId = ctx.membership.traderProfileId;
 
     const memberRows = await db
-      .select({ member: companyMembersTable, fullName: usersTable.fullName, email: usersTable.email })
+      .select({
+        member: companyMembersTable,
+        fullName: usersTable.fullName,
+        email: usersTable.email,
+        avatarUrl: usersTable.avatarUrl,
+      })
       .from(companyMembersTable)
       .innerJoin(usersTable, eq(usersTable.id, companyMembersTable.userId))
       .where(
@@ -284,6 +289,12 @@ router.get("/company/team", authMiddleware, traderOnly, teamsGate, async (req, r
         email: r.email,
         role: r.member.role,
         joinedAt: r.member.createdAt.toISOString(),
+        // Each member's OWN personal photo (users.avatarUrl) — never the
+        // owner's as a fallback (the client shows initials instead), and
+        // never the business logo. Served via the membership-gated
+        // avatar-file route only.
+        avatarUrl: r.avatarUrl,
+        status: r.member.status,
       })),
       invites: inviteRows.map(serializeInvite),
       seats: {

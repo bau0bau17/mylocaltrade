@@ -1,7 +1,9 @@
 import { and, eq } from "drizzle-orm";
+import type { NextFunction, Request, Response } from "express";
 import { db } from "@workspace/db";
 import { companyMembersTable, traderProfilesTable } from "@workspace/db/schema";
 import type { CompanyMemberRole } from "@workspace/db/schema";
+import type { AuthenticatedRequest } from "./types";
 import { logger } from "./logger";
 
 /**
@@ -66,6 +68,92 @@ export const OWNER_ONLY_RESPONSE = {
   error: "Only the business owner can do this.",
   code: "OWNER_ONLY",
 } as const;
+
+/**
+ * Express gate for owner-only surfaces that are keyed by users.id and do NOT
+ * resolve an owned trader_profiles row of their own (billing/subscriptions,
+ * …). Same pattern as documentsOwnerGate in the documents router:
+ *
+ *  - caller owns a trader_profiles row → pass (the legacy owner path);
+ *  - caller owns NO profile but has ANY company_members row (any status) →
+ *    they are an invite-created employee → 403 OWNER_ONLY. REVOKED members
+ *    stay locked out too — removal must permanently end company-surface
+ *    access even with a live session token;
+ *  - neither (customer, or a brand-new pre-onboarding trader with no company
+ *    ties) → legacy pass.
+ *
+ * Deliberately NOT feature-flag gated: employee rows only exist once teams
+ * ran, and those users must stay blocked even if the flag is later turned
+ * off.
+ */
+export function companyOwnerGate(surface: string) {
+  return async function ownerGate(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const { userId } = req as AuthenticatedRequest;
+      const [profile] = await db
+        .select({ id: traderProfilesTable.id })
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.userId, userId))
+        .limit(1);
+      if (profile) {
+        next();
+        return;
+      }
+      const [membership] = await db
+        .select({ id: companyMembersTable.id })
+        .from(companyMembersTable)
+        .where(eq(companyMembersTable.userId, userId))
+        .limit(1);
+      if (membership) {
+        res.status(403).json(OWNER_ONLY_RESPONSE);
+        return;
+      }
+      next();
+    } catch (error) {
+      req.log.error({ err: error }, `${surface} owner gate failed`);
+      res.status(500).json({ error: "Request failed" });
+    }
+  };
+}
+
+/**
+ * True when the two users belong to the same company: each side counts as
+ * "in" a company when they own its trader_profiles row (owners may predate
+ * their backfilled membership row) or hold an ACTIVE company_members row.
+ * REVOKED members do not count. Used for membership-scoped serving (e.g.
+ * colleagues loading each other's headshots on the Team screen), so it is
+ * deliberately flag-independent like the other membership-scoped paths.
+ */
+export async function usersShareActiveCompany(
+  userA: number,
+  userB: number,
+): Promise<boolean> {
+  const companyIdsOf = async (uid: number): Promise<Set<number>> => {
+    const [owned, member] = await Promise.all([
+      db
+        .select({ id: traderProfilesTable.id })
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.userId, uid)),
+      db
+        .select({ id: companyMembersTable.traderProfileId })
+        .from(companyMembersTable)
+        .where(
+          and(
+            eq(companyMembersTable.userId, uid),
+            eq(companyMembersTable.status, "ACTIVE"),
+          ),
+        ),
+    ]);
+    return new Set([...owned, ...member].map((r) => r.id));
+  };
+  const [a, b] = await Promise.all([companyIdsOf(userA), companyIdsOf(userB)]);
+  for (const id of a) if (b.has(id)) return true;
+  return false;
+}
 
 /**
  * Resolve the company the user currently acts for, or null when they act for

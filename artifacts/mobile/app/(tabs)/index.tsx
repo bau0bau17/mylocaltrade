@@ -22,6 +22,7 @@ import { RadiusSheet } from '@/components/RadiusSheet';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { usePremiumMonthlyPriceLabel } from '@/hooks/usePremiumMonthlyPriceLabel';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamContext } from '@/hooks/useTeamContext';
 import { useSubscription } from '@/lib/revenuecat';
 import type { FeatherIconName } from '@/types/feather-icons';
 
@@ -82,8 +83,11 @@ export default function HomeScreen() {
   // Trader-conversion promos (Get featured, Premium promotion banner,
   // Premium pricing) are only shown to logged-out visitors and trader
   // accounts — never to logged-in customers (or any other signed-in
-  // non-trader role).
-  const showTraderPromos = !isAuthenticated || isTrader;
+  // non-trader role). Company Teams: invited EMPLOYEES are traders too but
+  // billing is owner-only, so they never see Premium upsells either — and
+  // while their role is still loading we fail closed (no paywall flash).
+  const { isEmployee, roleUnknown } = useTeamContext();
+  const showTraderPromos = !isAuthenticated || (isTrader && !isEmployee && !roleUnknown);
   const premiumMonthlyPrice = usePremiumMonthlyPriceLabel(showTraderPromos);
 
   const { data: featuredData, isLoading: isLoadingFeatured, refetch: refetchFeatured } = useGetFeaturedTraders({ limit: 5 });
