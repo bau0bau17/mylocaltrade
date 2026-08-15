@@ -34,29 +34,96 @@ export type BusinessPlanTier =
 /** No self-service company may ever exceed this many employees. */
 export const ABSOLUTE_MAX_EMPLOYEE_SEATS = 20;
 
+const SOLO_TIER: { tier: BusinessPlanTier; seats: number } = {
+  tier: "premium_solo",
+  seats: 0,
+};
+
 /**
- * product_identifier → tier/seats. Single shared constant — never duplicate
- * per surface. Includes the RevenueCat Test Store equivalents (debug builds)
- * alongside the App Store product ids. Unknown products FAIL CLOSED to the
- * solo tier (0 seats) with a loud log — a typo in a future product id must
- * never silently grant seats.
+ * CONFIRMED production products (exist in App Store Connect today).
+ * Both are Solo — no Team product exists in production yet.
  */
-const PRODUCT_TIER_MAP: Readonly<
+const PRODUCTION_PRODUCT_TIER_MAP: Readonly<
   Record<string, { tier: BusinessPlanTier; seats: number }>
 > = {
-  // App Store
-  "com.mylocaltrade.app.trader.monthly": { tier: "premium_solo", seats: 0 },
-  "com.mylocaltrade.app.trader.yearly": { tier: "premium_solo", seats: 0 },
-  "com.mylocaltrade.app.team5.yearly": { tier: "team_5", seats: 5 },
-  "com.mylocaltrade.app.team10.yearly": { tier: "team_10", seats: 10 },
-  "com.mylocaltrade.app.team20.yearly": { tier: "team_20", seats: 20 },
-  // RevenueCat Test Store (debug-only builds)
-  monthly: { tier: "premium_solo", seats: 0 },
-  yearly: { tier: "premium_solo", seats: 0 },
+  "com.mylocaltrade.app.trader.monthly": SOLO_TIER,
+  "com.mylocaltrade.app.trader.yearly": SOLO_TIER,
+};
+
+/**
+ * RevenueCat Test Store identifiers — debug builds only. This map is
+ * ISOLATED from production: it is never consulted when NODE_ENV is
+ * "production", so a Test Store id can never grant production seats.
+ */
+const TEST_STORE_TIER_MAP: Readonly<
+  Record<string, { tier: BusinessPlanTier; seats: number }>
+> = {
+  monthly: SOLO_TIER,
+  yearly: SOLO_TIER,
   team5: { tier: "team_5", seats: 5 },
   team10: { tier: "team_10", seats: 10 },
   team20: { tier: "team_20", seats: 20 },
 };
+
+const SEATS_TO_TIER: Readonly<Record<number, BusinessPlanTier>> = {
+  5: "team_5",
+  10: "team_10",
+  20: "team_20",
+};
+
+/**
+ * Future Team products (Phase C placeholder — INACTIVE by default).
+ *
+ * No Team product identifiers are hardcoded: the exact ids will only exist
+ * once they are created and confirmed in App Store Connect. Until then this
+ * resolves from TEAM_PRODUCT_SEAT_MAP, a JSON env var mapping a confirmed
+ * product id to its seat count (allowed values: 5, 10, 20), e.g.
+ *   TEAM_PRODUCT_SEAT_MAP={"com.mylocaltrade.app.<confirmed-id>":5}
+ * Unset/empty (the default) means NO Team product is recognised, so every
+ * non-Solo product fails closed to solo. Malformed JSON or a disallowed
+ * seat value is logged and ignored (fail closed, never fail open).
+ */
+function configuredTeamProducts(): Record<
+  string,
+  { tier: BusinessPlanTier; seats: number }
+> {
+  const raw = process.env["TEAM_PRODUCT_SEAT_MAP"];
+  if (!raw) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    logger.error("TEAM_PRODUCT_SEAT_MAP is not valid JSON — ignoring it (fail closed).");
+    return {};
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    logger.error("TEAM_PRODUCT_SEAT_MAP must be a JSON object — ignoring it (fail closed).");
+    return {};
+  }
+  const out: Record<string, { tier: BusinessPlanTier; seats: number }> = {};
+  for (const [productId, seats] of Object.entries(parsed)) {
+    if (productId in TEST_STORE_TIER_MAP) {
+      // Test Store ids may ONLY resolve through the isolated non-production
+      // map — configuring one here must never grant seats (in any env, so a
+      // bad config is caught in dev before it reaches production).
+      logger.error(
+        { productId },
+        "TEAM_PRODUCT_SEAT_MAP must not contain RevenueCat Test Store ids — skipping it (fail closed).",
+      );
+      continue;
+    }
+    const tier = typeof seats === "number" ? SEATS_TO_TIER[seats] : undefined;
+    if (!tier || typeof seats !== "number") {
+      logger.error(
+        { productId, seats },
+        "TEAM_PRODUCT_SEAT_MAP entry has a disallowed seat value (must be 5, 10 or 20) — skipping it (fail closed).",
+      );
+      continue;
+    }
+    out[productId] = { tier, seats };
+  }
+  return out;
+}
 
 /**
  * Resolve a store product to its tier. `null`/unknown products map to the
@@ -68,14 +135,19 @@ export function resolveProductTier(productIdentifier: string | null): {
   tier: BusinessPlanTier;
   seats: number;
 } {
-  if (!productIdentifier) return { tier: "premium_solo", seats: 0 };
-  const mapped = PRODUCT_TIER_MAP[productIdentifier];
+  if (!productIdentifier) return { ...SOLO_TIER };
+  const mapped =
+    PRODUCTION_PRODUCT_TIER_MAP[productIdentifier] ??
+    configuredTeamProducts()[productIdentifier] ??
+    (process.env["NODE_ENV"] !== "production"
+      ? TEST_STORE_TIER_MAP[productIdentifier]
+      : undefined);
   if (!mapped) {
     logger.error(
       { productIdentifier },
-      "Unknown store product in subscriptions.product_identifier — failing closed to solo tier (0 seats). Update PRODUCT_TIER_MAP.",
+      "Unknown store product in subscriptions.product_identifier — failing closed to solo tier (0 seats). Confirm the product id and add it to the product tier configuration.",
     );
-    return { tier: "premium_solo", seats: 0 };
+    return { ...SOLO_TIER };
   }
   return {
     ...mapped,

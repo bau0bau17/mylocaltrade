@@ -59,7 +59,7 @@ jest.mock('@react-navigation/bottom-tabs', () => ({
 
 // ─── imports after mocks ─────────────────────────────────────────────────────
 
-import BillingScreen from '../billing';
+import BillingScreen from '@/app/(tabs)/trader-dashboard/billing';
 import { useTeamContext } from '@/hooks/useTeamContext';
 import { useSubscription } from '@/lib/revenuecat';
 import {

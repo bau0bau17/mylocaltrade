@@ -1,0 +1,58 @@
+Phase B cannot be accepted yet. Stop before Phase C and fix the following release-blocking issues.
+
+1. EXPO ROUTER IS BUNDLING A TEST FILE
+
+The running mobile app currently fails with:
+
+`Unable to resolve module @testing-library/react-native from artifacts/mobile/app/(tabs)/__tests__/pricing-role-gate.test.tsx`
+
+The file is inside the Expo Router `app/` route tree, so Metro/Expo is treating it as application code/a route. Test files must never be placed under the Expo Router route directory.
+
+Required correction:
+
+- Inspect every file under `artifacts/mobile/app`.
+- Find all `__tests__`, `.test.*` and `.spec.*` files under the route tree.
+- Move them outside `artifacts/mobile/app` into the project’s proper test location, following the existing mobile test conventions.
+- Update the test configuration so the tests are still discovered and executed from their new location.
+- Do not add `@testing-library/react-native` as a production/runtime dependency merely to hide this routing mistake.
+- If that library is genuinely required by the test runner and is not installed, add it only as a development dependency consistent with the workspace conventions, or rewrite the test using the existing test stack.
+- Confirm that no test-only dependency or test file is included in the production Expo bundle.
+- Add a regression guard that fails if a future `.test`, `.spec` or `__tests__` file is placed anywhere under the Expo Router `app/` directory.
+
+Verification required:
+
+- Restart Metro with a clean cache and prove the real app opens without the red error screen.
+- Run all mobile tests, including the employee paywall/role-gating tests.
+- Run the mobile typecheck.
+- Run an iOS production-style Expo export/bundle validation without starting an EAS build.
+- Confirm that the production route manifest contains no test files.
+- Explain why the previous checks reported green while this file still broke the running app.
+
+2. FUTURE TEAM PRODUCT IDENTIFIERS
+
+The approved Phase B instructions explicitly said not to invent or activate production product identifiers before the products are created in App Store Connect during Phase C.
+
+Your report states that `team5.yearly`, `team10.yearly` and `team20.yearly` are already mapped.
+
+Inspect and report the exact strings currently present in code.
+
+Required outcome:
+
+- Existing confirmed Solo identifiers may remain:
+  - `com.mylocaltrade.app.trader.monthly`
+  - `com.mylocaltrade.app.trader.yearly`
+- Future Team identifiers must not be treated as active production products until I create and confirm the exact IDs in App Store Connect.
+- Keep the tier model ready, but use clearly inactive/configurable Phase C placeholders or an empty future-product configuration.
+- Unknown identifiers must continue to fail closed to Solo/zero employee seats.
+- Test Store identifiers may exist only in an explicitly isolated test/development mapping and must never grant production seats.
+
+3. SAFETY
+
+- Keep `TEAM_BILLING_ENFORCED` OFF.
+- Do not push the schema to production.
+- Do not Publish or deploy.
+- Do not modify App Store Connect or RevenueCat.
+- Do not start an EAS/TestFlight build.
+- Do not force-push or rewrite Git history.
+
+After fixing everything, run the complete API, mobile and admin verification, perform a review round, commit with a normal push, and provide the corrected Phase B report. Stop before Phase C.

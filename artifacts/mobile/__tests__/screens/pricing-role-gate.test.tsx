@@ -71,7 +71,7 @@ jest.mock('@react-navigation/bottom-tabs', () => ({
 
 // ─── imports after mocks ─────────────────────────────────────────────────────
 
-import PricingScreen from '../pricing';
+import PricingScreen from '@/app/(tabs)/pricing';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeamContext } from '@/hooks/useTeamContext';
 import { useSubscription } from '@/lib/revenuecat';

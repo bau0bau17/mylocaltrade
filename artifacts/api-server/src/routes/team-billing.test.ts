@@ -35,14 +35,28 @@ import {
 const SUFFIX = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const emailFor = (label: string) => `tb-test+${label}-${SUFFIX}@example.test`;
 
+/**
+ * Phase C team products do not exist in App Store Connect yet, so no real
+ * Team product id is hardcoded anywhere. Tests exercise the env-configured
+ * placeholder path (TEAM_PRODUCT_SEAT_MAP) with an obviously-fake id.
+ */
+const FUTURE_TEAM5_PRODUCT = "test.placeholder.team5.awaiting-asc-confirmation";
+const TEAM_MAP = { [FUTURE_TEAM5_PRODUCT]: 5 };
+
 const createdUserIds: number[] = [];
 const createdProfileIds: number[] = [];
 
 const EXT_TEAMS = process.env["COMPANY_TEAMS_ENABLED"];
 const EXT_BILLING = process.env["TEAM_BILLING_ENFORCED"];
 const EXT_CAP = process.env["COMPANY_MAX_ACTIVE_MEMBERS"];
+const EXT_TEAM_MAP = process.env["TEAM_PRODUCT_SEAT_MAP"];
 
-function setFlags(opts: { teams?: boolean; billing?: boolean; cap?: number }) {
+function setFlags(opts: {
+  teams?: boolean;
+  billing?: boolean;
+  cap?: number;
+  teamMap?: Record<string, number>;
+}) {
   if (opts.teams) process.env["COMPANY_TEAMS_ENABLED"] = "true";
   else delete process.env["COMPANY_TEAMS_ENABLED"];
   if (opts.billing) process.env["TEAM_BILLING_ENFORCED"] = "true";
@@ -50,6 +64,9 @@ function setFlags(opts: { teams?: boolean; billing?: boolean; cap?: number }) {
   if (opts.cap !== undefined)
     process.env["COMPANY_MAX_ACTIVE_MEMBERS"] = String(opts.cap);
   else delete process.env["COMPANY_MAX_ACTIVE_MEMBERS"];
+  if (opts.teamMap !== undefined)
+    process.env["TEAM_PRODUCT_SEAT_MAP"] = JSON.stringify(opts.teamMap);
+  else delete process.env["TEAM_PRODUCT_SEAT_MAP"];
 }
 
 function restoreFlags() {
@@ -57,6 +74,7 @@ function restoreFlags() {
     ["COMPANY_TEAMS_ENABLED", EXT_TEAMS],
     ["TEAM_BILLING_ENFORCED", EXT_BILLING],
     ["COMPANY_MAX_ACTIVE_MEMBERS", EXT_CAP],
+    ["TEAM_PRODUCT_SEAT_MAP", EXT_TEAM_MAP],
   ] as const) {
     if (val === undefined) delete process.env[key];
     else process.env[key] = val;
@@ -136,7 +154,7 @@ beforeAll(async () => {
 
   const teamOwner = await createTrader("team-owner");
   const teamProfileId = await createProfile(teamOwner.id, "team");
-  await setSubscription(teamOwner.id, "com.mylocaltrade.app.team5.yearly");
+  await setSubscription(teamOwner.id, FUTURE_TEAM5_PRODUCT);
   // One active employee on the team company.
   const employee = await createTrader("team-employee");
   await db.insert(companyMembersTable).values({
@@ -196,7 +214,7 @@ afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveProductTier", () => {
-  it("maps known products to their tiers", () => {
+  it("maps the confirmed production Solo products", () => {
     expect(resolveProductTier("com.mylocaltrade.app.trader.monthly")).toEqual({
       tier: "premium_solo",
       seats: 0,
@@ -205,21 +223,87 @@ describe("resolveProductTier", () => {
       tier: "premium_solo",
       seats: 0,
     });
-    expect(resolveProductTier("com.mylocaltrade.app.team5.yearly")).toEqual({
+  });
+
+  it("does NOT recognise any Team product id by default — no future ids are hardcoded", () => {
+    delete process.env["TEAM_PRODUCT_SEAT_MAP"];
+    for (const guess of [
+      "com.mylocaltrade.app.team5.yearly",
+      "com.mylocaltrade.app.team10.yearly",
+      "com.mylocaltrade.app.team20.yearly",
+    ]) {
+      expect(resolveProductTier(guess)).toEqual({ tier: "premium_solo", seats: 0 });
+    }
+  });
+
+  it("resolves env-configured Phase C placeholder products", () => {
+    process.env["TEAM_PRODUCT_SEAT_MAP"] = JSON.stringify({
+      [FUTURE_TEAM5_PRODUCT]: 5,
+      "test.placeholder.team10": 10,
+      "test.placeholder.team20": 20,
+    });
+    expect(resolveProductTier(FUTURE_TEAM5_PRODUCT)).toEqual({
       tier: "team_5",
       seats: 5,
     });
-    expect(resolveProductTier("com.mylocaltrade.app.team10.yearly")).toEqual({
+    expect(resolveProductTier("test.placeholder.team10")).toEqual({
       tier: "team_10",
       seats: 10,
     });
-    expect(resolveProductTier("com.mylocaltrade.app.team20.yearly")).toEqual({
+    expect(resolveProductTier("test.placeholder.team20")).toEqual({
       tier: "team_20",
       seats: 20,
     });
-    // Test Store equivalents
+  });
+
+  it("fails closed on malformed or disallowed TEAM_PRODUCT_SEAT_MAP entries", () => {
+    process.env["TEAM_PRODUCT_SEAT_MAP"] = "not json";
+    expect(resolveProductTier(FUTURE_TEAM5_PRODUCT)).toEqual({
+      tier: "premium_solo",
+      seats: 0,
+    });
+    process.env["TEAM_PRODUCT_SEAT_MAP"] = JSON.stringify({
+      "test.placeholder.weird": 7,
+      "test.placeholder.huge": 999,
+    });
+    expect(resolveProductTier("test.placeholder.weird").seats).toBe(0);
+    expect(resolveProductTier("test.placeholder.huge").seats).toBe(0);
+  });
+
+  it("Test Store ids can NEVER be activated through TEAM_PRODUCT_SEAT_MAP — even in production", () => {
+    const TEST_STORE_IDS = ["monthly", "yearly", "team5", "team10", "team20"];
+    process.env["TEAM_PRODUCT_SEAT_MAP"] = JSON.stringify(
+      Object.fromEntries(TEST_STORE_IDS.map((id) => [id, 5])),
+    );
+    const prevNodeEnv = process.env["NODE_ENV"];
+    process.env["NODE_ENV"] = "production";
+    try {
+      for (const id of TEST_STORE_IDS) {
+        expect(resolveProductTier(id)).toEqual({ tier: "premium_solo", seats: 0 });
+      }
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env["NODE_ENV"];
+      else process.env["NODE_ENV"] = prevNodeEnv;
+    }
+    // Outside production the isolated Test Store map applies as normal — the
+    // env-map entries are still rejected, so team5 resolves via its own map.
+    expect(resolveProductTier("team5")).toEqual({ tier: "team_5", seats: 5 });
+  });
+
+  it("Test Store ids resolve outside production only", () => {
+    // vitest runs with NODE_ENV=test → the isolated Test Store map applies.
     expect(resolveProductTier("monthly").tier).toBe("premium_solo");
     expect(resolveProductTier("team10").seats).toBe(10);
+    // In production the same ids must grant NOTHING.
+    const prevNodeEnv = process.env["NODE_ENV"];
+    process.env["NODE_ENV"] = "production";
+    try {
+      expect(resolveProductTier("team10")).toEqual({ tier: "premium_solo", seats: 0 });
+      expect(resolveProductTier("team20")).toEqual({ tier: "premium_solo", seats: 0 });
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env["NODE_ENV"];
+      else process.env["NODE_ENV"] = prevNodeEnv;
+    }
   });
 
   it("fails closed: null and unknown products are solo with 0 seats", () => {
@@ -232,7 +316,10 @@ describe("resolveProductTier", () => {
 
   it("never exceeds the absolute seat ceiling", () => {
     expect(ABSOLUTE_MAX_EMPLOYEE_SEATS).toBe(20);
-    expect(resolveProductTier("com.mylocaltrade.app.team20.yearly").seats)
+    process.env["TEAM_PRODUCT_SEAT_MAP"] = JSON.stringify({
+      "test.placeholder.team20": 20,
+    });
+    expect(resolveProductTier("test.placeholder.team20").seats)
       .toBeLessThanOrEqual(ABSOLUTE_MAX_EMPLOYEE_SEATS);
   });
 });
@@ -255,6 +342,7 @@ describe("getCompanyPlanContext", () => {
   });
 
   it("team5 owner with one employee: 5 seats, counts, not over limit", async () => {
+    setFlags({ teamMap: TEAM_MAP });
     const plan = await getCompanyPlanContext(ctx.teamProfileId);
     expect(plan).toMatchObject({
       effectiveBusinessPlan: "team_5",
@@ -266,12 +354,12 @@ describe("getCompanyPlanContext", () => {
   });
 
   it("explicit COMPANY_MAX_ACTIVE_MEMBERS acts as a kill-switch ceiling", async () => {
-    setFlags({ teams: true, billing: true, cap: 1 });
+    setFlags({ teams: true, billing: true, cap: 1, teamMap: TEAM_MAP });
     const plan = await getCompanyPlanContext(ctx.teamProfileId);
     expect(plan.employeeSeatLimit).toBe(1);
     // 1 active employee at a 1-seat ceiling is full but not over.
     expect(plan.overLimit).toBe(false);
-    setFlags({ teams: true, billing: true, cap: 0 });
+    setFlags({ teams: true, billing: true, cap: 0, teamMap: TEAM_MAP });
   });
 
   it("inactive subscription reports active:false", async () => {
@@ -330,19 +418,19 @@ describe("TEAM_BILLING_ENFORCED on", () => {
   });
 
   it("inactive team plan cannot invite either", async () => {
-    setFlags({ teams: true, billing: true });
-    await setSubscription(ctx.teamOwner.id, "com.mylocaltrade.app.team5.yearly", "cancelled");
+    setFlags({ teams: true, billing: true, teamMap: TEAM_MAP });
+    await setSubscription(ctx.teamOwner.id, FUTURE_TEAM5_PRODUCT, "cancelled");
     const res = await request(app)
       .post("/api/company/invites")
       .set("Authorization", `Bearer ${ctx.teamOwner.token}`)
       .send({ email: emailFor("inactive-invitee") });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("TEAM_PLAN_REQUIRED");
-    await setSubscription(ctx.teamOwner.id, "com.mylocaltrade.app.team5.yearly");
+    await setSubscription(ctx.teamOwner.id, FUTURE_TEAM5_PRODUCT);
   });
 
   it("kill-switch ceiling of 1 makes a team5 company with 1 employee full", async () => {
-    setFlags({ teams: true, billing: true, cap: 1 });
+    setFlags({ teams: true, billing: true, cap: 1, teamMap: TEAM_MAP });
     const res = await request(app)
       .post("/api/company/invites")
       .set("Authorization", `Bearer ${ctx.teamOwner.token}`)
@@ -352,7 +440,7 @@ describe("TEAM_BILLING_ENFORCED on", () => {
   });
 
   it("team-context exposes plan tier, seat counts and gating booleans", async () => {
-    setFlags({ teams: true, billing: true });
+    setFlags({ teams: true, billing: true, teamMap: TEAM_MAP });
     const owner = await request(app)
       .get("/api/company/team-context")
       .set("Authorization", `Bearer ${ctx.teamOwner.token}`);
@@ -381,7 +469,7 @@ describe("TEAM_BILLING_ENFORCED on", () => {
   });
 
   it("GET /company/team shows EMPLOYEE-only seat usage against the plan limit", async () => {
-    setFlags({ teams: true, billing: true });
+    setFlags({ teams: true, billing: true, teamMap: TEAM_MAP });
     const res = await request(app)
       .get("/api/company/team")
       .set("Authorization", `Bearer ${ctx.teamOwner.token}`);
