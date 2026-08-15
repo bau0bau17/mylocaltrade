@@ -1,0 +1,202 @@
+I found several substantial problems in the real Company Teams implementation. I have attached five fresh screenshots.
+
+Treat this as a combined Company Teams identity, entitlement, billing and UI architecture correction. Because it affects App Store subscriptions, RevenueCat, permissions and personal identity, begin with a full evidence-based implementation plan. Do not change production, create subscription products or begin an EAS build until I approve the plan.
+
+Confirmed problems
+
+1. Employees are being shown Premium promotion and subscription surfaces.
+
+An invited Employee currently sees the Home “Promote your business” banner and can reach the Subscription Plans screen. This is incorrect.
+
+Only the company Owner may purchase, restore, upgrade, downgrade, cancel or manage a subscription. An Employee must never be offered an individual subscription and must not see Billing, Pricing, paywalls, verification-required subscription cards or promotional upgrade banners.
+
+Direct navigation or deep links to these routes must also be rejected server-side or redirected safely.
+
+2. Owner and Employee personal photos are not isolated.
+
+When the Employee changes their profile photo, the Owner’s photo changes too. These are different people and must have separate personal identities.
+
+Required identity separation:
+
+- Company logo belongs to the trader business profile and remains Owner-controlled.
+- Owner personal avatar belongs only to the Owner user record.
+- Employee personal avatar belongs only to that Employee user record.
+- Updating one user’s avatar must never update another user, the business logo or a shared company record.
+- Never use the Owner avatar as an Employee fallback; use that Employee’s initials.
+- Customers may see the assigned Employee’s avatar only under the existing job-assignment privacy rules.
+
+Investigate the actual upload endpoint, storage key, database column and response mapping. Add tests proving that two users in the same company can independently upload, replace and delete their photos.
+
+3. Team management lacks member identity.
+
+On the Owner’s Team screen:
+
+- Display each member’s own avatar next to their name.
+- Keep the Owner and Employee badges.
+- Tapping a member must open a dark-theme member-detail modal.
+- Show a large personal photo, name, email, role, joined date and current membership state.
+- If no photo exists, show initials.
+- Do not expose the personal photo publicly outside the existing Team and assigned-job privacy rules.
+
+4. Invitation-account UI breaks the design system.
+
+The join/create-account flow opened from a team invitation uses a white surface with white/grey text.
+
+Every invitation state must use the existing dark navy application design tokens:
+
+- loading;
+- valid invitation;
+- name/password form;
+- keyboard-focused form;
+- expired/revoked/used invitation;
+- validation error;
+- successful join.
+
+Do not hardcode a separate palette.
+
+Recommended business subscription model
+
+Keep the existing Premium Solo products for an Owner without Employees.
+
+Add annual-only business Team tiers:
+
+- Team 5: Owner + up to 5 active Employees.
+- Team 10: Owner + up to 10 active Employees.
+- Team 20: Owner + up to 20 active Employees.
+- 20 Employees is the absolute self-service maximum in v1.
+
+Provisional launch pricing for planning:
+
+- Team 5: £179.99/year.
+- Team 10: £249.99/year.
+- Team 20: £399.99/year.
+
+Do not hardcode these displayed prices. The app must use the live localized App Store/RevenueCat price strings.
+
+These should be replacement tiers in the same Apple subscription group as the existing business Premium subscription, not separate simultaneously active subscriptions. The Owner should have one business subscription, with upgrades/downgrades handled through Apple and RevenueCat.
+
+Please validate this product structure against the project’s existing App Store Connect and RevenueCat configuration and report any incompatibility before creating products.
+
+Entitlement architecture
+
+RevenueCat identifies the purchasing Owner, but the backend grants the effective business plan to the company.
+
+An Employee must retain their own RevenueCat App User ID. Never sign an Employee into RevenueCat as the Owner and never transfer the Owner’s purchase to an Employee.
+
+All shared business access must be determined server-side from:
+
+- active company membership;
+- the company Owner;
+- the Owner’s verified subscription state;
+- the purchased product’s employee-seat limit;
+- subscription expiry/grace/billing state.
+
+Return an explicit server-derived team context such as:
+
+- viewerRole;
+- effectiveBusinessPlan;
+- employeeSeatLimit;
+- activeEmployeeCount;
+- pendingInviteCount;
+- viewerCanManageBilling;
+- viewerCanInvite;
+- viewerCanManageTeam.
+
+Do not let the mobile app infer access merely because the current user has or does not have a personal RevenueCat entitlement.
+
+Seat rules
+
+- Pending invitations reserve a seat.
+- Expired or cancelled invitations release their seat.
+- Member removal releases a seat.
+- Concurrent invitations/acceptances must never exceed the plan limit.
+- A Solo Owner must upgrade before sending the first Employee invitation.
+- An Owner at 5/5 or 10/10 must upgrade before inviting another Employee.
+- The server must enforce the absolute maximum of 20 Employees.
+- Employees never count as separate public trader listings.
+- The Owner does not count against the Employee limit.
+
+Plan expiry or downgrade
+
+Do not delete memberships or job history.
+
+If a Team subscription expires:
+
+- keep company and membership history;
+- make Employees restricted/read-only;
+- keep the Owner’s appropriate free/expired-plan behaviour;
+- preserve assigned-job history;
+- show Employees a clear “Your company’s Team plan is inactive — contact the Owner” message;
+- show renewal controls only to the Owner.
+
+If a downgrade produces more Employees than the new limit, do not silently delete people. Propose a deterministic seat-selection/suspension design where the Owner selects which members remain active. Report how Apple downgrades occurring outside the app will be handled.
+
+Migration
+
+Inspect production read-only and report whether any companies already have Employees. Do not modify them.
+
+The migration must not suddenly lock out an existing real team. Propose a documented grace or grandfathering strategy if necessary.
+
+Permissions
+
+Reconfirm server-side that Employees cannot:
+
+- manage billing or subscriptions;
+- purchase or restore;
+- edit company logo/profile/services/hours;
+- manage verification documents;
+- invite/remove members;
+- reply to reviews;
+- change Owner identity.
+
+Employees may retain only their authorised shared-lead/job actions and their own personal account/photo controls.
+
+Required tests
+
+Include:
+
+- every subscription/paywall entry point hidden and server-blocked for Employees;
+- direct pricing/billing deep-link attempts;
+- Owner purchase/restore/upgrade/downgrade;
+- Team 5/10/20 limits;
+- pending-invite seat reservation;
+- simultaneous invite/accept races;
+- removal and expired-invite seat release;
+- subscription expiry and recovery;
+- downgrade below active member count;
+- Owner/Employee avatar isolation;
+- company-logo isolation;
+- Team list avatar privacy;
+- employee invitation UI states;
+- existing solo trader behaviour unchanged;
+- existing Teams job claiming/reassignment flows unchanged.
+
+Legal and App Store review
+
+Assess whether Terms, Privacy Policy, subscription disclosures and App Store review notes must be updated to explain:
+
+- Owner-paid company access;
+- annual auto-renewal;
+- included Employee limits;
+- downgrade/expiry effects;
+- Employee actions being performed under the company;
+- where personal member photos are visible.
+
+Change legal documents only where required, report whether re-acceptance is necessary, and do not make legal guarantees.
+
+Deliverable before implementation
+
+Produce:
+
+1. Exact root causes for the four confirmed defects.
+2. Current subscription/RevenueCat architecture inventory.
+3. Proposed database and API changes.
+4. App Store Connect and RevenueCat product/entitlement plan.
+5. Screen-by-screen mobile changes.
+6. Permissions matrix for Owner versus Employee.
+7. Seat lifecycle and concurrency design.
+8. Migration, rollout and rollback strategy.
+9. Test plan.
+10. Work split into safe phases.
+
+Stop after the plan and wait for my approval. Do not deploy, change production flags, create real products, send emails or start a build.
