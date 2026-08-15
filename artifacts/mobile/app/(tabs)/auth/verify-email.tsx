@@ -11,6 +11,20 @@ import { getApiUrl } from '@/lib/api-url';
 const CODE_LENGTH = 6;
 
 export default function VerifyEmailScreen() {
+  const { email, pollToken } = useLocalSearchParams<{ email: string; pollToken?: string }>();
+  // CRITICAL: force a full remount (fresh state AND refs) whenever the
+  // account being verified changes. Tab screens stay mounted after
+  // navigation, so without this a second registration in the same app
+  // session lands on the previous instance — which may still hold
+  // `verified=true` / `codeVerifiedRef=true` from the EARLIER account. That
+  // rendered a false "Email Verified!" success screen for a brand-new,
+  // unverified user, hid the code input behind it, and disabled the poll
+  // (production incident, Aug 2026). The key ties all local state to the
+  // specific email + poll token pair.
+  return <VerifyEmailInner key={`${email ?? ''}|${pollToken ?? ''}`} />;
+}
+
+function VerifyEmailInner() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
@@ -31,6 +45,16 @@ export default function VerifyEmailScreen() {
   // already signed the user in, so the poll's redirect to the login screen
   // would otherwise race it and strand an authenticated user on /auth/login.
   const codeVerifiedRef = useRef(false);
+  // Set on unmount so timers scheduled by async handlers (e.g. the
+  // code-success redirect) can never navigate on behalf of a stale instance
+  // after a remount for a different account.
+  const unmountedRef = useRef(false);
+  useEffect(
+    () => () => {
+      unmountedRef.current = true;
+    },
+    [],
+  );
 
   // Resend cooldown countdown.
   useEffect(() => {
@@ -51,22 +75,31 @@ export default function VerifyEmailScreen() {
   // them forward (to log in, since the link path does not issue a session).
   useEffect(() => {
     if (!pollToken) return;
+    // Cancellation guard: an in-flight status request (or its scheduled
+    // redirect) from THIS effect must become inert once the effect is torn
+    // down — either because the screen remounted for a different account or
+    // the user navigated away. Without it, a stale response for the PREVIOUS
+    // account could set `verified` / redirect the NEW account's screen.
+    let cancelled = false;
+    let redirectTimer: ReturnType<typeof setTimeout> | null = null;
     const check = async () => {
       try {
         const res = await fetch(
           `${getApiUrl()}/api/auth/verification-status?token=${encodeURIComponent(pollToken)}`,
         );
+        if (cancelled) return;
         // The in-app code path may have completed while this request was in
         // flight — it already signed the user in and scheduled its own
         // redirect, so this fallback must not hijack navigation to /auth/login.
         if (codeVerifiedRef.current) return;
         if (!res.ok) return;
         const json = await res.json();
+        if (cancelled) return;
         if (json?.verified) {
           setVerified(true);
           if (intervalRef.current) clearInterval(intervalRef.current);
-          setTimeout(() => {
-            if (codeVerifiedRef.current) return;
+          redirectTimer = setTimeout(() => {
+            if (cancelled || codeVerifiedRef.current) return;
             router.replace('/auth/login');
           }, 2000);
         }
@@ -77,7 +110,9 @@ export default function VerifyEmailScreen() {
     check();
     intervalRef.current = setInterval(check, 3000);
     return () => {
+      cancelled = true;
       if (intervalRef.current) clearInterval(intervalRef.current);
+      if (redirectTimer) clearTimeout(redirectTimer);
     };
   }, [pollToken, router]);
 
@@ -99,6 +134,7 @@ export default function VerifyEmailScreen() {
       if (intervalRef.current) clearInterval(intervalRef.current);
       setVerified(true);
       setTimeout(() => {
+        if (unmountedRef.current) return;
         if (profile.role === 'trader') {
           router.replace('/trader-dashboard/verify-phone');
         } else {

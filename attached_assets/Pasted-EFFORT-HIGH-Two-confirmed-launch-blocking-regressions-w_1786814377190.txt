@@ -1,0 +1,109 @@
+EFFORT: HIGH
+
+Two confirmed launch-blocking regressions were found during the clean production signup test. Treat this as a focused P0 authentication and mobile keyboard correction, not a feature expansion.
+
+Test accounts and observed result:
+
+- `sabaulucian@live.com` — deleted previously, then registered again as a TRADER. This account is currently broken.
+- `lucian.sabau@serviceproviderltd.co.uk` — registered again as a CUSTOMER and completed verification successfully. Use this only as the working control case; do not delete or modify it.
+
+Do not delete, anonymise, reset or directly update the new `sabaulucian@live.com` account before completing a read-only diagnosis. Its current production state is evidence.
+
+ISSUE 1 — TRADER EMAIL VERIFICATION IS INCONSISTENT
+
+Exact observed production/TestFlight flow:
+
+1. The deleted email `sabaulucian@live.com` was registered again as a trader.
+2. The verification link was opened.
+3. The app displayed “Email Verified! Your account has been activated.”
+4. After sign-out and sign-in, the app still says the email must be verified.
+5. A verification email containing a code is delivered, but the app does not expose any field or screen where that code can be entered.
+6. Opening the verification link again says the email is already verified, while authentication still treats it as unverified.
+
+This is a P0 launch blocker. A user must never become trapped between “verified” and “verification required”.
+
+Read-only production diagnosis first:
+
+- identify the new and previously deleted/tombstoned user rows for the exact normalized email;
+- inspect role, account status and every email-verification field read by registration, link verification, OTP verification, login, `/auth/me`, onboarding and trader access;
+- inspect verification request/event rows and their user IDs, without printing token hashes, raw tokens or OTP values;
+- confirm whether the link was tied to the new user ID or accidentally resolved an old anonymised/deleted identity;
+- compare the broken trader with the successful fresh customer control;
+- inspect production request logs around registration, link redemption and subsequent login;
+- check whether the “Email Verified” screen is showing success before the verification transaction actually commits;
+- check stale session/react-query/cache state, but do not assume this is only a client cache issue because a new login also reports unverified;
+- identify whether there are two competing verification systems—link and OTP—and document the intended canonical behaviour;
+- inspect RevenueCat identity separately only to ensure it is not affecting authentication. Do not modify receipts or entitlements.
+
+Required behaviour:
+
+- verification must update the single canonical server-side state transactionally;
+- both trader and customer registration must use that same canonical state;
+- a valid verification link must verify the NEW current user, not an old deleted/tombstoned user with the same former email;
+- after successful link verification, the app must refresh `/auth/me` and continue to the correct onboarding state without requiring an unnecessary code;
+- after sign-out/sign-in, verification must remain persisted;
+- if OTP verification is still an intended supported path, the app must display an accessible OTP input screen with submit and resend controls;
+- if the link has already completed verification, an OTP must no longer be required;
+- login must never display “verification required” when the canonical user record is verified;
+- expired, reused or invalid tokens must fail safely and must never verify another account;
+- link verification and OTP verification occurring concurrently must be idempotent and produce one verified state;
+- no account enumeration and no raw token/OTP logging.
+
+Required regression coverage:
+
+1. Register a fresh trader → verify by link → login succeeds and `/auth/me` reports verified.
+2. Register a fresh trader → verify by OTP → login succeeds.
+3. Delete/anonymise/complete an account → register the exact same normalized email again → the new trader verifies successfully.
+4. A token belonging to the deleted account cannot verify the replacement account.
+5. A token for the replacement account cannot mutate the deleted account.
+6. Reopening a used link gives a safe result without reverting state.
+7. Simultaneous link and OTP verification remains consistent.
+8. Customer verification continues to work unchanged.
+9. Sign-out/sign-in and app restart preserve the verified state.
+10. Resend rate limits and generic security errors remain intact.
+
+Do not “repair” the production account by manually flipping a database boolean. Fix the underlying flow first. After the correction is deployed later, explain the safe recovery path for the currently trapped test account, or whether I should delete and register it once more.
+
+ISSUE 2 — DELETE ACCOUNT PASSWORD FIELD IS COVERED BY THE KEYBOARD
+
+On the real Delete account screen, focusing the password or another lower field allows the iOS keyboard to cover the field/action area. The user cannot reliably see what they are typing or access the controls.
+
+Fix the actual mobile route shown in the attached screenshots:
+
+- make the full page vertically scrollable;
+- use the existing application keyboard-safe screen pattern already used to fix the conversation composer;
+- respect iOS and Android keyboard behaviour and safe-area insets;
+- automatically scroll the focused password field fully above the keyboard;
+- ensure the reason field, password field, acknowledgement toggle and Delete button remain reachable;
+- allow keyboard dismissal by dragging/tapping appropriately;
+- preserve password masking, validation, subscription warning, deletion confirmation and all existing deletion logic;
+- verify small supported iPhones, larger iPhones and Android;
+- do not solve it with arbitrary fixed padding that leaves permanent empty space.
+
+Also confirm whether the “active App Store subscription” warning shown in the screenshot is correct for this sandbox test identity. Do not change subscription logic unless evidence confirms a separate defect; report it separately.
+
+Verification:
+
+- focused API tests for all verification/re-registration cases above;
+- mobile typecheck;
+- API typecheck and full relevant API suite;
+- focused mobile tests for verification routing/state refresh where supported;
+- structural/regression coverage for keyboard avoidance and scrollability;
+- security review of token ownership, deleted-account replacement and race behaviour;
+- confirm no unrelated account, consent, campaign, subscription or production data was modified.
+
+Report:
+
+- exact root cause;
+- production evidence, with secrets and tokens redacted;
+- files changed;
+- tests and totals;
+- whether a backend publish is required;
+- whether a new TestFlight build is required;
+- whether any schema migration is required;
+- safe recovery steps for `sabaulucian@live.com`;
+- rollback steps.
+
+Commit and push the correction to `main`, with the commit SHA verified.
+
+Do not publish the backend, do not run an EAS build, do not submit to TestFlight, do not enable marketing and do not perform direct production database writes. I will handle deployment and builds after reviewing the report.

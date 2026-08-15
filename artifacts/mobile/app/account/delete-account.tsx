@@ -11,7 +11,10 @@ import {
   Alert,
   Modal,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -339,7 +342,13 @@ function PendingDeletionView({
         animationType="slide"
         onRequestClose={() => setShowPasswordModal(false)}
       >
-        <View style={styles.modalBackdrop}>
+        {/* Modals sit outside the keyboard-controller hierarchy, so the
+            password input needs its own KeyboardAvoidingView (same pattern
+            as the quote modal in the conversation screen). */}
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Confirm with your password</Text>
             <Text style={styles.modalBody}>
@@ -408,7 +417,7 @@ function PendingDeletionView({
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -512,9 +521,17 @@ function RequestDeletionView({
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: 'Delete account' }} />
-      <ScrollView
+      {/* Keyboard-aware: the password field and the controls below it sit in
+          the lower half of the page, so a plain ScrollView lets the iOS
+          keyboard cover them. The shared compat component (same pattern as
+          every other form screen) scrolls the focused input above the
+          keyboard; bottomOffset keeps a small gap. Drag-to-dismiss via
+          keyboardDismissMode, tap-to-dismiss via the app-level handler. */}
+      <KeyboardAwareScrollViewCompat
         contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        bottomOffset={24}
       >
         <View style={styles.warnCard}>
           <Feather name="alert-triangle" size={22} color={Colors.light.error} />
@@ -634,7 +651,7 @@ function RequestDeletionView({
             </>
           )}
         </Pressable>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }

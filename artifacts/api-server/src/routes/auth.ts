@@ -3,7 +3,7 @@ import bcryptjs from "bcryptjs";
 import { randomInt } from "crypto";
 import { db } from "@workspace/db";
 import { usersTable, traderProfilesTable, subscriptionsTable } from "@workspace/db/schema";
-import { and, eq, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
 import {
   RegisterCustomerBody,
   RegisterTraderBody,
@@ -95,8 +95,13 @@ function isAccountUnreachable(user: User): boolean {
  *     (idempotent, never downgrades)
  *   - writes the EMAIL_VERIFIED audit log
  * Callers must guard on `user.emailVerified` before invoking.
+ *
+ * Transactional and idempotent: the user flip is a conditional
+ * UPDATE ... WHERE email_verified = false inside one transaction with the
+ * trader-profile transition, so concurrent link + OTP redemptions produce
+ * exactly one verified state, one profile transition and one audit entry.
  */
-async function finalizeEmailVerification(user: User): Promise<void> {
+async function finalizeEmailVerification(user: User): Promise<boolean> {
   // Customers are activated immediately upon email verification. Traders are
   // NOT activated here — trader activation only happens after a successful
   // subscription payment webhook. Until then their account exists and they can
@@ -104,36 +109,62 @@ async function finalizeEmailVerification(user: User): Promise<void> {
   // is not publicly listed.
   const activateOnVerify = user.role === "customer";
 
-  await db.update(usersTable)
-    .set({
-      emailVerified: true,
-      emailVerificationToken: null,
-      emailOtpHash: null,
-      emailOtpExpiresAt: null,
-      emailOtpAttempts: 0,
-      ...(activateOnVerify ? { isActive: true } : {}),
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.id, user.id));
+  const flipped = await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(usersTable)
+      .set({
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailOtpHash: null,
+        emailOtpExpiresAt: null,
+        emailOtpAttempts: 0,
+        ...(activateOnVerify ? { isActive: true } : {}),
+        updatedAt: new Date(),
+      })
+      // Conditional flip: only the FIRST finalizer (link or OTP, whichever
+      // lands first) performs the side effects; the loser sees zero rows.
+      // The lifecycle guard lives IN the write predicate — not only in the
+      // caller's earlier read — so a concurrent admin anonymise/complete
+      // between that read and this update makes the flip a harmless no-op
+      // instead of verifying a tombstoned row. Pending-deletion states
+      // (REQUESTED / DISABLED_PENDING_RETENTION) are deliberately allowed.
+      .where(
+        and(
+          eq(usersTable.id, user.id),
+          eq(usersTable.emailVerified, false),
+          isNull(usersTable.deletedAt),
+          or(
+            isNull(usersTable.deletionStatus),
+            notInArray(usersTable.deletionStatus, ["ANONYMISED", "COMPLETED"]),
+          ),
+        ),
+      )
+      .returning({ id: usersTable.id });
+    if (updated.length === 0) return false;
 
-  if (user.role === "trader") {
-    const [profile] = await db
-      .select()
-      .from(traderProfilesTable)
-      .where(eq(traderProfilesTable.userId, user.id))
-      .limit(1);
-    if (profile && profile.verificationStatus === TRADER_STATUS.PENDING_EMAIL_VERIFICATION) {
-      await db
-        .update(traderProfilesTable)
-        .set({
-          verificationStatus: TRADER_STATUS.PENDING_PHONE_VERIFICATION,
-          updatedAt: new Date(),
-        })
-        .where(eq(traderProfilesTable.userId, user.id));
+    if (user.role === "trader") {
+      const [profile] = await tx
+        .select()
+        .from(traderProfilesTable)
+        .where(eq(traderProfilesTable.userId, user.id))
+        .limit(1);
+      if (profile && profile.verificationStatus === TRADER_STATUS.PENDING_EMAIL_VERIFICATION) {
+        await tx
+          .update(traderProfilesTable)
+          .set({
+            verificationStatus: TRADER_STATUS.PENDING_PHONE_VERIFICATION,
+            updatedAt: new Date(),
+          })
+          .where(eq(traderProfilesTable.userId, user.id));
+      }
     }
-  }
+    return true;
+  });
 
-  logAudit({ userId: user.id, action: "EMAIL_VERIFIED" });
+  if (flipped) {
+    logAudit({ userId: user.id, action: "EMAIL_VERIFIED" });
+  }
+  return flipped;
 }
 
 /**
@@ -768,6 +799,15 @@ router.get("/auth/verify-email", async (req, res) => {
       return;
     }
 
+    // A token that resolves to an anonymised / finalised (tombstoned) account
+    // must never be redeemable — the email has been released for
+    // re-registration and only the NEW account's own token may verify it.
+    // Treat exactly like an unknown token (no state leak).
+    if (isAccountUnreachable(user)) {
+      res.status(404).send(verifyPage("Link Expired", "This verification link is invalid or has already been used.", false));
+      return;
+    }
+
     if (user.emailVerified) {
       res.send(verifyPage("Already Verified", "Your email is already verified. You can log in to the app.", true));
       return;
@@ -784,7 +824,21 @@ router.get("/auth/verify-email", async (req, res) => {
       return;
     }
 
-    await finalizeEmailVerification(user);
+    const flipped = await finalizeEmailVerification(user);
+    if (!flipped) {
+      // Lost a race after our read: either the OTP path just verified the
+      // same account (fine — canonical state is verified) or the account was
+      // tombstoned mid-flight (must fail like an unknown token).
+      const [fresh] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, user.id))
+        .limit(1);
+      if (!fresh || !fresh.emailVerified || isAccountUnreachable(fresh)) {
+        res.status(404).send(verifyPage("Link Expired", "This verification link is invalid or has already been used.", false));
+        return;
+      }
+    }
 
     res.send(verifyPage("Email Verified!", "Your email has been verified. You can now log in to MyLocalTrade.", true));
   } catch (error) {
@@ -814,6 +868,12 @@ router.post("/auth/resend-verification", async (req, res) => {
       return;
     }
 
+    // Never re-arm verification credentials on a tombstoned account.
+    if (isAccountUnreachable(user)) {
+      res.json(GENERIC_RESPONSE);
+      return;
+    }
+
     // Rate limit: 60s cooldown between resends — enforced server-side but not
     // exposed to the caller to avoid leaking account/verification state.
     if (user.emailVerificationSentAt) {
@@ -826,7 +886,11 @@ router.post("/auth/resend-verification", async (req, res) => {
 
     const newToken = generateVerificationToken();
     const newOtp = await createEmailOtp();
-    await db.update(usersTable)
+    // Lifecycle guard in the write predicate: a concurrent verification or
+    // admin anonymise/complete between the read above and this update makes
+    // the re-arm a no-op (zero rows) instead of arming credentials on a
+    // verified or tombstoned row. Pending-deletion states stay allowed.
+    const rearmed = await db.update(usersTable)
       .set({
         emailVerificationToken: newToken,
         emailVerificationTokenExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
@@ -836,7 +900,23 @@ router.post("/auth/resend-verification", async (req, res) => {
         emailOtpAttempts: 0,
         updatedAt: new Date(),
       })
-      .where(eq(usersTable.id, user.id));
+      .where(
+        and(
+          eq(usersTable.id, user.id),
+          eq(usersTable.emailVerified, false),
+          isNull(usersTable.deletedAt),
+          or(
+            isNull(usersTable.deletionStatus),
+            notInArray(usersTable.deletionStatus, ["ANONYMISED", "COMPLETED"]),
+          ),
+        ),
+      )
+      .returning({ id: usersTable.id });
+
+    if (rearmed.length === 0) {
+      res.json(GENERIC_RESPONSE);
+      return;
+    }
 
     sendVerificationEmail(user.email, user.fullName, newToken, newOtp.code, EMAIL_OTP_TTL_MINUTES).catch((err) =>
       req.log.error({ err }, "Failed to send verification email")
@@ -888,6 +968,7 @@ router.post("/auth/verify-email-code", async (req, res) => {
 
     const hasActiveOtp =
       !!user &&
+      !isAccountUnreachable(user) &&
       !user.emailVerified &&
       !!user.emailOtpHash &&
       !!user.emailOtpExpiresAt &&
@@ -924,7 +1005,21 @@ router.post("/auth/verify-email-code", async (req, res) => {
       return;
     }
 
-    await finalizeEmailVerification(user);
+    const flipped = await finalizeEmailVerification(user);
+    if (!flipped) {
+      // Lost a race after our read: only proceed if the account really is
+      // verified and still live (the link path won). If it was tombstoned
+      // mid-flight, fail with the same generic response as any invalid code.
+      const [fresh] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, user.id))
+        .limit(1);
+      if (!fresh || !fresh.emailVerified || isAccountUnreachable(fresh)) {
+        res.status(400).json(INVALID);
+        return;
+      }
+    }
 
     const token = generateToken(user.id, user.role, user.tokenVersion);
     res.json({
