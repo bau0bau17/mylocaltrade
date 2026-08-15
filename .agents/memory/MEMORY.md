@@ -74,3 +74,5 @@
 - [Account deletion storage gap](account-deletion-storage-gap.md) — deletion is a soft delete: DB refs cleared but storage objects & trader_documents remain; pre-launch blocker to fix; RC ids/proxyFetch quirks inside.
 - [Campaign retention lifecycle](campaign-retention-lifecycle.md) — delete = never-queued drafts only (TEST_SENT blocks it); terminal → archive; anonymise keeps status/sentAt for quota; schedule in docs/data-retention.md.
 - [No test files under Expo app/](expo-route-tree-test-files.md) — Metro bundles app/**/*.test.* as routes → device crash; jest+typecheck stay green; guard test + clean-cache bundle are the tripwires.
+- [Team seat lifecycle](team-seat-lifecycle.md) — deterministic newest-first SYSTEM suspension; hourly sweep IS the contract (exemption expiry + reconcile retry); RC tie-break: equal-ts revoke wins; drizzle 23505 in err.cause.
+- [expo export contention](expo-export-resource-contention.md) — export gets killed mid-bundle while dev servers run & detached launches die; stop workflows, run foreground, restart after.
