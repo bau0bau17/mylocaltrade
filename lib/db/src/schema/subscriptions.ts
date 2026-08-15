@@ -11,6 +11,12 @@ export const subscriptionsTable = pgTable("subscriptions", {
   // dedicated database cleanup migration drops them. Do not write to them.
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
+  // The store product that granted the current access (e.g.
+  // "com.mylocaltrade.app.trader.yearly"), persisted by revenuecat-sync and
+  // the RevenueCat webhook on every grant. Source of truth for deriving the
+  // business tier (solo vs team seat plans) — never derived client-side.
+  // NULL for legacy rows and demo activations (treated as solo tier).
+  productIdentifier: varchar("product_identifier", { length: 255 }),
   currentPeriodStart: timestamp("current_period_start"),
   currentPeriodEnd: timestamp("current_period_end"),
   cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),

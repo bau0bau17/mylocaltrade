@@ -421,6 +421,10 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, subscr
               willRenew !== undefined ? !willRenew : existing.cancelAtPeriodEnd,
             // First-purchase anchor only; renewals must not reset cooling-off.
             originalPurchaseAt: existing.originalPurchaseAt ?? new Date(),
+            // Tier source of truth (team seat plans derive from this). Keep
+            // the stored value when this sync didn't carry a product id.
+            productIdentifier:
+              entitlement?.product_identifier ?? existing.productIdentifier ?? null,
             updatedAt: new Date(),
           })
           .where(eq(subscriptionsTable.userId, userId));
@@ -433,6 +437,7 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, subscr
           currentPeriodEnd: periodEnd,
           cancelAtPeriodEnd: willRenew === false,
           originalPurchaseAt: new Date(),
+          productIdentifier: entitlement?.product_identifier ?? null,
         });
       }
 
@@ -938,6 +943,13 @@ router.post("/webhooks/revenuecat", async (req, res) => {
     let newlyActivated = false;
     let newlyCancelled = false;
 
+    // Store product that triggered this event — persisted on grants so the
+    // team tier can be derived server-side (PRODUCT_CHANGE updates it too).
+    const eventProductId =
+      typeof event.product_id === "string" && event.product_id.length > 0
+        ? event.product_id
+        : null;
+
     await db.transaction(async (tx) => {
       const [existing] = await tx
         .select()
@@ -958,6 +970,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
               currentPeriodEnd: periodEnd,
               cancelAtPeriodEnd: false,
               originalPurchaseAt: existing.originalPurchaseAt ?? originalAnchor,
+              productIdentifier: eventProductId ?? existing.productIdentifier ?? null,
               updatedAt: new Date(),
             })
             .where(eq(subscriptionsTable.userId, userId));
@@ -969,6 +982,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
             currentPeriodStart: new Date(),
             currentPeriodEnd: periodEnd,
             originalPurchaseAt: originalAnchor,
+            productIdentifier: eventProductId,
           });
         }
         await tx

@@ -208,6 +208,8 @@ describe("RevenueCat subscription syncing", () => {
       expect(sub.cancelAtPeriodEnd).toBe(false);
       expect(sub.originalPurchaseAt).not.toBeNull();
       expect(sub.currentPeriodEnd!.getTime()).toBeGreaterThan(Date.now());
+      // Phase B: the granting product is persisted (tier source of truth).
+      expect(sub.productIdentifier).toBe("premium_monthly");
 
       const [user] = await db
         .select({ plan: usersTable.plan })
@@ -587,6 +589,33 @@ describe("RevenueCat subscription syncing", () => {
 
       expect(second.status).toBe(200);
       expect(endedPushes(trader.id)).toHaveLength(1);
+    });
+
+    it("persists the granting product_id on webhook grants (Phase B tier source)", async () => {
+      const trader = await createVerifiedTrader("wh-product-id");
+      const res = await request(app)
+        .post("/api/webhooks/revenuecat")
+        .set("Authorization", WEBHOOK_SECRET)
+        .send({
+          event: {
+            type: "INITIAL_PURCHASE",
+            app_user_id: String(trader.id),
+            entitlement_ids: [ENTITLEMENT_KEY],
+            product_id: "com.mylocaltrade.app.trader.yearly",
+            expiration_at_ms: Date.now() + 30 * 24 * 60 * 60 * 1000,
+            purchased_at_ms: Date.now(),
+          },
+        });
+      await settle();
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ success: true, applied: true });
+
+      const [sub] = await db
+        .select({ productIdentifier: subscriptionsTable.productIdentifier })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub.productIdentifier).toBe("com.mylocaltrade.app.trader.yearly");
     });
 
     it("acknowledges and skips events for other entitlements", async () => {

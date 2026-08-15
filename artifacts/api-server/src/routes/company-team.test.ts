@@ -291,6 +291,8 @@ describe("team-context (flag ON)", () => {
     const owner = await request(app)
       .get("/api/company/team-context")
       .set("Authorization", `Bearer ${ctx.ownerToken}`);
+    // TEAM_BILLING_ENFORCED is off here, so the legacy shape is EXACT —
+    // no plan/seat fields may leak onto this path.
     expect(owner.body).toEqual({ enabled: true, role: "OWNER" });
 
     const employee = await request(app)
@@ -529,7 +531,7 @@ describe("POST /company/invites/accept", () => {
     const meCtx = await request(app)
       .get("/api/company/team-context")
       .set("Authorization", `Bearer ${res.body.token}`);
-    expect(meCtx.body).toEqual({ enabled: true, role: "EMPLOYEE" });
+    expect(meCtx.body).toMatchObject({ enabled: true, role: "EMPLOYEE" });
 
     // Single use: the same token again fails generically.
     const again = await accept(raw);
@@ -748,7 +750,7 @@ describe("POST /company/members/:id/remove", () => {
     const beforeCtx = await request(app)
       .get("/api/company/team-context")
       .set("Authorization", `Bearer ${removeeToken}`);
-    expect(beforeCtx.body).toEqual({ enabled: true, role: "EMPLOYEE" });
+    expect(beforeCtx.body).toMatchObject({ enabled: true, role: "EMPLOYEE" });
 
     const res = await request(app)
       .post(`/api/company/members/${memberId}/remove`)

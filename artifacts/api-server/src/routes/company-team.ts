@@ -23,6 +23,12 @@ import {
 } from "../lib/company-membership";
 import { sendCompanyInviteEmail } from "../lib/email";
 import {
+  countCompanySeats,
+  getCompanyPlanContext,
+  resolveInviteSeatLimit,
+  teamBillingEnforced,
+} from "../lib/team-billing";
+import {
   handoverActiveJobsToOwner,
   logJobsHandedToOwner,
   notifyJobsHandedToOwner,
@@ -90,6 +96,19 @@ class CapReachedError extends Error {
     super("member cap reached");
   }
 }
+
+/** The owner's plan tier includes no employee seats (TEAM_BILLING_ENFORCED only). */
+class TeamPlanRequiredError extends Error {
+  constructor() {
+    super("team plan required");
+  }
+}
+
+const TEAM_PLAN_REQUIRED_RESPONSE = {
+  error:
+    "Your current plan doesn't include team members. Upgrade to a Team plan to invite employees.",
+  code: "TEAM_PLAN_REQUIRED",
+} as const;
 
 // Advisory-lock namespace for per-company seat-cap serialisation (arbitrary
 // app-unique int4; pairs with the trader_profiles id as the second key).
@@ -232,7 +251,46 @@ router.get(
       const membership = await getActiveMembership(
         (req as AuthenticatedRequest).userId!,
       );
-      res.json({ enabled: true, role: membership?.role ?? null });
+      if (!membership) {
+        res.json({ enabled: true, role: null });
+        return;
+      }
+      // Expanded response (Phase B) exists ONLY when TEAM_BILLING_ENFORCED
+      // is on. With the flag off the legacy {enabled, role} shape is
+      // returned untouched — no plan lookup, no reads of the new
+      // subscriptions.product_identifier column on this path.
+      if (!teamBillingEnforced()) {
+        res.json({ enabled: true, role: membership.role });
+        return;
+      }
+      const isOwner = membership.role === "OWNER";
+      if (!isOwner) {
+        // Employees get their own gating state only — never the owner's
+        // billing tier or seat utilisation (billing metadata is owner-only).
+        res.json({
+          enabled: true,
+          role: membership.role,
+          viewerRole: membership.role,
+          viewerCanManageBilling: false,
+          viewerCanManageTeam: false,
+          viewerCanInvite: false,
+        });
+        return;
+      }
+      const plan = await getCompanyPlanContext(membership.traderProfileId);
+      res.json({
+        enabled: true,
+        role: membership.role,
+        viewerRole: membership.role,
+        effectiveBusinessPlan: plan.effectiveBusinessPlan,
+        employeeSeatLimit: plan.employeeSeatLimit,
+        activeEmployeeCount: plan.activeEmployeeCount,
+        pendingInviteCount: plan.pendingInviteCount,
+        viewerCanManageBilling: true,
+        viewerCanManageTeam: true,
+        viewerCanInvite:
+          plan.active && plan.employeeSeatLimit > 0 && !plan.overLimit,
+      });
     } catch (error) {
       req.log.error({ err: error }, "team-context failed");
       res.status(500).json({ error: "Failed to load team context" });
@@ -280,7 +338,23 @@ router.get("/company/team", authMiddleware, traderOnly, teamsGate, async (req, r
       )
       .orderBy(desc(companyInvitesTable.createdAt));
 
-    const seats = await countSeatsInUse(profileId);
+    // With enforcement on, seats use the plan's EMPLOYEE-only semantics
+    // (owner never occupies a seat) so used/max stay comparable; otherwise
+    // the legacy owner-inclusive count against the env cap (today's shape).
+    let seatUsage: { used: number; max: number };
+    if (teamBillingEnforced()) {
+      const plan = await getCompanyPlanContext(profileId);
+      seatUsage = {
+        used: plan.activeEmployeeCount + plan.pendingInviteCount,
+        max: plan.employeeSeatLimit,
+      };
+    } else {
+      const seats = await countSeatsInUse(profileId);
+      seatUsage = {
+        used: seats.activeMembers + seats.pendingInvites,
+        max: maxActiveMembersPerCompany(),
+      };
+    }
     res.json({
       members: memberRows.map((r) => ({
         id: r.member.id,
@@ -297,10 +371,7 @@ router.get("/company/team", authMiddleware, traderOnly, teamsGate, async (req, r
         status: r.member.status,
       })),
       invites: inviteRows.map(serializeInvite),
-      seats: {
-        used: seats.activeMembers + seats.pendingInvites,
-        max: maxActiveMembersPerCompany(),
-      },
+      seats: seatUsage,
     });
   } catch (error) {
     req.log.error({ err: error }, "team list failed");
@@ -363,10 +434,24 @@ router.post("/company/invites", authMiddleware, traderOnly, teamsGate, async (re
         await tx.execute(
           sql`select pg_advisory_xact_lock(${CAP_LOCK_NAMESPACE}, ${profileId})`,
         );
-        const seats = await countSeatsInUse(profileId, tx);
-        const max = maxActiveMembersPerCompany();
-        if (seats.activeMembers + seats.pendingInvites >= max) {
-          throw new CapReachedError(max);
+        if (teamBillingEnforced()) {
+          // Plan-derived seats (Phase B, dormant by default): the owner's
+          // store product decides the employee seat count; solo/inactive
+          // plans have none. Counted per-EMPLOYEE (owner never uses a seat).
+          const rule = await resolveInviteSeatLimit(profileId, tx);
+          if (rule.requiresTeamPlan) {
+            throw new TeamPlanRequiredError();
+          }
+          const counts = await countCompanySeats(profileId, tx);
+          if (counts.activeEmployees + counts.pendingInvites >= rule.max) {
+            throw new CapReachedError(rule.max);
+          }
+        } else {
+          const seats = await countSeatsInUse(profileId, tx);
+          const max = maxActiveMembersPerCompany();
+          if (seats.activeMembers + seats.pendingInvites >= max) {
+            throw new CapReachedError(max);
+          }
         }
         const [row] = await tx
           .insert(companyInvitesTable)
@@ -383,6 +468,10 @@ router.post("/company/invites", authMiddleware, traderOnly, teamsGate, async (re
         return row;
       });
     } catch (err) {
+      if (err instanceof TeamPlanRequiredError) {
+        res.status(403).json(TEAM_PLAN_REQUIRED_RESPONSE);
+        return;
+      }
       if (err instanceof CapReachedError) {
         res.status(409).json({
           error: `Your team is limited to ${err.max} members, including pending invitations.`,
@@ -483,10 +572,27 @@ router.post(
             await tx.execute(
               sql`select pg_advisory_xact_lock(${CAP_LOCK_NAMESPACE}, ${ctx.membership.traderProfileId})`,
             );
-            const seats = await countSeatsInUse(ctx.membership.traderProfileId, tx);
-            const max = maxActiveMembersPerCompany();
-            if (seats.activeMembers + seats.pendingInvites + 1 > max) {
-              throw new CapReachedError(max);
+            if (teamBillingEnforced()) {
+              const rule = await resolveInviteSeatLimit(
+                ctx.membership.traderProfileId,
+                tx,
+              );
+              if (rule.requiresTeamPlan) {
+                throw new TeamPlanRequiredError();
+              }
+              const counts = await countCompanySeats(
+                ctx.membership.traderProfileId,
+                tx,
+              );
+              if (counts.activeEmployees + counts.pendingInvites + 1 > rule.max) {
+                throw new CapReachedError(rule.max);
+              }
+            } else {
+              const seats = await countSeatsInUse(ctx.membership.traderProfileId, tx);
+              const max = maxActiveMembersPerCompany();
+              if (seats.activeMembers + seats.pendingInvites + 1 > max) {
+                throw new CapReachedError(max);
+              }
             }
           }
           const updated = await tx
@@ -503,6 +609,10 @@ router.post(
           return updated[0] ?? null;
         });
       } catch (err) {
+        if (err instanceof TeamPlanRequiredError) {
+          res.status(403).json(TEAM_PLAN_REQUIRED_RESPONSE);
+          return;
+        }
         if (err instanceof CapReachedError) {
           res.status(409).json({
             error: `Your team is limited to ${err.max} members, including pending invitations.`,
