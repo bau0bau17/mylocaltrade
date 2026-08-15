@@ -530,3 +530,123 @@ describe("TEAM_BILLING_ENFORCED on", () => {
     await db.delete(companyInvitesTable).where(eq(companyInvitesTable.id, invite.id));
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase C — confirmed App Store Connect products
+// ---------------------------------------------------------------------------
+
+/**
+ * The five CONFIRMED App Store Connect products (subscription group
+ * "Trader Subscription", confirmed Aug 2026). The Team ids are deployed via
+ * TEAM_PRODUCT_SEAT_MAP in the environment — never hardcoded in the
+ * resolver — so these tests pin the EXACT env value the deployment uses.
+ */
+const CONFIRMED_TEAM_SEAT_MAP: Record<string, number> = {
+  "com.mylocaltrade.app.trader.team5.yearly": 5,
+  "com.mylocaltrade.app.trader.team10.yearly": 10,
+  "com.mylocaltrade.app.trader.team20.yearly": 20,
+};
+
+describe("Phase C confirmed products", () => {
+  it("resolves all five confirmed products with the deployed seat map", () => {
+    setFlags({ teamMap: CONFIRMED_TEAM_SEAT_MAP });
+    expect(resolveProductTier("com.mylocaltrade.app.trader.monthly")).toEqual({
+      tier: "premium_solo",
+      seats: 0,
+    });
+    expect(resolveProductTier("com.mylocaltrade.app.trader.yearly")).toEqual({
+      tier: "premium_solo",
+      seats: 0,
+    });
+    expect(resolveProductTier("com.mylocaltrade.app.trader.team5.yearly")).toEqual({
+      tier: "team_5",
+      seats: 5,
+    });
+    expect(resolveProductTier("com.mylocaltrade.app.trader.team10.yearly")).toEqual({
+      tier: "team_10",
+      seats: 10,
+    });
+    expect(resolveProductTier("com.mylocaltrade.app.trader.team20.yearly")).toEqual({
+      tier: "team_20",
+      seats: 20,
+    });
+  });
+
+  it("resolves the confirmed Team ids in production too (env map, not Test Store)", () => {
+    setFlags({ teamMap: CONFIRMED_TEAM_SEAT_MAP });
+    const prevNodeEnv = process.env["NODE_ENV"];
+    process.env["NODE_ENV"] = "production";
+    try {
+      expect(resolveProductTier("com.mylocaltrade.app.trader.team5.yearly").seats).toBe(5);
+      expect(resolveProductTier("com.mylocaltrade.app.trader.team10.yearly").seats).toBe(10);
+      expect(resolveProductTier("com.mylocaltrade.app.trader.team20.yearly").seats).toBe(20);
+      expect(resolveProductTier("com.mylocaltrade.app.trader.monthly").tier).toBe("premium_solo");
+      expect(resolveProductTier("com.mylocaltrade.app.trader.yearly").tier).toBe("premium_solo");
+    } finally {
+      if (prevNodeEnv === undefined) delete process.env["NODE_ENV"];
+      else process.env["NODE_ENV"] = prevNodeEnv;
+    }
+  });
+
+  it("near-miss ids fail closed to solo/0 even with the confirmed map present", () => {
+    setFlags({ teamMap: CONFIRMED_TEAM_SEAT_MAP });
+    for (const guess of [
+      "com.mylocaltrade.app.team5.yearly", // the old invented id (missing .trader.)
+      "com.mylocaltrade.app.trader.team5.monthly",
+      "com.mylocaltrade.app.trader.team15.yearly",
+      "com.mylocaltrade.app.trader.team5.yearly.v2",
+    ]) {
+      expect(resolveProductTier(guess)).toEqual({ tier: "premium_solo", seats: 0 });
+    }
+  });
+
+  it("pending invites reserve seats: team5 with 1 employee + 4 pending invites is full", async () => {
+    setFlags({ teams: true, billing: true, teamMap: CONFIRMED_TEAM_SEAT_MAP });
+    await setSubscription(ctx.teamOwner.id, "com.mylocaltrade.app.trader.team5.yearly");
+    const inviteIds: number[] = [];
+    try {
+      for (let i = 0; i < 4; i++) {
+        const rawToken = crypto.randomBytes(24).toString("hex");
+        const [inv] = await db
+          .insert(companyInvitesTable)
+          .values({
+            traderProfileId: ctx.teamProfileId,
+            email: emailFor(`seat-reserving-${i}`),
+            role: "EMPLOYEE",
+            status: "PENDING",
+            tokenHash: crypto.createHash("sha256").update(rawToken).digest("hex"),
+            invitedByUserId: ctx.teamOwner.id,
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          })
+          .returning({ id: companyInvitesTable.id });
+        inviteIds.push(inv.id);
+      }
+
+      // 1 active employee + 4 unexpired PENDING invites = all 5 seats taken.
+      const context = await request(app)
+        .get("/api/company/team-context")
+        .set("Authorization", `Bearer ${ctx.teamOwner.token}`);
+      expect(context.status).toBe(200);
+      expect(context.body).toMatchObject({
+        effectiveBusinessPlan: "team_5",
+        employeeSeatLimit: 5,
+        activeEmployeeCount: 1,
+        pendingInviteCount: 4,
+      });
+
+      const res = await request(app)
+        .post("/api/company/invites")
+        .set("Authorization", `Bearer ${ctx.teamOwner.token}`)
+        .send({ email: emailFor("fifth-seat-blocked") });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("MEMBER_LIMIT_REACHED");
+    } finally {
+      if (inviteIds.length > 0) {
+        await db
+          .delete(companyInvitesTable)
+          .where(inArray(companyInvitesTable.id, inviteIds));
+      }
+      await setSubscription(ctx.teamOwner.id, FUTURE_TEAM5_PRODUCT);
+    }
+  });
+});

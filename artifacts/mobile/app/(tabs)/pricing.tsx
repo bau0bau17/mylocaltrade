@@ -18,6 +18,24 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { getYearlySavings } from '@/lib/pricing';
 
+/**
+ * All five confirmed App Store products live in one Apple subscription group
+ * ("Trader Subscription"), so buying a different package while subscribed is
+ * a plan change handled by the App Store — never a second subscription.
+ * Prices are ALWAYS taken live from the StoreKit product via RevenueCat;
+ * these labels and seat counts are display copy only, and the backend derives
+ * the real seat limit from the purchased product identifier.
+ */
+type PlanKey = 'monthly' | 'annual' | 'team5' | 'team10' | 'team20';
+
+const PLAN_LABELS: Record<PlanKey, string> = {
+  monthly: 'Premium Monthly',
+  annual: 'Premium Yearly',
+  team5: 'Team 5 Annual',
+  team10: 'Team 10 Annual',
+  team20: 'Team 20 Annual',
+};
+
 interface PromoPreview {
   code: string;
   discountGbp: number;
@@ -43,7 +61,7 @@ export default function PricingScreen() {
   const [promoApplied, setPromoApplied] = useState<PromoPreview | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
-  const [purchasing, setPurchasing] = useState<'monthly' | 'annual' | null>(null);
+  const [purchasing, setPurchasing] = useState<PlanKey | null>(null);
 
   const { data: onboardingStatus, isLoading: isLoadingOnboarding, refetch: refetchOnboarding } = useGetTraderOnboardingStatus({
     query: {
@@ -118,7 +136,7 @@ export default function PricingScreen() {
 
   const handlePurchase = async (
     pkg: PurchasesPackage | null,
-    key: 'monthly' | 'annual',
+    key: PlanKey,
   ) => {
     if (!pkg) return;
     if (!isTrader) {
@@ -141,9 +159,12 @@ export default function PricingScreen() {
     try {
       const active = await subscription.purchase(pkg);
       if (active) {
+        const isTeam = key === 'team5' || key === 'team10' || key === 'team20';
         Alert.alert(
-          key === 'annual' ? 'Premium Yearly is now active' : 'Premium Monthly is now active',
-          'Your listing is now featured and boosted in local search. You can manage your plan any time from Billing.',
+          `${PLAN_LABELS[key]} is now active`,
+          isTeam
+            ? 'Your listing is featured and boosted in local search, and you can now invite employees from the Team page in your dashboard.'
+            : 'Your listing is now featured and boosted in local search. You can manage your plan any time from Billing.',
         );
         router.push('/trader-dashboard/billing');
       }
@@ -176,6 +197,59 @@ export default function PricingScreen() {
     } catch (e) {
       Alert.alert('Restore failed', e instanceof Error ? e.message : 'Please try again.');
     }
+  };
+
+  // Team packages come live from the RevenueCat offering; a missing package
+  // (Test Store offering, stale cache, partial rollout) simply isn't shown.
+  const teamPlans = [
+    { key: 'team5' as const, pkg: subscription.team5Package, seats: 5 },
+    { key: 'team10' as const, pkg: subscription.team10Package, seats: 10 },
+    { key: 'team20' as const, pkg: subscription.team20Package, seats: 20 },
+  ];
+  const availableTeamPlans = teamPlans.filter(
+    // != null (loose) also drops `undefined` from an older provider shape.
+    (p): p is { key: PlanKey & ('team5' | 'team10' | 'team20'); pkg: PurchasesPackage; seats: number } =>
+      p.pkg != null,
+  );
+  const anyPackage =
+    !!subscription.monthlyPackage ||
+    !!subscription.annualPackage ||
+    availableTeamPlans.length > 0;
+  const activePlanLabel = subscription.activeTeamTier
+    ? PLAN_LABELS[subscription.activeTeamTier]
+    : subscription.activeCadence === 'annual'
+      ? 'Premium Yearly'
+      : subscription.activeCadence === 'monthly'
+        ? 'Premium Monthly'
+        : 'Premium';
+
+  // One action row per plan card: the active plan is marked (no button), any
+  // other plan purchases via RevenueCat — Apple treats it as an upgrade or
+  // downgrade inside the shared subscription group.
+  const renderPlanAction = (pkg: PurchasesPackage, key: PlanKey, subscribeLabel: string) => {
+    if (subscription.activeProductId === pkg.product.identifier) {
+      return (
+        <View style={styles.currentPlanBox}>
+          <Feather name="check-circle" size={16} color={Colors.light.secondary} />
+          <Text style={styles.currentPlanText}>Current plan</Text>
+        </View>
+      );
+    }
+    return (
+      <Pressable
+        style={[styles.subscribeBtn, !!purchasing && { opacity: 0.6 }]}
+        onPress={() => handlePurchase(pkg, key)}
+        disabled={!!purchasing}
+      >
+        {purchasing === key ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.subscribeBtnText}>
+            {subscription.hasTraderSubscription ? 'Switch to this plan' : subscribeLabel}
+          </Text>
+        )}
+      </Pressable>
+    );
   };
 
   if (isLoadingPlans || verifiedStatus === 'unknown' || roleUnknown) {
@@ -367,122 +441,151 @@ export default function PricingScreen() {
 
       {subscription.isSupported ? (
         <View style={styles.plansContainer}>
-          {subscription.hasTraderSubscription ? (
-            <View style={styles.iapActiveCard}>
-              <Feather name="check-circle" size={20} color={Colors.light.secondary} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.iapActiveTitle}>Trader Subscription active</Text>
-                <Text style={styles.iapActiveBody}>
-                  Premium is active — your listing is featured and boosted in search. Manage your subscription from Billing in your dashboard.
-                </Text>
-                <Pressable style={styles.gateBtn} onPress={() => router.push('/trader-dashboard/billing')}>
-                  <Text style={styles.gateBtnText}>Go to billing</Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : !subscription.isReady ? (
+          {!subscription.isReady ? (
             <ActivityIndicator size="large" color={Colors.light.primary} style={{ marginVertical: 24 }} />
-          ) : !subscription.monthlyPackage && !subscription.annualPackage ? (
-            <View style={styles.gateBanner}>
-              <Feather name="alert-circle" size={18} color={Colors.light.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gateTitle}>Plans unavailable</Text>
-                <Text style={styles.gateBody}>
-                  We could not load subscription options right now. Please try again shortly.
-                </Text>
-                <Pressable style={styles.gateBtn} onPress={() => subscription.refresh()}>
-                  <Text style={styles.gateBtnText}>Retry</Text>
-                </Pressable>
-              </View>
-            </View>
           ) : (
             <>
-              <Text style={styles.iapHeading}>Choose your plan</Text>
-
-              <View style={[styles.planOption, styles.planOptionCurrent]}>
-                <View style={styles.planOptionHead}>
-                  <Text style={styles.planOptionName}>Basic</Text>
-                  <View style={styles.currentTag}>
-                    <Text style={styles.currentTagText}>Current</Text>
+              {subscription.hasTraderSubscription && (
+                <View style={styles.iapActiveCard}>
+                  <Feather name="check-circle" size={20} color={Colors.light.secondary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.iapActiveTitle}>Trader Subscription active</Text>
+                    <Text style={styles.iapActiveBody}>
+                      {activePlanLabel} is active — your listing is featured and boosted in search. Manage your subscription from Billing in your dashboard.
+                    </Text>
+                    <Pressable style={styles.gateBtn} onPress={() => router.push('/trader-dashboard/billing')}>
+                      <Text style={styles.gateBtnText}>Go to billing</Text>
+                    </Pressable>
                   </View>
-                </View>
-                <Text style={styles.planOptionPrice}>Free</Text>
-                <Text style={styles.planOptionDesc}>
-                  Your free public listing — verified traders appear in search and receive customer enquiries at no cost.
-                </Text>
-              </View>
-
-              {subscription.monthlyPackage && (
-                <View style={[styles.planOption, styles.planOptionPremium]}>
-                  <View style={styles.planOptionHead}>
-                    <Text style={styles.planOptionName}>Premium Monthly</Text>
-                    <View style={styles.popularTag}>
-                      <Text style={styles.popularTagText}>Popular</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.planOptionPrice}>
-                    {subscription.monthlyPackage.product.priceString}
-                    <Text style={styles.planOptionCadence}> / month</Text>
-                  </Text>
-                  <Text style={styles.planOptionDesc}>
-                    Full premium access, billed monthly. Cancel anytime.
-                  </Text>
-                  <Pressable
-                    style={[styles.subscribeBtn, !!purchasing && { opacity: 0.6 }]}
-                    onPress={() => handlePurchase(subscription.monthlyPackage, 'monthly')}
-                    disabled={!!purchasing}
-                  >
-                    {purchasing === 'monthly' ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.subscribeBtnText}>Subscribe monthly</Text>
-                    )}
-                  </Pressable>
                 </View>
               )}
 
-              {subscription.annualPackage && (() => {
-                const savings = getYearlySavings(
-                  subscription.monthlyPackage?.product.price,
-                  subscription.annualPackage.product.price,
-                );
-                return (
-                <View style={[styles.planOption, styles.planOptionPremium]}>
-                  <View style={styles.planOptionHead}>
-                    <Text style={styles.planOptionName}>Premium Yearly</Text>
-                    <View style={styles.saveTag}>
-                      <Text style={styles.saveTagText}>
-                        {savings ? `Save ${savings.percent}%` : 'Best value'}
+              {!anyPackage ? (
+                !subscription.hasTraderSubscription && (
+                  <View style={styles.gateBanner}>
+                    <Feather name="alert-circle" size={18} color={Colors.light.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.gateTitle}>Plans unavailable</Text>
+                      <Text style={styles.gateBody}>
+                        We could not load subscription options right now. Please try again shortly.
                       </Text>
+                      <Pressable style={styles.gateBtn} onPress={() => subscription.refresh()}>
+                        <Text style={styles.gateBtnText}>Retry</Text>
+                      </Pressable>
                     </View>
                   </View>
-                  <Text style={styles.planOptionPrice}>
-                    {subscription.annualPackage.product.priceString}
-                    <Text style={styles.planOptionCadence}> / year</Text>
+                )
+              ) : (
+                <>
+                  <Text style={styles.iapHeading}>
+                    {subscription.hasTraderSubscription ? 'Change your plan' : 'Choose your plan'}
                   </Text>
-                  <Text style={styles.planOptionDesc}>
-                    {savings && savings.monthsFree > 0
-                      ? `Full premium access, billed yearly — that's ${savings.monthsFree} month${savings.monthsFree === 1 ? '' : 's'} free vs paying monthly. Cancel anytime.`
-                      : 'Full premium access, billed yearly. Cancel anytime.'}
-                  </Text>
-                  <Pressable
-                    style={[styles.subscribeBtn, !!purchasing && { opacity: 0.6 }]}
-                    onPress={() => handlePurchase(subscription.annualPackage, 'annual')}
-                    disabled={!!purchasing}
-                  >
-                    {purchasing === 'annual' ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.subscribeBtnText}>Subscribe yearly</Text>
-                    )}
-                  </Pressable>
-                </View>
-                );
-              })()}
+                  {subscription.hasTraderSubscription && (
+                    <Text style={styles.planSwitchNote}>
+                      All plans are part of the same App Store subscription — switching upgrades or downgrades your existing plan, with Apple handling the billing adjustment.
+                    </Text>
+                  )}
 
-              <Pressable style={styles.restoreBtn} onPress={handleRestore} disabled={!!purchasing}>
-                <Text style={styles.restoreBtnText}>Restore purchases</Text>
-              </Pressable>
+                  {!subscription.hasTraderSubscription && (
+                    <View style={[styles.planOption, styles.planOptionCurrent]}>
+                      <View style={styles.planOptionHead}>
+                        <Text style={styles.planOptionName}>Basic</Text>
+                        <View style={styles.currentTag}>
+                          <Text style={styles.currentTagText}>Current</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.planOptionPrice}>Free</Text>
+                      <Text style={styles.planOptionDesc}>
+                        Your free public listing — verified traders appear in search and receive customer enquiries at no cost.
+                      </Text>
+                    </View>
+                  )}
+
+                  {subscription.monthlyPackage && (
+                    <View style={[styles.planOption, styles.planOptionPremium]}>
+                      <View style={styles.planOptionHead}>
+                        <Text style={styles.planOptionName}>Premium Monthly</Text>
+                        <View style={styles.popularTag}>
+                          <Text style={styles.popularTagText}>Popular</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.planOptionPrice}>
+                        {subscription.monthlyPackage.product.priceString}
+                        <Text style={styles.planOptionCadence}> / month</Text>
+                      </Text>
+                      <Text style={styles.planOptionDesc}>
+                        Full premium access for the business owner, billed monthly. Cancel anytime.
+                      </Text>
+                      <Text style={styles.seatNote}>Solo plan — no employee seats.</Text>
+                      {renderPlanAction(subscription.monthlyPackage, 'monthly', 'Subscribe monthly')}
+                    </View>
+                  )}
+
+                  {subscription.annualPackage && (() => {
+                    const savings = getYearlySavings(
+                      subscription.monthlyPackage?.product.price,
+                      subscription.annualPackage.product.price,
+                    );
+                    return (
+                    <View style={[styles.planOption, styles.planOptionPremium]}>
+                      <View style={styles.planOptionHead}>
+                        <Text style={styles.planOptionName}>Premium Yearly</Text>
+                        <View style={styles.saveTag}>
+                          <Text style={styles.saveTagText}>
+                            {savings ? `Save ${savings.percent}%` : 'Best value'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.planOptionPrice}>
+                        {subscription.annualPackage.product.priceString}
+                        <Text style={styles.planOptionCadence}> / year</Text>
+                      </Text>
+                      <Text style={styles.planOptionDesc}>
+                        {savings && savings.monthsFree > 0
+                          ? `Full premium access for the business owner, billed yearly — that's ${savings.monthsFree} month${savings.monthsFree === 1 ? '' : 's'} free vs paying monthly. Cancel anytime.`
+                          : 'Full premium access for the business owner, billed yearly. Cancel anytime.'}
+                      </Text>
+                      <Text style={styles.seatNote}>Solo plan — no employee seats.</Text>
+                      {renderPlanAction(subscription.annualPackage, 'annual', 'Subscribe yearly')}
+                    </View>
+                    );
+                  })()}
+
+                  {availableTeamPlans.length > 0 && (
+                    <>
+                      <Text style={styles.teamHeading}>Team plans</Text>
+                      <Text style={styles.planSwitchNote}>
+                        For companies with employees. The business owner never uses a seat, and pending invitations reserve seats until they are accepted or expire.
+                      </Text>
+                      {availableTeamPlans.map(({ key, pkg, seats }) => (
+                        <View key={key} style={[styles.planOption, styles.planOptionPremium]}>
+                          <View style={styles.planOptionHead}>
+                            <Text style={styles.planOptionName}>{PLAN_LABELS[key]}</Text>
+                            <View style={styles.teamTag}>
+                              <Text style={styles.teamTagText}>Up to {seats} employees</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.planOptionPrice}>
+                            {pkg.product.priceString}
+                            <Text style={styles.planOptionCadence}> / year</Text>
+                          </Text>
+                          <Text style={styles.planOptionDesc}>
+                            Annual Premium plan for one business owner and up to {seats} employees — your whole team on one subscription.
+                          </Text>
+                          <Text style={styles.seatNote}>
+                            Includes {seats} employee seats. The owner doesn't use a seat.
+                          </Text>
+                          {renderPlanAction(pkg, key, 'Subscribe yearly')}
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  <Pressable style={styles.restoreBtn} onPress={handleRestore} disabled={!!purchasing}>
+                    <Text style={styles.restoreBtnText}>Restore purchases</Text>
+                  </Pressable>
+                </>
+              )}
             </>
           )}
         </View>
@@ -594,6 +697,42 @@ const styles = StyleSheet.create({
   },
   restoreBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   restoreBtnText: { fontSize: 14, fontWeight: '600', color: Colors.light.primary },
+  planSwitchNote: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  teamHeading: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.light.text,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  teamTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: Colors.light.secondaryMuted,
+  },
+  teamTagText: { fontSize: 11, fontWeight: '700', color: Colors.light.secondary, letterSpacing: 0.4 },
+  seatNote: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.light.textSecondary,
+    marginBottom: 14,
+  },
+  currentPlanBox: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: Colors.light.secondaryMuted,
+  },
+  currentPlanText: { fontSize: 15, fontWeight: '700', color: Colors.light.secondary },
   planOption: {
     borderRadius: 16,
     borderWidth: 1,

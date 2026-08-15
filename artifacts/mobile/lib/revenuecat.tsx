@@ -248,6 +248,72 @@ async function syncEntitlementWithBackend(
   }
 }
 
+/**
+ * Phase C Team packages — matched by their custom package identifiers in the
+ * RevenueCat `default` offering (confirmed configuration):
+ *   team_5_annual / team_10_annual / team_20_annual.
+ * A package that is absent from the current offering (Test Store offering, a
+ * stale cached offering from before the Team launch, or a partial rollout)
+ * resolves to null and the UI simply omits that plan — never a crash and
+ * never a hardcoded price. Seat ENFORCEMENT is server-side only: the backend
+ * derives the seat limit from the purchased product identifier, so these
+ * constants are display/purchase plumbing, not authorization.
+ */
+const TEAM_PACKAGE_IDS = {
+  team5: 'team_5_annual',
+  team10: 'team_10_annual',
+  team20: 'team_20_annual',
+} as const;
+
+export type TeamTierKey = keyof typeof TEAM_PACKAGE_IDS;
+
+function pickTeamPackage(
+  offering: PurchasesOffering | null,
+  tier: TeamTierKey,
+): PurchasesPackage | null {
+  if (!offering) return null;
+  return (
+    offering.availablePackages.find(
+      (p) => p.identifier === TEAM_PACKAGE_IDS[tier],
+    ) ?? null
+  );
+}
+
+/**
+ * EXACT known Team product ids, for when the offering isn't loaded: the three
+ * confirmed App Store Connect products plus the dev Test Store ids (the Test
+ * Store key never ships in a Release build, so the bare ids are unambiguous).
+ * Anything else — team50, team15, suffixed variants — resolves to null and
+ * the UI falls back to the generic "Premium" label: display fails CLOSED,
+ * mirroring the server's seat resolver.
+ */
+const KNOWN_TEAM_PRODUCT_TIERS: Record<string, TeamTierKey> = {
+  'com.mylocaltrade.app.trader.team5.yearly': 'team5',
+  'com.mylocaltrade.app.trader.team10.yearly': 'team10',
+  'com.mylocaltrade.app.trader.team20.yearly': 'team20',
+  team5: 'team5',
+  team10: 'team10',
+  team20: 'team20',
+};
+
+/**
+ * Which Team tier (if any) the active product belongs to — for DISPLAY labels
+ * only (the server derives real seat limits from the product id itself).
+ * Matches the current offering's team packages first, then EXACT known ids.
+ * Never guesses from id shape: unknown products must not borrow a tier label.
+ */
+export function resolveTeamTier(
+  productId: string | null,
+  offering: PurchasesOffering | null,
+): TeamTierKey | null {
+  if (!productId) return null;
+  for (const tier of ['team20', 'team10', 'team5'] as const) {
+    const pkg = pickTeamPackage(offering, tier);
+    if (pkg && productId === pkg.product.identifier) return tier;
+  }
+  return KNOWN_TEAM_PRODUCT_TIERS[productId] ?? null;
+}
+
 function pickPackage(
   offering: PurchasesOffering | null,
   preferred: 'monthly' | 'annual',
@@ -284,6 +350,8 @@ function resolveCadence(
   const annual = pickPackage(offering, 'annual');
   if (annual && productId === annual.product.identifier) return 'annual';
   if (monthly && productId === monthly.product.identifier) return 'monthly';
+  // Every Team plan is annual (there are no monthly Team products).
+  if (resolveTeamTier(productId, offering)) return 'annual';
   const p = productId.toLowerCase();
   if (/year|annual|yr|12m/.test(p)) return 'annual';
   if (/month|monthly|1m/.test(p)) return 'monthly';
@@ -298,6 +366,16 @@ interface SubscriptionContextValue {
   isLoading: boolean;
   monthlyPackage: PurchasesPackage | null;
   annualPackage: PurchasesPackage | null;
+  /**
+   * Team packages from the active offering (live StoreKit prices). Null when
+   * the offering doesn't carry that package — the UI must omit the plan, not
+   * invent one.
+   */
+  team5Package: PurchasesPackage | null;
+  team10Package: PurchasesPackage | null;
+  team20Package: PurchasesPackage | null;
+  /** Team tier of the ACTIVE subscription, for display labels only. */
+  activeTeamTier: TeamTierKey | null;
   /** True when the trader entitlement is currently active on this device. */
   hasTraderSubscription: boolean;
   /** Store identifier of the active subscription product, if any. */
@@ -600,6 +678,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       isLoading,
       monthlyPackage: pickPackage(offering, 'monthly'),
       annualPackage: pickPackage(offering, 'annual'),
+      team5Package: pickTeamPackage(offering, 'team5'),
+      team10Package: pickTeamPackage(offering, 'team10'),
+      team20Package: pickTeamPackage(offering, 'team20'),
+      activeTeamTier: resolveTeamTier(
+        activeEntitlement?.productIdentifier ?? null,
+        offering,
+      ),
       hasTraderSubscription: !!activeEntitlement,
       activeProductId: activeEntitlement?.productIdentifier ?? null,
       activeCadence: resolveCadence(

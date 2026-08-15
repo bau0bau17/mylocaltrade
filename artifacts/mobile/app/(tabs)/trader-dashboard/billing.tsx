@@ -141,8 +141,14 @@ export default function BillingScreen() {
   // (Monthly vs Yearly) comes from RevenueCat's active product. Falls back to a
   // plain "Premium" label when the cadence can't be determined (e.g. web).
   const cadence = subscription.activeCadence;
-  const premiumName =
-    cadence === 'annual' ? 'Premium Yearly' : cadence === 'monthly' ? 'Premium Monthly' : 'Premium';
+  // Team plans are named by their confirmed tier (display only — the server
+  // derives the real seat limit from the purchased product identifier).
+  const teamTier = subscription.activeTeamTier;
+  const teamSeats =
+    teamTier === 'team5' ? 5 : teamTier === 'team10' ? 10 : teamTier === 'team20' ? 20 : null;
+  const premiumName = teamSeats
+    ? `Team ${teamSeats} Annual`
+    : cadence === 'annual' ? 'Premium Yearly' : cadence === 'monthly' ? 'Premium Monthly' : 'Premium';
   // Verified traders are always listed for free as Basic, even with no paid
   // subscription row (plan === null). Only true paid plans show as Premium.
   const planLabel = isPremium ? premiumName : 'Basic';
@@ -221,6 +227,13 @@ export default function BillingScreen() {
           </Text>
         )}
 
+        {isPremium && teamSeats ? (
+          <Text style={s.meta}>
+            Includes the business owner and up to {teamSeats} employees. The owner doesn't use a
+            seat, and pending invitations reserve seats — manage your team from the Team page.
+          </Text>
+        ) : null}
+
         {cancelled ? (
           <View style={s.cancelBanner}>
             <Feather name="alert-triangle" size={16} color={Colors.light.warning ?? '#B45309'} />
@@ -261,12 +274,18 @@ export default function BillingScreen() {
             </View>
           ) : (
             <View style={{ gap: 10 }}>
+              <Pressable style={s.secondaryBtn} onPress={() => router.push('/pricing')}>
+                <Feather name="repeat" size={18} color={Colors.light.primary} />
+                <Text style={s.secondaryBtnText}>Change plan</Text>
+              </Pressable>
               <Pressable style={s.secondaryBtn} onPress={manageApple}>
                 <Feather name="settings" size={18} color={Colors.light.primary} />
                 <Text style={s.secondaryBtnText}>Manage subscription</Text>
               </Pressable>
               <Text style={s.actionHint}>
-                Change between Monthly and Yearly, update payment or cancel any time in your App Store subscription settings.
+                Switch between Solo and Team plans from Change plan — Apple applies upgrades and
+                downgrades within your existing subscription. Update payment or cancel any time in
+                your App Store subscription settings.
               </Text>
               {!cancelled && (
                 <Pressable style={s.dangerBtn} onPress={() => setShowDowngrade(true)}>

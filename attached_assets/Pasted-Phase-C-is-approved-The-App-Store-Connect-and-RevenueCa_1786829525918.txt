@@ -1,0 +1,128 @@
+Phase C is approved. The App Store Connect and RevenueCat configuration is now complete. Please implement only Phase C, verify everything thoroughly, and stop before Phase D.
+
+CONFIRMED APP STORE PRODUCTS
+
+Existing Solo products:
+
+- com.mylocaltrade.app.trader.monthly
+- com.mylocaltrade.app.trader.yearly
+
+New annual Team products:
+
+- com.mylocaltrade.app.trader.team5.yearly
+- com.mylocaltrade.app.trader.team10.yearly
+- com.mylocaltrade.app.trader.team20.yearly
+
+All five products are in the same Apple subscription group:
+
+- Subscription group: Trader Subscription
+- Subscription Group ID: 22124207
+
+Apple service levels are configured as:
+
+- Level 1: Team 20 Annual
+- Level 2: Team 10 Annual
+- Level 3: Team 5 Annual
+- Level 4: Solo Monthly and Solo Yearly together
+
+CONFIRMED REVENUECAT CONFIGURATION
+
+All five iOS products are attached to the existing entitlement:
+
+- Trader Subscription
+
+The active `default` offering contains exactly:
+
+- `$rc_monthly` → Solo Monthly
+- `$rc_annual` → Solo Yearly
+- `team_5_annual` → Team 5 Annual
+- `team_10_annual` → Team 10 Annual
+- `team_20_annual` → Team 20 Annual
+
+The Team package descriptions are:
+
+- Annual Premium plan for one business owner and up to 5 employees.
+- Annual Premium plan for one business owner and up to 10 employees.
+- Annual Premium plan for one business owner and up to 20 employees.
+
+Team Test Store and Android products have intentionally not been created. Do not create or configure them.
+
+PHASE C REQUIREMENTS
+
+1. Configure the production Team product-to-seat mapping using the exact product identifiers confirmed above.
+
+2. Inspect the existing parser before setting `TEAM_PRODUCT_SEAT_MAP` and use its exact expected syntax. Do not assume or silently alter the format.
+
+3. Verify that `EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID` exactly matches the existing RevenueCat entitlement identifier `Trader Subscription`, including case and spaces.
+
+4. Update the owner-only subscription and billing UI so it loads all five packages from the active RevenueCat offering:
+
+- Solo Monthly
+- Solo Yearly
+- Team 5 Annual
+- Team 10 Annual
+- Team 20 Annual
+
+5. All displayed prices, currencies and billing periods must come live from StoreKit/RevenueCat. Do not hardcode prices.
+
+6. Clearly show the seat rules:
+
+- Solo Monthly: 0 employees
+- Solo Yearly: 0 employees
+- Team 5 Annual: up to 5 employees
+- Team 10 Annual: up to 10 employees
+- Team 20 Annual: up to 20 employees
+
+The business owner does not consume an employee seat. Pending invitations reserve seats.
+
+7. Only the company owner may:
+
+- view subscription purchasing controls;
+- purchase a subscription;
+- restore purchases;
+- upgrade or downgrade;
+- manage billing.
+
+Employees must never see a paywall, Premium promotion, purchase control or brief owner-content flash while their role is loading.
+
+8. Keep the existing custom subscription UI. Do not create or require a RevenueCat Paywall.
+
+9. Handle upgrades and downgrades through the existing Apple subscription group. The backend must determine the effective seat limit from the confirmed product identifier, never from client-supplied values.
+
+10. Unknown product identifiers must fail closed to Solo/0 employee seats and generate an appropriate server warning.
+
+11. Keep these safety controls unchanged:
+
+- `TEAM_BILLING_ENFORCED=false`
+- no production database migration;
+- no backend Publish;
+- no EAS/TestFlight build;
+- no App Store `Add for Review`;
+- no changes to App Store Connect or RevenueCat;
+- no Phase D implementation.
+
+12. Add regression coverage for:
+
+- all five confirmed production product identifiers;
+- correct seat limits;
+- unknown product fail-closed behaviour;
+- owner-only purchasing, restoring and billing;
+- employees never seeing paywalls or promotions;
+- shared-device logout/login role changes;
+- prices and packages being loaded dynamically from RevenueCat;
+- missing/unavailable Team packages failing safely;
+- pending invites reserving seats.
+
+Run the complete API, mobile and admin test suites, mobile production bundle/export, typechecks and a security/architecture review.
+
+Provide a final report containing:
+
+- files changed;
+- exact product mapping used;
+- RevenueCat offering/package handling;
+- UI behaviour for owner and employee;
+- tests and bundle results;
+- any findings or remaining blockers;
+- rollout and rollback instructions.
+
+Stop after Phase C and wait for my approval before Phase D.
