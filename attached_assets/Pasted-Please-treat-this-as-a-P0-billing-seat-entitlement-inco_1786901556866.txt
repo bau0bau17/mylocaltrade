@@ -1,0 +1,85 @@
+Please treat this as a P0 billing/seat-entitlement inconsistency and a continuation of the Team Billing work.
+
+Current production/TestFlight evidence:
+
+- The owner’s active subscription is correctly shown as Premium Monthly.
+- Premium Monthly is a Solo plan and includes 0 employee seats.
+- The Team screen incorrectly shows “2 of 10 seats used”.
+- The company currently contains one Owner and one active Employee.
+- The Owner must never consume an employee seat.
+- The owner does not have Team 10 Annual, so the UI must never present a 10-seat allowance.
+- The new Team 5/10/20 plans now appear correctly on the Subscription Plans screen with live App Store prices.
+
+Please diagnose the complete source of this mismatch before changing anything:
+
+1. Inspect the production `team-context` and `team` API responses for this company.
+2. Inspect the owner’s subscription row, including `product_identifier`.
+3. Confirm whether RevenueCat currently reports:
+   `com.mylocaltrade.app.trader.monthly`
+4. Confirm the current values of:
+   - `TEAM_BILLING_ENFORCED`
+   - `COMPANY_MAX_ACTIVE_MEMBERS`
+   - `TEAM_PRODUCT_SEAT_MAP`
+5. Determine whether “2 of 10” comes from:
+   - the legacy `COMPANY_MAX_ACTIVE_MEMBERS=10` fallback;
+   - counting the Owner as a seat;
+   - a stale/cached team context;
+   - an incorrect product-to-seat mapping;
+   - or more than one of these.
+
+Required behaviour:
+
+- Solo Monthly and Solo Yearly: 0 employee seats.
+- Team 5 Annual: up to 5 active employees.
+- Team 10 Annual: up to 10 active employees.
+- Team 20 Annual: up to 20 active employees.
+- The Owner never consumes a seat.
+- Used seats must count active Employees only.
+- Pending invitations must reserve seats, but must be displayed separately or clearly included as reserved.
+- Never derive a paid seat allowance from the legacy global cap.
+- Never hardcode “10” in the mobile UI.
+- The server must remain the source of truth for plan, seat limit, used seats and pending invitations.
+
+For the current company:
+
+- It has one active Employee.
+- The owner is on Solo Monthly, which includes 0 employee seats.
+- Preserve the existing Employee under the documented grandfathering rule; do not remove, suspend or revoke them.
+- Do not allow additional invitations while the company remains on Solo.
+- Show a truthful state such as:
+  “1 active employee · Solo plan includes 0 employee seats”
+  and an owner-only CTA such as:
+  “Change to a Team plan to invite more people.”
+- Do not show “2 of 10 seats used”.
+
+Security and rollout requirements:
+
+- Keep all invitation and seat-limit checks server-side and transactional.
+- Employees must remain blocked from billing, purchases, restores and plan management.
+- Do not modify App Store Connect or RevenueCat.
+- Do not perform a real purchase.
+- Do not enable `TEAM_BILLING_ENFORCED` blindly. First confirm that the existing employee is safely grandfathered and cannot be locked out.
+- Preserve all production users, memberships, jobs and subscriptions.
+- Do not create a second seat-mapping system; use the existing shared product-to-seat resolver.
+
+Regression tests required:
+
+- Solo owner + no employees → 0 seats, invitations blocked.
+- Solo owner + one grandfathered employee → employee remains active, owner not counted, additional invitations blocked.
+- Team 5/10/20 → exact corresponding limits.
+- Active employees and pending invitations are counted correctly.
+- Owner is never counted.
+- Switching Team → Solo preserves history and applies the documented downgrade/grandfathering behaviour.
+- Employee receives no billing information or controls.
+- Flag-off mode must not falsely display the legacy cap as a purchased seat allowance.
+
+After implementing:
+
+- Run the full API, mobile and admin suites plus typechecks.
+- Run a security/code review.
+- Commit and push to `main`.
+- Report the exact root cause, changed files, tests and whether the correction requires:
+  1. backend Publish only,
+  2. a new TestFlight build,
+  3. or both.
+- Do not enable Team billing enforcement or change production flags without my explicit approval.
