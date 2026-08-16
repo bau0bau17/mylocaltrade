@@ -5,7 +5,9 @@ import { getApiUrl } from '@/lib/api-url';
 export type TeamContext = {
   enabled: boolean;
   role: 'OWNER' | 'EMPLOYEE' | null;
-  // Present only when team billing is enforced server-side.
+  // Plan-truthful fields — newer servers always send them (owners get the
+  // seat breakdown, employees get their own gating state only); optional
+  // for compatibility with older servers.
   viewerRole?: 'OWNER' | 'EMPLOYEE';
   viewerCanManageBilling?: boolean;
   viewerCanManageTeam?: boolean;
@@ -13,7 +15,7 @@ export type TeamContext = {
   // Employee-only: this member's seat is suspended (read-only mode — they
   // keep their login and history but can't act until reactivated).
   seatSuspended?: boolean;
-  // Owner-only seat utilisation (enforced mode).
+  // Owner-only seat utilisation (always plan-derived; never the legacy cap).
   effectiveBusinessPlan?: string | null;
   employeeSeatLimit?: number;
   effectiveSeatAllowance?: number;
@@ -23,6 +25,8 @@ export type TeamContext = {
   availableSeats?: number;
   overCapacity?: boolean;
   seatExemption?: { seatLimit: number; expiresAt: string | null } | null;
+  // Owner-only: whether suspend/reactivate seat routes exist server-side.
+  seatEnforcementActive?: boolean;
 };
 
 // Company Teams: which role the signed-in trader plays for their company.

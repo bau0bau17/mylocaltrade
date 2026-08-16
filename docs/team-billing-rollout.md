@@ -1,10 +1,28 @@
 # Team billing — rollout & rollback (Phase D)
 
-Server-controlled Team subscription lifecycle. Everything in this document is
-**dormant until `TEAM_BILLING_ENFORCED=true`**; with the flag off (current
-state in BOTH dev and prod) behaviour is byte-identical to legacy: the env cap
-(`COMPANY_MAX_ACTIVE_MEMBERS`) governs invites, nobody is ever suspended, and
-the new routes answer 404.
+Server-controlled Team subscription lifecycle. Two independent layers:
+
+1. **Plan-truthful seat ACCOUNTING — always on** (since the Aug 2026 seat
+   display fix). Every surface (owner Team screen, `/company/team`,
+   `/company/team-context`, invite create/resend/accept) derives the employee
+   seat allowance from the owner's store product via
+   `getCompanyPlanContext`: Solo = 0 seats, Team 5/10/20 = 5/10/20. The owner
+   never occupies a seat; pending invites reserve seats and are reported
+   separately. The legacy env cap (`COMPANY_MAX_ACTIVE_MEMBERS`) is NEVER a
+   seat allowance — it survives only as the operational kill-switch ceiling.
+   A Solo owner therefore cannot invite (403 `TEAM_PLAN_REQUIRED`) in ANY
+   regime.
+2. **Seat ENFORCEMENT — dormant until `TEAM_BILLING_ENFORCED=true`**:
+   suspension reconciliation, the hourly sweep, and the owner
+   suspend/reactivate routes (404 while off). With the flag off nobody is
+   ever suspended, so a company over its allowance (e.g. Solo owner with a
+   pre-existing employee) keeps every member active — **grandfathered** —
+   but cannot add more.
+
+The `/company/team` response includes `seats.enforcement` (boolean) and adds
+`seats.allowance` only when enforcement is on — older app builds key their
+seat-management UI on `allowance`'s presence, and those routes 404 while
+enforcement is off.
 
 ## The invariants (what the code guarantees)
 
@@ -125,8 +143,9 @@ never deleted; reason mandatory; `expiresAt` optional; max 20 seats.
 - **Before the flag flip**: nothing to roll back — all code is dormant; the
   schema additions are nullable/additive and unused.
 - **After the flip**: set `TEAM_BILLING_ENFORCED=false`. Enforcement, seat
-  routes and reconciliation go dormant instantly. Existing suspensions stop
-  mattering for the legacy paths (the write gate is the ONLY
+  routes and reconciliation go dormant instantly. Plan-truthful accounting
+  (display + invite limits) stays on — it is not part of the flag. Existing
+  suspensions stop mattering for the legacy paths (the write gate is the ONLY
   enforcement-independent piece; to clear leftover suspensions run:
   `UPDATE company_members SET seat_suspended_at=NULL, seat_suspension_source=NULL
    WHERE seat_suspended_at IS NOT NULL;` — safe, reversible, audit rows keep

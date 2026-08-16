@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndic
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,13 +39,19 @@ type TeamInvite = {
   createdAt: string;
 };
 type TeamSeats = {
+  // Plan-truthful: used = active employees + seats reserved by pending
+  // invitations; max = the employee seat allowance the owner's plan grants
+  // (Solo = 0, Team 5/10/20 = 5/10/20). The owner NEVER counts as a seat,
+  // and the server never reports a limit the plan doesn't include.
   used: number;
   max: number;
-  // Present ONLY when team billing is enforced server-side; their presence is
-  // what switches this screen into seat-management mode.
   plan?: string | null;
   planActive?: boolean;
+  // `allowance` is sent ONLY while seat enforcement (suspend/reactivate) is
+  // switched on server-side; newer servers also say so explicitly via
+  // `enforcement`.
   allowance?: number;
+  enforcement?: boolean;
   activeEmployees?: number;
   suspendedEmployees?: number;
   reservedInvites?: number;
@@ -238,10 +245,22 @@ export default function TeamScreen() {
   }
 
   const data = teamQuery.data!;
-  const seatsFull = data.seats.used >= data.seats.max;
-  // Server includes the enforced-billing seat breakdown only when Team
-  // billing is switched on — its presence toggles seat management below.
-  const enforced = typeof data.seats.allowance === 'number';
+  // Plan-truthful seat figures — the server is the source of truth; the
+  // legacy used/max pair doubles as a fallback for older servers. Never
+  // derive or hardcode a seat limit on the client.
+  const seatLimit = data.seats.max;
+  const activeEmployees = data.seats.activeEmployees ?? data.seats.used;
+  const reservedInvites = data.seats.reservedInvites ?? 0;
+  const availableSeats =
+    data.seats.available ?? Math.max(0, seatLimit - activeEmployees - reservedInvites);
+  // Solo (or inactive) plan: 0 employee seats. Existing employees are
+  // grandfathered — they stay active and listed — but no NEW invitations
+  // are possible until the owner moves to a Team plan.
+  const soloPlan = seatLimit === 0;
+  const seatsFull = availableSeats <= 0;
+  // Seat management (suspend/reactivate) exists server-side only while Team
+  // billing enforcement is on; newer servers signal it explicitly.
+  const enforced = data.seats.enforcement ?? typeof data.seats.allowance === 'number';
   const suspendedCount = data.seats.suspendedEmployees ?? 0;
 
   return (
@@ -254,58 +273,86 @@ export default function TeamScreen() {
       }
       keyboardShouldPersistTaps="handled"
     >
-      {/* Invite */}
+      {/* Invite / seats */}
       <View style={styles.inviteCard}>
-        <Text style={styles.inviteTitle}>Invite a team member</Text>
-        <Text style={styles.inviteSub}>
-          They'll get an email link to create their own login for your business. Use an email
-          address that doesn't already have a MyLocalTrade account.
-        </Text>
-        <View style={styles.inviteRow}>
-          <TextInput
-            style={[
-              styles.input,
-              emailFocused && styles.inputFocused,
-              (inviteMutation.isPending || seatsFull) && styles.inputDisabled,
-            ]}
-            value={inviteEmail}
-            onChangeText={setInviteEmail}
-            onFocus={() => setEmailFocused(true)}
-            onBlur={() => setEmailFocused(false)}
-            placeholder="name@example.com"
-            placeholderTextColor={Colors.light.textSecondary}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!inviteMutation.isPending && !seatsFull}
-          />
-          <Pressable
-            style={[styles.inviteBtn, (inviteMutation.isPending || seatsFull || !inviteEmail.trim()) && { opacity: 0.5 }]}
-            onPress={submitInvite}
-            disabled={inviteMutation.isPending || seatsFull || !inviteEmail.trim()}
-          >
-            {inviteMutation.isPending ? (
-              <ActivityIndicator color={Colors.light.white} size="small" />
-            ) : (
-              <Feather name="send" size={16} color={Colors.light.white} />
-            )}
-          </Pressable>
-        </View>
-        <Text style={[styles.seatsLine, seatsFull && { color: Colors.light.warning }]}>
-          {data.seats.used} of {data.seats.max} seats used
-          {seatsFull
-            ? enforced
-              ? ' — suspend a seat, cancel an invitation or upgrade your plan to free one up'
-              : ' — remove a member or cancel an invitation to free one up'
-            : ''}
-        </Text>
+        {soloPlan ? (
+          <>
+            {/* Truthful Solo state: no invite form, no invented seat count.
+                Grandfathered employees stay listed below; the only path to
+                MORE seats is a Team plan. */}
+            <Text style={styles.inviteTitle}>Team seats</Text>
+            <Text style={styles.inviteSub}>
+              {activeEmployees === 1
+                ? '1 active employee'
+                : `${activeEmployees} active employees`}
+              {' · '}Solo plan includes 0 employee seats
+            </Text>
+            <Pressable
+              style={styles.upgradeBtn}
+              onPress={() => router.push('/pricing')}
+              accessibilityLabel="Change to a Team plan to invite more people"
+            >
+              <Feather name="arrow-up-circle" size={16} color={Colors.light.white} />
+              <Text style={styles.upgradeBtnText}>Change to a Team plan to invite more people</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={styles.inviteTitle}>Invite a team member</Text>
+            <Text style={styles.inviteSub}>
+              They'll get an email link to create their own login for your business. Use an email
+              address that doesn't already have a MyLocalTrade account.
+            </Text>
+            <View style={styles.inviteRow}>
+              <TextInput
+                style={[
+                  styles.input,
+                  emailFocused && styles.inputFocused,
+                  (inviteMutation.isPending || seatsFull) && styles.inputDisabled,
+                ]}
+                value={inviteEmail}
+                onChangeText={setInviteEmail}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
+                placeholder="name@example.com"
+                placeholderTextColor={Colors.light.textSecondary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!inviteMutation.isPending && !seatsFull}
+              />
+              <Pressable
+                style={[styles.inviteBtn, (inviteMutation.isPending || seatsFull || !inviteEmail.trim()) && { opacity: 0.5 }]}
+                onPress={submitInvite}
+                disabled={inviteMutation.isPending || seatsFull || !inviteEmail.trim()}
+              >
+                {inviteMutation.isPending ? (
+                  <ActivityIndicator color={Colors.light.white} size="small" />
+                ) : (
+                  <Feather name="send" size={16} color={Colors.light.white} />
+                )}
+              </Pressable>
+            </View>
+            <Text style={[styles.seatsLine, seatsFull && { color: Colors.light.warning }]}>
+              {activeEmployees} of {seatLimit} employee seat{seatLimit === 1 ? '' : 's'} used
+              {reservedInvites > 0
+                ? ` · ${reservedInvites} reserved by pending invitation${reservedInvites === 1 ? '' : 's'}`
+                : ''}
+              {seatsFull
+                ? enforced
+                  ? ' — suspend a seat, cancel an invitation or upgrade your plan to free one up'
+                  : ' — remove a member or cancel an invitation to free one up'
+                : ''}
+            </Text>
+          </>
+        )}
         {enforced && suspendedCount > 0 ? (
           <Text style={[styles.seatsLine, { color: Colors.light.warning }]}>
             {suspendedCount} team member{suspendedCount === 1 ? "'s seat is" : "s' seats are"} suspended —
             they keep their login and history, and you can reactivate them when a seat is free.
           </Text>
         ) : null}
-        {enforced && data.seats.overCapacity ? (
+        {enforced && suspendedCount > 0 && data.seats.overCapacity ? (
           <Text style={[styles.seatsLine, { color: Colors.light.warning }]}>
             Your team is over your plan's seat allowance. Upgrade your plan to reactivate everyone.
           </Text>
@@ -562,6 +609,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   seatsLine: { fontSize: 12, color: Colors.light.textSecondary, marginTop: 10 },
+  upgradeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: Colors.light.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  upgradeBtnText: { color: Colors.light.white, fontSize: 14, fontWeight: '600', flexShrink: 1 },
   sectionLabel: {
     fontSize: 13,
     fontWeight: '600',

@@ -204,8 +204,8 @@ let ctx: Ctx;
 
 beforeAll(async () => {
   // Recognise the placeholder Team product for the duration of this file so
-  // the owner's subscription grants real seats when billing is enforced.
-  // (Consulted only when TEAM_BILLING_ENFORCED is on; inert otherwise.)
+  // the owner's subscription grants real seats. (Consulted in EVERY regime —
+  // seat accounting is always plan-based; the flag only gates suspensions.)
   process.env["TEAM_PRODUCT_SEAT_MAP"] = JSON.stringify({ [TEAM_PRODUCT]: 20 });
   const ownerUserId = await createUser("trader", "owner");
   const companyProfileId = await createTraderProfile(ownerUserId, "main");
@@ -333,41 +333,33 @@ describe("team-context (flag ON)", () => {
     const owner = await request(app)
       .get("/api/company/team-context")
       .set("Authorization", `Bearer ${ctx.ownerToken}`);
-    if (BILLING_ON) {
-      // Enforcement regime: the owner gets the expanded Phase-B payload
-      // with plan + seat context derived from their Team subscription.
-      expect(owner.body).toMatchObject({
-        enabled: true,
-        role: "OWNER",
-        viewerRole: "OWNER",
-        effectiveBusinessPlan: "team_20",
-        employeeSeatLimit: 20,
-      });
-      expect(typeof owner.body.effectiveSeatAllowance).toBe("number");
-    } else {
-      // TEAM_BILLING_ENFORCED is off here, so the legacy shape is EXACT —
-      // no plan/seat fields may leak onto this path.
-      expect(owner.body).toEqual({ enabled: true, role: "OWNER" });
-    }
+    // Plan-truthful payload in EVERY regime; only the enforcement marker
+    // differs (it tells clients whether the suspend/reactivate routes
+    // exist right now).
+    expect(owner.body).toMatchObject({
+      enabled: true,
+      role: "OWNER",
+      viewerRole: "OWNER",
+      effectiveBusinessPlan: "team_20",
+      employeeSeatLimit: 20,
+      seatEnforcementActive: BILLING_ON,
+    });
+    expect(typeof owner.body.effectiveSeatAllowance).toBe("number");
 
     const employee = await request(app)
       .get("/api/company/team-context")
       .set("Authorization", `Bearer ${ctx.employeeToken}`);
-    if (BILLING_ON) {
-      // Employees get their own gating state only — never the owner's
-      // billing tier or seat utilisation.
-      expect(employee.body).toEqual({
-        enabled: true,
-        role: "EMPLOYEE",
-        viewerRole: "EMPLOYEE",
-        viewerCanManageBilling: false,
-        viewerCanManageTeam: false,
-        viewerCanInvite: false,
-        seatSuspended: false,
-      });
-    } else {
-      expect(employee.body).toEqual({ enabled: true, role: "EMPLOYEE" });
-    }
+    // Employees get their own gating state only — never the owner's
+    // billing tier or seat utilisation — in EVERY regime.
+    expect(employee.body).toEqual({
+      enabled: true,
+      role: "EMPLOYEE",
+      viewerRole: "EMPLOYEE",
+      viewerCanManageBilling: false,
+      viewerCanManageTeam: false,
+      viewerCanInvite: false,
+      seatSuspended: false,
+    });
 
     const bare = await request(app)
       .get("/api/company/team-context")
@@ -413,21 +405,22 @@ describe("GET /company/team", () => {
     expect(res.body.members[1].role).toBe("EMPLOYEE");
     expect(res.body.members[1].email).toContain("team-test+trader-employee");
     expect(res.body.invites).toEqual([]);
-    if (BILLING_ON) {
-      // Enforcement regime: employee-only seat semantics (the owner never
-      // occupies a seat) against the Team-plan allowance.
-      expect(res.body.seats).toMatchObject({
-        used: 1,
-        max: 20,
-        plan: "team_20",
-        activeEmployees: 1,
-        reservedInvites: 0,
-        suspendedEmployees: 0,
-      });
-    } else {
-      // Legacy owner-inclusive count against the env cap — exact shape.
-      expect(res.body.seats).toEqual({ used: 2, max: 10 });
-    }
+    // Plan-truthful in EVERY regime: employee-only seat semantics (the
+    // owner never occupies a seat) against the Team-plan allowance — the
+    // legacy env cap is never presented. `allowance` appears only while
+    // the seat-management routes exist (older builds key their seat UI on
+    // its presence, and those routes 404 when enforcement is off).
+    expect(res.body.seats).toMatchObject({
+      used: 1,
+      max: 20,
+      plan: "team_20",
+      activeEmployees: 1,
+      reservedInvites: 0,
+      suspendedEmployees: 0,
+      enforcement: BILLING_ON,
+    });
+    if (BILLING_ON) expect(res.body.seats.allowance).toBe(20);
+    else expect(res.body.seats.allowance).toBeUndefined();
   });
 });
 
@@ -460,9 +453,8 @@ describe("POST /company/invites", () => {
   it("enforces the seat cap counting active members + pending invites", async () => {
     setFlag(true);
     // Cap 1 trips BOTH regimes with the same fixture (0 pending invites):
-    //  - billing off: legacy owner-inclusive count — 2 active members >= 1;
-    //  - billing on:  employee-only count clamped by the kill-switch
-    //    ceiling — 1 active employee >= min(plan 20, ceiling 1).
+    // seat accounting is plan-based everywhere, and the kill-switch ceiling
+    // clamps it — 1 active employee >= min(plan 20, ceiling 1).
     process.env["COMPANY_MAX_ACTIVE_MEMBERS"] = "1";
     const res = await invite(ctx.ownerToken, emailFor("capped"));
     expect(res.status).toBe(409);

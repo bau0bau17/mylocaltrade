@@ -79,4 +79,5 @@
 - [No test files under Expo app/](expo-route-tree-test-files.md) — Metro bundles app/**/*.test.* as routes → device crash; jest+typecheck stay green; guard test + clean-cache bundle are the tripwires.
 - [Team seat lifecycle](team-seat-lifecycle.md) — deterministic newest-first SYSTEM suspension; hourly sweep IS the contract (exemption expiry + reconcile retry); RC tie-break: equal-ts revoke wins; drizzle 23505 in err.cause.
 - [expo export contention](expo-export-resource-contention.md) — export gets killed mid-bundle while dev servers run & detached launches die; stop workflows, run foreground, restart after.
-- [Team billing flag-ON tests](team-billing-flag-on-tests.md) — global TEAM_BILLING_ENFORCED=true makes invite tests 403 (fail-closed working as designed, NOT bugs); meaningful combos inside.
+- [Team billing flag-ON tests](team-billing-flag-on-tests.md) — suite must pass in all flag combos; plan-less fixture owners 403 fail-closed everywhere (working as designed); fixture conventions inside.
+- [Team seat accounting split](team-seat-accounting-split.md) — seat display/invite gating ALWAYS plan-based (owner never counts); TEAM_BILLING_ENFORCED gates only suspensions; allowance field presence = enforcement on.

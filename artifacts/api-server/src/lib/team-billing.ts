@@ -12,14 +12,21 @@ import { companyTeamsEnabled, maxActiveMembersPerCompany } from "./company-membe
 import { logger } from "./logger";
 
 /**
- * Team billing (Phase B) — DORMANT plumbing behind TEAM_BILLING_ENFORCED.
+ * Team billing — plan-truthful seat accounting + gated enforcement.
  *
- * With the flag OFF (the default, and the only state until Team products
- * exist in App Store Connect / RevenueCat), every behaviour in this module is
- * advisory: seat limits fall back to the legacy COMPANY_MAX_ACTIVE_MEMBERS
- * cap and no invite is ever refused for plan reasons. Turning the flag ON
- * makes the owner's store product (subscriptions.product_identifier) the
- * source of truth for how many employee seats the company may use.
+ * Seat ACCOUNTING is always plan-based: the owner's store product
+ * (subscriptions.product_identifier) is the single source of truth for how
+ * many employee seats the company may use, on every surface (team screen,
+ * team-context, invite create/resend/accept). The legacy
+ * COMPANY_MAX_ACTIVE_MEMBERS cap is NEVER presented or enforced as a seat
+ * allowance — it survives only as the operational kill-switch ceiling.
+ *
+ * Seat ENFORCEMENT (suspending over-allowance employees: reconciliation,
+ * the hourly sweep, and the owner suspend/reactivate routes) stays behind
+ * TEAM_BILLING_ENFORCED. With the flag OFF nobody is ever suspended, so
+ * companies that exceed their allowance (e.g. a Solo owner with a
+ * grandfathered employee) keep every member active — they simply cannot
+ * invite MORE people until they move to a Team plan.
  */
 
 export function teamBillingEnforced(): boolean {
@@ -350,13 +357,15 @@ export async function getCompanyPlanContext(
 }
 
 /**
- * The seat limit invite create/resend must enforce, INSIDE the same
+ * The seat limit invite create/resend/accept must enforce, INSIDE the same
  * advisory-lock transaction as the seat count + write.
  *
- * Flag OFF → legacy env cap, plan ignored (today's behaviour, bit-identical).
- * Flag ON  → the effective seat allowance: plan seats while the plan is
- * active, or a live grandfathering exemption (whichever is higher, still
- * capped at the ceiling). An inactive plan with no exemption grants 0 seats.
+ * ALWAYS the plan-derived effective seat allowance, regardless of
+ * TEAM_BILLING_ENFORCED: plan seats while the plan is active, or a live
+ * grandfathering exemption (whichever is higher, still capped at the
+ * ceiling). An inactive plan with no exemption grants 0 seats. The legacy
+ * env cap is never a seat allowance — a Solo owner can never invite, even
+ * while suspension enforcement is off.
  * Returns `requiresTeamPlan: true` when the blocker is the tier itself
  * (solo plan / no active plan / no exemption), so the route can answer
  * TEAM_PLAN_REQUIRED instead of MEMBER_LIMIT_REACHED.
@@ -365,9 +374,6 @@ export async function resolveInviteSeatLimit(
   traderProfileId: number,
   executor: DbExecutor = db,
 ): Promise<{ max: number; requiresTeamPlan: boolean }> {
-  if (!teamBillingEnforced()) {
-    return { max: maxActiveMembersPerCompany(), requiresTeamPlan: false };
-  }
   const ctx = await getCompanyPlanContext(traderProfileId, executor);
   const max = ctx.effectiveSeatAllowance;
   return { max, requiresTeamPlan: max === 0 };

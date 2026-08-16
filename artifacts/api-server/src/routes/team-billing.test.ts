@@ -25,16 +25,18 @@ import {
 } from "../lib/team-billing";
 
 /**
- * Team billing Phase B — dormant seat-limit plumbing.
+ * Team billing — plan-truthful seat accounting + gated enforcement.
  *
  * Contract under test:
- *  - TEAM_BILLING_ENFORCED off (default): invites use the legacy env cap,
- *    solo owners can invite, team-context reports the legacy limit —
- *    today's behaviour, unchanged.
- *  - Flag ON: the owner's subscriptions.product_identifier decides seats;
- *    solo/inactive plans get 403 TEAM_PLAN_REQUIRED on invite; team tiers
- *    cap at their seat count; COMPANY_MAX_ACTIVE_MEMBERS acts as a
- *    kill-switch ceiling when explicitly set.
+ *  - Seat accounting is ALWAYS plan-based, in EVERY regime: the owner's
+ *    subscriptions.product_identifier decides seats; solo/inactive plans
+ *    get 403 TEAM_PLAN_REQUIRED on invite; team tiers cap at their seat
+ *    count; the owner never occupies a seat; COMPANY_MAX_ACTIVE_MEMBERS
+ *    acts only as a kill-switch ceiling when explicitly set — never as a
+ *    seat allowance.
+ *  - TEAM_BILLING_ENFORCED gates ONLY the destructive machinery
+ *    (suspension reconciliation + owner seat routes): flag off, nobody is
+ *    ever suspended — over-allowance members are grandfathered in place.
  */
 
 const SUFFIX = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -391,20 +393,30 @@ describe("getCompanyPlanContext", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Flag OFF — legacy behaviour untouched
+// Flag OFF — plan-truthful accounting, never destructive
 // ---------------------------------------------------------------------------
 
 describe("TEAM_BILLING_ENFORCED off (default)", () => {
-  it("solo owner can still create an invite under the legacy cap", async () => {
+  it("solo owner cannot invite even with the flag off: 403 TEAM_PLAN_REQUIRED", async () => {
     setFlags({ teams: true, billing: false });
     const res = await request(app)
       .post("/api/company/invites")
       .set("Authorization", `Bearer ${ctx.soloOwner.token}`)
       .send({ email: emailFor("legacy-invitee") });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("TEAM_PLAN_REQUIRED");
+  });
+
+  it("a Team-plan owner CAN invite with the flag off — no legacy cap in the way", async () => {
+    setFlags({ teams: true, billing: false, teamMap: TEAM_MAP });
+    const res = await request(app)
+      .post("/api/company/invites")
+      .set("Authorization", `Bearer ${ctx.teamOwner.token}`)
+      .send({ email: emailFor("flagoff-team-invitee") });
     // 201 (email send is mocked/captured in tests) or 502 if the email layer
-    // refuses — but NEVER a plan-based 403.
+    // refuses — but NEVER a plan-based 403 and NEVER a legacy-cap 409.
     expect(res.status).not.toBe(403);
-    expect(res.body.code).not.toBe("TEAM_PLAN_REQUIRED");
+    expect(res.status).not.toBe(409);
     if (res.status === 201) {
       await db
         .delete(companyInvitesTable)
@@ -412,13 +424,108 @@ describe("TEAM_BILLING_ENFORCED off (default)", () => {
     }
   });
 
-  it("team-context keeps the EXACT legacy shape — no plan fields leak", async () => {
+  it("team-context is plan-truthful with the flag off; enforcement marked inactive", async () => {
     setFlags({ teams: true, billing: false });
     const res = await request(app)
       .get("/api/company/team-context")
       .set("Authorization", `Bearer ${ctx.soloOwner.token}`);
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ enabled: true, role: "OWNER" });
+    expect(res.body).toMatchObject({
+      enabled: true,
+      role: "OWNER",
+      viewerRole: "OWNER",
+      effectiveBusinessPlan: "premium_solo",
+      employeeSeatLimit: 0,
+      effectiveSeatAllowance: 0,
+      viewerCanInvite: false,
+      seatEnforcementActive: false,
+    });
+  });
+
+  it("GET /company/team never reports the legacy cap as a seat allowance", async () => {
+    // The pre-fix bug: flag off showed "2 of 10 seats used" for a Solo
+    // owner (owner counted as a seat, env-default cap 10 presented as an
+    // allowance). Truthful answer: 0 employee seats, owner not counted,
+    // and no `allowance` field while the seat routes 404.
+    setFlags({ teams: true, billing: false });
+    const res = await request(app)
+      .get("/api/company/team")
+      .set("Authorization", `Bearer ${ctx.soloOwner.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.seats).toMatchObject({
+      used: 0,
+      max: 0,
+      plan: "premium_solo",
+      activeEmployees: 0,
+      enforcement: false,
+    });
+    expect(res.body.seats.allowance).toBeUndefined();
+  });
+
+  it("grandfathered employee on Solo: stays active, owner uncounted, new invites blocked", async () => {
+    setFlags({ teams: true, billing: false });
+    const employee = await createTrader("grandfathered-emp");
+    const [member] = await db
+      .insert(companyMembersTable)
+      .values({
+        traderProfileId: ctx.soloProfileId,
+        userId: employee.id,
+        role: "EMPLOYEE",
+        status: "ACTIVE",
+      })
+      .returning({ id: companyMembersTable.id });
+    try {
+      const team = await request(app)
+        .get("/api/company/team")
+        .set("Authorization", `Bearer ${ctx.soloOwner.token}`);
+      expect(team.status).toBe(200);
+      // Owner + employee both listed, both active — nobody suspended.
+      const roles = team.body.members
+        .map((m: { role: string }) => m.role)
+        .sort();
+      expect(roles).toEqual(["EMPLOYEE", "OWNER"]);
+      expect(
+        team.body.members.every((m: { seatSuspended?: boolean }) => !m.seatSuspended),
+      ).toBe(true);
+      // ...but the seat math is truthful: 1 employee over a 0-seat plan.
+      expect(team.body.seats).toMatchObject({
+        used: 1,
+        max: 0,
+        activeEmployees: 1,
+        overCapacity: true,
+        enforcement: false,
+      });
+      // And no NEW invitations while on Solo.
+      const invite = await request(app)
+        .post("/api/company/invites")
+        .set("Authorization", `Bearer ${ctx.soloOwner.token}`)
+        .send({ email: emailFor("blocked-while-solo") });
+      expect(invite.status).toBe(403);
+      expect(invite.body.code).toBe("TEAM_PLAN_REQUIRED");
+    } finally {
+      await db
+        .delete(companyMembersTable)
+        .where(eq(companyMembersTable.id, member.id));
+    }
+  });
+
+  it("Team → Solo downgrade with the flag off reports over-capacity but suspends nobody", async () => {
+    setFlags({ teams: true, billing: false, teamMap: TEAM_MAP });
+    await setSubscription(ctx.teamOwner.id, "com.mylocaltrade.app.trader.yearly");
+    try {
+      const team = await request(app)
+        .get("/api/company/team")
+        .set("Authorization", `Bearer ${ctx.teamOwner.token}`);
+      expect(team.status).toBe(200);
+      expect(team.body.seats).toMatchObject({ max: 0, overCapacity: true });
+      const employees = team.body.members.filter(
+        (m: { role: string }) => m.role === "EMPLOYEE",
+      );
+      expect(employees).toHaveLength(1);
+      expect(employees[0].seatSuspended).toBeFalsy();
+    } finally {
+      await setSubscription(ctx.teamOwner.id, FUTURE_TEAM5_PRODUCT);
+    }
   });
 });
 
@@ -508,6 +615,7 @@ describe("TEAM_BILLING_ENFORCED on", () => {
       available: 4,
       overCapacity: false,
       exemption: null,
+      enforcement: true,
     });
   });
 
@@ -563,6 +671,54 @@ describe("TEAM_BILLING_ENFORCED on", () => {
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("TEAM_PLAN_REQUIRED");
     await db.delete(companyInvitesTable).where(eq(companyInvitesTable.id, invite.id));
+  });
+
+  it("resend of a LIVE invite on a Solo plan is 403 and mutates nothing — both regimes", async () => {
+    // Team → Solo downgrade with an invitation still pending: the owner must
+    // not be able to keep rotating the token / re-emailing an invitee the
+    // plan can never seat. Applies identically with enforcement off and on.
+    for (const billing of [false, true]) {
+      setFlags({ teams: true, billing });
+      const rawToken = crypto.randomBytes(24).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const [invite] = await db
+        .insert(companyInvitesTable)
+        .values({
+          traderProfileId: ctx.soloProfileId,
+          email: emailFor(`live-invitee-${billing ? "on" : "off"}`),
+          role: "EMPLOYEE",
+          status: "PENDING",
+          tokenHash,
+          invitedByUserId: ctx.soloOwner.id,
+          expiresAt,
+        })
+        .returning({ id: companyInvitesTable.id });
+      try {
+        const res = await request(app)
+          .post(`/api/company/invites/${invite.id}/resend`)
+          .set("Authorization", `Bearer ${ctx.soloOwner.token}`);
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe("TEAM_PLAN_REQUIRED");
+        // No token rotation, no expiry extension.
+        const [row] = await db
+          .select({
+            tokenHash: companyInvitesTable.tokenHash,
+            expiresAt: companyInvitesTable.expiresAt,
+            status: companyInvitesTable.status,
+          })
+          .from(companyInvitesTable)
+          .where(eq(companyInvitesTable.id, invite.id))
+          .limit(1);
+        expect(row.tokenHash).toBe(tokenHash);
+        expect(row.expiresAt.getTime()).toBe(expiresAt.getTime());
+        expect(row.status).toBe("PENDING");
+      } finally {
+        await db
+          .delete(companyInvitesTable)
+          .where(eq(companyInvitesTable.id, invite.id));
+      }
+    }
   });
 });
 

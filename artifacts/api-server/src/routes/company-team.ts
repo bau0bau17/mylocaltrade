@@ -18,7 +18,6 @@ import type { AuthenticatedRequest } from "../lib/types";
 import {
   companyTeamsEnabled,
   getActiveMembership,
-  maxActiveMembersPerCompany,
   OWNER_ONLY_RESPONSE,
   type CompanyMembership,
 } from "../lib/company-membership";
@@ -99,7 +98,7 @@ class CapReachedError extends Error {
   }
 }
 
-/** The owner's plan tier includes no employee seats (TEAM_BILLING_ENFORCED only). */
+/** The owner's plan tier includes no employee seats (every regime). */
 class TeamPlanRequiredError extends Error {
   constructor() {
     super("team plan required");
@@ -202,39 +201,6 @@ function serializeInvite(row: typeof companyInvitesTable.$inferSelect) {
   };
 }
 
-/** db or a drizzle transaction — cap counting runs inside cap-locked txs. */
-type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-/** ACTIVE members + live (unexpired PENDING) invites — the seat count the cap applies to. */
-async function countSeatsInUse(
-  traderProfileId: number,
-  executor: DbExecutor = db,
-): Promise<{
-  activeMembers: number;
-  pendingInvites: number;
-}> {
-  const [members] = await executor
-    .select({ n: sql<number>`count(*)::int` })
-    .from(companyMembersTable)
-    .where(
-      and(
-        eq(companyMembersTable.traderProfileId, traderProfileId),
-        eq(companyMembersTable.status, "ACTIVE"),
-      ),
-    );
-  const [invites] = await executor
-    .select({ n: sql<number>`count(*)::int` })
-    .from(companyInvitesTable)
-    .where(
-      and(
-        eq(companyInvitesTable.traderProfileId, traderProfileId),
-        eq(companyInvitesTable.status, "PENDING"),
-        gt(companyInvitesTable.expiresAt, new Date()),
-      ),
-    );
-  return { activeMembers: members?.n ?? 0, pendingInvites: invites?.n ?? 0 };
-}
-
 /**
  * v1 invites are for BRAND-NEW email addresses only: any non-admin users row
  * with this email blocks the invite — deliberately stricter than signup's
@@ -284,14 +250,11 @@ router.get(
         res.json({ enabled: true, role: null });
         return;
       }
-      // Expanded response (Phase B) exists ONLY when TEAM_BILLING_ENFORCED
-      // is on. With the flag off the legacy {enabled, role} shape is
-      // returned untouched — no plan lookup, no reads of the new
-      // subscriptions.product_identifier column on this path.
-      if (!teamBillingEnforced()) {
-        res.json({ enabled: true, role: membership.role });
-        return;
-      }
+      // Plan-truthful payload for EVERY regime: the seat allowance always
+      // derives from the owner's store product, never from the legacy env
+      // cap, so the client can never present a seat count the owner hasn't
+      // paid for. TEAM_BILLING_ENFORCED only changes whether suspension
+      // machinery exists (seatEnforcementActive below).
       const isOwner = membership.role === "OWNER";
       if (!isOwner) {
         // Employees get their own gating state only — never the owner's
@@ -344,6 +307,9 @@ router.get(
         viewerCanManageTeam: true,
         viewerCanInvite:
           plan.effectiveSeatAllowance > 0 && !plan.overLimit && plan.availableSeats > 0,
+        // Whether the suspend/reactivate seat routes exist right now — the
+        // truthful seat numbers above are always live regardless.
+        seatEnforcementActive: teamBillingEnforced(),
       });
     } catch (error) {
       req.log.error({ err: error }, "team-context failed");
@@ -392,38 +358,37 @@ router.get("/company/team", authMiddleware, traderOnly, teamsGate, async (req, r
       )
       .orderBy(desc(companyInvitesTable.createdAt));
 
-    // With enforcement on, seats use the plan's EMPLOYEE-only semantics
-    // (owner never occupies a seat) so used/max stay comparable; otherwise
-    // the legacy owner-inclusive count against the env cap (today's shape).
-    let seatUsage: Record<string, unknown>;
+    // Seats are ALWAYS plan-truthful: EMPLOYEE-only usage (the owner never
+    // occupies a seat) against the plan-derived allowance. The legacy env
+    // cap is never presented as a seat allowance — flag off merely means
+    // nobody gets suspended for exceeding it (grandfathered members stay).
+    const plan = await getCompanyPlanContext(profileId);
+    const seatUsage: Record<string, unknown> = {
+      used: plan.activeEmployeeCount + plan.pendingInviteCount,
+      max: plan.effectiveSeatAllowance,
+      // Full owner-facing breakdown: plan / active / reserved / available /
+      // suspended / over-capacity.
+      plan: plan.effectiveBusinessPlan,
+      planActive: plan.active,
+      activeEmployees: plan.activeEmployeeCount,
+      suspendedEmployees: plan.suspendedEmployeeCount,
+      reservedInvites: plan.pendingInviteCount,
+      available: plan.availableSeats,
+      overCapacity: plan.overLimit,
+      exemption: plan.exemption
+        ? {
+            seatLimit: plan.exemption.seatLimit,
+            expiresAt: plan.exemption.expiresAt?.toISOString() ?? null,
+          }
+        : null,
+      // Whether suspend/reactivate routes exist right now.
+      enforcement: teamBillingEnforced(),
+    };
     if (teamBillingEnforced()) {
-      const plan = await getCompanyPlanContext(profileId);
-      seatUsage = {
-        used: plan.activeEmployeeCount + plan.pendingInviteCount,
-        max: plan.effectiveSeatAllowance,
-        // Full owner-facing breakdown: plan / allowance / active / reserved /
-        // available / suspended / over-capacity.
-        plan: plan.effectiveBusinessPlan,
-        planActive: plan.active,
-        allowance: plan.effectiveSeatAllowance,
-        activeEmployees: plan.activeEmployeeCount,
-        suspendedEmployees: plan.suspendedEmployeeCount,
-        reservedInvites: plan.pendingInviteCount,
-        available: plan.availableSeats,
-        overCapacity: plan.overLimit,
-        exemption: plan.exemption
-          ? {
-              seatLimit: plan.exemption.seatLimit,
-              expiresAt: plan.exemption.expiresAt?.toISOString() ?? null,
-            }
-          : null,
-      };
-    } else {
-      const seats = await countSeatsInUse(profileId);
-      seatUsage = {
-        used: seats.activeMembers + seats.pendingInvites,
-        max: maxActiveMembersPerCompany(),
-      };
+      // Older app builds key their seat-management UI on the presence of
+      // `allowance`, and those routes 404 while enforcement is off — so the
+      // field appears only when the routes do.
+      seatUsage["allowance"] = plan.effectiveSeatAllowance;
     }
     res.json({
       members: memberRows.map((r) => ({
@@ -507,24 +472,17 @@ router.post("/company/invites", authMiddleware, traderOnly, teamsGate, async (re
         await tx.execute(
           sql`select pg_advisory_xact_lock(${CAP_LOCK_NAMESPACE}, ${profileId})`,
         );
-        if (teamBillingEnforced()) {
-          // Plan-derived seats (Phase B, dormant by default): the owner's
-          // store product decides the employee seat count; solo/inactive
-          // plans have none. Counted per-EMPLOYEE (owner never uses a seat).
-          const rule = await resolveInviteSeatLimit(profileId, tx);
-          if (rule.requiresTeamPlan) {
-            throw new TeamPlanRequiredError();
-          }
-          const counts = await countCompanySeats(profileId, tx);
-          if (counts.activeEmployees + counts.pendingInvites >= rule.max) {
-            throw new CapReachedError(rule.max);
-          }
-        } else {
-          const seats = await countSeatsInUse(profileId, tx);
-          const max = maxActiveMembersPerCompany();
-          if (seats.activeMembers + seats.pendingInvites >= max) {
-            throw new CapReachedError(max);
-          }
+        // Plan-derived seats, ALWAYS: the owner's store product decides the
+        // employee seat count; solo/inactive plans have none. Counted
+        // per-EMPLOYEE (owner never uses a seat). The legacy env cap is not
+        // a seat allowance in any regime.
+        const rule = await resolveInviteSeatLimit(profileId, tx);
+        if (rule.requiresTeamPlan) {
+          throw new TeamPlanRequiredError();
+        }
+        const counts = await countCompanySeats(profileId, tx);
+        if (counts.activeEmployees + counts.pendingInvites >= rule.max) {
+          throw new CapReachedError(rule.max);
         }
         const [row] = await tx
           .insert(companyInvitesTable)
@@ -597,8 +555,9 @@ router.post("/company/invites", authMiddleware, traderOnly, teamsGate, async (re
 
 // ---------------------------------------------------------------------------
 // POST /company/invites/:id/resend — rotate token + expiry, email again.
-// Works for expired-but-still-PENDING rows too (that IS the recovery path),
-// re-checking the seat cap when the invite re-enters the pending pool.
+// Works for expired-but-still-PENDING rows too (that IS the recovery path).
+// Every resend re-checks the plan (Solo ⇒ 403); expired rows additionally
+// re-check capacity because they re-enter the pending pool.
 // ---------------------------------------------------------------------------
 router.post(
   "/company/invites/:id/resend",
@@ -638,34 +597,30 @@ router.post(
       let updatedRow: typeof companyInvitesTable.$inferSelect | null;
       try {
         updatedRow = await db.transaction(async (tx) => {
+          // Every resend re-checks the plan under the same per-company
+          // advisory lock the create path uses: a Solo/inactive plan must
+          // not keep rotating tokens and emailing invitees it could never
+          // seat (403 in every flag regime, same as create).
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(${CAP_LOCK_NAMESPACE}, ${ctx.membership.traderProfileId})`,
+          );
+          const rule = await resolveInviteSeatLimit(
+            ctx.membership.traderProfileId,
+            tx,
+          );
+          if (rule.requiresTeamPlan) {
+            throw new TeamPlanRequiredError();
+          }
           if (invite.expiresAt.getTime() <= Date.now()) {
             // Expired invites left the seat count — re-arming one re-enters
-            // the pending pool, so re-check the cap under the same per-company
-            // advisory lock the create path uses.
-            await tx.execute(
-              sql`select pg_advisory_xact_lock(${CAP_LOCK_NAMESPACE}, ${ctx.membership.traderProfileId})`,
+            // the pending pool, so only THEN does capacity need headroom for
+            // one more (a still-live invite already occupies its slot).
+            const counts = await countCompanySeats(
+              ctx.membership.traderProfileId,
+              tx,
             );
-            if (teamBillingEnforced()) {
-              const rule = await resolveInviteSeatLimit(
-                ctx.membership.traderProfileId,
-                tx,
-              );
-              if (rule.requiresTeamPlan) {
-                throw new TeamPlanRequiredError();
-              }
-              const counts = await countCompanySeats(
-                ctx.membership.traderProfileId,
-                tx,
-              );
-              if (counts.activeEmployees + counts.pendingInvites + 1 > rule.max) {
-                throw new CapReachedError(rule.max);
-              }
-            } else {
-              const seats = await countSeatsInUse(ctx.membership.traderProfileId, tx);
-              const max = maxActiveMembersPerCompany();
-              if (seats.activeMembers + seats.pendingInvites + 1 > max) {
-                throw new CapReachedError(max);
-              }
+            if (counts.activeEmployees + counts.pendingInvites + 1 > rule.max) {
+              throw new CapReachedError(rule.max);
             }
           }
           const updated = await tx
@@ -1009,14 +964,14 @@ router.post("/company/invites/accept", teamsGate, async (req, res) => {
         .limit(1);
       if (!profile) throw new InviteInvalidError();
 
-      // Seat re-check AT ACCEPT TIME (enforcement on): the allowance may
+      // Seat re-check AT ACCEPT TIME, in every regime: the allowance may
       // have shrunk since the invite was sent (downgrade/expiry), or other
       // invitees may have taken the remaining seats. Throwing rolls the
       // claim back, so the invite stays PENDING and can be accepted later
       // once the owner frees a seat or upgrades. Only SEATED employees
       // count — a suspended seat is free by definition, and other PENDING
       // invites don't block (first to accept wins the seat).
-      if (teamBillingEnforced()) {
+      {
         const rule = await resolveInviteSeatLimit(invite.traderProfileId, tx);
         const counts = await countCompanySeats(invite.traderProfileId, tx);
         if (counts.activeEmployees >= rule.max) {
