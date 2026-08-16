@@ -1,0 +1,46 @@
+Continue from commit `0c620bc`.
+
+The P0 hardening report is approved in principle. Before any TestFlight build, perform the final production rollout preflight.
+
+First clarify the test-count inconsistency in the report: it says both `660/660` and `651/651` API tests. Run the complete API suite once in a clean environment and report the actual discovered, passed, failed and skipped totals. Do not proceed if anything is excluded unexpectedly.
+
+Then prepare the safe production rollout in this exact order:
+
+1. Confirm local `main`, `origin/main` and commit `0c620bc` are identical.
+2. Produce the exact production schema diff. It must contain only the expected additive changes, including:
+   - `users.revenuecat_id`;
+   - `account_cleanup_jobs`;
+   - every still-unpublished Phase D Team lifecycle column/table.
+3. Confirm no existing customer, trader, subscription, conversation, company membership or deletion record will be removed or renamed.
+4. Verify all required production variables without changing them yet:
+   - `COMPANY_TEAMS_ENABLED=true`;
+   - `TEAM_BILLING_ENFORCED=false`;
+   - `MARKETING_BREVO_ENABLED=false`;
+   - the exact confirmed `TEAM_PRODUCT_SEAT_MAP`;
+   - the correct RevenueCat entitlement identifier.
+5. Confirm existing authenticated users receive or are backfilled with a unique opaque RevenueCat ID before the new mobile build depends on it.
+6. Prove legacy numeric RevenueCat identities can only resolve to their original account and cannot be redirected by a modified client.
+7. Identify every existing company that requires a temporary seat exemption/grandfathering entry before Team Billing enforcement.
+8. Confirm the cleanup worker is idempotent, uses a multi-instance lock and will not broadly delete storage prefixes.
+9. Run the complete test matrix again:
+   - API with Team Billing OFF;
+   - API with Team Billing ON;
+   - mobile;
+   - admin;
+   - all typechecks;
+   - clean Metro start;
+   - production iOS export;
+   - production bundle test-file guard.
+10. Provide the precise schema migration, backend Publish, smoke-test and rollback checklist.
+
+Do not:
+
+- build or submit through EAS;
+- enable `TEAM_BILLING_ENFORCED`;
+- change App Store Connect or RevenueCat products;
+- make real purchases;
+- send marketing campaigns;
+- delete production files manually;
+- publish automatically.
+
+After the report, stop and wait for my approval to apply the production schema and Publish the backend.

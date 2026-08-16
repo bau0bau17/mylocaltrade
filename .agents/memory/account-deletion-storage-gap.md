@@ -9,6 +9,7 @@ Invariants to preserve:
 - **Namespace containment**: `isValidCleanupPath` only ever deletes inside the owner's own `/objects/customer-uploads/<uid>/` or `/objects/trader-documents/<uid>/` (category-matched, no `..`). Foreign paths → state `invalid`, permanent skip + integrity log — never touched.
 - **No false DONE**: a job reaches DONE only when every object is terminal (deleted/missing/invalid) **and both namespace listings succeeded that run**. A failed listing means incomplete inventory → stay PARTIAL with lastError (a transient listing outage must not strand unreferenced objects forever).
 - ObjectNotFoundError = `missing` = success (idempotent retries, double-delete race harmless).
+- **Single-flight sweep**: sweepAccountCleanupJobs takes `pg_try_advisory_xact_lock` (deployment is autoscale, every instance runs the scheduler); non-holders skip. Xact-level, so a crashed holder can never wedge the sweep.
 - `trader_documents` rows are purged once their objects are deleted/missing; the review audit trail lives in `trader_audit_log`.
 - Retention schedule + 30-day finalisation commitment documented in docs/data-retention.md; email + app copy say "within 30 days, unless a legal retention period applies".
 

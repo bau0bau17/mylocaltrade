@@ -290,7 +290,37 @@ export async function runAccountCleanupNow(userId: number): Promise<void> {
  * before storage cleanup existed (or whose enqueue was lost), then
  * (b) process every non-DONE job.
  */
+/**
+ * Advisory-lock key for the cleanup sweep. The deployment target is
+ * autoscale, so several API instances can run the hourly scheduler at once;
+ * the transaction-level lock makes the sweep single-flight cluster-wide
+ * (the storage deletions are idempotent anyway — this avoids duplicate work
+ * and interleaved attempt counting, not corruption). Auto-released on
+ * commit/rollback, so a crashed holder can never wedge future sweeps.
+ */
+export const ACCOUNT_CLEANUP_SWEEP_LOCK_KEY = 727465301;
+
 export async function sweepAccountCleanupJobs(): Promise<{
+  skipped: boolean;
+  backfilled: number;
+  processed: number;
+  done: number;
+  failed: number;
+}> {
+  return await db.transaction(async (lockTx) => {
+    const lockRes = await lockTx.execute(
+      sql`SELECT pg_try_advisory_xact_lock(${ACCOUNT_CLEANUP_SWEEP_LOCK_KEY}) AS locked`,
+    );
+    if (lockRes.rows[0]?.["locked"] !== true) {
+      logger.info("Account cleanup sweep: another instance holds the lock — skipping");
+      return { skipped: true, backfilled: 0, processed: 0, done: 0, failed: 0 };
+    }
+    const result = await runAccountCleanupSweep();
+    return { skipped: false, ...result };
+  });
+}
+
+async function runAccountCleanupSweep(): Promise<{
   backfilled: number;
   processed: number;
   done: number;

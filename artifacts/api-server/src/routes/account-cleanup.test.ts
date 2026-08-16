@@ -56,13 +56,14 @@ import {
   traderAuditLogTable,
   accountCleanupJobsTable,
 } from "@workspace/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import app from "../app";
 import { generateToken } from "../lib/auth";
 import {
   isValidCleanupPath,
   processAccountCleanupJob,
   sweepAccountCleanupJobs,
+  ACCOUNT_CLEANUP_SWEEP_LOCK_KEY,
 } from "../lib/account-cleanup";
 
 /**
@@ -358,6 +359,21 @@ describe("processAccountCleanupJob — safety and retry semantics", () => {
     const after = await jobFor(userId);
     expect(after.status).toBe("DONE");
     expect(fileGone(stray)).toBe(true);
+  });
+
+  it("sweep is single-flight: skips while another instance holds the advisory lock", async () => {
+    // Simulate a concurrent autoscale instance by holding the xact-level
+    // advisory lock on one pooled connection while the sweep runs on another.
+    await db.transaction(async (holder) => {
+      await holder.execute(sql`SELECT pg_advisory_xact_lock(${ACCOUNT_CLEANUP_SWEEP_LOCK_KEY})`);
+      const result = await sweepAccountCleanupJobs();
+      expect(result.skipped).toBe(true);
+      expect(result.processed).toBe(0);
+      expect(result.backfilled).toBe(0);
+    });
+    // Lock released with the holder transaction → the sweep runs normally.
+    const after = await sweepAccountCleanupJobs();
+    expect(after.skipped).toBe(false);
   });
 });
 
