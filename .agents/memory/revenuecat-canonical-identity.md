@@ -13,4 +13,6 @@ Fail-closed rules (keep):
 - **Legacy numeric alias is gated**: an all-digits app_user_id resolves ONLY when that user already has a `subscriptions` row (pre-existing billing history). Never widen this — an ungated numeric fallback reopens the confused-deputy hole. Remove the alias entirely once pre-hardening sandbox customers are gone.
 - A deleted account's rc_ id stays bound to the tombstoned row; re-registration mints a NEW id — late webhooks for the old id must never leak entitlements to the new account.
 
-**Deploy order:** production DB needs the schema push (users.revenuecat_id + account_cleanup_jobs) BEFORE the API/app build that uses it, or auth/registration queries fail live.
+**Deploy order:** production DB needs the schema push (users.revenuecat_id + account_cleanup_jobs) BEFORE the API/app build that uses it, or auth/registration queries fail live. This shipped to production Aug 16 2026 (additive schema applied via Publish; lazy backfill live).
+
+**Expected transition state (not a regression):** until the NEW mobile build ships and each subscriber does Restore purchases, RevenueCat has never seen the fresh rc_ ids, so `POST /subscriptions/revenuecat-sync` returns 502 ("Could not find customer ID…"). This is the fail-closed read path working as designed: it only reports, never mutates — DB subscription rows and perks stay intact. Don't "fix" it by widening lookup to the legacy numeric id.

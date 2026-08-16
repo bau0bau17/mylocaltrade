@@ -70,6 +70,7 @@
 - [Early Access campaigns](early-access-campaigns.md) — bulk mail via Brevo MARKETING pipeline gated on MARKETING_BREVO_ENABLED; batch idempotency (brevoCampaignId-before-sendNow, assumed-sent recovery); stateless HMAC unsub tokens; local conservative daily quota.
 - [Job reassignment & handover](job-reassignment-invariants.md) — conv FOR UPDATE = serialization point; handovers gated by conditional flips (removal + account deletion); reassign re-checks target membership+availability; side effects post-commit winner-only.
 - [Prod executeSql masks errors](prod-executesql-error-masking.md) — prod query returning only "START TRANSACTION\nROLLBACK" with success=true means the SQL FAILED, not empty data.
+- [CodeExecution Date.now() disabled](codeexec-date-now-disabled.md) — durable runtime can throw on Date.now(); get epoch via shellExec `date +%s%3N` or Date.parse literal.
 - [Brand asset provenance](brand-provenance.md) — logo provenance record lives in docs/brand-provenance.md; no creation prompt survives, never overclaim ownership; RCS banner NOT in repo = unverified.
 - [Account deletion storage cleanup](account-deletion-storage-gap.md) — gap FIXED: durable account_cleanup_jobs outbox + hourly sweep w/ orphan backfill; namespace-contained deletes; no false DONE on listing failure.
 - [RevenueCat canonical identity](revenuecat-canonical-identity.md) — rc_<32hex> server ids, lazy backfill IS the migration; numeric alias gated on existing subscription row; webhook fail-closed 2xx acks; prod schema push BEFORE build.
