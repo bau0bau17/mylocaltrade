@@ -8,6 +8,7 @@ import {
   companyMembersTable,
   companyInvitesTable,
   companySeatExemptionsTable,
+  subscriptionsTable,
   traderAuditLogTable,
 } from "@workspace/db/schema";
 import { eq, inArray, and, or } from "drizzle-orm";
@@ -40,6 +41,31 @@ const createdProfileIds: number[] = [];
 const createdInviteIds: number[] = [];
 
 const EXTERNAL_FLAG = process.env["COMPANY_TEAMS_ENABLED"];
+
+/**
+ * This file's contract is invite/team MECHANICS, valid under BOTH billing
+ * regimes. When the whole suite runs with TEAM_BILLING_ENFORCED=true (the
+ * flag-ON verification matrix), enforcement derives the seat allowance from
+ * the owner's subscription product — so the fixture owner gets a real Team
+ * plan (below) instead of tests bypassing enforcement. Shape assertions that
+ * legitimately differ between regimes branch on BILLING_ON.
+ */
+const BILLING_ON = process.env["TEAM_BILLING_ENFORCED"] === "true";
+const TEAM_PRODUCT = "test.placeholder.team20.company-team-suite";
+const EXTERNAL_TEAM_MAP = process.env["TEAM_PRODUCT_SEAT_MAP"];
+
+async function giveOwnerTeamSubscription(userId: number): Promise<void> {
+  await db.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, userId));
+  await db.insert(subscriptionsTable).values({
+    userId,
+    planId: "premium",
+    status: "active",
+    productIdentifier: TEAM_PRODUCT,
+    currentPeriodStart: new Date(),
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    originalPurchaseAt: new Date(),
+  });
+}
 
 function setFlag(on: boolean): void {
   if (on) process.env["COMPANY_TEAMS_ENABLED"] = "true";
@@ -177,12 +203,20 @@ interface Ctx {
 let ctx: Ctx;
 
 beforeAll(async () => {
+  // Recognise the placeholder Team product for the duration of this file so
+  // the owner's subscription grants real seats when billing is enforced.
+  // (Consulted only when TEAM_BILLING_ENFORCED is on; inert otherwise.)
+  process.env["TEAM_PRODUCT_SEAT_MAP"] = JSON.stringify({ [TEAM_PRODUCT]: 20 });
   const ownerUserId = await createUser("trader", "owner");
   const companyProfileId = await createTraderProfile(ownerUserId, "main");
+  await giveOwnerTeamSubscription(ownerUserId);
   const employeeUserId = await createUser("trader", "employee");
   await insertMembership({ profileId: companyProfileId, userId: employeeUserId });
   const otherOwnerUserId = await createUser("trader", "other-owner");
   const otherProfileId = await createTraderProfile(otherOwnerUserId, "other");
+  // The "other" company also invites through the real endpoint, so it needs
+  // its own seat allowance under enforcement.
+  await giveOwnerTeamSubscription(otherOwnerUserId);
   const customerEmail = emailFor("customer-existing");
   const customerId = await createUser("customer", "existing", customerEmail);
   const bareTraderId = await createUser("trader", "bare");
@@ -211,6 +245,13 @@ afterEach(() => {
 afterAll(async () => {
   restoreFlag();
   delete process.env["COMPANY_MAX_ACTIVE_MEMBERS"];
+  if (EXTERNAL_TEAM_MAP === undefined) delete process.env["TEAM_PRODUCT_SEAT_MAP"];
+  else process.env["TEAM_PRODUCT_SEAT_MAP"] = EXTERNAL_TEAM_MAP;
+  if (createdUserIds.length > 0) {
+    await db
+      .delete(subscriptionsTable)
+      .where(inArray(subscriptionsTable.userId, createdUserIds));
+  }
   // Order matters: audit + invites reference users; memberships reference both.
   if (createdUserIds.length > 0) {
     await db
@@ -292,14 +333,41 @@ describe("team-context (flag ON)", () => {
     const owner = await request(app)
       .get("/api/company/team-context")
       .set("Authorization", `Bearer ${ctx.ownerToken}`);
-    // TEAM_BILLING_ENFORCED is off here, so the legacy shape is EXACT —
-    // no plan/seat fields may leak onto this path.
-    expect(owner.body).toEqual({ enabled: true, role: "OWNER" });
+    if (BILLING_ON) {
+      // Enforcement regime: the owner gets the expanded Phase-B payload
+      // with plan + seat context derived from their Team subscription.
+      expect(owner.body).toMatchObject({
+        enabled: true,
+        role: "OWNER",
+        viewerRole: "OWNER",
+        effectiveBusinessPlan: "team_20",
+        employeeSeatLimit: 20,
+      });
+      expect(typeof owner.body.effectiveSeatAllowance).toBe("number");
+    } else {
+      // TEAM_BILLING_ENFORCED is off here, so the legacy shape is EXACT —
+      // no plan/seat fields may leak onto this path.
+      expect(owner.body).toEqual({ enabled: true, role: "OWNER" });
+    }
 
     const employee = await request(app)
       .get("/api/company/team-context")
       .set("Authorization", `Bearer ${ctx.employeeToken}`);
-    expect(employee.body).toEqual({ enabled: true, role: "EMPLOYEE" });
+    if (BILLING_ON) {
+      // Employees get their own gating state only — never the owner's
+      // billing tier or seat utilisation.
+      expect(employee.body).toEqual({
+        enabled: true,
+        role: "EMPLOYEE",
+        viewerRole: "EMPLOYEE",
+        viewerCanManageBilling: false,
+        viewerCanManageTeam: false,
+        viewerCanInvite: false,
+        seatSuspended: false,
+      });
+    } else {
+      expect(employee.body).toEqual({ enabled: true, role: "EMPLOYEE" });
+    }
 
     const bare = await request(app)
       .get("/api/company/team-context")
@@ -345,7 +413,21 @@ describe("GET /company/team", () => {
     expect(res.body.members[1].role).toBe("EMPLOYEE");
     expect(res.body.members[1].email).toContain("team-test+trader-employee");
     expect(res.body.invites).toEqual([]);
-    expect(res.body.seats).toEqual({ used: 2, max: 10 });
+    if (BILLING_ON) {
+      // Enforcement regime: employee-only seat semantics (the owner never
+      // occupies a seat) against the Team-plan allowance.
+      expect(res.body.seats).toMatchObject({
+        used: 1,
+        max: 20,
+        plan: "team_20",
+        activeEmployees: 1,
+        reservedInvites: 0,
+        suspendedEmployees: 0,
+      });
+    } else {
+      // Legacy owner-inclusive count against the env cap — exact shape.
+      expect(res.body.seats).toEqual({ used: 2, max: 10 });
+    }
   });
 });
 
@@ -377,8 +459,11 @@ describe("POST /company/invites", () => {
 
   it("enforces the seat cap counting active members + pending invites", async () => {
     setFlag(true);
-    // 2 active members (owner + employee), 0 pending at this point.
-    process.env["COMPANY_MAX_ACTIVE_MEMBERS"] = "2";
+    // Cap 1 trips BOTH regimes with the same fixture (0 pending invites):
+    //  - billing off: legacy owner-inclusive count — 2 active members >= 1;
+    //  - billing on:  employee-only count clamped by the kill-switch
+    //    ceiling — 1 active employee >= min(plan 20, ceiling 1).
+    process.env["COMPANY_MAX_ACTIVE_MEMBERS"] = "1";
     const res = await invite(ctx.ownerToken, emailFor("capped"));
     expect(res.status).toBe(409);
     expect(res.body.code).toBe("MEMBER_LIMIT_REACHED");
@@ -640,7 +725,13 @@ describe("POST /company/invites/accept", () => {
 
   it("Phase D: a seat filled after the invite went out fails acceptance with SEAT_UNAVAILABLE and keeps the invite alive", async () => {
     setFlag(true);
+    const prevBilling = process.env["TEAM_BILLING_ENFORCED"];
     process.env["TEAM_BILLING_ENFORCED"] = "true";
+    // This scenario NEEDS a plan-less owner (the exemption must BE the whole
+    // allowance), so park the fixture's Team subscription for the duration.
+    await db
+      .delete(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, ctx.ownerUserId));
     const [exemption] = await db
       .insert(companySeatExemptionsTable)
       .values({
@@ -673,7 +764,9 @@ describe("POST /company/invites/accept", () => {
         .where(eq(usersTable.email, emailFor("accept-no-seat").toLowerCase()));
       expect(users).toHaveLength(0);
     } finally {
-      delete process.env["TEAM_BILLING_ENFORCED"];
+      if (prevBilling === undefined) delete process.env["TEAM_BILLING_ENFORCED"];
+      else process.env["TEAM_BILLING_ENFORCED"] = prevBilling;
+      await giveOwnerTeamSubscription(ctx.ownerUserId);
       await db
         .delete(companySeatExemptionsTable)
         .where(eq(companySeatExemptionsTable.id, exemption.id));

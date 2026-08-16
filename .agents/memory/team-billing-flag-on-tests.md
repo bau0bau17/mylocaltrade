@@ -1,10 +1,16 @@
 ---
 name: Team billing flag-ON test matrix
-description: Why the API suite "fails" when TEAM_BILLING_ENFORCED=true is exported globally, and which combos are meaningful.
+description: How the API suite stays green with TEAM_BILLING_ENFORCED=true exported globally, and the fixture conventions that make it work.
 ---
 
-Running the full API suite with `TEAM_BILLING_ENFORCED=true` exported globally produces ~8 failures in company-team/company-jobs invite flows (403 instead of 201/409).
+The full API suite must pass in all three matrix combos: (a) default env; (b) prod-like `COMPANY_TEAMS_ENABLED=true` only (one `skipIf` test correctly skips); (c) both flags ON.
 
-**Why:** those tests create companies with no team-product subscription and no seat exemption; under global enforcement the seat allowance is 0 and invites fail closed with 403 — that is the enforcement working as designed, not a regression. Enforcement-specific behavior is covered by `team-billing.test.ts`, which sets and restores both flags itself and passes in every combo.
+**Why:** under global enforcement the seat allowance derives from the inviting owner's subscription product. Test companies with no team product get allowance 0 and invites 403 fail-closed — that is enforcement working as designed, so tests must supply real seat context instead of weakening the gate.
 
-**How to apply:** the meaningful matrix combos are (a) default env — everything green; (b) prod-like `COMPANY_TEAMS_ENABLED=true` only — everything green (one `skipIf` test correctly skips); (c) both flags ON — expect the invite-flow 403s, don't chase them as bugs. Never "fix" the invite tests to pass under global enforcement by weakening the seat gate.
+**How to apply (fixture conventions in company-team / company-jobs tests):**
+- Fixture owners that invite through the real endpoint get an active subscription with a placeholder team product (`test.placeholder.team20.*`) registered per-file via `TEAM_PRODUCT_SEAT_MAP` (save/restore the external value; only seats 5/10/20 are valid; consulted only when billing is enforced).
+- Shape assertions that legitimately differ between regimes branch on a module-load `BILLING_ON` const (team-context / GET company/team expanded payloads).
+- Seat-cap tests use `COMPANY_MAX_ACTIVE_MEMBERS=1` — it trips BOTH regimes (legacy count includes the owner; enforcement counts employees only, clamped by the kill-switch ceiling).
+- A test that needs a plan-less owner (exemption-is-the-allowance scenarios) deletes and restores the fixture subscription inside its own try/finally, and restores `TEAM_BILLING_ENFORCED` to its PRIOR value, never blind-deletes it (blind delete silently turns the rest of the file into billing-off under the both-ON combo).
+- Subscriptions rows must be deleted in afterAll BEFORE users (FK).
+- Never "fix" flag-ON failures by bypassing enforcement or weakening production seat gates.

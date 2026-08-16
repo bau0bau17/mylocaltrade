@@ -12,6 +12,7 @@ import {
   messagesTable,
   quotesTable,
   enquiriesTable,
+  subscriptionsTable,
   traderAuditLogTable,
 } from "@workspace/db/schema";
 import { eq, inArray, or, and } from "drizzle-orm";
@@ -60,6 +61,14 @@ const SUFFIX = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 const emailFor = (label: string) => `company-jobs+${label}-${SUFFIX}@example.test`;
 
 const EXTERNAL_FLAG = process.env["COMPANY_TEAMS_ENABLED"];
+
+// When the suite runs with TEAM_BILLING_ENFORCED=true, the e2e regression's
+// real invite endpoint derives seats from the inviting owner's subscription
+// product — so owner B gets a real Team plan (below) instead of the test
+// bypassing enforcement. Inert when billing is off.
+const TEAM_PRODUCT = "test.placeholder.team20.company-jobs-suite";
+const EXTERNAL_TEAM_MAP = process.env["TEAM_PRODUCT_SEAT_MAP"];
+
 function setFlag(on: boolean): void {
   if (on) process.env["COMPANY_TEAMS_ENABLED"] = "true";
   else delete process.env["COMPANY_TEAMS_ENABLED"];
@@ -349,6 +358,16 @@ beforeAll(async () => {
   // Company B: separate firm to prove cross-company isolation.
   ownerB = await createUser("trader", "ownerB");
   profileB = await createTraderProfile(ownerB, "beta");
+  process.env["TEAM_PRODUCT_SEAT_MAP"] = JSON.stringify({ [TEAM_PRODUCT]: 20 });
+  await db.insert(subscriptionsTable).values({
+    userId: ownerB,
+    planId: "premium",
+    status: "active",
+    productIdentifier: TEAM_PRODUCT,
+    currentPeriodStart: new Date(),
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    originalPurchaseAt: new Date(),
+  });
   empB = await createUser("trader", "empB");
   await insertMembership({ profileId: profileB, userId: ownerB, role: "OWNER" });
   await insertMembership({ profileId: profileB, userId: empB });
@@ -375,6 +394,13 @@ beforeAll(async () => {
 
 afterAll(async () => {
   restoreFlag();
+  if (EXTERNAL_TEAM_MAP === undefined) delete process.env["TEAM_PRODUCT_SEAT_MAP"];
+  else process.env["TEAM_PRODUCT_SEAT_MAP"] = EXTERNAL_TEAM_MAP;
+  if (createdUserIds.length) {
+    await db
+      .delete(subscriptionsTable)
+      .where(inArray(subscriptionsTable.userId, createdUserIds));
+  }
   if (createdConversationIds.length) {
     await db.delete(quotesTable).where(inArray(quotesTable.conversationId, createdConversationIds));
     await db.delete(messagesTable).where(inArray(messagesTable.conversationId, createdConversationIds));
