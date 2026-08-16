@@ -255,8 +255,9 @@ function PendingDeletionView({
           <View style={{ flex: 1 }}>
             <Text style={styles.warnTitle}>Account deletion request pending</Text>
             <Text style={styles.warnBody}>
-              Your account is currently deactivated. An administrator will finalise your deletion shortly.
-              You can cancel this request from here while it is still pending.
+              Your account is currently deactivated. An administrator will finalise your deletion
+              within 30 days, unless a legal retention period applies. You can cancel this request
+              from here while it is still pending.
             </Text>
           </View>
         </View>
@@ -539,10 +540,10 @@ function RequestDeletionView({
             <Text style={styles.warnTitle}>Account deletion is permanent once finalised</Text>
             <Text style={styles.warnBody}>
               Deleting your account will sign you out of every other device, hide your trader profile (if any) from
-              customers, and stop all email and push notifications. Our admin team will then finalise the deletion —
-              until then, you can still cancel your request from this screen. You'll receive a confirmation email
-              when your account has been permanently deleted.
-              Some records may be retained where the law requires us to do so.
+              customers, and stop all email and push notifications. Our admin team will then finalise the deletion
+              within 30 days, unless a legal retention period applies — until then, you can still cancel your
+              request from this screen. You'll receive a confirmation email when your account has been permanently
+              deleted. Some records may be retained where the law requires us to do so.
             </Text>
           </View>
         </View>

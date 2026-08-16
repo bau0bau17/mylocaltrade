@@ -1681,7 +1681,7 @@ export async function sendAccountDeletionReceivedEmail(opts: {
   blocks.push(
     {
       kind: "paragraph",
-      text: "Our admin team will finalise the deletion once any required legal retention period has passed. We may keep a minimal record of certain data (for example, completed transactions) where the law requires us to do so.",
+      text: "Our admin team will finalise the deletion within 30 days of your request, unless a legal retention period requires us to keep certain records for longer. We may keep a minimal record of certain data (for example, completed transactions) where the law requires us to do so.",
     },
     {
       kind: "html",

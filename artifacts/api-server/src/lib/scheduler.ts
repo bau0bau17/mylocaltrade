@@ -16,6 +16,7 @@ import { sweepLeadReminders } from "./lead-reminders";
 import { sweepCompanySeatReconciliation } from "./team-billing";
 import { sweepExpiredMutes } from "./mute-sweep";
 import { sweepOrphanUploads } from "./upload-sweep";
+import { sweepAccountCleanupJobs } from "./account-cleanup";
 import { sweepTraderGeocoding } from "./trader-geocoding";
 import { sweepBookingReminders } from "./booking-reminders";
 import { sendPushToUser } from "./push-notifications";
@@ -249,6 +250,7 @@ let leadReminderTimer: NodeJS.Timeout | null = null;
 let muteSweepTimer: NodeJS.Timeout | null = null;
 let revalidationTimer: NodeJS.Timeout | null = null;
 let orphanUploadTimer: NodeJS.Timeout | null = null;
+let accountCleanupTimer: NodeJS.Timeout | null = null;
 let bookingReminderTimer: NodeJS.Timeout | null = null;
 let traderGeocodeTimer: NodeJS.Timeout | null = null;
 
@@ -377,6 +379,34 @@ export function startScheduler(): void {
   }, ORPHAN_UPLOAD_SWEEP_INTERVAL_MS);
   orphanUploadTimer.unref?.();
 
+  // Account-deletion storage cleanup: durable retry of the object deletions
+  // enqueued at terminal deletion (anonymise/complete), plus retroactive
+  // backfill for accounts finalised before the cleanup outbox existed. The
+  // initial run shortly after boot picks up anything that accumulated while
+  // the server was down.
+  setTimeout(async () => {
+    try {
+      const result = await sweepAccountCleanupJobs();
+      if (result.backfilled > 0 || result.processed > 0) {
+        logger.info({ ...result }, "Account-cleanup sweep (initial)");
+      }
+    } catch (err) {
+      logger.error({ err }, "Account-cleanup sweep (initial) failed");
+    }
+  }, initialDelayMs);
+
+  accountCleanupTimer = setInterval(async () => {
+    try {
+      const result = await sweepAccountCleanupJobs();
+      if (result.backfilled > 0 || result.processed > 0) {
+        logger.info({ ...result }, "Account-cleanup sweep");
+      }
+    } catch (err) {
+      logger.error({ err }, "Account-cleanup sweep failed");
+    }
+  }, HOUR_MS);
+  accountCleanupTimer.unref?.();
+
   // Trader geocoding sweep: resolves base-postcode coordinates used by the
   // customer search-radius filter. The initial run backfills existing rows
   // shortly after boot (including right after a deploy that adds the
@@ -428,6 +458,10 @@ export function stopScheduler(): void {
   if (orphanUploadTimer) {
     clearInterval(orphanUploadTimer);
     orphanUploadTimer = null;
+  }
+  if (accountCleanupTimer) {
+    clearInterval(accountCleanupTimer);
+    accountCleanupTimer = null;
   }
   if (bookingReminderTimer) {
     clearInterval(bookingReminderTimer);

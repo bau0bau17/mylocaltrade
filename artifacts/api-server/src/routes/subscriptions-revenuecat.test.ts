@@ -37,6 +37,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import app from "../app";
 import { generateToken } from "../lib/auth";
+import { getOrCreateRevenueCatId } from "../lib/revenuecat-identity";
 import {
   listEntitlements,
   listCustomerActiveEntitlements,
@@ -99,7 +100,9 @@ function mockActiveEntitlement(expiresAtMs: number | null = Date.now() + 30 * 24
   });
 }
 
-async function createVerifiedTrader(label: string): Promise<{ id: number; token: string }> {
+async function createVerifiedTrader(
+  label: string,
+): Promise<{ id: number; token: string; rcId: string }> {
   const [u] = await db
     .insert(usersTable)
     .values({
@@ -126,7 +129,11 @@ async function createVerifiedTrader(label: string): Promise<{ id: number; token:
     verificationStatus: "VERIFIED",
     revalidationOverdue: false,
   });
-  return { id: u.id, token: generateToken(u.id, "trader", 1) };
+  // Webhook fixtures identify the customer by the canonical rc_ id — the
+  // numeric users.id form is a narrow legacy alias (pre-existing subscribers
+  // only) with its own dedicated tests below.
+  const rcId = await getOrCreateRevenueCatId(u.id);
+  return { id: u.id, token: generateToken(u.id, "trader", 1), rcId };
 }
 
 // The push is fired void-and-forget; give the microtask queue a beat before
@@ -498,7 +505,7 @@ describe("RevenueCat subscription syncing", () => {
         .post("/api/webhooks/revenuecat")
         .set("Authorization", "wrong-secret")
         .send({
-          event: { type: "EXPIRATION", app_user_id: String(trader.id) },
+          event: { type: "EXPIRATION", app_user_id: trader.rcId },
         });
       expect(res.status).toBe(401);
 
@@ -536,7 +543,7 @@ describe("RevenueCat subscription syncing", () => {
       const event = {
         event: {
           type: "EXPIRATION",
-          app_user_id: String(trader.id),
+          app_user_id: trader.rcId,
           entitlement_ids: [ENTITLEMENT_KEY],
           expiration_at_ms: Date.now(),
         },
@@ -600,7 +607,7 @@ describe("RevenueCat subscription syncing", () => {
         .send({
           event: {
             type: "INITIAL_PURCHASE",
-            app_user_id: String(trader.id),
+            app_user_id: trader.rcId,
             entitlement_ids: [ENTITLEMENT_KEY],
             product_id: "com.mylocaltrade.app.trader.yearly",
             expiration_at_ms: Date.now() + 30 * 24 * 60 * 60 * 1000,
@@ -627,7 +634,7 @@ describe("RevenueCat subscription syncing", () => {
         .send({
           event: {
             type: "EXPIRATION",
-            app_user_id: String(trader.id),
+            app_user_id: trader.rcId,
             entitlement_ids: ["some_other_entitlement"],
           },
         });
@@ -649,7 +656,7 @@ describe("RevenueCat subscription syncing", () => {
       const grant = {
         id: `evt-dedupe-${SUFFIX}`,
         type: "INITIAL_PURCHASE",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         product_id: "com.mylocaltrade.app.trader.yearly",
         expiration_at_ms: now + 30 * 24 * 60 * 60 * 1000,
@@ -688,7 +695,7 @@ describe("RevenueCat subscription syncing", () => {
       const initial = await sendEvent({
         id: `evt-order-initial-${SUFFIX}`,
         type: "INITIAL_PURCHASE",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         product_id: "com.mylocaltrade.app.trader.yearly",
         expiration_at_ms: tGrant + 30 * 24 * 60 * 60 * 1000,
@@ -701,7 +708,7 @@ describe("RevenueCat subscription syncing", () => {
       const expire = await sendEvent({
         id: `evt-order-expire-${SUFFIX}`,
         type: "EXPIRATION",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         expiration_at_ms: t1,
         event_timestamp_ms: t1,
@@ -713,7 +720,7 @@ describe("RevenueCat subscription syncing", () => {
       const lateRenewal = await sendEvent({
         id: `evt-order-renew-${SUFFIX}`,
         type: "RENEWAL",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         product_id: "com.mylocaltrade.app.trader.yearly",
         expiration_at_ms: t0 + 30 * 24 * 60 * 60 * 1000,
@@ -737,7 +744,7 @@ describe("RevenueCat subscription syncing", () => {
       const resub = await sendEvent({
         id: `evt-order-resub-${SUFFIX}`,
         type: "INITIAL_PURCHASE",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         product_id: "com.mylocaltrade.app.trader.yearly",
         expiration_at_ms: t2 + 30 * 24 * 60 * 60 * 1000,
@@ -760,7 +767,7 @@ describe("RevenueCat subscription syncing", () => {
       await sendEvent({
         id: `evt-bi-grant-${SUFFIX}`,
         type: "INITIAL_PURCHASE",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         product_id: "com.mylocaltrade.app.trader.yearly",
         expiration_at_ms: t0 + 30 * 24 * 60 * 60 * 1000,
@@ -773,7 +780,7 @@ describe("RevenueCat subscription syncing", () => {
       const issue = await sendEvent({
         id: `evt-bi-issue-${SUFFIX}`,
         type: "BILLING_ISSUE",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         event_timestamp_ms: t0 + 1_000,
       });
@@ -797,7 +804,7 @@ describe("RevenueCat subscription syncing", () => {
       await sendEvent({
         id: `evt-bi-renew-${SUFFIX}`,
         type: "RENEWAL",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         product_id: "com.mylocaltrade.app.trader.yearly",
         expiration_at_ms: t1 + 30 * 24 * 60 * 60 * 1000,
@@ -820,7 +827,7 @@ describe("RevenueCat subscription syncing", () => {
       await sendEvent({
         id: `evt-tie-grant0-${SUFFIX}`,
         type: "INITIAL_PURCHASE",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         product_id: "com.mylocaltrade.app.trader.yearly",
         expiration_at_ms: t0 + 30 * 24 * 60 * 60 * 1000,
@@ -835,7 +842,7 @@ describe("RevenueCat subscription syncing", () => {
       const expire = await sendEvent({
         id: `evt-tie-expire-${SUFFIX}`,
         type: "EXPIRATION",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         event_timestamp_ms: t1,
       });
@@ -845,7 +852,7 @@ describe("RevenueCat subscription syncing", () => {
       const tiedGrant = await sendEvent({
         id: `evt-tie-grant1-${SUFFIX}`,
         type: "RENEWAL",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         product_id: "com.mylocaltrade.app.trader.yearly",
         expiration_at_ms: t1 + 30 * 24 * 60 * 60 * 1000,
@@ -867,7 +874,7 @@ describe("RevenueCat subscription syncing", () => {
       const regrant = await sendEvent({
         id: `evt-tie-grant2-${SUFFIX}`,
         type: "INITIAL_PURCHASE",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         product_id: "com.mylocaltrade.app.trader.yearly",
         expiration_at_ms: t2 + 30 * 24 * 60 * 60 * 1000,
@@ -880,7 +887,7 @@ describe("RevenueCat subscription syncing", () => {
       const tiedRevoke = await sendEvent({
         id: `evt-tie-expire2-${SUFFIX}`,
         type: "EXPIRATION",
-        app_user_id: String(trader.id),
+        app_user_id: trader.rcId,
         entitlement_ids: [ENTITLEMENT_KEY],
         event_timestamp_ms: t2, // exact tie with the grant
       });
@@ -892,6 +899,223 @@ describe("RevenueCat subscription syncing", () => {
         .where(eq(subscriptionsTable.userId, trader.id))
         .limit(1);
       expect(final.status).toBe("cancelled");
+    });
+  });
+
+  describe("RevenueCat identity hardening (rc_ app user ids)", () => {
+    const sendEvent = (event: Record<string, unknown>) =>
+      request(app)
+        .post("/api/webhooks/revenuecat")
+        .set("Authorization", WEBHOOK_SECRET)
+        .send({ event });
+
+    it("sync lazily backfills a canonical rc_ id and queries RevenueCat with it (never the numeric user id)", async () => {
+      const trader = await createVerifiedTrader("id-canonical-sync");
+      mockActiveEntitlement();
+
+      const res = await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({});
+      await settle();
+      expect(res.status).toBe(200);
+
+      const [row] = await db
+        .select({ revenuecatId: usersTable.revenuecatId })
+        .from(usersTable)
+        .where(eq(usersTable.id, trader.id))
+        .limit(1);
+      expect(row.revenuecatId).toMatch(/^rc_[0-9a-f]{32}$/);
+
+      const call = mockListActive.mock.calls.at(-1)?.[0] as {
+        path?: { customer_id?: string };
+      };
+      expect(call?.path?.customer_id).toBe(row.revenuecatId);
+    });
+
+    it("webhook resolves a canonical rc_ app_user_id to the right account", async () => {
+      const trader = await createVerifiedTrader("id-canonical-wh");
+      const rcId = await getOrCreateRevenueCatId(trader.id);
+      const now = Date.now();
+
+      const res = await sendEvent({
+        id: `evt-id-canonical-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: rcId,
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: now + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: now,
+        event_timestamp_ms: now,
+      });
+      await settle();
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ success: true, applied: true });
+
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub.status).toBe("active");
+    });
+
+    it("webhook resolves via original_app_user_id when app_user_id is anonymous (receipt transfer)", async () => {
+      const trader = await createVerifiedTrader("id-transfer");
+      const rcId = await getOrCreateRevenueCatId(trader.id);
+      const now = Date.now();
+
+      const res = await sendEvent({
+        id: `evt-id-transfer-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: "$RCAnonymousID:ffffffffffffffffffffffffffffffff",
+        original_app_user_id: rcId,
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: now + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: now,
+        event_timestamp_ms: now,
+      });
+      await settle();
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ success: true, applied: true });
+
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub.status).toBe("active");
+    });
+
+    it("fails closed on a forged/unknown rc_ id: 2xx ack, no state mutation", async () => {
+      const before = await db.select().from(subscriptionsTable);
+      const res = await sendEvent({
+        id: `evt-id-forged-rc-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: "rc_00000000000000000000000000000000",
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: Date.now(),
+        event_timestamp_ms: Date.now(),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ success: true, ignored: "unknown_app_user_id" });
+      const after = await db.select().from(subscriptionsTable);
+      expect(after.length).toBe(before.length);
+    });
+
+    it("fails closed on an unknown numeric id: 2xx ack, no state mutation", async () => {
+      const res = await sendEvent({
+        id: `evt-id-forged-num-${SUFFIX}`,
+        type: "EXPIRATION",
+        app_user_id: "999999999",
+        entitlement_ids: [ENTITLEMENT_KEY],
+        event_timestamp_ms: Date.now(),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ success: true, ignored: "unknown_app_user_id" });
+    });
+
+    it("legacy numeric alias resolves ONLY for accounts with pre-existing billing history", async () => {
+      // A real user with NO subscription row: the guessable numeric id must
+      // NOT attach new subscription state to them (the confused-deputy path
+      // the rc_ hardening closes). Fails closed as unknown.
+      const fresh = await createVerifiedTrader("id-legacy-fresh");
+      const denied = await sendEvent({
+        id: `evt-id-legacy-fresh-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: String(fresh.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: Date.now(),
+        event_timestamp_ms: Date.now(),
+      });
+      expect(denied.status).toBe(200);
+      expect(denied.body).toMatchObject({ success: true, ignored: "unknown_app_user_id" });
+      const rows = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, fresh.id));
+      expect(rows).toHaveLength(0);
+
+      // A pre-hardening subscriber (existing subscription row) still gets
+      // their numeric-keyed webhook events applied — receipts created before
+      // the hardening carry the numeric id as original_app_user_id forever.
+      const legacy = await createVerifiedTrader("id-legacy-sub");
+      const now = Date.now();
+      await db.insert(subscriptionsTable).values({
+        userId: legacy.id,
+        planId: "premium",
+        status: "active",
+        currentPeriodStart: new Date(now - 15 * 24 * 60 * 60 * 1000),
+        currentPeriodEnd: new Date(now + 15 * 24 * 60 * 60 * 1000),
+        cancelAtPeriodEnd: false,
+        originalPurchaseAt: new Date(now - 15 * 24 * 60 * 60 * 1000),
+      });
+      const applied = await sendEvent({
+        id: `evt-id-legacy-sub-${SUFFIX}`,
+        type: "EXPIRATION",
+        app_user_id: String(legacy.id),
+        entitlement_ids: [ENTITLEMENT_KEY],
+        event_timestamp_ms: now,
+      });
+      await settle();
+      expect(applied.status).toBe(200);
+      expect(applied.body).toMatchObject({ success: true, applied: true });
+      const [sub] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, legacy.id))
+        .limit(1);
+      expect(sub.status).toBe("cancelled");
+    });
+
+    it("acks anonymous-only events without touching anything", async () => {
+      const res = await sendEvent({
+        id: `evt-id-anon-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: "$RCAnonymousID:abcabcabcabcabcabcabcabcabcabcab",
+        entitlement_ids: [ENTITLEMENT_KEY],
+        event_timestamp_ms: Date.now(),
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ success: true, ignored: "anonymous" });
+    });
+
+    it("a deleted account's released rc_ id can never grant to a new account (ids are unique per user row)", async () => {
+      // Re-registration after deletion produces a NEW user row with a NEW
+      // rc_ id; the old id stays bound to the tombstoned row. A late webhook
+      // for the old id must therefore never leak Premium to the new account.
+      const oldTrader = await createVerifiedTrader("id-deleted-old");
+      const oldRcId = await getOrCreateRevenueCatId(oldTrader.id);
+      const newTrader = await createVerifiedTrader("id-deleted-new");
+      const newRcId = await getOrCreateRevenueCatId(newTrader.id);
+      expect(newRcId).not.toBe(oldRcId);
+
+      const now = Date.now();
+      const res = await sendEvent({
+        id: `evt-id-deleted-${SUFFIX}`,
+        type: "INITIAL_PURCHASE",
+        app_user_id: oldRcId,
+        entitlement_ids: [ENTITLEMENT_KEY],
+        product_id: "com.mylocaltrade.app.trader.yearly",
+        expiration_at_ms: now + 30 * 24 * 60 * 60 * 1000,
+        purchased_at_ms: now,
+        event_timestamp_ms: now,
+      });
+      await settle();
+      expect(res.status).toBe(200);
+
+      // Whatever happens to the old row, the NEW account must have no
+      // subscription.
+      const subs = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, newTrader.id));
+      expect(subs).toHaveLength(0);
     });
   });
 });

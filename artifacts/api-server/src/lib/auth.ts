@@ -97,11 +97,16 @@ export function verifyUnsubscribeToken(token: string): {
 async function loadActiveUser(
   userId: number,
   tokenVersion: number,
-): Promise<{
-  id: number;
-  role: "customer" | "trader" | "admin";
-  isSuperAdmin: boolean;
-} | null> {
+): Promise<
+  | {
+      kind: "active";
+      id: number;
+      role: "customer" | "trader" | "admin";
+      isSuperAdmin: boolean;
+    }
+  | { kind: "deletion-pending" }
+  | null
+> {
   const [user] = await db
     .select({
       id: usersTable.id,
@@ -118,14 +123,20 @@ async function loadActiveUser(
 
   if (!user) return null;
   if (user.deletedAt) return null;
-  // GDPR / account deletion: any non-null deletionStatus locks the account
-  // out, even if the soft-delete `deletedAt` flag has not been set yet.
-  // Admins go through a different code path to view those accounts.
-  if (user.deletionStatus) return null;
   if (user.role === "admin" && !user.isActive) return null;
   if (user.tokenVersion !== tokenVersion) return null;
+  // GDPR / account deletion: a pending (still cancellable) deletion locks
+  // the account out of the app, but is reported as a DISTINCT 403 code so
+  // the mobile client does not treat it as a dead session (401 triggers
+  // forceLogout, which would strip the token the user needs to reach the
+  // cancel endpoint). Terminal states behave like a deleted account.
+  if (user.deletionStatus === "REQUESTED" || user.deletionStatus === "DISABLED_PENDING_RETENTION") {
+    return { kind: "deletion-pending" };
+  }
+  if (user.deletionStatus) return null;
 
   return {
+    kind: "active",
     id: user.id,
     role: user.role as "customer" | "trader" | "admin",
     isSuperAdmin: user.isSuperAdmin,
@@ -156,6 +167,18 @@ export async function authMiddleware(
     const user = await loadActiveUser(decoded.userId, decoded.tokenVersion);
     if (!user) {
       res.status(401).json({ error: "Account is no longer active" });
+      return;
+    }
+    if (user.kind === "deletion-pending") {
+      // Deliberately NOT 401: the session is valid, the account is just
+      // locked while a cancellable deletion request is open. The dedicated
+      // deletion-status/cancel endpoints (authMiddlewareAllowDeletion)
+      // remain reachable with this same token.
+      res.status(403).json({
+        error:
+          "Your account is scheduled for deletion. You can cancel the request from the delete-account screen.",
+        code: "ACCOUNT_DELETION_PENDING",
+      });
       return;
     }
     (req as AuthenticatedRequest).userId = user.id;
@@ -349,7 +372,7 @@ export async function optionalAuth(
       const token = authHeader.substring(7);
       const decoded = verifyToken(token);
       const user = await loadActiveUser(decoded.userId, decoded.tokenVersion);
-      if (user) {
+      if (user && user.kind === "active") {
         (req as AuthenticatedRequest).userId = user.id;
         (req as AuthenticatedRequest).userRole = user.role;
       }

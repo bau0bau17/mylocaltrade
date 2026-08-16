@@ -33,6 +33,7 @@ import {
   logJobsHandedToOwner,
   notifyJobsHandedToOwner,
 } from "../lib/job-assignment";
+import { enqueueAccountCleanup, runAccountCleanupNow } from "../lib/account-cleanup";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { serializeQuote } from "../lib/quotes";
@@ -3050,6 +3051,15 @@ router.post(
           .returning({ id: usersTable.id });
         if (!updated) return null;
         anonOk = true;
+        // Storage cleanup: capture the object inventory NOW — winner-only
+        // (after the guarded flip) but BEFORE the trader-profile update
+        // below overwrites logoUrl/galleryUrls. users.avatarUrl was already
+        // nulled by the flip, so it comes from the pre-transaction read.
+        await enqueueAccountCleanup(tx, {
+          userId: user.id,
+          enqueuedBy: "anonymise",
+          avatarUrl: user.avatarUrl,
+        });
         await tx.delete(pushTokensTable).where(eq(pushTokensTable.userId, user.id));
         if (user.role === "trader") {
           await tx
@@ -3114,6 +3124,11 @@ router.post(
         });
         return;
       }
+      // Best-effort immediate storage cleanup; the hourly sweep retries
+      // anything that fails here.
+      void runAccountCleanupNow(user.id).catch((err) =>
+        req.log.warn({ err, userId: user.id }, "Immediate account cleanup failed (anonymise)"),
+      );
       // Post-commit, winner-only (gated by the conditional revoke above).
       if (deletionHandover) {
         const { memberId, traderProfileId, ownerUserId, businessName, handedOver } =
@@ -3211,6 +3226,9 @@ router.post(
           email: usersTable.email,
           fullName: usersTable.fullName,
           role: usersTable.role,
+          // Captured before the terminal UPDATE nulls it — the storage
+          // cleanup job needs the object path.
+          avatarUrl: usersTable.avatarUrl,
         })
         .from(usersTable)
         .where(eq(usersTable.id, userId))
@@ -3256,6 +3274,15 @@ router.post(
           .returning({ id: usersTable.id });
         if (!updated) return null;
         completed = true;
+        // Storage cleanup: winner-only enqueue (idempotent — merges into the
+        // job the anonymise step may have already created). Trader-profile
+        // refs are still intact at this point; avatarUrl comes from the
+        // pre-transaction read above.
+        await enqueueAccountCleanup(tx, {
+          userId,
+          enqueuedBy: "complete",
+          avatarUrl: user.avatarUrl,
+        });
         // Belt-and-braces: earlier lifecycle steps already purge push tokens,
         // but the terminal transition must guarantee none survive.
         await tx.delete(pushTokensTable).where(eq(pushTokensTable.userId, userId));
@@ -3307,6 +3334,11 @@ router.post(
         });
         return;
       }
+      // Best-effort immediate storage cleanup; the hourly sweep retries
+      // anything that fails here.
+      void runAccountCleanupNow(userId).catch((err) =>
+        req.log.warn({ err, userId }, "Immediate account cleanup failed (complete)"),
+      );
       await revokeUserSessions(userId);
       // Post-commit, winner-only (gated by the conditional revoke above).
       if (completionHandover) {

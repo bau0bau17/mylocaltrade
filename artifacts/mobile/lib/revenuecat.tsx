@@ -524,11 +524,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     };
   }, [loadOfferings, loadCustomerInfo]);
 
-  // Identify the RevenueCat user with our app user id so the server can verify
-  // the same subscriber. Runs whenever the signed-in user changes.
+  // Identify the RevenueCat user with the CANONICAL app user id so the server
+  // can verify the same subscriber. The id is an opaque server-generated
+  // token ("rc_..."), received only from authenticated responses — never the
+  // numeric user id, and never constructed on the device. Runs whenever the
+  // signed-in user changes. A signed-in user without the id (stale cached
+  // profile from an older app version) stays anonymous until /auth/me
+  // refreshes the profile; purchases are blocked by ensureIdentified below.
   useEffect(() => {
     if (!isPurchasesSupported) return;
-    const appUserId = user ? String(user.id) : null;
+    const appUserId = user?.revenuecatId ?? null;
     if (appUserId === lastUserIdRef.current) return;
     lastUserIdRef.current = appUserId;
     (async () => {
@@ -571,14 +576,21 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   // Guarantee the RevenueCat customer is our signed-in user before a purchase
   // or restore. configure() starts anonymous and the identity effect above may
   // not have completed yet; without this a purchase can land on an
-  // $RCAnonymousID, so the server sync and the webhook (both keyed on our
-  // numeric user id) never see it and the purchase is orphaned. Throws if the
-  // identity can't be set, so we never make an anonymous (unattributable)
-  // purchase.
+  // $RCAnonymousID, so the server sync and the webhook (both keyed on the
+  // canonical server-issued id) never see it and the purchase is orphaned.
+  // Throws if the identity can't be set, so we never make an anonymous
+  // (unattributable) purchase.
   const ensureIdentified = useCallback(
     async (P: PurchasesDefault): Promise<void> => {
       if (!user) throw new Error('You need to be signed in to manage your subscription.');
-      const wantedId = String(user.id);
+      const wantedId = user.revenuecatId;
+      if (!wantedId) {
+        // Server hasn't supplied the canonical id yet (stale cached profile).
+        // Never fall back to a locally constructed id.
+        throw new Error(
+          'Your account is still syncing. Please try again in a moment, or sign out and back in.',
+        );
+      }
       const currentId = await P.getAppUserID();
       if (currentId === wantedId) return;
       const { customerInfo: info } = await P.logIn(wantedId);

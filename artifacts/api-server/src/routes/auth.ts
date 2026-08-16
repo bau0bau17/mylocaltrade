@@ -27,6 +27,7 @@ import { TRADER_STATUS, logAudit, buildOnboardingChecklist, statusMessage, isTra
 import { ACCOUNT_DELETION_STATUSES, type User } from "@workspace/db/schema";
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, evaluateLegalAcceptance } from "../lib/legal";
 import { getCompanyProfile, formatChAddress } from "../lib/companies-house";
+import { generateRevenueCatId, getOrCreateRevenueCatId } from "../lib/revenuecat-identity";
 import type { AiVerificationResult } from "../lib/trader-ai-verification";
 import { normaliseVatNumber } from "../lib/hmrc-vat";
 import { traderDocumentsTable } from "@workspace/db/schema";
@@ -350,6 +351,9 @@ router.post("/auth/register/customer", async (req, res) => {
         phone: body.phone || null,
         role: "customer",
         isActive: false,
+        // Canonical RevenueCat customer id — assigned at creation so the
+        // identity is never client-influenced (see lib/revenuecat-identity).
+        revenuecatId: generateRevenueCatId(),
         emailVerified: false,
         emailVerificationToken: verificationToken,
         emailVerificationTokenExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
@@ -523,6 +527,9 @@ router.post("/auth/register/trader", async (req, res) => {
         phone: body.phone,
         role: "trader",
         isActive: false,
+        // Canonical RevenueCat customer id — assigned at creation so the
+        // identity is never client-influenced (see lib/revenuecat-identity).
+        revenuecatId: generateRevenueCatId(),
         emailVerified: false,
         emailVerificationToken: verificationToken,
         emailVerificationTokenExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
@@ -769,6 +776,11 @@ router.post("/auth/login", async (req, res) => {
         createdAt: user.createdAt.toISOString(),
         deletionStatus: user.deletionStatus ?? null,
         deletionRequestedAt: user.deletionRequestedAt?.toISOString() ?? null,
+        // Canonical RevenueCat customer id — see /auth/me for the contract.
+        revenuecatId:
+          user.role === "admin"
+            ? null
+            : (user.revenuecatId ?? (await getOrCreateRevenueCatId(user.id))),
       },
     });
   } catch (error: unknown) {
@@ -1306,6 +1318,14 @@ router.get("/auth/me", authMiddlewareAllowDeletion, async (req, res) => {
       createdAt: user.createdAt.toISOString(),
       deletionStatus: user.deletionStatus ?? null,
       deletionRequestedAt: user.deletionRequestedAt?.toISOString() ?? null,
+      // Canonical RevenueCat customer id (opaque, server-generated). The
+      // mobile app passes it verbatim to Purchases.logIn and must never
+      // construct one. Lazily backfilled for accounts predating the column;
+      // null for admin rows (the admin portal has no RevenueCat identity).
+      revenuecatId:
+        user.role === "admin"
+          ? null
+          : (user.revenuecatId ?? (await getOrCreateRevenueCatId(user.id))),
     });
   } catch (error) {
     req.log.error({ err: error }, "Get user failed");

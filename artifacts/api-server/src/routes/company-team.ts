@@ -13,6 +13,7 @@ import {
 } from "@workspace/db/schema";
 import { and, eq, gt, ne, sql, desc } from "drizzle-orm";
 import { authMiddleware, traderOnly, generateToken } from "../lib/auth";
+import { generateRevenueCatId } from "../lib/revenuecat-identity";
 import type { AuthenticatedRequest } from "../lib/types";
 import {
   companyTeamsEnabled,
@@ -1054,6 +1055,9 @@ router.post("/company/invites/accept", teamsGate, async (req, res) => {
           // trader accounts it mirrors subscription payment. Employees carry
           // no subscription — their account is operational immediately.
           isActive: true,
+          // Canonical RevenueCat customer id — assigned at creation so the
+          // identity is never client-influenced (see lib/revenuecat-identity).
+          revenuecatId: generateRevenueCatId(),
         })
         .returning();
 

@@ -171,6 +171,12 @@ export const ResetPasswordResponse = zod.object({
       .describe(
         "GDPR account-deletion lifecycle stage. Null for normal accounts.\nREQUESTED \/ DISABLED_PENDING_RETENTION are still cancellable from\nthe mobile client. ANONYMISED \/ COMPLETED are terminal — those\nusers cannot reach this endpoint.\n",
       ),
+    revenuecatId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Canonical RevenueCat customer id (\"rc_\" + 32 hex chars). Opaque\nand server-generated; the app passes it verbatim to\nPurchases.logIn and must never construct or choose one. Null\nonly for admin rows.\n',
+      ),
     deletionRequestedAt: zod.date().nullish(),
   }),
 });
@@ -222,6 +228,12 @@ export const VerifyEmailCodeResponse = zod.object({
       .describe(
         "GDPR account-deletion lifecycle stage. Null for normal accounts.\nREQUESTED \/ DISABLED_PENDING_RETENTION are still cancellable from\nthe mobile client. ANONYMISED \/ COMPLETED are terminal — those\nusers cannot reach this endpoint.\n",
       ),
+    revenuecatId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Canonical RevenueCat customer id (\"rc_\" + 32 hex chars). Opaque\nand server-generated; the app passes it verbatim to\nPurchases.logIn and must never construct or choose one. Null\nonly for admin rows.\n',
+      ),
     deletionRequestedAt: zod.date().nullish(),
   }),
 });
@@ -261,6 +273,12 @@ export const LoginResponse = zod.object({
       .nullish()
       .describe(
         "GDPR account-deletion lifecycle stage. Null for normal accounts.\nREQUESTED \/ DISABLED_PENDING_RETENTION are still cancellable from\nthe mobile client. ANONYMISED \/ COMPLETED are terminal — those\nusers cannot reach this endpoint.\n",
+      ),
+    revenuecatId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Canonical RevenueCat customer id (\"rc_\" + 32 hex chars). Opaque\nand server-generated; the app passes it verbatim to\nPurchases.logIn and must never construct or choose one. Null\nonly for admin rows.\n',
       ),
     deletionRequestedAt: zod.date().nullish(),
   }),
@@ -343,6 +361,12 @@ export const GetMeResponse = zod.object({
     .nullish()
     .describe(
       "GDPR account-deletion lifecycle stage. Null for normal accounts.\nREQUESTED \/ DISABLED_PENDING_RETENTION are still cancellable from\nthe mobile client. ANONYMISED \/ COMPLETED are terminal — those\nusers cannot reach this endpoint.\n",
+    ),
+  revenuecatId: zod
+    .string()
+    .nullish()
+    .describe(
+      'Canonical RevenueCat customer id (\"rc_\" + 32 hex chars). Opaque\nand server-generated; the app passes it verbatim to\nPurchases.logIn and must never construct or choose one. Null\nonly for admin rows.\n',
     ),
   deletionRequestedAt: zod.date().nullish(),
 });

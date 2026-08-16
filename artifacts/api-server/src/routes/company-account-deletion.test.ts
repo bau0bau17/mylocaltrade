@@ -431,11 +431,14 @@ describe("Employee deletion request — live jobs move to the owner", () => {
 
   it("refuses a repeat request — the locked account only reaches the cancel flow", async () => {
     // deletion-request sits behind the strict authMiddleware, which refuses
-    // deletion-flagged accounts outright (401). The fresh token is only
-    // honoured by the allow-deletion routes (status/cancel). The handler's
-    // own 409 ALREADY_REQUESTED guard covers the middleware-read race.
+    // deletion-flagged accounts with the distinct 403 ACCOUNT_DELETION_PENDING
+    // (NOT 401 — that would make the mobile client forceLogout and strip the
+    // very token needed to cancel). The fresh token is only honoured for real
+    // work by the allow-deletion routes (status/cancel). The handler's own
+    // 409 ALREADY_REQUESTED guard covers the middleware-read race.
     const res = await requestDeletion(freshToken);
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("ACCOUNT_DELETION_PENDING");
 
     // At-most-once side effects: still exactly ONE handover audit row.
     const rows = await db

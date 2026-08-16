@@ -7,7 +7,7 @@ import {
   traderAuditLogTable,
   pushTokensTable,
 } from "@workspace/db/schema";
-import { and, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   authMiddleware,
@@ -302,11 +302,11 @@ router.post("/account/deletion-request", authMiddleware, async (req, res) => {
  * can render the right UI on the delete-account screen and show a banner
  * elsewhere if the request is in flight.
  *
- * Note: the auth middleware blocks REQUESTED/DISABLED/ANONYMISED accounts
- * at the bearer-token check, so this route is normally only reachable in
- * the ACTIVE state. The shape below still describes the lifecycle so the
- * client can show the cancel-flow on a fresh sign-in token (issued after
- * a successful cancel).
+ * Reachable in BOTH the active state and the pending-deletion states:
+ * the standard auth middleware answers pending accounts with a 403
+ * ACCOUNT_DELETION_PENDING (not a session-killing 401), and this route
+ * uses authMiddlewareAllowDeletion so the same token can read the
+ * lifecycle snapshot and drive the cancel flow.
  */
 router.get("/account/deletion-status", authMiddlewareAllowDeletion, async (req, res) => {
   try {
@@ -354,11 +354,11 @@ router.get("/account/deletion-status", authMiddlewareAllowDeletion, async (req, 
  *    valid verification status + active subscription before they re-appear in
  *    public listings (handled by the existing isTraderProfilePublic logic).
  *
- * Note: because the auth middleware locks deletion-flagged accounts out, the
- * caller cannot reach this route with a normal session. It is exposed for
- * admin-on-behalf-of flows and for direct programmatic use; the mobile app
- * routes its cancel through admin support today. Kept for parity with the
- * GDPR specification and so a future "magic-link to cancel" email can plug in.
+ * The requesting device keeps a valid session token after submitting a
+ * deletion request (the standard middleware answers it with 403
+ * ACCOUNT_DELETION_PENDING rather than revoking it), so the mobile app can
+ * call this endpoint directly from the delete-account screen. Password +
+ * checkbox confirmation are still mandatory.
  */
 router.post("/account/deletion-cancel", authMiddlewareAllowDeletion, async (req, res) => {
   try {
@@ -405,19 +405,54 @@ router.post("/account/deletion-cancel", authMiddlewareAllowDeletion, async (req,
     }
 
     const now = new Date();
-    await db
-      .update(usersTable)
-      .set({
-        deletionStatus: null,
-        deletionRequestedAt: null,
-        deletionReason: null,
-        accountDisabledAt: null,
-        retentionReason: null,
-        retentionUntil: null,
-        marketingOptOutAt: null,
-        updatedAt: now,
-      })
-      .where(eq(usersTable.id, userId));
+    // Conditional transition guard: the pre-read above races against an
+    // admin finalising (anonymise/complete) this very request. Cancelling
+    // must NEVER resurrect a terminal account — the UPDATE only wins while
+    // the status is still one of the two cancellable states, and every side
+    // effect below (profile restore, audit, email) is winner-only.
+    const won = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(usersTable)
+        .set({
+          deletionStatus: null,
+          deletionRequestedAt: null,
+          deletionReason: null,
+          accountDisabledAt: null,
+          retentionReason: null,
+          retentionUntil: null,
+          marketingOptOutAt: null,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(usersTable.id, userId),
+            inArray(usersTable.deletionStatus, ["REQUESTED", "DISABLED_PENDING_RETENTION"]),
+          ),
+        )
+        .returning({ id: usersTable.id });
+      if (!updated) return false;
+      // Mirror of the request path, which hides the trader profile
+      // (isActive=false). Cancelling must restore it or the trader stays
+      // invisible in public listings forever. Safe blanket restore: only the
+      // deletion request and the terminal admin anonymise write
+      // isActive=false, and neither state can coexist with a cancellable
+      // request. Public visibility still requires the verification status
+      // checks (isTraderProfilePublic) on top of this flag.
+      if (user.role === "trader") {
+        await tx
+          .update(traderProfilesTable)
+          .set({ isActive: true, updatedAt: now })
+          .where(eq(traderProfilesTable.userId, userId));
+      }
+      return true;
+    });
+    if (!won) {
+      res.status(409).json({
+        error: "This account is not in a cancellable deletion state.",
+        code: "NOT_CANCELLABLE",
+      });
+      return;
+    }
 
     void logAudit({ userId, action: "ACCOUNT_DELETION_CANCELLED" });
 

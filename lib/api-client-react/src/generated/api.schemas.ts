@@ -216,6 +216,12 @@ the mobile client. ANONYMISED / COMPLETED are terminal — those
 users cannot reach this endpoint.
  */
   deletionStatus?: string | null;
+  /** Canonical RevenueCat customer id ("rc_" + 32 hex chars). Opaque
+and server-generated; the app passes it verbatim to
+Purchases.logIn and must never construct or choose one. Null
+only for admin rows.
+ */
+  revenuecatId?: string | null;
   deletionRequestedAt?: string | null;
 }
 

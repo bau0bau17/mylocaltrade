@@ -88,6 +88,14 @@ export const usersTable = pgTable(
   stripeCustomerId: varchar("stripe_customer_id", { length: 255 }),
   stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
   plan: varchar("plan", { length: 20 }),
+  // Canonical RevenueCat App User ID ("rc_" + 32 hex chars). Server-generated,
+  // opaque, immutable once set, unique per user. The mobile app receives it
+  // ONLY from authenticated responses (/auth/me, login) and must never
+  // construct or choose it. Never the numeric users.id or the email — those
+  // are guessable/client-influenced. NULL until first needed; assigned
+  // lazily via getOrCreateRevenueCatId() (guarded UPDATE ... WHERE IS NULL),
+  // which also backfills pre-existing rows.
+  revenuecatId: varchar("revenuecat_id", { length: 64 }),
   pushNotificationsEnabled: boolean("push_notifications_enabled").notNull().default(true),
   // Stamped whenever at least one Expo push ticket comes back "ok" for this
   // user. Powers the admin notification-health view ("why didn't this user
@@ -140,6 +148,8 @@ export const usersTable = pgTable(
     adminEmailUnique: uniqueIndex("users_email_admin_unique")
       .on(t.email)
       .where(sql`role = 'admin'`),
+    // Canonical RevenueCat identity must be unique (multiple NULLs allowed).
+    revenuecatIdUnique: uniqueIndex("users_revenuecat_id_unique").on(t.revenuecatId),
   }),
 );
 

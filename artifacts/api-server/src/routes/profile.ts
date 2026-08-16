@@ -4,6 +4,7 @@ import { getActiveMembership } from "../lib/company-membership";
 import { traderProfilesTable, usersTable, subscriptionsTable } from "@workspace/db/schema";
 import { eq, and } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
+import { requireActiveSeat } from "../lib/seat-guard";
 import { UpdateTraderProfileBody } from "@workspace/api-zod";
 import { businessFieldsIn, canManageBusinessFields } from "../lib/business-permissions";
 import { validateWorkingHours } from "../lib/booking-availability";
@@ -119,7 +120,7 @@ router.get("/profile", authMiddleware, traderOnly, async (req, res) => {
   }
 });
 
-router.put("/profile", authMiddleware, traderOnly, async (req, res) => {
+router.put("/profile", authMiddleware, traderOnly, requireActiveSeat, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
     const body = UpdateTraderProfileBody.parse(req.body);
@@ -609,6 +610,7 @@ router.post(
   "/profile/business-email/send",
   authMiddleware,
   traderOnly,
+  requireActiveSeat,
   async (req, res) => {
     try {
       const { userId } = req as AuthenticatedRequest;
@@ -839,7 +841,7 @@ router.get("/profile/business-email/confirm", async (req, res) => {
 // Trader re-confirms their key documents are still current, resetting the
 // periodic re-validation clock and clearing any "due"/"overdue" state. This is
 // the action prompted by the scheduler's re-validation sweep.
-router.post("/profile/revalidate", authMiddleware, traderOnly, async (req, res) => {
+router.post("/profile/revalidate", authMiddleware, traderOnly, requireActiveSeat, async (req, res) => {
   try {
     const { userId } = req as AuthenticatedRequest;
 

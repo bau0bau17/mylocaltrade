@@ -41,6 +41,7 @@ import { alias } from "drizzle-orm/pg-core";
 const traderUsers = alias(usersTable, "trader_users");
 const assignedUsers = alias(usersTable, "assigned_users");
 import { authMiddleware } from "../lib/auth";
+import { requireActiveSeat } from "../lib/seat-guard";
 import type { AuthenticatedRequest } from "../lib/types";
 import {
   sendNewMessageEmail,
@@ -1546,7 +1547,7 @@ router.post("/conversations/:id/cancel", authMiddleware, async (req, res) => {
 });
 
 // PATCH /api/conversations/:id/mute — toggle per-user push mute
-router.patch("/conversations/:id/mute", authMiddleware, async (req, res) => {
+router.patch("/conversations/:id/mute", authMiddleware, requireActiveSeat, async (req, res) => {
   try {
     const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {
@@ -1610,7 +1611,7 @@ router.patch("/conversations/:id/mute", authMiddleware, async (req, res) => {
 });
 
 // POST /api/conversations/:id/report
-router.post("/conversations/:id/report", authMiddleware, async (req, res) => {
+router.post("/conversations/:id/report", authMiddleware, requireActiveSeat, async (req, res) => {
   try {
     const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {

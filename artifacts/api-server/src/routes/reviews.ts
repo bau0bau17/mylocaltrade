@@ -12,6 +12,7 @@ import {
 import { and, eq, ne, sql, desc, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { authMiddleware, adminOnly, customerOnly, traderOnly } from "../lib/auth";
+import { requireActiveSeat } from "../lib/seat-guard";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, isTraderPubliclyListed } from "../lib/trader-status";
 import { detectContactInfo, contactViolationMessage } from "../lib/content-filter";
@@ -312,7 +313,7 @@ router.get("/trader/reviews", authMiddleware, traderOnly, async (req, res) => {
 });
 
 // POST /api/trader/reviews/:id/reply — trader replies to a review on their profile
-router.post("/trader/reviews/:id/reply", authMiddleware, traderOnly, async (req, res) => {
+router.post("/trader/reviews/:id/reply", authMiddleware, traderOnly, requireActiveSeat, async (req, res) => {
   try {
     const id = Number.parseInt(String(req.params.id), 10);
     if (!Number.isFinite(id)) {

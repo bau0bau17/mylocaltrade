@@ -1,0 +1,143 @@
+Continue from Phase D commit `e37b392`.
+
+Treat this as the final P0 hardening pass before the next TestFlight build, not as a new feature expansion. Inspect the current implementation first and make the smallest safe changes.
+
+Do not publish, migrate production, change production environment variables, modify App Store Connect or RevenueCat configuration, run EAS, or send real purchases/emails.
+
+Keep:
+
+- `COMPANY_TEAMS_ENABLED` unchanged.
+- `TEAM_BILLING_ENFORCED=false`.
+- `MARKETING_BREVO_ENABLED=false`.
+
+## 1. P0 — Harden RevenueCat customer identity
+
+The Phase D report identifies the current numeric, client-influenced RevenueCat App User ID as an unresolved risk. Fix it before team billing can be enabled.
+
+Requirements:
+
+- Trace the complete identity flow: authenticated user → mobile RevenueCat configure/login → subscription sync/activation → webhook processing.
+- Introduce a server-generated, opaque, immutable and unique RevenueCat customer ID for every user. Do not use the database numeric user ID or email as the canonical RevenueCat identity.
+- Backfill existing users safely.
+- Mobile must receive this identifier only from an authenticated server response and must never construct or choose it.
+- Subscription sync/status/activation routes must derive the expected identity from the authenticated server session. Ignore or reject any client-supplied RevenueCat user ID.
+- Webhooks must resolve only known canonical IDs or explicitly documented migration aliases. Unknown identities must fail closed and generate a safe integrity alert.
+- Provide a safe migration strategy for existing TestFlight/sandbox RevenueCat customers so valid test entitlements are not silently attached to another account or lost.
+- Cover shared-device account switching, logout/login, deletion and re-registration, forged IDs, unknown webhook IDs, duplicate/out-of-order events, restore purchases and concurrent sync.
+- Never log full tokens, credentials or unnecessary personal data.
+
+Follow RevenueCat’s documented customer identity and alias behaviour. Do not guess.
+
+## 2. P0 — Complete account-deletion storage cleanup
+
+Inventory every stored object connected to a customer, trader, owner or employee account, including:
+
+- Personal avatars.
+- Business logos.
+- Gallery images.
+- Verification documents.
+- Temporary uploads and rejected/replaced files.
+
+When account deletion is finalised:
+
+- Remove or securely retire all objects that are not legally required to be retained.
+- Clear the corresponding database references.
+- Never perform broad or unvalidated prefix deletion.
+- Ensure one user’s cleanup can never delete another user’s files.
+- Make cleanup idempotent: an already missing object is a successful outcome.
+- Because database and object storage cannot be one transaction, use a durable cleanup job/outbox with retry and an auditable status.
+- Handle partial storage failure without incorrectly reporting full completion.
+- Add a safe orphan-cleanup mechanism for previously deleted accounts.
+- Explicitly document every retained category, its lawful reason and maximum retention period. Do not retain verification documents indefinitely by default.
+
+Add tests for partial failure, retries, repeated finalisation, missing files, malicious paths, cross-user isolation and all supported account roles.
+
+## 3. P0 — Correct the pending-deletion lifecycle and copy
+
+The application currently says the user can access the account while admin review is pending, but the implementation appears to revoke sessions and block login immediately. The behaviour and displayed promise must match.
+
+Implement this state model unless the existing code demonstrates a safer equivalent:
+
+### Pending deletion
+
+- User may still authenticate.
+- Public trader/business visibility, new leads, company actions, push and marketing stop immediately.
+- Account is restricted/read-only except for personal security/legal pages and cancelling the deletion request.
+- Show a clear persistent banner with the current status and expected processing timeframe.
+- Do not revoke all sessions merely because the request was created.
+
+### Finalised deletion
+
+- Only finalisation revokes all sessions and prevents further login.
+- Personal data anonymisation and storage cleanup complete or enter a clearly tracked retry state.
+- Send the final confirmation email only when deletion is actually finalised.
+- Release the email for re-registration only when the terminal state is safe.
+- Preserve only the minimum legally required, non-public audit/transaction records.
+
+The user must be able to cancel before irreversible anonymisation begins. Ensure admin review cannot become indefinite unnecessary friction: document and display the processing timeframe.
+
+Update every affected screen and email so no text contradicts the real behaviour.
+
+## 4. P0 — Audit every suspended-employee mutation
+
+Phase D explicitly blocks messages, quotes and bookings, but the requirement is that a seat-suspended employee cannot perform any action on behalf of the company.
+
+Create or reuse one central server-side authorization guard and audit every company-scoped write route, including:
+
+- Claiming or assigning jobs.
+- Conversation and pipeline status changes.
+- Messages and attachments.
+- Quotes.
+- Appointments, rescheduling, confirmation and cancellation.
+- Completion and review-related company actions.
+- Company profile, services, hours, logo, gallery and documents.
+- Team invitations or member administration.
+- Subscription and billing operations.
+- Reports or other business mutations.
+
+A suspended employee may still manage their own personal password, personal avatar, legal/support access and account deletion, but must not mutate business/company data.
+
+Add a full permission-matrix test proving ACTIVE versus SEAT_SUSPENDED versus REVOKED behaviour, including concurrent claim/reconciliation races.
+
+## 5. Legal and product-copy check
+
+Phase D changed Terms and pricing copy without a legal version bump.
+
+Provide:
+
+- The exact old/new legal-text diff.
+- A documented conclusion on whether version bump or trader re-acceptance is required.
+- Do not force re-acceptance unless justified.
+- Ensure Terms, Privacy, App Store subscription copy and in-app pricing all agree on owner billing, employee seats, auto-renewal, downgrades, suspension and account deletion.
+- Do not present this as formal legal advice.
+
+## 6. Verification and final release gate
+
+Run:
+
+- Full API suites with Team Billing flag OFF and ON.
+- Mobile and Admin suites.
+- Typechecks.
+- Metro clean start and production iOS export.
+- A guard proving no test files enter Expo Router routes or the production bundle.
+- Multi-instance reconciliation/sweep tests.
+- Idempotency, advisory-lock and retry tests.
+- Security review of identity, authorization, webhook replay and deletion cleanup.
+
+Do not make any real RevenueCat purchase or send any real campaign.
+
+## Final report required
+
+Report:
+
+1. Root causes.
+2. Exact files and schema changes.
+3. RevenueCat identity migration/backfill strategy.
+4. Account-deletion state machine and cleanup retry behaviour.
+5. Complete suspended-employee permission matrix.
+6. Legal-copy decision.
+7. Test totals and security-review findings.
+8. Exact production rollout and rollback order.
+9. Any remaining blocker before TestFlight or App Store review.
+
+Commit and push normally to `main`, then stop. Do not publish or start the build.

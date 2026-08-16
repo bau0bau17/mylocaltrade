@@ -28,6 +28,11 @@ import {
   listEntitlements,
 } from "@replit/revenuecat-sdk";
 import { getUncachableRevenueCatClient } from "../lib/revenueCatClient";
+import {
+  getOrCreateRevenueCatId,
+  isAnonymousRevenueCatId,
+  resolveRevenueCatAppUserId,
+} from "../lib/revenuecat-identity";
 
 const router: IRouter = Router();
 
@@ -309,8 +314,17 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, subscr
       return;
     }
 
-    // RevenueCat uses our app user id as the customer id (set via logIn on the
-    // client). Query the v2 Developer API (via the Replit connector) to confirm
+    // Canonical RevenueCat customer id — a server-generated opaque token
+    // (users.revenuecat_id), assigned lazily here for accounts that predate
+    // it. Derived EXCLUSIVELY from the authenticated session; any
+    // client-supplied RevenueCat id in the request body is ignored. Legacy
+    // sandbox/TestFlight customers keyed by the numeric user id re-attach
+    // their entitlement to this id via "Restore purchases" (RevenueCat
+    // transfers the receipt); we deliberately do NOT query the legacy
+    // customer here — canonical-only keeps the read path fail-closed.
+    const rcCustomerId = await getOrCreateRevenueCatId(userId);
+
+    // Query the v2 Developer API (via the Replit connector) to confirm
     // the active entitlement server-side.
     const wanted = normalizeEntitlementKey(REVENUECAT_ENTITLEMENT_ID);
     let activeEntitlements: RevenueCatActiveEntitlement[];
@@ -337,7 +351,7 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, subscr
 
       const { data, error } = await listCustomerActiveEntitlements({
         client,
-        path: { project_id: REVENUECAT_PROJECT_ID, customer_id: String(userId) },
+        path: { project_id: REVENUECAT_PROJECT_ID, customer_id: rcCustomerId },
       });
       if (error) {
         req.log.error({ err: error }, "RevenueCat lookup failed");
@@ -922,13 +936,57 @@ router.post("/webhooks/revenuecat", async (req, res) => {
       return;
     }
 
-    // app_user_id is our numeric user id (set via RevenueCat logIn). Anonymous
-    // ids ("$RCAnonymousID:...") cannot be mapped to an account — ack and skip.
-    const appUserId = String(event.app_user_id ?? event.original_app_user_id ?? "");
-    const userId = Number(appUserId);
-    if (!Number.isInteger(userId) || userId <= 0) {
-      res.json({ success: true, ignored: "anonymous" });
+    // Resolve the RevenueCat identity to a local account. Accepted forms:
+    //   1. Canonical "rc_<32hex>" (users.revenuecat_id) — server-generated,
+    //      opaque, set via Purchases.logIn from an authenticated response.
+    //   2. DOCUMENTED MIGRATION ALIAS: all-digits numeric users.id — the
+    //      pre-hardening App User ID, which also survives forever as
+    //      original_app_user_id on transferred receipts.
+    // Anonymous SDK ids ("$RCAnonymousID:...") cannot be mapped — ack and
+    // skip, as before. Everything else FAILS CLOSED: no state mutation, a
+    // 2xx ack (RevenueCat retries non-2xx indefinitely) and a structured
+    // integrity alert in the logs for monitoring.
+    const candidates = [event.app_user_id, event.original_app_user_id]
+      .map((v) => (v == null ? "" : String(v)))
+      .filter((v) => v.length > 0);
+    let resolved: { userId: number; legacyAlias: boolean } | null = null;
+    let resolvedAppUserId: string | null = null;
+    let sawNonAnonymous = false;
+    for (const candidate of candidates) {
+      if (isAnonymousRevenueCatId(candidate)) continue;
+      sawNonAnonymous = true;
+      resolved = await resolveRevenueCatAppUserId(candidate);
+      if (resolved) {
+        resolvedAppUserId = candidate;
+        break;
+      }
+    }
+    if (!resolved || !resolvedAppUserId) {
+      if (!sawNonAnonymous) {
+        res.json({ success: true, ignored: "anonymous" });
+        return;
+      }
+      req.log.error(
+        {
+          integrity: "revenuecat_webhook_unknown_app_user_id",
+          eventId: typeof event.id === "string" ? event.id : null,
+          eventType: type,
+          // Truncated on purpose — enough to investigate, never a full
+          // identity string or token.
+          appUserIdPrefix: candidates[0]?.slice(0, 8) ?? null,
+        },
+        "RevenueCat webhook addressed an unknown app_user_id — failing closed",
+      );
+      res.json({ success: true, ignored: "unknown_app_user_id" });
       return;
+    }
+    const userId = resolved.userId;
+    const appUserId = resolvedAppUserId;
+    if (resolved.legacyAlias) {
+      req.log.info(
+        { userId, eventType: type },
+        "RevenueCat webhook resolved via legacy numeric alias (pre-hardening customer)",
+      );
     }
 
     const [user] = await db
@@ -937,7 +995,13 @@ router.post("/webhooks/revenuecat", async (req, res) => {
       .where(eq(usersTable.id, userId))
       .limit(1);
     if (!user) {
-      res.json({ success: true, ignored: "unknown_user" });
+      // Unreachable in practice (the resolver just matched this id) unless
+      // the row vanished in a race; treat as the same integrity condition.
+      req.log.error(
+        { integrity: "revenuecat_webhook_unknown_app_user_id", eventType: type },
+        "RevenueCat webhook user row disappeared during resolution — failing closed",
+      );
+      res.json({ success: true, ignored: "unknown_app_user_id" });
       return;
     }
 
