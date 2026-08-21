@@ -9,6 +9,7 @@ import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit } from "../lib/trader-status";
 import { deliverTraderPhoneOtp } from "../lib/otp-delivery";
 import {
+  fetchVerificationAttemptOutcome,
   isTwilioVerifyConfigured,
   startPhoneVerification,
   checkPhoneVerification,
@@ -17,13 +18,12 @@ import {
 import { takePhoneSendSlot, canonicalPhoneKey } from "./trader-phone";
 
 // -----------------------------------------------------------------------------
-// Customer phone verification — SMS only.
+// Customer phone verification — Twilio Verify with RCS Upgrade + SMS fallback.
 //
 // Mirrors the trader onboarding flow (trader-phone.ts) with the same
 // guardrails (per-number hourly cap, per-account 60s cooldown, 10 min TTL,
 // 5 attempts) but operates on the users table and uses the CUSTOMER Twilio
-// Verify Service (SMS-only; see twilio-verify.ts — customers must never be
-// sent RCS). Phone is optional at registration; this flow is what unlocks
+// Verify Service. Phone is optional at registration; this flow is what unlocks
 // contacting traders (see customer-phone-gate.ts).
 // -----------------------------------------------------------------------------
 
@@ -119,7 +119,8 @@ router.post("/customer/phone/send-otp", authMiddleware, async (req, res) => {
       return;
     }
 
-    // Primary path: Twilio Verify (customer SMS-only service) sends the SMS
+    // Primary path: Twilio Verify sends the OTP; RCS Upgrade and SMS fallback
+    // are selected by Twilio after this channel=sms request.
     // and owns the code — no local hash (phoneOtpHash = null).
     if (isTwilioVerifyConfigured("customer")) {
       const e164 = toUkE164(phoneToUse);
@@ -135,8 +136,16 @@ router.post("/customer/phone/send-otp", authMiddleware, async (req, res) => {
           res.status(503).json({ error: "Could not send verification code. Please try again shortly." });
           return;
         }
+        observeVerificationAttempt(auth, user.id, started.verificationAttemptSid);
       } catch (err) {
-        req.log.error({ err, userId: user.id }, "Twilio Verify start threw (customer)");
+        const code =
+          typeof err === "object" && err !== null && "code" in err
+            ? String((err as { code?: unknown }).code)
+            : undefined;
+        req.log.error(
+          { userId: user.id, provider: "twilio_verify", code },
+          "Twilio Verify start threw (customer)",
+        );
         res.status(503).json({ error: "Could not send verification code. Please try again shortly." });
         return;
       }
@@ -153,11 +162,18 @@ router.post("/customer/phone/send-otp", authMiddleware, async (req, res) => {
         })
         .where(eq(usersTable.id, user.id));
 
-      req.log.info({ userId: user.id, channel: "sms" }, "Customer phone OTP dispatched via Twilio Verify");
-      logAudit({ userId: user.id, action: "PHONE_OTP_SENT", details: { phone: e164, channel: "sms" } });
+      req.log.info(
+        { userId: user.id, provider: "twilio_verify", outcome: "pending" },
+        "Customer phone OTP dispatched via Twilio Verify",
+      );
+      logAudit({
+        userId: user.id,
+        action: "PHONE_OTP_SENT",
+        details: { provider: "twilio_verify", outcome: "pending" },
+      });
 
       res.json({
-        message: "Verification code sent by SMS.",
+        message: "Verification code sent.",
         phoneMasked: maskPhone(e164),
         expiresInSeconds: Math.floor(OTP_TTL_MS / 1000),
         // Twilio owns the code — never surface it, even in dev.
@@ -205,14 +221,14 @@ router.post("/customer/phone/send-otp", authMiddleware, async (req, res) => {
       .where(eq(usersTable.id, user.id));
 
     req.log.info(
-      { userId: user.id, phone: phoneToUse, channel: delivery.channel, delivered: delivery.delivered },
+        { userId: user.id, channel: delivery.channel, delivered: delivery.delivered },
       "Customer phone OTP dispatched",
     );
 
     logAudit({
       userId: user.id,
       action: "PHONE_OTP_SENT",
-      details: { phone: phoneToUse, channel: delivery.channel },
+      details: { channel: delivery.channel },
     });
 
     res.json({
@@ -280,7 +296,14 @@ router.post("/customer/phone/verify", authMiddleware, async (req, res) => {
         const result = await checkPhoneVerification(e164, code, "customer");
         approved = result.approved;
       } catch (err) {
-        req.log.error({ err, userId: user.id }, "Twilio Verify check threw (customer)");
+        const code =
+          typeof err === "object" && err !== null && "code" in err
+            ? String((err as { code?: unknown }).code)
+            : undefined;
+        req.log.error(
+          { userId: user.id, provider: "twilio_verify", code },
+          "Twilio Verify check threw (customer)",
+        );
         res.status(503).json({ error: "Could not verify code. Please try again shortly." });
         return;
       }
@@ -330,3 +353,49 @@ router.post("/customer/phone/verify", authMiddleware, async (req, res) => {
 });
 
 export default router;
+
+function observeVerificationAttempt(
+  req: AuthenticatedRequest,
+  userId: number,
+  verificationAttemptSid?: string,
+): void {
+  if (!verificationAttemptSid) {
+    req.log.warn({ userId }, "Twilio Verify response did not include an attempt SID");
+    return;
+  }
+
+  const delaysMs = [2_000, 8_000, 30_000];
+  void (async () => {
+    for (const delayMs of delaysMs) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, delayMs);
+        timer.unref?.();
+      });
+      try {
+        const outcome = await fetchVerificationAttemptOutcome(verificationAttemptSid);
+        if (!outcome || outcome.channel === "unknown") continue;
+        req.log.info(
+          {
+            userId,
+            provider: "twilio_verify",
+            verificationAttemptSid,
+            channel: outcome.channel,
+            messageStatus: outcome.messageStatus,
+            conversionStatus: outcome.conversionStatus,
+          },
+          "Customer phone OTP delivery outcome",
+        );
+        return;
+      } catch (error) {
+        const code =
+          typeof error === "object" && error !== null && "code" in error
+            ? String((error as { code?: unknown }).code)
+            : undefined;
+        req.log.warn(
+          { userId, provider: "twilio_verify", verificationAttemptSid, code },
+          "Could not read Twilio Verify delivery outcome",
+        );
+      }
+    }
+  })();
+}

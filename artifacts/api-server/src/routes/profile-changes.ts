@@ -14,6 +14,7 @@ import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit } from "../lib/trader-status";
 import { deliverTraderPhoneOtp } from "../lib/otp-delivery";
 import {
+  fetchVerificationAttemptOutcome,
   isTwilioVerifyConfigured,
   startPhoneVerification,
   checkPhoneVerification,
@@ -254,21 +255,34 @@ router.post("/profile/phone-change/send-otp", authMiddleware, async (req, res) =
     const now = new Date();
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
-    if (isTwilioVerifyConfigured()) {
+    const verifyKind = user.role === "customer" ? "customer" : "trader";
+    if (isTwilioVerifyConfigured(verifyKind)) {
       const e164 = toUkE164(phoneRaw);
       if (!e164) {
         res.status(400).json({ error: "Please enter a valid UK mobile number (07… or +447…)." });
         return;
       }
       try {
-        const started = await startPhoneVerification(e164);
+        const started = await startPhoneVerification(e164, verifyKind);
         if (!started.ok) {
           req.log.error({ userId, status: started.status }, "Twilio Verify start not pending (phone change)");
           res.status(503).json({ error: "Could not send verification code. Please try again shortly." });
           return;
         }
+        observeVerificationAttempt(
+          req as AuthenticatedRequest,
+          userId,
+          started.verificationAttemptSid,
+        );
       } catch (err) {
-        req.log.error({ err, userId }, "Twilio Verify start threw (phone change)");
+        const code =
+          typeof err === "object" && err !== null && "code" in err
+            ? String((err as { code?: unknown }).code)
+            : undefined;
+        req.log.error(
+          { userId, provider: "twilio_verify", code },
+          "Twilio Verify start threw (phone change)",
+        );
         res.status(503).json({ error: "Could not send verification code. Please try again shortly." });
         return;
       }
@@ -298,9 +312,13 @@ router.post("/profile/phone-change/send-otp", authMiddleware, async (req, res) =
           },
         });
 
-      logAudit({ userId, action: "PHONE_OTP_SENT", details: { phone: e164, channel: "sms", purpose: "phone_change" } });
+      logAudit({
+        userId,
+        action: "PHONE_OTP_SENT",
+        details: { provider: "twilio_verify", outcome: "pending", purpose: "phone_change" },
+      });
       res.json({
-        message: "Verification code sent by SMS.",
+        message: "Verification code sent.",
         phoneMasked: maskPhone(e164),
         expiresInSeconds: Math.floor(OTP_TTL_MS / 1000),
         mockCode: undefined,
@@ -357,7 +375,11 @@ router.post("/profile/phone-change/send-otp", authMiddleware, async (req, res) =
         },
       });
 
-    logAudit({ userId, action: "PHONE_OTP_SENT", details: { phone: phoneToUse, channel: delivery.channel, purpose: "phone_change" } });
+    logAudit({
+      userId,
+      action: "PHONE_OTP_SENT",
+      details: { channel: delivery.channel, purpose: "phone_change" },
+    });
     res.json({
       message:
         delivery.channel === "email"
@@ -413,7 +435,8 @@ router.post("/profile/phone-change/verify", authMiddleware, async (req, res) => 
       return;
     }
 
-    const useTwilio = isTwilioVerifyConfigured() && !pending.otpHash;
+    const verifyKind = user.role === "customer" ? "customer" : "trader";
+    const useTwilio = isTwilioVerifyConfigured(verifyKind) && !pending.otpHash;
     let approved = false;
     if (useTwilio) {
       const e164 = toUkE164(pending.phone);
@@ -422,10 +445,17 @@ router.post("/profile/phone-change/verify", authMiddleware, async (req, res) => 
         return;
       }
       try {
-        const result = await checkPhoneVerification(e164, code);
+        const result = await checkPhoneVerification(e164, code, verifyKind);
         approved = result.approved;
       } catch (err) {
-        req.log.error({ err, userId }, "Twilio Verify check threw (phone change)");
+        const code =
+          typeof err === "object" && err !== null && "code" in err
+            ? String((err as { code?: unknown }).code)
+            : undefined;
+        req.log.error(
+          { userId, provider: "twilio_verify", code },
+          "Twilio Verify check threw (phone change)",
+        );
         res.status(503).json({ error: "Could not verify code. Please try again shortly." });
         return;
       }
@@ -600,3 +630,50 @@ router.put("/account/personal-details", authMiddleware, async (req, res) => {
 });
 
 export default router;
+
+function observeVerificationAttempt(
+  req: AuthenticatedRequest,
+  userId: number,
+  verificationAttemptSid: string | undefined,
+): void {
+  if (!verificationAttemptSid) {
+    req.log.warn({ userId, purpose: "phone_change" }, "Twilio Verify response did not include an attempt SID");
+    return;
+  }
+
+  const delaysMs = [2_000, 8_000, 30_000];
+  void (async () => {
+    for (const delayMs of delaysMs) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, delayMs);
+        timer.unref?.();
+      });
+      try {
+        const outcome = await fetchVerificationAttemptOutcome(verificationAttemptSid);
+        if (!outcome || outcome.channel === "unknown") continue;
+        req.log.info(
+          {
+            userId,
+            purpose: "phone_change",
+            provider: "twilio_verify",
+            verificationAttemptSid,
+            channel: outcome.channel,
+            messageStatus: outcome.messageStatus,
+            conversionStatus: outcome.conversionStatus,
+          },
+          "Phone change OTP delivery outcome",
+        );
+        return;
+      } catch (error) {
+        const code =
+          typeof error === "object" && error !== null && "code" in error
+            ? String((error as { code?: unknown }).code)
+            : undefined;
+        req.log.warn(
+          { userId, purpose: "phone_change", provider: "twilio_verify", verificationAttemptSid, code },
+          "Could not read Twilio Verify delivery outcome",
+        );
+      }
+    }
+  })();
+}

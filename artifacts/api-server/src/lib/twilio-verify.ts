@@ -16,11 +16,10 @@ import twilio from "twilio";
 // these must be real account credentials (a trial account is fine for testing;
 // SMS can only be sent to verified numbers on a trial).
 
-// Which Verify Service a flow belongs to. Pre-launch plan: traders use a
-// Verify Service that may enable RCS; customers use a *separate, SMS-only*
-// Verify Service. Until TWILIO_VERIFY_SERVICE_SID_CUSTOMER is set, the
-// customer flow falls back to the shared service — but always over the SMS
-// channel (RCS is never requested for customers).
+// Which Verify Service a flow belongs to. Both roles may use Verify RCS
+// Upgrade; a separate customer service can be supplied with
+// TWILIO_VERIFY_SERVICE_SID_CUSTOMER. Until that variable is set, the
+// customer flow falls back to the shared service.
 export type VerifyServiceKind = "trader" | "customer";
 
 function serviceSidFor(kind: VerifyServiceKind): string | undefined {
@@ -79,6 +78,7 @@ export function toUkE164(input: string): string | null {
 export interface StartVerificationResult {
   ok: boolean;
   status?: string;
+  verificationAttemptSid?: string;
 }
 
 export async function startPhoneVerification(
@@ -88,13 +88,69 @@ export async function startPhoneVerification(
   const client = getClient();
   if (!client) return { ok: false };
   const serviceSid = twilioCreds(kind).serviceSid as string;
-  // Channel is always "sms" here. If the trader service later enables RCS,
-  // that is a service-level Twilio setting — the customer service must stay
-  // SMS-only, which the split service SIDs above preserve.
+  // channel=sms is intentional: Verify RCS Upgrade may upgrade this delivery
+  // to RCS and automatically fall back to SMS when RCS is unavailable.
   const verification = await client.verify.v2
     .services(serviceSid)
     .verifications.create({ to: phoneE164, channel: "sms" });
-  return { ok: verification.status === "pending", status: verification.status };
+  const typedVerification = verification as {
+    status?: string;
+    sendCodeAttempts?: Array<{ attemptSid?: string }>;
+  };
+  const latestAttempt =
+    typedVerification.sendCodeAttempts?.[typedVerification.sendCodeAttempts.length - 1];
+  return {
+    ok: verification.status === "pending",
+    status: verification.status,
+    verificationAttemptSid: latestAttempt?.attemptSid,
+  };
+}
+
+export type VerificationDeliveryChannel = "RCS" | "SMS fallback" | "unknown";
+
+export interface VerificationAttemptOutcome {
+  channel: VerificationDeliveryChannel;
+  messageStatus?: string;
+  conversionStatus?: string;
+}
+
+/**
+ * Verify's RCS upgrade is represented by the RBM channel in the Attempts API.
+ * The create-verification response intentionally remains unchanged, so the
+ * final delivery channel is read from the attempt resource instead.
+ */
+export function normalizeVerificationDeliveryChannel(
+  channel: unknown,
+): VerificationDeliveryChannel {
+  const normalized = typeof channel === "string" ? channel.toLowerCase() : "";
+  if (normalized === "rbm" || normalized === "rcs") return "RCS";
+  if (normalized === "sms") return "SMS fallback";
+  return "unknown";
+}
+
+export async function fetchVerificationAttemptOutcome(
+  verificationAttemptSid: string,
+): Promise<VerificationAttemptOutcome | null> {
+  const client = getClient();
+  if (!client) return null;
+
+  const attempt = await client.verify.v2
+    .verificationAttempts(verificationAttemptSid)
+    .fetch();
+  const typedAttempt = attempt as {
+    channel?: unknown;
+    messageStatus?: unknown;
+    conversionStatus?: unknown;
+  };
+  return {
+    channel: normalizeVerificationDeliveryChannel(typedAttempt.channel),
+    ...(typeof typedAttempt.messageStatus === "string"
+      ? { messageStatus: typedAttempt.messageStatus }
+      : {}),
+    ...(typeof typedAttempt.conversionStatus === "string"
+      ? { conversionStatus: typedAttempt.conversionStatus }
+      : {}),
+  };
 }
 
 export interface CheckVerificationResult {

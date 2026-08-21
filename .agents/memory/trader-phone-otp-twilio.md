@@ -41,3 +41,13 @@ an SMS. Numbers are stored on the profile in E.164 once the Twilio path runs.
 **Secrets (backend only, never in mobile):** `TWILIO_ACCOUNT_SID`,
 `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID` — the last is a Verify **Service**
 SID (`VA…`), not the Account SID.
+
+**RCS Upgrade observability:** the Verify create response identifies the
+Verification resource with a `VE…` SID, while `send_code_attempts[].attempt_sid`
+is the `VL…` SID required by the Verification Attempts API. In Attempts API
+results, `channel=rbm` represents the RCS leg and `channel=sms` represents the
+SMS fallback leg. Never use the `VE…` SID to fetch an attempt.
+
+**Why:** Twilio exposes the verification and delivery-attempt resources
+separately, and the initial request remains `channel=sms` even when Verify
+upgrades it to RCS.
