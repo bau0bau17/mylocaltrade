@@ -28,26 +28,26 @@ export default function RefundScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>Store-Managed Subscriptions</Text>
+        <Text style={styles.heading}>App Store Subscriptions</Text>
         <Text style={styles.paragraph}>
-          Premium subscriptions are purchased through the app-store platform through which you subscribe. Apple App Store purchases are billed and managed by Apple; Google Play purchases, where offered, are billed and managed by Google. The relevant store manages billing, renewals, cancellations and refunds under its own policies and terms. MyLocalTrade manages access to Premium features once the store confirms your subscription.
+          Premium subscriptions are purchased through the Apple App Store. Apple takes your payment and manages your subscription, including billing, renewals, cancellations and refunds, in accordance with Apple's own policies and terms. MyLocalTrade manages access to Premium features once Apple confirms your subscription.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>Cancelling Your Subscription</Text>
         <Text style={styles.paragraph}>
-          You can cancel your subscription through the store platform where you purchased it. For Apple App Store purchases, use your App Store subscription settings; for Google Play purchases, use your Google Play subscriptions. Your Premium access continues until the end of the current billing period, and no further payments are taken after that. Your free Basic listing stays live.
+          You can cancel your subscription at any time in your App Store settings: open Settings, tap your name, then Subscriptions, and choose MyLocalTrade. Your Premium access continues until the end of the current billing period, and no further payments are taken after that. Your free Basic listing stays live.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>Refunds</Text>
         <Text style={styles.paragraph}>
-          Refund requests are made to and decided by the store platform that processed your purchase under that platform's own policies. For Apple App Store purchases, you can request a refund at reportaproblem.apple.com or through your App Store purchase history. For Google Play purchases, use Google Play's refund process.
+          Because your payment is taken by Apple, refunds for App Store purchases are requested from and decided by Apple under Apple's own policies. You can request a refund from Apple at reportaproblem.apple.com or through your App Store purchase history.
         </Text>
         <Text style={styles.paragraph}>
-          MyLocalTrade does not take store-subscription payments directly and cannot issue refunds for Apple App Store or Google Play purchases.
+          MyLocalTrade does not take subscription payments directly and cannot issue refunds for App Store purchases.
         </Text>
       </View>
 

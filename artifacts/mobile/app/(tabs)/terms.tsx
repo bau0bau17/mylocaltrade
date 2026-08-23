@@ -145,7 +145,7 @@ export default function TermsScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>10. Trader Subscriptions</Text>
         <Text style={styles.paragraph}>
-          Basic listings are free. Tradespeople may upgrade to Premium for additional features through the app-store platform through which the subscription was purchased. Apple App Store subscriptions are billed and managed by Apple; Google Play subscriptions, where offered, are billed and managed by Google. Subscriptions may renew automatically until cancelled through the relevant store settings, and access continues until the end of the current billing period. Prices and available billing periods are shown before purchase. Cancellations and refunds are handled under the relevant store's policies and are set out on our Subscription &amp; Billing page.
+          Basic listings are free. Tradespeople may upgrade to Premium for additional features, billed monthly or yearly through the Apple App Store and renewing automatically until cancelled. Subscriptions are billed and managed by Apple: you can cancel at any time in your App Store subscription settings, and access continues until the end of the current billing period. Prices are subject to change with 30 days' notice. Cancellations and refunds are set out on our Subscription &amp; Billing page.
         </Text>
         <Text style={styles.paragraph}>
           Where a Team plan is available in the relevant store offering, it is a single business subscription purchased by the business owner and may include a store-authorised number of employee seats; it is not billed per employee. If a Team subscription ends, lapses or changes to a plan with fewer seats, employee seats above the new allowance may be suspended rather than deleted. Suspended team members keep their login and can view their past enquiries, messages and bookings, but cannot act for the business until a seat becomes available again. A plan change does not delete team members or their history.
@@ -158,7 +158,7 @@ export default function TermsScreen() {
           Nothing in these Terms affects your statutory rights under the Consumer Rights Act 2015.
         </Text>
         <Text style={styles.paragraph}>
-          Premium subscriptions are billed, renewed, cancelled and refunded by the store platform through which they were purchased, in accordance with that platform's own policies. Details are set out on our Subscription &amp; Billing page.
+          Premium subscriptions are purchased through the Apple App Store and are billed, renewed, cancelled and refunded by Apple in accordance with Apple's own policies. Details are set out on our Subscription &amp; Billing page.
         </Text>
       </View>
 
