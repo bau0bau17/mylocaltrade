@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
+import { teamContextQueryKey } from '@/lib/team-billing-queries';
 
 export type TeamContext = {
   enabled: boolean;
@@ -45,7 +46,7 @@ export function useTeamContext() {
     // switch would briefly render owner surfaces while refetching). Each
     // user id gets its own cache entry, so a fresh identity starts at
     // "unknown" and fails closed.
-    queryKey: ['company', 'team-context', user?.id ?? null],
+    queryKey: teamContextQueryKey(user?.id),
     enabled: isAuthenticated && isTrader && !!token && user?.id != null,
     queryFn: async (): Promise<TeamContext> => {
       const res = await fetch(`${getApiUrl()}/api/company/team-context`, {
@@ -71,5 +72,12 @@ export function useTeamContext() {
   const roleUnknown =
     isAuthenticated && isTrader && !!token && query.data === undefined;
 
-  return { ...query, teamContext, isEmployee, isTeamOwner, roleUnknown };
+  return {
+    ...query,
+    teamContext,
+    userId: user?.id ?? null,
+    isEmployee,
+    isTeamOwner,
+    roleUnknown,
+  };
 }
