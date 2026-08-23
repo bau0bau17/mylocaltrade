@@ -1,0 +1,165 @@
+Pre-launch Universal Links and email deep-link readiness audit/fix.
+
+This is one of the final launch checks.
+
+Please keep this tightly scoped to existing MyLocalTrade Universal Links, email deep links and safe in-app routing.
+
+IMPORTANT:
+Do NOT push to GitHub when finished. I will use Replit Git Sync myself.
+
+Do not publish/deploy production and do not change DNS/provider configuration blindly.
+
+FIRST: AUDIT THE CURRENT IMPLEMENTATION
+
+Verify the current iOS Universal Links setup end to end:
+
+1. Expo/iOS associated domains configuration
+2. mylocaltrade.co.uk Associated Domains entitlement
+3. apple-app-site-association (AASA) file
+4. public hosting path for the AASA file
+5. supported URL paths
+6. app-side link parsing/routing
+7. authentication/session handling when opening a link
+8. fallback behaviour when the app is not installed
+9. email-generated links that are intended to open MyLocalTrade
+
+The project has previously implemented links such as “Open conversation” and other app-entry links. Please inspect the CURRENT implementation rather than assuming old routes still match.
+
+
+CHECK IMPORTANT LINK DESTINATIONS
+
+Audit all current email/public links that are intended to open app content, including where applicable:
+
+- conversation/message links
+- enquiry/lead links
+- job links
+- support/account links
+- verification-related links
+- notification-related URL routes if they share the same routing layer
+
+For conversation/job URLs:
+
+If the user is logged in and authorised:
+- open the correct existing screen/context.
+
+If the user is logged out:
+- preserve the intended destination safely through authentication if the existing architecture supports this.
+
+If the logged-in account does not have access:
+- do not expose protected content;
+- fall back safely to the appropriate Messages/Home/Account destination.
+
+If the URL is malformed or stale:
+- no crash;
+- safe fallback.
+
+
+AASA VALIDATION
+
+Inspect the current AASA content and confirm:
+
+- correct production bundle/application identifier
+- correct Apple Team ID/application identifier combination
+- required URL paths are covered
+- JSON structure is valid
+- no redirects are required for the AASA request
+- correct content type / public accessibility where this can be verified safely
+
+If live hosting cannot be verified from the codebase/environment, give me the exact URL and checks I should perform manually.
+
+Do not invent identifiers or replace values that are already correct.
+
+
+EMAIL DEEP LINKS
+
+Inspect current transactional email links.
+
+Confirm that links intended to open the app use the public MyLocalTrade domain and do not rely on:
+
+- Expo preview URLs
+- development URLs
+- Replit development domains
+- localhost
+- rewritten tracking URLs that would break Universal Links
+
+The communications audit already confirmed Brevo click tracking is intentionally disabled for transactional email.
+
+Preserve that behaviour.
+
+
+COLD / WARM APP STATES
+
+Verify routing behaviour for:
+
+1. app already open
+2. app in background
+3. cold start from Universal Link
+4. logged-out user
+5. user switches account before opening an old link
+
+Task #149 account isolation must remain respected.
+
+An old link must never expose another account’s protected conversation/job data.
+
+
+DO NOT CHANGE
+
+Do not change:
+
+- job/business logic
+- quote/hire/booking behaviour
+- authentication architecture unless a concrete routing defect requires a minimal fix
+- Twilio
+- Brevo
+- RevenueCat
+- subscription products
+- database schema
+- unrelated navigation
+- landing-page design
+
+
+TESTS
+
+Add/update focused tests only where useful for:
+
+- valid conversation Universal Link
+- cold-start routing
+- logged-out handling
+- malformed/stale link
+- unauthorised conversation
+- old Account A link opened while Account B is logged in
+- production-domain link parsing
+
+Run:
+
+- mobile TypeScript check
+- relevant mobile tests
+- focused final review of Universal Link/auth routing
+
+
+WHEN COMPLETE
+
+Do NOT push to GitHub.
+
+Report:
+
+1. Files changed
+2. Current associated-domain configuration
+3. AASA location and paths covered
+4. Links/routes audited
+5. Any incorrect development/preview URLs found
+6. Cold/background/foreground behaviour
+7. Authentication/account-switch safety
+8. Tests/typechecks and results
+9. Whether landing-page/web republish is required
+10. Whether backend republish is required
+11. Whether a new TestFlight build is required
+12. Exact real-device Universal Link tests I need to perform
+
+Explicitly confirm one of:
+
+A. “The current Universal Link implementation is launch-ready and protected links route safely to the authorised existing app screen.”
+
+OR
+
+B. “Universal Links are not launch-ready yet,” followed by the exact remaining blocker.
