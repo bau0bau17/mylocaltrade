@@ -1,0 +1,77 @@
+Amend Task #156 based on the corrected diagnosis.
+
+Do NOT include any work to add, restore, or modify TEAM_PRODUCT_SEAT_MAP.
+
+The production mapping is confirmed correct and inherited through envVars.shared:
+
+com.mylocaltrade.app.trader.team5.yearly -> 5
+com.mylocaltrade.app.trader.team10.yearly -> 10
+com.mylocaltrade.app.trader.team20.yearly -> 20
+
+The permanent fix should focus only on the verified lifecycle and reconciliation behavior.
+
+Required behavior:
+
+1. Preserve the existing security rule:
+   subscription reconciliation must still fail while a trader is not VERIFIED.
+
+2. When an admin re-approves a trader who already owns an active Apple/RevenueCat subscription:
+   - automatically reconcile the existing entitlement server-side;
+   - use the existing canonical RevenueCat identity;
+   - resolve the current product through the existing Team mapping;
+   - persist the current active subscription/seat state;
+   - clear any stale unconfirmed/pending reconciliation state.
+
+3. The user must NOT need to:
+   - repurchase;
+   - sign out/in;
+   - restart the app;
+   - repeatedly press Restore.
+
+4. Retry after reapproval must recover cleanly from an earlier 403.
+
+5. Restore Purchases after reapproval must also recover cleanly and be idempotent.
+
+6. If a successful 200 server reconciliation occurs after reapproval, Billing and Team UI must immediately clear:
+   “Plan update needs confirmation”
+   and display the server-authorized current plan/seats.
+
+7. Check whether the current warning can remain because of stale local/React Query confirmation state even after a successful 200 response.
+   If so, fix the actual state invalidation/update rather than simply hiding the warning.
+
+8. Do not weaken:
+   - product validation;
+   - entitlement ownership checks;
+   - account isolation;
+   - unknown-product fail-closed behavior.
+
+Regression test the exact lifecycle:
+
+VERIFIED + active Team 5
+→ Reset Verification
+→ sync correctly rejected while unverified
+→ verification completed
+→ admin reapproval
+→ existing entitlement automatically reconciled
+→ Team 5 / 5 employee seats restored
+→ no warning
+→ no repurchase required
+
+Also test:
+- manual Retry after reapproval;
+- Restore after reapproval;
+- repeated reconciliation is idempotent;
+- unknown Team product remains fail-closed;
+- cross-account RevenueCat entitlement cannot be claimed.
+
+Do not push to GitHub.
+I will use Replit Git Sync myself.
+
+When complete report:
+- exact root cause;
+- exact server-side fix;
+- exact mobile-state fix, if required;
+- whether the currently affected account self-heals automatically after deployment;
+- backend republish required yes/no;
+- TestFlight build required yes/no;
+- all relevant tests and typechecks.
