@@ -1,0 +1,84 @@
+Do not complete Task #150 yet.
+
+The test-isolation issue is now resolved and confirmed unrelated:
+- both previously failing files pass independently and serially
+- the full API suite passes: 43 files / 666 tests
+
+However, before Task #150 can be completed, I need one final verification of the ACTUAL CURRENT PUBLISHED LEGAL COPY.
+
+Important: you stated that you discarded the uncommitted post-validation legal-copy changes.
+
+The latest launch constraint established during validation was:
+
+MyLocalTrade is launching on iOS through the Apple App Store only.
+
+For this launch, customer-facing subscription, cancellation and refund disclosures must therefore be Apple/App Store-specific.
+
+Dormant/future Android or Google Play infrastructure must NOT be described as a currently available billing platform.
+
+Please inspect the CURRENT GitHub main content and confirm the exact final state.
+
+CHECK ALL OF THESE CURRENT PUBLISHED SURFACES:
+
+- in-app Privacy Policy
+- in-app Terms / Terms of Service
+- Billing & Plan explanatory copy
+- refund/subscription wording
+- public Privacy Policy
+- public Terms
+- public subscription/billing wording
+- verification page
+- RCS opt-in page
+- canonical/editable landing-page legal source
+- generated/rendered public legal assets where applicable
+
+REQUIRED LAUNCH STATE
+
+Subscription/billing:
+- Apple/App Store-specific for the current launch
+- subscriptions are purchased and billed through Apple
+- cancellation/management occurs through Apple/App Store
+- refund requests follow Apple/App Store processes
+- MyLocalTrade does not directly process App Store subscription payments/refunds
+- no customer-facing statement that Google Play billing is currently available
+
+Verification:
+- do not state RCS is trader-only
+- do not state customer verification is always SMS-only
+- Twilio Verify must be described as conditional on configuration
+- accurate email fallback wording must remain
+- do not promise RCS availability
+
+Also preserve:
+- conditional Team-plan wording
+- removal of the outdated ICO validity date
+
+CRITICAL
+
+Do not rely on what was previously intended or reviewed.
+
+Read the CURRENT files on GitHub main and report the actual wording/state.
+
+If Google Play / Android billing is still presented as currently available in launch-facing legal copy, correct it now across both the app and canonical/public landing-page legal sources.
+
+If the current files are already Apple-specific, make no unnecessary edits.
+
+Then run the relevant contradiction scan/typechecks and push any required correction to origin/main.
+
+Only after this exact verification should Task #150 be marked complete.
+
+Report:
+
+1. Current final GitHub main SHA
+2. Whether any Google Play/Android launch billing wording was found
+3. Whether edits were required
+4. Exact legal/public surfaces checked
+5. Confirmation canonical landing-page source is updated
+6. Confirmation verification/RCS/email-fallback wording remains correct
+7. Typecheck/test results
+8. Whether landing-page republish is required
+9. Whether a new TestFlight build is required
+
+Explicitly confirm:
+
+“For the current iOS launch, all customer-facing subscription, cancellation and refund disclosures are Apple/App Store-specific, and no launch-facing legal page presents Google Play billing as currently available.”
