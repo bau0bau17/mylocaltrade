@@ -1,0 +1,154 @@
+Pre-launch P0 audit/fix: verify Team subscription products, RevenueCat mapping and employee-seat entitlement end to end.
+
+This comes directly from the latest release audit.
+
+Please keep this tightly scoped to Team subscription/product-seat correctness before launch.
+
+DO NOT change pricing, create new products, or modify external provider configuration blindly.
+
+First inspect the current code, environment/configuration references and existing Team billing logic, then determine exactly what is already correct and what still needs confirmation or correction.
+
+CURRENT RISK
+
+The release audit found that the API only grants Team employee seats when a purchased Team product is recognised by the configured product-to-seat mapping.
+
+If a Team subscription is active in RevenueCat but the product ID is absent or mismatched in the deployed Team seat map, the account can become Premium-active while receiving zero employee seats.
+
+That must not be possible for a paid Team customer.
+
+TEAM PRODUCTS TO VERIFY
+
+Inspect all currently implemented Team products/packages and determine the exact intended seat count for each.
+
+The app currently has Team tiers corresponding to:
+
+- Team 5
+- Team 10
+- Team 20
+
+Verify the exact product IDs/package IDs already used by the current app. Do not invent or rename IDs.
+
+CHECK END TO END
+
+Please verify the mapping between:
+
+1. Mobile subscription products/packages
+2. RevenueCat package/product identifiers referenced by the app
+3. RevenueCat entitlement used for Premium/Team access
+4. API/server Team product recognition
+5. TEAM_PRODUCT_SEAT_MAP or equivalent deployed configuration
+6. Employee seat count granted for each Team tier
+7. Solo Premium versus Team Premium behaviour
+8. Subscription restore
+9. Upgrade/downgrade between Team tiers
+10. Team subscription cancellation while entitlement remains active until expiry
+11. Expiry/downgrade back to the correct non-Team state
+
+EXPECTED RESULT
+
+A paid recognised Team subscription must deterministically grant the correct number of employee seats.
+
+For example, conceptually:
+
+Team 5 → 5 employee seats
+Team 10 → 10 employee seats
+Team 20 → 20 employee seats
+
+Use the actual existing business definition in the repository if those counts differ.
+
+There must be no valid paid Team state where:
+- Premium is active
+- Team plan is recognised
+- employee seat allowance is zero because of a product-ID/config mismatch
+
+FAIL-CLOSED BEHAVIOUR
+
+Preserve safe/fail-closed behaviour for unknown or invalid product IDs.
+
+Do NOT grant Team seats to an unknown product.
+
+But make sure all legitimate launch products are recognised correctly.
+
+
+PRODUCTION CONFIGURATION
+
+Inspect what can be safely verified from the project/environment without changing production.
+
+Report the exact required production environment mapping and whether it is currently present.
+
+If RevenueCat/App Store Connect state cannot be verified from the repository/environment, do NOT guess.
+
+Instead report the exact values I need to manually verify in:
+
+- App Store Connect
+- RevenueCat
+
+Include the expected product IDs, package IDs, entitlement and seat counts so I can compare them directly.
+
+
+TEST COVERAGE
+
+Add or verify automated tests for at least:
+
+1. recognised Team 5 product → correct seat allowance
+2. recognised Team 10 product → correct seat allowance
+3. recognised Team 20 product → correct seat allowance
+4. unknown Team product → zero Team seats / safe failure
+5. Solo Premium product → no Team employee seats
+6. Team subscription restore/reconciliation
+7. Team tier change if the current architecture supports it
+8. cancelled-but-active Team subscription retains seats until entitlement expiry
+9. expired Team subscription removes Team allowance according to current business rules
+
+Do not call real App Store purchases or mutate live RevenueCat/App Store configuration in this task.
+
+
+IMPORTANT
+
+Do not change:
+- product pricing
+- product IDs unless a proven code typo exists
+- App Store Connect configuration
+- RevenueCat project configuration
+- subscription group structure
+- unrelated Premium features
+- database schema unless genuinely required and clearly justified
+
+If the correct fix is production environment/configuration rather than code, do not introduce unnecessary code changes.
+
+
+VALIDATION
+
+Run:
+- mobile TypeScript check if mobile files are touched
+- API TypeScript/tests
+- Team billing tests with Team billing flags enabled
+- relevant subscription/reconciliation tests
+- focused final review for paid-Team-with-zero-seats risk
+
+WHEN COMPLETE
+
+Commit and push any required code changes to origin/main.
+
+Report:
+
+1. Final GitHub main SHA
+2. Exact launch Team product IDs
+3. Exact RevenueCat package IDs referenced by the app
+4. Exact entitlement used
+5. Expected seat count for each Team product
+6. Current server product-to-seat mapping
+7. Whether production TEAM_PRODUCT_SEAT_MAP is present/correct
+8. Any App Store Connect values I must manually verify
+9. Any RevenueCat values I must manually verify
+10. Tests/checks run and results
+11. Whether backend republish is required
+12. Whether a new TestFlight build is required
+
+Explicitly confirm one of these:
+
+A. “All launch Team products are correctly mapped end to end and no recognised paid Team subscription can receive zero employee seats.”
+
+OR
+
+B. “Team plans are not safe to enable for launch yet,” followed by the exact missing configuration and safest launch action.
