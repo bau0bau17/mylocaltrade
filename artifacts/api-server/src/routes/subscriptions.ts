@@ -16,7 +16,7 @@ import {
 import { eq, and, inArray } from "drizzle-orm";
 import { authMiddleware, traderOnly } from "../lib/auth";
 import { companyOwnerGate } from "../lib/company-membership";
-import { reconcileCompanySeats } from "../lib/team-billing";
+import { reconcileCompanySeats, resolveProductTier } from "../lib/team-billing";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit, TRADER_STATUS } from "../lib/trader-status";
 import { getCoolingOffState } from "../lib/cooling-off";
@@ -268,6 +268,62 @@ const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
 // priority search — actually apply to native subscribers.
 const RC_PLAN_ID = "premium";
 
+async function logRevenueCatSyncDiagnostic(
+  userId: number,
+  outcome: Awaited<ReturnType<typeof reconcileRevenueCatEntitlement>>,
+  log: { info: (bindings: Record<string, unknown>, message: string) => void },
+): Promise<void> {
+  try {
+    const [profile] = await db
+      .select({ verificationStatus: traderProfilesTable.verificationStatus })
+      .from(traderProfilesTable)
+      .where(eq(traderProfilesTable.userId, userId))
+      .limit(1);
+    const [subscription] = await db
+      .select({
+        status: subscriptionsTable.status,
+        productId: subscriptionsTable.productIdentifier,
+      })
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, userId))
+      .limit(1);
+    const providerProductId = outcome.status === "synced" ? outcome.productId : null;
+    const resolvedTier = resolveProductTier(providerProductId);
+
+    // Deliberately omit user ID, email, canonical RevenueCat ID, tokens,
+    // receipts, and transaction data. Product IDs and derived booleans are
+    // sufficient to trace the strict mobile confirmation comparison.
+    log.info(
+      {
+        event: "revenuecat_sync_diagnostic",
+        httpResult:
+          outcome.status === "synced"
+            ? 200
+            : outcome.status === "not_verified"
+              ? 403
+              : outcome.status === "not_configured"
+                ? 503
+                : outcome.status === "user_not_found"
+                  ? 404
+                  : 502,
+        traderVerified: profile?.verificationStatus === TRADER_STATUS.VERIFIED,
+        entitlementActive: outcome.status === "synced" ? outcome.active : null,
+        providerProductId,
+        returnedProductId: providerProductId,
+        resolvedTeamSeats: resolvedTier.seats,
+        persistedSubscriptionActive: subscription?.status === "active",
+        persistedProductMatchesProvider:
+          providerProductId !== null && subscription?.productId === providerProductId,
+      },
+      "RevenueCat sync diagnostic",
+    );
+  } catch (error) {
+    // Diagnostic queries must never change the sync response or its
+    // authorization behavior.
+    log.info({ event: "revenuecat_sync_diagnostic_failed" }, "RevenueCat sync diagnostic unavailable");
+  }
+}
+
 // Entitlement lookup keys differ between display names ("Trader Subscription")
 // and identifiers ("trader_subscription"). Normalise both sides before
 // comparing so either form resolves to the same entitlement.
@@ -287,6 +343,7 @@ router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, subscr
     const rawWillRenew = (req.body as { willRenew?: unknown } | undefined)?.willRenew;
     const willRenew = typeof rawWillRenew === "boolean" ? rawWillRenew : undefined;
     const outcome = await reconcileRevenueCatEntitlement(userId, req.log, willRenew);
+    await logRevenueCatSyncDiagnostic(userId, outcome, req.log);
 
     if (outcome.status === "not_configured") {
       res.status(503).json({ error: "In-app purchases are not configured yet." });

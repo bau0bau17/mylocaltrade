@@ -76,6 +76,7 @@
 - [Brand asset provenance](brand-provenance.md) — logo provenance record lives in docs/brand-provenance.md; no creation prompt survives, never overclaim ownership; RCS banner NOT in repo = unverified.
 - [Account deletion storage cleanup](account-deletion-storage-gap.md) — gap FIXED: durable account_cleanup_jobs outbox + hourly sweep w/ orphan backfill; namespace-contained deletes; no false DONE on listing failure.
 - [RevenueCat canonical identity](revenuecat-canonical-identity.md) — rc_<32hex> server ids, lazy backfill IS the migration; numeric alias gated on existing subscription row; webhook fail-closed 2xx acks; prod schema push BEFORE build.
+- [RevenueCat product lookup](revenuecat-product-lookup.md) — active-entitlement v2 responses name only an entitlement; resolve the access-granting subscription’s product resource before comparing Store product IDs.
 - [Pending-deletion auth contract](account-deletion-pending-403.md) — cancellable deletion = 403 ACCOUNT_DELETION_PENDING (not 401/forceLogout); status/cancel routes stay reachable; cancel is winner-only CAS (never resurrect terminal).
 - [Campaign retention lifecycle](campaign-retention-lifecycle.md) — delete = never-queued drafts only (TEST_SENT blocks it); terminal → archive; anonymise keeps status/sentAt for quota; schedule in docs/data-retention.md.
 - [No test files under Expo app/](expo-route-tree-test-files.md) — Metro bundles app/**/*.test.* as routes → device crash; jest+typecheck stay green; guard test + clean-cache bundle are the tripwires.
