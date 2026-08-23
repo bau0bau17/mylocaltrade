@@ -1,0 +1,56 @@
+Before starting Task #156, reconcile one important contradiction.
+
+Do NOT change code or environment variables yet.
+Do NOT deploy.
+Do NOT push to GitHub.
+
+A previous production-readiness audit (Task #152) explicitly confirmed that the effective production TEAM_PRODUCT_SEAT_MAP was present and resolved exactly:
+
+com.mylocaltrade.app.trader.team5.yearly -> 5
+com.mylocaltrade.app.trader.team10.yearly -> 10
+com.mylocaltrade.app.trader.team20.yearly -> 20
+
+Your current investigation now says TEAM_PRODUCT_SEAT_MAP is absent from production.
+
+Please determine why these two findings differ.
+
+Verify READ-ONLY:
+
+1. Which exact environment/scope are you currently checking?
+   - workspace/dev environment
+   - production deployment environment
+   - shared secrets
+   - deployment-specific secrets
+
+2. Is TEAM_PRODUCT_SEAT_MAP:
+   - completely absent,
+   - present but unavailable to the production deployment,
+   - present under a different scope,
+   - malformed,
+   - or being read incorrectly by the server?
+
+3. Confirm whether the currently LIVE production backend process can actually resolve these three product IDs to 5 / 10 / 20 seats.
+
+4. Do not print secret values beyond the already-approved product-to-seat mapping.
+
+5. Check whether any deployment/reconfiguration since Task #152 could have caused the mapping to disappear or become inaccessible.
+
+6. Separate the two issues clearly:
+
+A. Missing/inaccessible production TEAM_PRODUCT_SEAT_MAP
+B. No automatic subscription reconciliation after verification re-approval
+
+Tell me which one is the immediate cause of the affected account still failing Retry now that the account is VERIFIED again.
+
+Important:
+If the account is VERIFIED now and Retry still fails, explain whether the missing mapping alone is sufficient to explain the current failure.
+
+Do not change anything yet.
+
+Return:
+- exact environment checked
+- whether the LIVE backend sees the mapping
+- why Task #152 previously found it present
+- immediate root cause
+- whether automatic reapproval reconciliation is required for correctness or is an additional resilience improvement
+- whether Task #156 plan needs to be amended before implementation
