@@ -1,0 +1,188 @@
+Continue Task #156. The issue is NOT resolved yet.
+
+Do not mark Task #156 complete.
+Do not create another speculative fix.
+Do not create another TestFlight build yet.
+Do not change verification state, TEAM_PRODUCT_SEAT_MAP, Apple products, RevenueCat products, credentials, or subscription ownership.
+Do not push to GitHub. I will use Replit Git Sync myself.
+
+We have now narrowed the failure to the strict Retry confirmation comparison.
+
+CURRENT PRODUCTION FACTS
+
+The affected account is:
+
+- VERIFIED
+- active
+- stored product:
+  com.mylocaltrade.app.trader.team5.yearly
+- Team mapping resolves to 5 seats
+- 0 employee seats used
+- Retry reaches POST /api/subscriptions/revenuecat-sync
+- live request returns HTTP 200
+- Billing and Team refresh requests follow
+
+Yet build 38 still shows:
+
+“Apple found your subscription, but we could not yet confirm the server-authorized Team seats.”
+
+The mobile confirmation requires:
+
+backend active === true
+AND
+backend productId === native RevenueCat productIdentifier
+
+We now need the EXACT values.
+
+
+STEP 1 — ENSURE #156 BACKEND IS LIVE
+
+If the current production deployment cannot be proven to contain Task #156, explicitly report that first.
+
+After the current #156 backend is republished, reproduce Retry once before changing code.
+
+If that resolves the issue, stop and report that the previous backend deployment was stale.
+
+
+STEP 2 — SAFE LIVE TELEMETRY
+
+If the failure remains, add the minimum temporary/safe server-side diagnostic logging necessary for POST /api/subscriptions/revenuecat-sync.
+
+Do NOT log:
+
+- email
+- name
+- RevenueCat API key
+- auth token
+- receipt
+- Apple transaction data
+- canonical RevenueCat identifier
+- other personal data
+
+For a Retry request, log only safe reconciliation output such as:
+
+- HTTP result
+- traderVerified: true/false
+- entitlementActive: true/false
+- providerProductId
+- returnedProductId
+- resolvedTeamSeats
+- persistedSubscriptionActive
+- persistedProductMatchesProvider: true/false
+
+Product IDs are acceptable to log.
+
+Then I will press Retry once on build 38.
+
+
+STEP 3 — QUERY REVENUECAT PROVIDER STATE READ-ONLY
+
+Using the existing server-authorized canonical RevenueCat identity, inspect the current RevenueCat customer/entitlement read-only.
+
+Report without exposing the identity itself:
+
+- active entitlement exists: yes/no
+- active entitlement productIdentifier
+- entitlement expiration/current period status
+- whether RevenueCat considers the entitlement active
+- whether the provider productIdentifier exactly equals:
+  com.mylocaltrade.app.trader.team5.yearly
+
+Do not change or transfer RevenueCat ownership.
+
+
+STEP 4 — COMPARE ALL THREE PRODUCT IDENTITIES
+
+We need to determine whether these are identical:
+
+A. RevenueCat provider productIdentifier
+B. backend returned productId
+C. native mobile RevenueCat productIdentifier used by build 38
+
+Expected value:
+
+com.mylocaltrade.app.trader.team5.yearly
+
+Do not assume they match.
+
+If A and B match but build 38 still rejects confirmation, inspect the mobile RevenueCat CustomerInfo path and determine exactly what C is.
+
+Pay special attention to:
+
+- stale CustomerInfo cache
+- package identifier vs product identifier confusion
+- previous plan product remaining in native state
+- entitlement selection when multiple historical products exist
+- restore/customer-info timing
+- RevenueCat aliases / account switch state
+
+
+STEP 5 — TRACE THE BOOLEAN
+
+Produce the exact real Retry result:
+
+nativeProductId = ?
+backendActive = ?
+backendProductId = ?
+exactMatch = true/false
+
+That is the key diagnostic result.
+
+
+ONLY AFTER ROOT CAUSE IS PROVEN
+
+Implement the smallest permanent fix.
+
+If the native CustomerInfo is stale, force a fresh authoritative RevenueCat customer-info refresh before comparing.
+
+If the wrong RevenueCat property is being compared (for example package ID vs Store product ID), compare the correct Store product identifier.
+
+If backend productId is wrong, correct the backend derivation.
+
+Do NOT weaken the confirmation requirement.
+
+We still require:
+
+- active entitlement
+- authenticated/canonical account ownership
+- recognised server-authorized product
+- correct server-authorized Team seats
+
+Do not simply accept “Team 5 Active” from local UI state.
+
+
+FINAL REGRESSION
+
+For the affected lifecycle:
+
+active Team 5
+→ verification reset
+→ temporary unverified 403
+→ reapproval
+→ Retry
+→ fresh RevenueCat entitlement
+→ backend active true
+→ exact product match
+→ 5 server-authorized seats
+→ Billing warning clears
+→ Team warning clears
+
+No repurchase.
+No logout/login.
+No reinstall.
+No manual subscription modification.
+
+
+WHEN DONE REPORT
+
+1. Was the #156 backend definitely live?
+2. RevenueCat provider productIdentifier
+3. backend active value
+4. backend returned productId
+5. native mobile productIdentifier
+6. which exact comparison failed
+7. exact root cause
+8. exact permanent fix
+9. tests/results
+10. backend republish required yes/no
+11. new TestFlight build required yes/no
