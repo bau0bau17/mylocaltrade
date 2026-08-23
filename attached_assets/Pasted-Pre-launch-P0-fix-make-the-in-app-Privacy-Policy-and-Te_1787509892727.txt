@@ -1,0 +1,167 @@
+Pre-launch P0 fix: make the in-app Privacy Policy and Terms accurately match the current production behaviour.
+
+This task comes directly from the latest read-only release audit.
+
+Please keep this tightly scoped to legal/disclosure accuracy. Inspect the actual current implementation first, then update only the relevant Privacy Policy / Terms copy and any directly related legal-display logic.
+
+Do not change product behaviour just to match old legal text. The legal text must be corrected to describe what the app actually does.
+
+
+ISSUE 1 — PHONE VERIFICATION / RCS / SMS COPY IS INACCURATE
+
+The current Privacy Policy / Terms describe RCS as trader-only and customer verification as SMS-only.
+
+The current implementation uses Twilio Verify and can use Twilio Verify RCS Upgrade with SMS fallback.
+
+Customer phone verification also uses the Twilio Verify path.
+
+Therefore the legal wording must not make a false statement that:
+
+- RCS is exclusively trader-only
+or
+- customer verification is always SMS-only
+
+Please inspect the actual current verification flows and write platform/provider-neutral, accurate wording.
+
+Preferred approach:
+
+Explain that MyLocalTrade may send one-time verification/security codes using supported messaging channels such as SMS or RCS where available, with fallback depending on device, network and provider support.
+
+Make it clear that:
+- these messages are for account access, verification, security and trust purposes
+- they are not marketing/promotional messages
+- delivery channel may vary
+- Twilio or another authorised communications provider may process the delivery
+
+Do not promise that RCS is available when provider-side activation is not yet confirmed.
+
+
+ISSUE 2 — SUBSCRIPTION / BILLING COPY IS TOO APPLE-ONLY
+
+The current app supports RevenueCat subscription infrastructure and has configuration for iOS and Android.
+
+Privacy / Terms currently describe subscription billing, cancellation and refunds in Apple/iOS-only terms.
+
+Please correct this so the legal copy remains accurate across supported app-store platforms.
+
+Use wording such as:
+
+- subscriptions are purchased and managed through the app store/platform through which the subscription was purchased
+- Apple App Store subscriptions are billed and managed by Apple
+- Google Play subscriptions, when offered, are billed and managed by Google
+- cancellation, billing changes and refund requests are handled through the relevant store/platform policies
+
+Do NOT create a custom MyLocalTrade refund policy for store subscriptions.
+
+Do NOT imply MyLocalTrade directly processes App Store/Google Play subscription payments.
+
+
+ISSUE 3 — TEAM / COMPANY PLAN WORDING
+
+Inspect the current Terms and Privacy wording for Team / Company subscription features.
+
+Make sure the legal text does not promise Team seats, employee access, or plan availability beyond what the app/store configuration currently supports.
+
+The wording should describe Team functionality conditionally where appropriate, for example:
+
+“Where a Team plan is available…”
+
+Do not change Team billing/business logic in this task.
+
+
+ISSUE 4 — ICO / PRIVACY REGISTRATION DATE
+
+The audit found a statement using an ICO validity date of 21 July 2026, which is now outdated.
+
+Please inspect the current Privacy Policy wording.
+
+Do not invent or guess a new ICO expiry/validity date.
+
+If the current valid date cannot be verified from the existing trusted project information:
+- remove the time-sensitive expiry/validity date
+- keep only accurate non-expiring wording such as the company being registered with the ICO, if that fact is already established in the project
+
+Do not fabricate registration numbers, dates or legal status.
+
+
+ISSUE 5 — CONSISTENCY ACROSS ALL LEGAL SURFACES
+
+Please inspect all current MyLocalTrade legal surfaces, not just one screen:
+
+- in-app Privacy Policy
+- in-app Terms / Terms of Service
+- registration/onboarding legal acceptance text
+- subscription/billing legal notes
+- phone verification consent/help text
+- any web legal pages in this repository that are intended to represent the same policy
+
+The same core facts should not contradict each other.
+
+Do not rewrite unrelated sections unnecessarily.
+
+
+IMPORTANT LEGAL/PRODUCT FACTS TO PRESERVE
+
+MyLocalTrade:
+- is a marketplace connecting customers and independent traders
+- does not itself perform the trade work
+- does not process payment for the actual customer/trader job
+- may use third-party service providers for communications, authentication, hosting and subscription infrastructure
+- uses store-managed digital subscriptions where applicable
+- uses verification/security messaging and not promotional OTP messaging
+- should not promise a communications channel such as RCS until that channel is actually available
+
+
+DO NOT CHANGE
+
+Do not change:
+- Twilio implementation
+- RevenueCat implementation
+- subscription products or pricing
+- job payment behaviour
+- Team billing logic
+- database schema
+- authentication/business logic
+- provider configuration
+
+This task is legal/disclosure accuracy only.
+
+
+VALIDATION
+
+After edits:
+
+1. Search the repository for outdated/contradictory references to:
+   - trader-only RCS
+   - customer SMS-only
+   - Apple-only subscription wording
+   - outdated ICO validity dates
+   - custom refund wording
+
+2. Run relevant mobile/web TypeScript checks and tests.
+
+3. Perform a focused final review comparing the legal copy against the current code behaviour.
+
+
+WHEN COMPLETE
+
+Commit and push to origin/main.
+
+Report:
+
+1. Commit hash
+2. Files changed
+3. Exact inaccurate statements corrected
+4. Which legal surfaces were reviewed
+5. Whether any potentially outdated statement remains
+6. Tests/typechecks run
+7. Whether backend republish is required
+8. Whether a new TestFlight build is required
+
+Explicitly confirm:
+
+“The Privacy Policy and Terms no longer state that RCS is trader-only or that customer verification is always SMS-only.”
+
+and
+
+“The subscription wording no longer assumes Apple is the only supported billing platform.”
