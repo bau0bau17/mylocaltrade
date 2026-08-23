@@ -49,7 +49,7 @@ describe("outreach legal copy consistency", () => {
     expect(html).toContain(SECTION_TITLE);
     expect(html).toContain(SHARED_SENTENCE);
     // The page's stated update date must not have regressed.
-    expect(html).toContain("Last updated: 12 August 2026");
+    expect(html).toContain("Last updated: 23 August 2026");
   });
 
   it("landing privacy JS chunk stays in lockstep with the HTML", () => {

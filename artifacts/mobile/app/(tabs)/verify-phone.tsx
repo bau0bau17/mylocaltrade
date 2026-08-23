@@ -120,7 +120,7 @@ export default function CustomerVerifyPhoneScreen() {
       setMockCode(json.mockCode ?? null);
       setOtpSent(true);
       setResendIn(60);
-      setInfo(`We sent a 6-digit code to ${json.phoneMasked ?? 'your phone'}.`);
+      setInfo(json.message || 'Your verification code has been sent.');
       setTimeout(() => codeRef.current?.focus(), 200);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send code');
@@ -274,7 +274,7 @@ export default function CustomerVerifyPhoneScreen() {
           </View>
         ) : (
           <View style={styles.card}>
-            <Text style={styles.sentTo}>Code sent to {maskedPhone ?? 'your phone'}</Text>
+            <Text style={styles.sentTo}>Enter the 6-digit code you received.</Text>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>6-digit code</Text>
