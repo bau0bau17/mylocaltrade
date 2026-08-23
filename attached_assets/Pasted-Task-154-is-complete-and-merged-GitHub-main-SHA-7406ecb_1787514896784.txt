@@ -1,0 +1,38 @@
+Task #154 is complete and merged.
+
+GitHub main SHA: 7406ecb0ea22f46d61405e6251be4a439b9d1377
+
+Implementation commit: cf641780bd7bd6104286c7e94c890954d64a343c
+Followed by a documentation-only safety note commit.
+What changed
+Notification taps now route these conversation-scoped events to the existing /messages/:id screen:
+new messages
+quotes received, revised, withdrawn, accepted, declined
+bookings proposed, confirmed, cancelled, reminded
+job reassignment
+job completion / work marked complete / review invite
+Prior gaps: quote, booking, reassignment, and several completion/review notifications carried a conversationId but did not use it on tap.
+Invalid or missing conversation IDs safely open Messages instead of an invalid route.
+Existing destinations remain unchanged:
+enquiries / lead reminders → Leads
+verification updates → Trader dashboard
+subscription updates → Billing
+unknown/report notifications → app root, with no speculative navigation.
+Account and lifecycle safety
+The mobile listener waits for a signed-in, non-admin user.
+Every push now includes a server-authoritative recipient user ID.
+The app only routes when that ID matches the currently authenticated account—old/shared-device notifications are consumed without navigating.
+Expo request IDs suppress duplicate handling across cold-start and response-listener callbacks.
+Cold-start responses are cleared only after handling; foreground and background taps use the same routing logic.
+Conversation access remains enforced by the existing authenticated API checks.
+Validation
+Mobile routing tests: 22 passed
+Mobile TypeScript check: passed
+API TypeScript check: passed
+Direct full API test suite: 43 files / 666 tests passed
+The older api-test workflow shows a known shared-database fixture collision, not a regression from this change.
+API workflow restarted cleanly and is listening on port 8080.
+Release impact
+Backend republish required: Yes. The server must be deployed so outgoing pushes include recipientUserId; otherwise updated mobile clients safely ignore legacy unbound tap payloads.
+New TestFlight build required: Yes, for the mobile routing bundle to reach TestFlight users. No new notification permission or native integration change was introduced.
+“Actionable quote, booking and reassignment notifications with valid job/conversation context now open the correct existing conversation/job screen while respecting the current authenticated account.”
