@@ -61,6 +61,7 @@ import {
   sendTraderSuspendedEmail,
   sendAccountDeletionCompletedEmail,
 } from "../lib/email";
+import { reconcileApprovedTraderSubscription } from "../lib/revenuecat-reconciliation";
 import { reconcileDocumentsState } from "./trader-documents";
 
 const router: IRouter = Router();
@@ -1094,13 +1095,19 @@ router.post("/admin/traders/:userId/approve", authMiddleware, adminOnly, async (
       }
     })();
 
-    // Best-effort push so the trader is alerted even if they're not on the
-    // dashboard. Deep-links to the dashboard where the live status is shown.
-    void sendPushToUser(userId, {
-      title: "You're verified",
-      body: "Your details have been verified. Your trader profile is now live in search.",
-      data: { type: "verification_update", status: "VERIFIED" },
-    }).catch((err) => req.log.warn({ err }, "Failed to send trader-approved push"));
+    // Verification reset intentionally preserves billing ownership. Once the
+    // trader is verified again, reconcile the existing server-owned RevenueCat
+    // entitlement without waiting for a device-timed Retry or Restore. This is
+    // best effort: a provider outage must never undo a valid admin approval.
+    // The mounted app receives the sync marker ONLY after reconciliation
+    // succeeds, preventing an early push from re-running the old failed state.
+    void reconcileApprovedTraderSubscription(userId, req.log)
+      .catch((err) =>
+        req.log.warn(
+          { err, traderUserId: userId },
+          "Post-approval trader notification failed",
+        ),
+      );
 
     res.json({ profile: updated });
   } catch (error) {

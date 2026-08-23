@@ -33,6 +33,10 @@ import {
   isAnonymousRevenueCatId,
   resolveRevenueCatAppUserId,
 } from "../lib/revenuecat-identity";
+import {
+  downgradeExpiredSubscription,
+  reconcileRevenueCatEntitlement,
+} from "../lib/revenuecat-reconciliation";
 
 const router: IRouter = Router();
 
@@ -279,228 +283,36 @@ interface RevenueCatActiveEntitlement {
 
 router.post("/subscriptions/revenuecat-sync", authMiddleware, traderOnly, subscriptionsOwnerGate, async (req, res) => {
   try {
-    if (!REVENUECAT_PROJECT_ID) {
+    const { userId } = req as AuthenticatedRequest;
+    const rawWillRenew = (req.body as { willRenew?: unknown } | undefined)?.willRenew;
+    const willRenew = typeof rawWillRenew === "boolean" ? rawWillRenew : undefined;
+    const outcome = await reconcileRevenueCatEntitlement(userId, req.log, willRenew);
+
+    if (outcome.status === "not_configured") {
       res.status(503).json({ error: "In-app purchases are not configured yet." });
       return;
     }
-
-    const { userId } = req as AuthenticatedRequest;
-
-    // Optional device-reported auto-renew state. The native SDK's CustomerInfo
-    // knows willRenew immediately after the user cancels in the App Store
-    // sheet, while the CANCELLATION webhook can lag (or never arrive in the
-    // sandbox). Display-only: it only drives the cancelAtPeriodEnd flag
-    // (badges and copy) — never perks, pricing or the plan itself — so
-    // trusting the client here is safe. When absent, the stored flag is
-    // PRESERVED (it used to be reset to false on every focus sync, which
-    // clobbered the webhook's cancellation state).
-    const rawWillRenew = (req.body as { willRenew?: unknown } | undefined)?.willRenew;
-    const willRenew = typeof rawWillRenew === "boolean" ? rawWillRenew : undefined;
-
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
-    if (!user) {
+    if (outcome.status === "user_not_found") {
       res.status(404).json({ error: "User not found" });
       return;
     }
-
-    // Mirror the subscribe gate: only verified traders may go live.
-    const [profile] = await db
-      .select()
-      .from(traderProfilesTable)
-      .where(eq(traderProfilesTable.userId, userId))
-      .limit(1);
-    if (!profile || profile.verificationStatus !== TRADER_STATUS.VERIFIED) {
+    if (outcome.status === "not_verified") {
       res.status(403).json({ error: "Your account must be verified before you can subscribe." });
       return;
     }
-
-    // Canonical RevenueCat customer id — a server-generated opaque token
-    // (users.revenuecat_id), assigned lazily here for accounts that predate
-    // it. Derived EXCLUSIVELY from the authenticated session; any
-    // client-supplied RevenueCat id in the request body is ignored. Legacy
-    // sandbox/TestFlight customers keyed by the numeric user id re-attach
-    // their entitlement to this id via "Restore purchases" (RevenueCat
-    // transfers the receipt); we deliberately do NOT query the legacy
-    // customer here — canonical-only keeps the read path fail-closed.
-    const rcCustomerId = await getOrCreateRevenueCatId(userId);
-
-    // Query the v2 Developer API (via the Replit connector) to confirm
-    // the active entitlement server-side.
-    const wanted = normalizeEntitlementKey(REVENUECAT_ENTITLEMENT_ID);
-    let activeEntitlements: RevenueCatActiveEntitlement[];
-    // The v2 active_entitlements list identifies entitlements by their object id
-    // (e.g. "entl..."), NOT by lookup key/display name. Resolve our configured
-    // key to that object id (and its lookup key) so we can match reliably.
-    let targetEntitlementId: string | null = null;
-    let targetLookupKey: string | null = null;
-    try {
-      const client = await getUncachableRevenueCatClient();
-
-      const { data: entlData } = await listEntitlements({
-        client,
-        path: { project_id: REVENUECAT_PROJECT_ID },
-      });
-      const target = (entlData?.items ?? []).find(
-        (e) =>
-          e.id === REVENUECAT_ENTITLEMENT_ID ||
-          (!!e.lookup_key && normalizeEntitlementKey(e.lookup_key) === wanted) ||
-          (!!e.display_name && normalizeEntitlementKey(e.display_name) === wanted),
-      );
-      targetEntitlementId = target?.id ?? null;
-      targetLookupKey = target?.lookup_key ?? null;
-
-      const { data, error } = await listCustomerActiveEntitlements({
-        client,
-        path: { project_id: REVENUECAT_PROJECT_ID, customer_id: rcCustomerId },
-      });
-      if (error) {
-        req.log.error({ err: error }, "RevenueCat lookup failed");
-        res.status(502).json({ error: "Could not verify your subscription. Please try again." });
-        return;
-      }
-      activeEntitlements = (data?.items ?? []) as RevenueCatActiveEntitlement[];
-    } catch (e) {
-      req.log.error({ err: e }, "RevenueCat request error");
+    if (outcome.status === "provider_error") {
       res.status(502).json({ error: "Could not verify your subscription. Please try again." });
       return;
     }
-
-    const entitlement = activeEntitlements.find((e) => {
-      if (!e.entitlement_id) return false;
-      // Primary: match against the resolved entitlement object id.
-      if (targetEntitlementId && e.entitlement_id === targetEntitlementId) return true;
-      const norm = normalizeEntitlementKey(e.entitlement_id);
-      // Fallbacks: some payloads may surface the lookup key/display name instead.
-      if (targetLookupKey && norm === normalizeEntitlementKey(targetLookupKey)) return true;
-      return norm === wanted;
-    });
-    // The v2 active_entitlements endpoint only returns currently-active grants,
-    // so presence implies active. expires_at is epoch milliseconds (or null for
-    // a lifetime / non-expiring grant).
-    const expiresAt = entitlement?.expires_at ? new Date(entitlement.expires_at) : null;
-    const isActive = !!entitlement;
-
-    if (!isActive) {
-      // RevenueCat reports no active entitlement. Self-heal the local record so
-      // the app converges to Apple/RevenueCat's real state on focus and on
-      // "Restore purchases". Only an active row needs revoking.
-      const [existing] = await db
-        .select()
-        .from(subscriptionsTable)
-        .where(eq(subscriptionsTable.userId, userId))
-        .limit(1);
-      if (existing && existing.status === "active") {
-        await downgradeExpiredSubscription(userId);
-        // Plan-derived seat allowance may have dropped to 0 — bring seated
-        // employees in line (no-op unless team billing is enforced).
-        await reconcileCompanySeats(profile.id, "revenuecat-sync:no_active_entitlement").catch(
-          (err) => req.log.error({ err }, "seat reconciliation after sync downgrade failed"),
-        );
-        await logAudit({
-          userId,
-          action: "SUBSCRIPTION_CANCELLED",
-          details: { source: "revenuecat-sync", reason: "no_active_entitlement" },
-        });
-        void sendPushToUser(userId, {
-          title: "Premium ended",
-          body: "Your Premium subscription has ended. Your free Basic listing stays live.",
-          data: { type: "subscription_update", status: "cancelled" },
-        }).catch((err) => req.log.warn({ err }, "Failed to send subscription-ended push"));
-      }
-      res.json({ active: false });
-      return;
-    }
-
-    const periodEnd = expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-    let newlyActivated = false;
-
-    await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(subscriptionsTable)
-        .where(eq(subscriptionsTable.userId, userId))
-        .limit(1);
-
-      // Only a genuine inactive -> active transition should notify, so the
-      // routine focus/restore syncs don't re-announce an already-live plan.
-      newlyActivated = !existing || existing.status !== "active";
-
-      if (existing) {
-        await tx
-          .update(subscriptionsTable)
-          .set({
-            status: "active",
-            planId: RC_PLAN_ID,
-            currentPeriodStart: new Date(),
-            currentPeriodEnd: periodEnd,
-            // Only overwrite the cancellation flag when the device reported a
-            // definite auto-renew state; otherwise keep what the webhook (or a
-            // previous sync) recorded. Resetting to false here used to wipe a
-            // scheduled cancellation on every focus re-sync.
-            cancelAtPeriodEnd:
-              willRenew !== undefined ? !willRenew : existing.cancelAtPeriodEnd,
-            // First-purchase anchor only; renewals must not reset cooling-off.
-            originalPurchaseAt: existing.originalPurchaseAt ?? new Date(),
-            // Tier source of truth (team seat plans derive from this). Keep
-            // the stored value when this sync didn't carry a product id.
-            productIdentifier:
-              entitlement?.product_identifier ?? existing.productIdentifier ?? null,
-            updatedAt: new Date(),
-          })
-          .where(eq(subscriptionsTable.userId, userId));
-      } else if (!existing) {
-        await tx.insert(subscriptionsTable).values({
-          userId,
-          planId: RC_PLAN_ID,
-          status: "active",
-          currentPeriodStart: new Date(),
-          currentPeriodEnd: periodEnd,
-          cancelAtPeriodEnd: willRenew === false,
-          originalPurchaseAt: new Date(),
-          productIdentifier: entitlement?.product_identifier ?? null,
-        });
-      }
-
-      // Grant Premium perks. Public listing is driven by verification, not
-      // subscription, so we never touch isActive here — losing Premium must
-      // never unlist a verified trader.
-      await tx
-        .update(usersTable)
-        .set({ plan: RC_PLAN_ID })
-        .where(eq(usersTable.id, userId));
-      await tx
-        .update(traderProfilesTable)
-        .set({ plan: RC_PLAN_ID, isFeatured: true, updatedAt: new Date() })
-        .where(eq(traderProfilesTable.userId, userId));
-    });
-
-    // The grant (or a product change picked up by this sync) may have changed
-    // the seat allowance — reconcile seats now (no-op unless enforced).
-    await reconcileCompanySeats(profile.id, "revenuecat-sync:grant").catch((err) =>
-      req.log.error({ err }, "seat reconciliation after sync grant failed"),
-    );
-
-    await logAudit({
-      userId,
-      action: "SUBSCRIPTION_ACTIVATED",
-      details: { plan: RC_PLAN_ID, source: "revenuecat", productId: entitlement?.product_identifier },
-    });
-    await logAudit({ userId, action: "PROFILE_WENT_LIVE", details: { plan: RC_PLAN_ID, source: "revenuecat" } });
-
-    if (newlyActivated) {
-      void sendPushToUser(userId, {
-        title: "Premium active",
-        body: "Your Premium subscription is now active. Your premium perks are live.",
-        data: { type: "subscription_update", status: "active" },
-      }).catch((err) => req.log.warn({ err }, "Failed to send subscription-activated push"));
-    }
-
     res.json({
-      active: true,
-      plan: RC_PLAN_ID,
-      productId: entitlement?.product_identifier ?? null,
-      currentPeriodEnd: periodEnd.toISOString(),
+      active: outcome.active,
+      ...(outcome.active
+        ? {
+            plan: "premium",
+            productId: outcome.productId,
+            currentPeriodEnd: outcome.currentPeriodEnd,
+          }
+        : {}),
     });
   } catch (error) {
     req.log.error({ err: error }, "RevenueCat sync failed");
@@ -832,27 +644,6 @@ router.post(
     }
   },
 );
-
-// Revoke Premium perks for a lapsed (RevenueCat / demo) subscriber and mark the
-// row ended. Mirrors the EXPIRATION webhook's revoke branch so the read-time
-// expiry guard and the focus/restore sync path converge on the same end state:
-// the verified free listing stays live, only the paid perks are removed.
-async function downgradeExpiredSubscription(userId: number): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx
-      .update(usersTable)
-      .set({ plan: null })
-      .where(eq(usersTable.id, userId));
-    await tx
-      .update(traderProfilesTable)
-      .set({ plan: null, isFeatured: false, updatedAt: new Date() })
-      .where(eq(traderProfilesTable.userId, userId));
-    await tx
-      .update(subscriptionsTable)
-      .set({ status: "cancelled", cancelAtPeriodEnd: false, updatedAt: new Date() })
-      .where(eq(subscriptionsTable.userId, userId));
-  });
-}
 
 // Constant-time comparison of the webhook Authorization header against the
 // configured shared secret, avoiding length/timing leaks.

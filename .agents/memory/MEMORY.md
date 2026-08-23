@@ -83,3 +83,4 @@
 - [expo export contention](expo-export-resource-contention.md) — export gets killed mid-bundle while dev servers run & detached launches die; stop workflows, run foreground, restart after.
 - [Team billing flag-ON tests](team-billing-flag-on-tests.md) — suite must pass in all flag combos; plan-less fixture owners 403 fail-closed everywhere (working as designed); fixture conventions inside.
 - [Team seat accounting split](team-seat-accounting-split.md) — seat display/invite gating ALWAYS plan-based (owner never counts); TEAM_BILLING_ENFORCED gates only suspensions; allowance field presence = enforcement on.
+- [Verification reapproval billing recovery](verification-reapproval-billing-recovery.md) — reapproval must reconcile the preserved server-owned entitlement before telling mounted clients to refresh; active repeats are transition-idempotent.

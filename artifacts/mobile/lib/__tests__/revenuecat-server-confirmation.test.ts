@@ -8,6 +8,7 @@ jest.mock('@/lib/api-url', () => ({
 
 import {
   confirmBackendSubscriptionSync,
+  isSubscriptionReconciliationNotification,
   type BackendSyncResult,
 } from '@/lib/revenuecat';
 
@@ -23,6 +24,37 @@ function result(overrides: Partial<BackendSyncResult> = {}): BackendSyncResult {
 }
 
 describe('RevenueCat backend confirmation', () => {
+  it('accepts only a current-account verified notification as a reconciliation trigger', () => {
+    expect(
+      isSubscriptionReconciliationNotification(
+        {
+          type: 'verification_update',
+          status: 'VERIFIED',
+          subscriptionSync: true,
+          recipientUserId: 42,
+        },
+        42,
+      ),
+    ).toBe(true);
+    expect(
+      isSubscriptionReconciliationNotification(
+        {
+          type: 'verification_update',
+          status: 'VERIFIED',
+          subscriptionSync: true,
+          recipientUserId: 43,
+        },
+        42,
+      ),
+    ).toBe(false);
+    expect(
+      isSubscriptionReconciliationNotification(
+        { type: 'verification_update', status: 'VERIFIED', recipientUserId: 42 },
+        42,
+      ),
+    ).toBe(false);
+  });
+
   it('retries a short propagation delay until the API reports the purchased Team product', async () => {
     const sync = jest
       .fn<Promise<BackendSyncResult>, []>()

@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import type {
   CustomerInfo,
@@ -38,6 +39,25 @@ import {
 
 export const TRADER_ENTITLEMENT_ID =
   process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID || 'trader_subscription';
+
+export function isSubscriptionReconciliationNotification(
+  data: unknown,
+  userId: number | null | undefined,
+): boolean {
+  if (!data || typeof data !== 'object' || userId == null) return false;
+  const payload = data as {
+    type?: unknown;
+    status?: unknown;
+    subscriptionSync?: unknown;
+    recipientUserId?: unknown;
+  };
+  return (
+    payload.type === 'verification_update' &&
+    payload.status === 'VERIFIED' &&
+    payload.subscriptionSync === true &&
+    String(payload.recipientUserId) === String(userId)
+  );
+}
 
 const TEST_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY ?? '';
 const IOS_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY ?? '';
@@ -595,7 +615,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
       if (entitlement) syncedInactiveRef.current = false;
       setIsServerStateUpdating(true);
-      setServerStateError(null);
 
       const confirmed = await confirmBackendSubscriptionSync(
         entitlement?.productIdentifier ?? null,
@@ -604,8 +623,23 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (requestGeneration !== identityGenerationRef.current) return false;
       if (confirmed) {
         if (!entitlement) syncedInactiveRef.current = true;
-        await refreshTeamBillingQueries(queryClient, user.id);
+        try {
+          await refreshTeamBillingQueries(queryClient, user.id);
+        } catch (error) {
+          console.warn('RevenueCat Team query refresh failed', error);
+          if (requestGeneration === identityGenerationRef.current) {
+            setIsServerStateUpdating(false);
+            setServerStateError(
+              'Your plan was confirmed, but we could not refresh your Team seats. Please try again.',
+            );
+          }
+          return false;
+        }
         if (requestGeneration !== identityGenerationRef.current) return false;
+        // Keep a previous warning visible while a recovery is in-flight. It is
+        // cleared only once RevenueCat, the server, and server-owned Team
+        // queries all agree on the new state.
+        setServerStateError(null);
         setIsServerStateUpdating(false);
         return true;
       }
@@ -719,6 +753,30 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     });
     return () => sub.remove();
   }, [refreshServerState]);
+
+  // Reapproval can happen while the trader is already using the app. The
+  // server has reconciled the entitlement, but this mounted provider still
+  // owns a previous "unconfirmed" warning until it re-checks RevenueCat and
+  // refreshes server-owned Team queries. Only accept the centrally-bound push
+  // for the current account; stale device notifications must not trigger work.
+  useEffect(() => {
+    if (!isPurchasesSupported || Platform.OS === 'web' || user?.id == null) return;
+    const sub = Notifications.addNotificationReceivedListener((notification) => {
+      if (
+        !isSubscriptionReconciliationNotification(
+          notification.request.content.data,
+          user.id,
+        )
+      ) {
+        return;
+      }
+      void refreshServerState(undefined, {
+        forceSync: true,
+        identityGeneration: identityGenerationRef.current,
+      });
+    });
+    return () => sub.remove();
+  }, [refreshServerState, user?.id]);
 
   // Guarantee the RevenueCat customer is our signed-in user before a purchase
   // or restore. configure() starts anonymous and the identity effect above may

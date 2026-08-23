@@ -39,6 +39,11 @@ import app from "../app";
 import { generateToken } from "../lib/auth";
 import { getOrCreateRevenueCatId } from "../lib/revenuecat-identity";
 import {
+  reconcileApprovedTraderSubscription,
+  reconcileRevenueCatEntitlement,
+} from "../lib/revenuecat-reconciliation";
+import { resolveProductTier } from "../lib/team-billing";
+import {
   listEntitlements,
   listCustomerActiveEntitlements,
 } from "@replit/revenuecat-sdk";
@@ -85,14 +90,17 @@ function mockEntitlementCatalog() {
   });
 }
 
-function mockActiveEntitlement(expiresAtMs: number | null = Date.now() + 30 * 24 * 60 * 60 * 1000) {
+function mockActiveEntitlement(
+  expiresAtMs: number | null = Date.now() + 30 * 24 * 60 * 60 * 1000,
+  productIdentifier = "premium_monthly",
+) {
   mockListActive.mockResolvedValue({
     data: {
       items: [
         {
           entitlement_id: ENTITLEMENT_OBJECT_ID,
           expires_at: expiresAtMs,
-          product_identifier: "premium_monthly",
+          product_identifier: productIdentifier,
         },
       ],
     },
@@ -191,6 +199,153 @@ describe("RevenueCat subscription syncing", () => {
   });
 
   describe("POST /subscriptions/revenuecat-sync", () => {
+    it("notifies a mounted trader only after post-approval reconciliation succeeds", async () => {
+      let finishReconciliation!: (result: Awaited<ReturnType<typeof reconcileRevenueCatEntitlement>>) => void;
+      const pending = new Promise<Awaited<ReturnType<typeof reconcileRevenueCatEntitlement>>>(
+        (resolve) => {
+          finishReconciliation = resolve;
+        },
+      );
+      const notify = vi.fn(async () => true);
+      const log = { error: vi.fn(), warn: vi.fn() } as never;
+      const completion = reconcileApprovedTraderSubscription(73, log, {
+        reconcile: vi.fn(() => pending),
+        notify,
+      });
+      expect(notify).not.toHaveBeenCalled();
+
+      finishReconciliation({ status: "synced", active: true, productId: "premium_monthly" });
+      await expect(completion).resolves.toMatchObject({ status: "synced", active: true });
+      expect(notify).toHaveBeenCalledWith(
+        73,
+        expect.objectContaining({
+          data: expect.objectContaining({ subscriptionSync: true }),
+        }),
+      );
+
+      const unavailableNotify = vi.fn(async () => true);
+      await reconcileApprovedTraderSubscription(73, log, {
+        reconcile: vi.fn(async () => ({ status: "provider_error" as const })),
+        notify: unavailableNotify,
+      });
+      expect(unavailableNotify).toHaveBeenCalledWith(
+        73,
+        expect.objectContaining({
+          data: { type: "verification_update", status: "VERIFIED" },
+        }),
+      );
+    });
+
+    it("preserves an active Team 5 entitlement through reset, rejects sync while unverified, then reapproves and reconciles idempotently", async () => {
+      const trader = await createVerifiedTrader("verification-reset-team5");
+      const team5Product = "com.mylocaltrade.app.trader.team5.yearly";
+      const savedTeamMap = process.env.TEAM_PRODUCT_SEAT_MAP;
+      const originalPeriodStart = new Date("2026-01-05T12:00:00.000Z");
+      process.env.TEAM_PRODUCT_SEAT_MAP = JSON.stringify({ [team5Product]: 5 });
+      try {
+        // This is the existing Apple/RevenueCat ownership that Reset
+        // Verification must never delete or detach.
+        await db.insert(subscriptionsTable).values({
+          userId: trader.id,
+          planId: "premium",
+          status: "active",
+          productIdentifier: team5Product,
+          currentPeriodStart: originalPeriodStart,
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          originalPurchaseAt: new Date(),
+        });
+        mockActiveEntitlement(undefined, team5Product);
+
+        await db
+          .update(traderProfilesTable)
+          .set({ verificationStatus: "UNDER_REVIEW" })
+          .where(eq(traderProfilesTable.userId, trader.id));
+
+        // The public route remains securely closed during the reset window.
+        const rejected = await request(app)
+          .post("/api/subscriptions/revenuecat-sync")
+          .set("Authorization", `Bearer ${trader.token}`)
+          .send({});
+        expect(rejected.status).toBe(403);
+
+        const [afterRejected] = await db
+          .select({
+            status: subscriptionsTable.status,
+            productIdentifier: subscriptionsTable.productIdentifier,
+          currentPeriodStart: subscriptionsTable.currentPeriodStart,
+            revenuecatId: usersTable.revenuecatId,
+          })
+          .from(subscriptionsTable)
+          .innerJoin(usersTable, eq(usersTable.id, subscriptionsTable.userId))
+          .where(eq(subscriptionsTable.userId, trader.id))
+          .limit(1);
+        expect(afterRejected).toMatchObject({
+          status: "active",
+          productIdentifier: team5Product,
+          currentPeriodStart: originalPeriodStart,
+          revenuecatId: trader.rcId,
+        });
+
+        // This is the same shared service the admin approval path schedules
+        // after it commits VERIFIED status.
+        await db
+          .update(traderProfilesTable)
+          .set({ verificationStatus: "VERIFIED" })
+          .where(eq(traderProfilesTable.userId, trader.id));
+        const log = { error: vi.fn(), warn: vi.fn() } as never;
+        await expect(reconcileRevenueCatEntitlement(trader.id, log)).resolves.toMatchObject({
+          status: "synced",
+          active: true,
+          productId: team5Product,
+        });
+        await expect(reconcileRevenueCatEntitlement(trader.id, log)).resolves.toMatchObject({
+          status: "synced",
+          active: true,
+          productId: team5Product,
+        });
+
+        const [reconciled] = await db
+          .select({
+            status: subscriptionsTable.status,
+            productIdentifier: subscriptionsTable.productIdentifier,
+          currentPeriodStart: subscriptionsTable.currentPeriodStart,
+            revenuecatId: usersTable.revenuecatId,
+          })
+          .from(subscriptionsTable)
+          .innerJoin(usersTable, eq(usersTable.id, subscriptionsTable.userId))
+          .where(eq(subscriptionsTable.userId, trader.id))
+          .limit(1);
+        expect(reconciled).toMatchObject({
+          status: "active",
+          productIdentifier: team5Product,
+          currentPeriodStart: originalPeriodStart,
+          revenuecatId: trader.rcId,
+        });
+        expect(resolveProductTier(reconciled.productIdentifier)).toEqual({
+          tier: "team_5",
+          seats: 5,
+        });
+        const lifecycleAudits = await db
+          .select()
+          .from(traderAuditLogTable)
+          .where(eq(traderAuditLogTable.userId, trader.id));
+        expect(
+          lifecycleAudits.filter((audit) => audit.action === "SUBSCRIPTION_ACTIVATED"),
+        ).toHaveLength(0);
+
+        // Retry after approval keeps the same server-authorized Team product.
+        const retried = await request(app)
+          .post("/api/subscriptions/revenuecat-sync")
+          .set("Authorization", `Bearer ${trader.token}`)
+          .send({});
+        expect(retried.status).toBe(200);
+        expect(retried.body).toMatchObject({ active: true, productId: team5Product });
+      } finally {
+        if (savedTeamMap === undefined) delete process.env.TEAM_PRODUCT_SEAT_MAP;
+        else process.env.TEAM_PRODUCT_SEAT_MAP = savedTeamMap;
+      }
+    });
+
     it("creates an active row, grants perks, and notifies exactly once when no row exists", async () => {
       const trader = await createVerifiedTrader("fresh");
       mockActiveEntitlement();
