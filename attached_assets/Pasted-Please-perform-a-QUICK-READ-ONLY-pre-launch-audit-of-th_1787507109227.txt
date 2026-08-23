@@ -1,0 +1,66 @@
+Please perform a QUICK, READ-ONLY pre-launch audit of the current MyLocalTrade app.
+
+Do not implement fixes yet. Do not change production data, environment variables, feature flags, App Store Connect, RevenueCat, Twilio, Brevo, or Git history. Do not publish, deploy, run EAS, or submit anything to TestFlight/App Store.
+
+First confirm the exact current `origin/main` HEAD and verify that Task #145 — “Refresh Team Billing State” — is fully present on GitHub, not only in the local workspace. Report the final remote commit SHA and whether the local and remote trees are identical.
+
+Audit only release-critical areas:
+
+1. Authentication and account lifecycle:
+   - customer/trader registration;
+   - email and phone verification;
+   - login/logout and account switching on the same device;
+   - password reset;
+   - deletion request, admin review, cancellation and final deletion;
+   - no stale state leaking between accounts.
+
+2. Company Teams:
+   - Owner and Employee permissions;
+   - employee billing/paywall blocking;
+   - independent personal avatars and owner-only company logo;
+   - invites, removal, assignment, reassignment and revoked-member access;
+   - Team member photos and dark-theme screens.
+
+3. RevenueCat and Team billing:
+   - Solo Monthly/Yearly and Team 5/10/20 product identifiers;
+   - server remains the only authority for plan and seat allowance;
+   - automatic Team allowance refresh after purchase, plan change, restore and return from App Store;
+   - bounded retry/manual retry when backend confirmation is delayed;
+   - no stale RevenueCat response can update a different account;
+   - confirm the behaviour while `TEAM_BILLING_ENFORCED` is OFF and clearly state what remains before it can safely be enabled.
+
+4. Core customer/trader workflows:
+   - search, enquiry, conversation, quote, hire, appointment, completion and review;
+   - messaging composer/keyboard behaviour;
+   - company logos in search, profile and customer Messages list;
+   - job assignment and read-only rules for colleagues.
+
+5. Notifications and communications:
+   - push notification routing;
+   - transactional email delivery and correct canonical logo;
+   - Twilio Verify remains the OTP authority;
+   - treat RCS/Verify integration as pending Twilio confirmation — do not move OTP to Programmable Messaging.
+
+6. Release and store safety:
+   - no test/spec/mock files bundled under Expo Router `app/`;
+   - production Metro/iOS export can complete;
+   - production API URL and RevenueCat entitlement configuration are correct;
+   - Privacy Policy, Terms, subscription disclosures and account-deletion wording match actual behaviour;
+   - no secrets or personal data are exposed in logs or client bundles.
+
+Run only safe automated checks. Do not send real email, SMS, RCS, push notifications or campaigns. Do not make test purchases.
+
+Return a concise report with exactly these sections:
+
+A. Release verdict: READY / NOT READY  
+B. P0 blockers — must fix before launch  
+C. P1 issues — strongly recommended before launch  
+D. Safe to defer until after launch  
+E. Existing requested work that is still unconfirmed or incomplete  
+F. Exact tests/checks run and their results  
+G. Minimal recommended implementation order  
+H. Whether a new backend Publish and/or TestFlight build will be required after each confirmed fix
+
+For every finding, include concrete evidence: file/route, current behaviour and user impact. Do not propose broad refactors or new features.
+
+Stop after the report and wait for my approval before changing anything.
