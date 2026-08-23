@@ -1,0 +1,106 @@
+This is a pre-launch P0 subscription-state refresh fix plus a release-gap audit. Treat it as a continuation of the existing Company Teams billing work, not as a new feature expansion.
+
+CURRENT CONFIRMED DEFECT
+
+After the owner successfully purchases or changes to a Team subscription, the Team screen does not automatically refresh its employee-seat allowance. It continues showing the previous allowance until the user manually pulls down to refresh.
+
+For example, after purchasing or changing the Team plan, the correct allowance must appear automatically without reopening the screen, signing out, or using pull-to-refresh.
+
+REQUIRED BEHAVIOUR
+
+Inspect the real RevenueCat purchase, restore, subscription-sync, Billing, Pricing, Team context and Team list flows before editing anything.
+
+After any successful:
+
+- Team 5 / Team 10 / Team 20 purchase;
+- upgrade or downgrade;
+- Restore purchases;
+- return to the app after managing the subscription in the App Store;
+
+the application must:
+
+1. Wait for RevenueCat to confirm success.
+2. Call the existing backend subscription-sync flow.
+3. Invalidate and refetch every relevant server-backed query, including:
+   - subscription status;
+   - company team-context;
+   - Team member list;
+   - employee-seat allowance and usage.
+4. Update the Team screen automatically, even if that screen was already mounted.
+5. Use a short, bounded retry only if RevenueCat/backend propagation is temporarily delayed.
+6. Show a clear “Updating your plan…” state while synchronization is happening.
+7. If synchronization cannot be confirmed, keep the previous server-authorized allowance and show a retry action.
+
+SECURITY AND DATA RULES
+
+- The server remains the only authority for the product identifier, effective Team tier and seat allowance.
+- Never grant or calculate employee seats only on the client.
+- Never infer Team 10 merely from the current member count or the presence of an employee.
+- A Solo Monthly or Solo Yearly subscription must always provide zero employee seats once Team billing enforcement is enabled.
+- Pending invitations count only according to the existing server rules.
+- Cached subscription/team state must be isolated by authenticated user so switching accounts on the same device cannot expose the previous owner’s allowance.
+- Employees must remain unable to purchase, restore, manage billing or see owner subscription controls.
+
+REGRESSION COVERAGE
+
+Add focused tests for:
+
+- Solo Monthly → Team 5;
+- Team 5 → Team 10;
+- Team 10 → Team 20;
+- Team plan → Solo downgrade;
+- Restore purchases;
+- return from App Store subscription management;
+- delayed backend synchronization;
+- failed synchronization;
+- account switching on one device;
+- ensuring a Monthly Solo owner is never shown 10 seats;
+- Team screen already mounted while the purchase completes;
+- no manual pull-to-refresh required.
+
+RELEASE-GAP AUDIT
+
+Before committing, inspect the final current code and previous implementation reports and give me a table with:
+
+- Confirmed complete;
+- Implemented but still requires on-device verification;
+- Not implemented;
+- External dependency/blocker.
+
+Include these exact items:
+
+1. Automatic Team allowance refresh — fix now.
+2. Previous incorrect “2 of 10 seats” display for a Solo Monthly owner — confirm the committed fix and regression test, then state whether it still needs a new device test.
+3. Team billing enforcement and the existing test company/grandfathering or seat override — do not enable the flag.
+4. Employee billing/paywall blocking.
+5. Owner/employee avatar isolation and Team member photo viewer.
+6. Dark-theme team invitation and team-management screens.
+7. Account deletion: whether a user with a pending deletion request can still sign in and access the private account until the admin finalises deletion, while the public profile remains disabled. I requested this previously but have not received a final implementation report.
+8. Account-deletion storage cleanup for avatars, logos, gallery images and verification documents.
+9. The previously reported promo-video/whole-project build check — confirm whether it was fixed or remains outstanding.
+10. Twilio RCS/Verify backend work — report its commit SHA, whether it was pushed, and whether it was published. Do not change Twilio; support confirmation is still pending.
+11. Current production flags:
+    - COMPANY_TEAMS_ENABLED;
+    - TEAM_BILLING_ENFORCED;
+    - MARKETING_BREVO_ENABLED.
+12. Final App Store/TestFlight work still required.
+
+VERIFICATION
+
+Run proportionate full checks:
+
+- mobile tests and typecheck;
+- API tests under the relevant flag combinations;
+- admin tests if affected;
+- clean Metro production bundle/export;
+- an independent review focused on stale cache, cross-account leakage, incorrect seat grants and purchase/sync races.
+
+CONSTRAINTS
+
+- Do not enable TEAM_BILLING_ENFORCED.
+- Do not modify App Store Connect, RevenueCat, Twilio, production secrets or production data.
+- Do not publish the backend.
+- Do not start an EAS/TestFlight build.
+- Do not refactor unrelated code.
+- Commit and push only after all checks pass.
+- Finish with the exact commit SHA, changed files, tests, whether a new mobile build is required, and the completed release-gap table.
