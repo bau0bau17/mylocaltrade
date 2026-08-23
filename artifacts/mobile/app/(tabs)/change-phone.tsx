@@ -162,8 +162,8 @@ export default function ChangePhoneScreen() {
           <Text style={styles.title}>Verify your phone number</Text>
           <Text style={styles.subtitle}>
             {isTrader
-              ? 'MyLocalTrade will send a one-time verification code by SMS or RCS to verify this mobile number for account access, security and trust.'
-              : 'MyLocalTrade will send a one-time verification code by SMS to verify this mobile number for account access, security and trust.'}{'\n\n'}
+              ? 'Where Twilio Verify is configured, MyLocalTrade may send a one-time code through its configured channel, such as SMS or RCS where available; otherwise, the code is sent to your account email address to verify this mobile number for account access, security and trust.'
+              : 'Where Twilio Verify is configured, MyLocalTrade may send a one-time code through its configured channel, such as SMS or RCS where available; otherwise, the code is sent to your account email address to verify this mobile number for account access, security and trust.'}{'\n\n'}
             {isTrader
               ? 'Phone verification is part of trader verification. Once verified, your new number is submitted for review — your current approved number stays active until the change is approved.'
               : 'This verification confirms your identity and contact details for account security and trust. Once verified, your new number is submitted for review — your current number stays active until the change is approved.'}
@@ -199,7 +199,7 @@ export default function ChangePhoneScreen() {
               </Pressable>
 
               <Text style={styles.consentText}>
-                By tapping 'Send verification code', you agree to receive a one-time verification message from MyLocalTrade{isTrader ? ' by SMS or RCS' : ' by SMS'}. These messages are used only for account and phone verification, security and trust — never for marketing, advertising, promotions, discounts or bulk messaging. Message and data rates may apply. See our{' '}
+                By tapping 'Send verification code', you agree to receive a one-time verification message from MyLocalTrade where Twilio Verify is configured, through its configured channel such as SMS or RCS where available; otherwise, the code is sent to your account email address. Messaging delivery may vary by device, network, provider configuration and availability. These messages are used only for account and phone verification, security and trust — never for marketing, advertising, promotions, discounts or bulk messaging. Message and data rates may apply. See our{' '}
                 <Text style={styles.consentLink} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
                 {' '}and{' '}
                 <Text style={styles.consentLink} onPress={() => router.push('/terms')}>Terms</Text>.

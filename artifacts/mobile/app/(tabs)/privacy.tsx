@@ -22,7 +22,7 @@ export default function PrivacyScreen() {
     >
       
       <View style={styles.section}>
-        <Text style={styles.lastUpdated}>Last Updated: 12 August 2026</Text>
+        <Text style={styles.lastUpdated}>Last Updated: 23 August 2026</Text>
         <Text style={styles.paragraph}>
           This Privacy Policy explains how Service Provider LTD (company registered in England and Wales under company number 15830141), trading as MyLocalTrade ("we", "us", "our"), collects, uses, discloses, and safeguards your personal data when you use our mobile application. Our registered office address is shown in the contact section below.
         </Text>
@@ -37,7 +37,7 @@ export default function PrivacyScreen() {
           Personal Data: We may collect personally identifiable information, such as your name, email address, telephone number, and location when you register for an account.
         </Text>
         <Text style={styles.paragraph}>
-          Trader Data: If you register as a tradesperson, we collect business details and verification documents. We do not collect or store your payment card details. Subscriptions purchased through the MyLocalTrade iOS app are processed by Apple through the App Store, with subscription status managed through RevenueCat. If additional payment methods are introduced in the future, the relevant payment provider and terms will be disclosed before payment.
+          Trader Data: If you register as a tradesperson, we collect business details and verification documents. We do not collect or store your payment card details. Digital subscriptions are purchased through the app-store platform through which you buy them — Apple App Store for Apple purchases or Google Play where offered — with subscription status supported by RevenueCat. The relevant store processes payment under its own terms.
         </Text>
         <Text style={styles.paragraph}>
           Technical Data: We automatically collect certain information about your device, including IP address, device type, operating system, and usage patterns.
@@ -69,7 +69,7 @@ export default function PrivacyScreen() {
           We use one-time verification codes to confirm ownership of a mobile phone number and support account access, trader verification, security and trust.
         </Text>
         <Text style={styles.paragraph}>
-          For the trader-verification flow, a trader actively requests a verification code after reviewing the relevant consent notice. The code may be delivered by SMS or RCS through our messaging provider, Twilio, depending on service availability and the approved messaging configuration. Customer phone-change verification codes are delivered by SMS.
+          A user actively requests a verification code after reviewing the relevant consent notice. Where Twilio Verify is configured, codes are delivered through its configured verification channel, which may include SMS or RCS where available. Otherwise, a code is sent to the account email address. Messaging delivery depends on the device, network, provider configuration and service availability.
         </Text>
         <Text style={styles.paragraph}>
           A proposed replacement phone number must be successfully verified before it can be submitted for administrative review. Verifying a proposed number does not immediately replace the currently approved phone number. The current approved number remains active until the proposed change is approved.
@@ -97,13 +97,13 @@ export default function PrivacyScreen() {
         <Text style={styles.paragraph}>
           - To facilitate connections between customers and tradespeople{'\n'}
           - To manage your account and subscriptions{'\n'}
-          - To process subscription payments — on iOS through the Apple App Store, with subscription status managed by RevenueCat{'\n'}
+          - To support store-managed digital subscriptions, with subscription status managed through RevenueCat{'\n'}
           - To improve our services and app functionality{'\n'}
           - To send service-related communications{'\n'}
           - To comply with legal and regulatory requirements
         </Text>
         <Text style={styles.paragraph}>
-          We may send one-time verification codes, security alerts and service-related account messages by SMS or email. RCS may be used for trader phone verification only, as described in the Phone-Number Verification section above. These messages are used for account access, registration, login and security purposes. We do not use these verification messages for marketing or promotional purposes. We do not sell personal information or share messaging opt-in data or consent with third parties for marketing purposes.
+          We may send one-time verification codes, security alerts and service-related account messages through Twilio Verify's configured channel, which may include SMS or RCS where available, or by email where Twilio Verify is not configured. These messages are used for account access, registration, login and security purposes. We do not use verification messages for marketing or promotional purposes. We do not sell personal information or share messaging opt-in data or consent with third parties for marketing purposes.
         </Text>
       </View>
 
@@ -142,14 +142,14 @@ export default function PrivacyScreen() {
           MyLocalTrade does not process payments from customers to traders for the work described in an enquiry or quote. After a trader is hired, the customer and trader arrange payment for the actual work separately.
         </Text>
         <Text style={styles.paragraph}>
-          Subscriptions purchased in the MyLocalTrade iOS app are separate from customer-to-trader job payments and are processed by Apple through the App Store, with subscription status managed through RevenueCat. MyLocalTrade does not collect or store Apple payment-card details.
+          Store-managed subscriptions are separate from customer-to-trader job payments. They are purchased through the relevant app-store platform, with subscription status managed through RevenueCat. MyLocalTrade does not collect or store store payment-card details.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>9. Data Sharing</Text>
         <Text style={styles.paragraph}>
-          We may share your data with the providers that operate our service: Apple (App Store) and RevenueCat, which process and manage trader subscriptions purchased on iOS; our email provider (Brevo); and our hosting provider. We do not sell your personal data to third parties. When you send an enquiry to a trader, the trader receives your name, the service required, your preferred date and your message so they can respond to your request. If you choose to provide a phone number with your enquiry, it is stored securely but is not shown to the trader before hire — your phone number and email address only become available to a trader after you accept their quote or hire them, as described in the Contact Details and Communication Between Users section above. Replies come back through the in-app messaging system.
+          We may share your data with the providers that operate our service: the relevant app-store platform (Apple App Store or Google Play where offered) and RevenueCat for store-managed trader subscriptions; our communications providers, which may deliver verification messages; our email provider (Brevo); and our hosting provider. We do not sell your personal data to third parties. When you send an enquiry to a trader, the trader receives your name, the service required, your preferred date and your message so they can respond to your request. If you choose to provide a phone number with your enquiry, it is stored securely but is not shown to the trader before hire — your phone number and email address only become available to a trader after you accept their quote or hire them, as described in the Contact Details and Communication Between Users section above. Replies come back through the in-app messaging system.
         </Text>
       </View>
 
@@ -221,7 +221,6 @@ export default function PrivacyScreen() {
             Supervisory Authority:{'\n'}
             Information Commissioner's Office (ICO){'\n'}
             ICO Registration Ref: ZB724124{'\n'}
-            Registered: 22.07.2024 — Valid until: 21.07.2026{'\n'}
             ico.org.uk
           </Text>
         </View>

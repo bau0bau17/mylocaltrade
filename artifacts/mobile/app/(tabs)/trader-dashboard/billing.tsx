@@ -85,8 +85,8 @@ export default function BillingScreen() {
         result.active && result.confirmed
           ? 'Your Premium plan has been restored.'
           : result.active
-            ? 'Apple found your subscription, but we could not yet confirm the server-authorized Team seats. Use Retry to update your plan.'
-          : 'We could not find an active subscription for this Apple ID.',
+              ? 'Your purchase platform found your subscription, but we could not yet confirm the server-authorized Team seats. Use Retry to update your plan.'
+              : 'We could not find an active subscription for this store account.',
       );
     } catch (e) {
       Alert.alert('Restore failed', e instanceof Error ? e.message : 'Try again.');
@@ -324,9 +324,9 @@ export default function BillingScreen() {
                 <Text style={s.secondaryBtnText}>Manage subscription</Text>
               </Pressable>
               <Text style={s.actionHint}>
-                Switch between Solo and Team plans from Change plan — Apple applies upgrades and
-                downgrades within your existing subscription. Update payment or cancel any time in
-                your App Store subscription settings.
+                Switch between available plans from Change plan. Your purchase platform applies
+                upgrades and downgrades within your subscription; update payment or cancel in that
+                platform's subscription settings.
               </Text>
               {!cancelled && (
                 <Pressable style={s.dangerBtn} onPress={() => setShowDowngrade(true)}>
@@ -380,8 +380,9 @@ export default function BillingScreen() {
       </View>
 
       <Text style={s.footnote}>
-        Subscriptions are billed and managed by Apple. Changes and cancellations are made in
-        your App Store settings, and your status here updates automatically once Apple confirms them.
+        Subscriptions are billed and managed by the platform where you purchased them. Changes and
+        cancellations are made in that platform's subscription settings, and your status here
+        updates automatically once the platform confirms them.
       </Text>
     </ScrollView>
 
@@ -409,7 +410,8 @@ export default function BillingScreen() {
             photos and reviews.
           </Text>
           <Text style={s.modalNote}>
-            Your subscription is billed by Apple, so the final step is completed in your App Store settings.
+            Your subscription is billed by the platform where you purchased it, so the final step is
+            completed in that platform's subscription settings.
           </Text>
           <Pressable
             style={s.primaryBtn}
@@ -420,7 +422,7 @@ export default function BillingScreen() {
             }}
           >
             <Feather name="external-link" size={18} color="#fff" />
-            <Text style={s.primaryBtnText}>Continue in App Store</Text>
+            <Text style={s.primaryBtnText}>Continue to subscription settings</Text>
           </Pressable>
           <Pressable
             style={[s.dangerBtn, { marginTop: 10 }]}

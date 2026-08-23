@@ -21,7 +21,8 @@ import { getApiUrl } from '@/lib/api-url';
 const OTP_LENGTH = 6;
 
 /**
- * Customer mobile verification (SMS only — customers are never sent RCS).
+ * Customer mobile verification. Delivery uses the configured verification
+ * provider and may vary by supported channel and availability.
  * Phone is optional at registration; this screen is where a customer adds
  * and verifies a UK mobile before first contacting a trader (sending an
  * enquiry or accepting a quote/offer).
@@ -203,7 +204,7 @@ export default function CustomerVerifyPhoneScreen() {
 
         <Text style={styles.title}>Verify your mobile number</Text>
         <Text style={styles.subtitle}>
-          Before you contact a trader for the first time, please verify a UK mobile number. MyLocalTrade will send you a one-time verification code by SMS.{'\n\n'}
+          Before you contact a trader for the first time, please verify a UK mobile number. Where Twilio Verify is configured, MyLocalTrade may send a one-time code through its configured channel, such as SMS or RCS where available; otherwise, the code is sent to your account email address.{'\n\n'}
           This keeps enquiries genuine for both customers and traders. Your number is never shared publicly.
         </Text>
 
@@ -264,8 +265,8 @@ export default function CustomerVerifyPhoneScreen() {
             </Pressable>
 
             <Text style={styles.consentText}>
-              By continuing, you agree to receive a one-time verification message from MyLocalTrade by SMS, used for phone verification, account access, security and trust only — never for marketing, advertising, promotions, discounts or bulk messaging. Message and data rates may apply.{'\n\n'}
-              If you prefer not to receive the SMS code, you can choose not to continue with this step, but you will not be able to send enquiries to traders or accept quotes. See our{' '}
+              By continuing, you agree to receive a one-time verification message from MyLocalTrade where Twilio Verify is configured, through its configured channel such as SMS or RCS where available; otherwise, the code is sent to your account email address. It is used for phone verification, account access, security and trust only — never for marketing, advertising, promotions, discounts or bulk messaging. Messaging delivery may vary by device, network, provider configuration and availability. Message and data rates may apply.{'\n\n'}
+              If you prefer not to receive a verification code, you can choose not to continue with this step, but you will not be able to send enquiries to traders or accept quotes. See our{' '}
               <Text style={styles.consentLink} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
               {' '}and{' '}
               <Text style={styles.consentLink} onPress={() => router.push('/terms')}>Terms</Text>.

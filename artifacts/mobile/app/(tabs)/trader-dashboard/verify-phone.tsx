@@ -148,7 +148,7 @@ export default function VerifyPhoneScreen() {
 
         <Text style={styles.title}>Verify your phone number</Text>
         <Text style={styles.subtitle}>
-          To continue setting up your trader profile, you need to verify your mobile number. MyLocalTrade will send you a one-time verification code by SMS or RCS.{'\n\n'}
+          To continue setting up your trader profile, you need to verify your mobile number. Where Twilio Verify is configured, MyLocalTrade may send a one-time code through its configured channel, such as SMS or RCS where available; otherwise, the code is sent to your account email address.{'\n\n'}
           This verification is required as part of the trader checks for account access, security and trust. Your number is never shared publicly.
         </Text>
 
@@ -203,8 +203,8 @@ export default function VerifyPhoneScreen() {
             </Pressable>
 
             <Text style={styles.consentText}>
-              By continuing, you agree to receive a one-time verification message from MyLocalTrade by SMS or RCS, used for trader phone verification, account access, security and trust only — never for marketing, advertising, promotions, discounts or bulk messaging. Message and data rates may apply.{'\n\n'}
-              If you prefer not to receive the SMS/RCS code, you can choose not to continue with this step, but this may prevent you from completing trader verification or publishing and maintaining a verified trader profile. See our{' '}
+              By continuing, you agree to receive a one-time verification message from MyLocalTrade where Twilio Verify is configured, through its configured channel such as SMS or RCS where available; otherwise, the code is sent to your account email address. It is used for trader phone verification, account access, security and trust only — never for marketing, advertising, promotions, discounts or bulk messaging. Messaging delivery may vary by device, network, provider configuration and availability. Message and data rates may apply.{'\n\n'}
+              If you prefer not to receive a verification code, you can choose not to continue with this step, but this may prevent you from completing trader verification or publishing and maintaining a verified trader profile. See our{' '}
               <Text style={styles.consentLink} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
               {' '}and{' '}
               <Text style={styles.consentLink} onPress={() => router.push('/terms')}>Terms</Text>.
