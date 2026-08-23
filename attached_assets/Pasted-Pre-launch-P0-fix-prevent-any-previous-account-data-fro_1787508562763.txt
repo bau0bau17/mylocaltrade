@@ -1,0 +1,130 @@
+Pre-launch P0 fix: prevent any previous-account data from appearing after account switching.
+
+This comes directly from the latest read-only release audit.
+
+CURRENT ISSUE
+
+The mobile app uses a shared React Query cache across the app. When Account A signs out and Account B signs in on the same device, user-specific cached data may briefly remain available/render before Account B's fresh requests complete.
+
+The audit specifically identified conversations as an example, but this must be fixed comprehensively for all authenticated user-specific data.
+
+This is a privacy/data-isolation issue and must be fixed before launch.
+
+REQUIRED BEHAVIOUR
+
+When the authenticated identity changes:
+
+Account A → signed out
+Account A → Account B
+Account B → Account A
+session invalidated / expired
+account deleted/deactivated
+
+No cached data belonging to the previous account may be rendered, reused or exposed to the new session.
+
+The new user should only see:
+- their own data after authenticated requests complete
+- appropriate loading/empty states while waiting
+
+They must never temporarily see:
+- previous conversations
+- enquiries/jobs
+- quotes/bookings
+- profile/account information
+- notifications
+- team/company data
+- billing/subscription UI derived from another account
+- any other authenticated user-specific cached result
+
+
+IMPLEMENTATION REQUIREMENTS
+
+Please first inspect the existing AuthContext/session lifecycle and React Query setup.
+
+Fix this centrally at the authentication identity boundary rather than adding one-off clears to individual screens.
+
+On authenticated identity transition:
+- cancel in-flight queries belonging to the previous identity
+- clear/remove protected user-specific cached query data before the new identity can render it
+- ensure stale responses from Account A cannot repopulate cache after Account B becomes active
+- preserve genuinely public/non-user-specific cache only where safe
+
+Also inspect current query keys.
+
+Where user-specific queries are intended to remain cached across normal navigation, make sure their query identity cannot collide across different logged-in users.
+
+Do not solve this with arbitrary timeouts or UI delays.
+
+
+REGRESSION TEST REQUIRED
+
+Add an automated regression test covering at minimum:
+
+1. Account A logs in
+2. Account A conversations/data are cached
+3. Account A logs out
+4. Account B logs in on the same running app
+5. Before/while Account B requests resolve, Account A data is not present or renderable
+6. A delayed request/result originally started under Account A must not overwrite Account B state
+
+Also test B → A if practical using the same shared mechanism.
+
+
+CHECK RELATED USER-SCOPED DATA
+
+Audit the authenticated mobile queries for the same risk, including at minimum:
+
+- conversations/messages
+- customer enquiries
+- trader leads/jobs
+- quotes
+- bookings/appointments
+- trader/customer profile
+- team/company state
+- subscription/billing state where user-specific
+- notification-related query state
+
+Do not unnecessarily refactor unrelated features.
+
+
+DO NOT CHANGE
+
+Do not change:
+- business logic
+- job lifecycle
+- quote/hire flow
+- subscription products/pricing
+- database schema unless absolutely necessary
+- UI design except loading/empty behaviour required to prevent stale data exposure
+
+
+VALIDATION
+
+Run:
+- mobile TypeScript check
+- relevant existing mobile tests
+- new account-switch regression test
+- existing API tests only if server code is touched
+
+Perform a focused review of the final diff for account-switch races.
+
+
+WHEN COMPLETE
+
+Commit and push to origin/main.
+
+Report:
+
+1. Commit hash
+2. Root cause
+3. Files changed
+4. Exact cache/session strategy used
+5. Which user-specific query areas were checked
+6. New regression tests added
+7. Test/typecheck results
+8. Whether backend republish is required
+9. Whether a new TestFlight build is required
+
+Explicitly confirm:
+
+“After Account A → Account B on the same device, Account A protected data cannot render from cache or from a stale in-flight response.”
