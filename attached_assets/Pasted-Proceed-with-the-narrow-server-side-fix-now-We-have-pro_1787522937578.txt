@@ -1,0 +1,169 @@
+Proceed with the narrow server-side fix now.
+
+We have proven the exact root cause from production telemetry:
+
+httpResult = 200
+traderVerified = true
+entitlementActive = true
+providerProductId = null
+returnedProductId = null
+resolvedTeamSeats = 0
+persistedSubscriptionActive = true
+persistedProductMatchesProvider = false
+
+RevenueCat itself has already been verified read-only to have one active, renewing, access-granting subscription whose Store product identifier is exactly:
+
+com.mylocaltrade.app.trader.team5.yearly
+
+Therefore this is a server-side RevenueCat product-resolution defect.
+
+IMPORTANT:
+Do not change mobile code unless absolutely necessary.
+Do not create another TestFlight build.
+Do not change Apple products.
+Do not change RevenueCat products, offerings, entitlement configuration, ownership, credentials, verification state, or TEAM_PRODUCT_SEAT_MAP.
+Do not push to GitHub. I will use Replit Git Sync myself.
+Do not deploy/publish when finished.
+
+FIX REQUIREMENT
+
+Keep the existing secure flow:
+
+1. Use the active RevenueCat entitlement to establish that access is currently valid.
+2. From that entitlement/customer state, identify the CURRENT access-granting active subscription.
+3. Resolve that subscription’s RevenueCat product resource.
+4. Resolve the product resource to the actual App Store Store identifier / store_identifier.
+5. Use that Store identifier as the authoritative provider product ID.
+
+For this real account, the result must be:
+
+providerProductId =
+com.mylocaltrade.app.trader.team5.yearly
+
+returnedProductId =
+com.mylocaltrade.app.trader.team5.yearly
+
+resolvedTeamSeats = 5
+
+persistedProductMatchesProvider = true
+
+
+VERY IMPORTANT PROVIDER SEMANTICS
+
+Do not assume the active-entitlement object itself directly contains the Store product identifier.
+
+The previous investigation proved that the RevenueCat API path currently used exposes RevenueCat resource references rather than the Store product identifier at that level.
+
+Use the correct read-only RevenueCat subscription/product resolution chain.
+
+Do not select an arbitrary historical product.
+
+If multiple historical subscriptions/products exist, select only the current access-granting active subscription associated with the active entitlement.
+
+If the current active provider product cannot be resolved safely, continue to fail closed.
+
+
+PERSISTENCE
+
+Once the current provider Store product ID is resolved:
+
+- validate it against the existing server product mapping;
+- derive the correct Team seat allowance;
+- persist the authoritative current subscription state;
+- return the exact Store product ID in the existing sync response.
+
+Do not overwrite valid lifecycle fields unnecessarily.
+Preserve Task #156 idempotency protections.
+
+
+SECURITY
+
+Keep all existing protections:
+
+- canonical server-owned RevenueCat identity
+- authenticated account ownership
+- VERIFIED-only sync
+- active entitlement requirement
+- unknown product fails closed
+- cross-account claims rejected
+- expired/inactive subscription grants no Team seats
+
+Do not fall back to trusting a client-supplied product ID.
+
+Do not simply reuse the persisted product ID as proof if provider resolution fails.
+The provider-derived active product must remain authoritative.
+
+
+PERFORMANCE / PROVIDER CALLS
+
+Avoid unnecessary repeated RevenueCat API calls during the three mobile confirmation attempts.
+
+If the current architecture allows safe request-level reuse/caching of the resolved provider state, use it without weakening freshness or correctness.
+
+Do not introduce a long-lived stale cache for subscription authorization.
+
+
+REGRESSION TESTS
+
+Add tests for:
+
+1. active entitlement returns RevenueCat resource references rather than Store product ID;
+2. active subscription is resolved correctly;
+3. RevenueCat product resource resolves to:
+   com.mylocaltrade.app.trader.team5.yearly
+4. Team mapping resolves to 5 seats;
+5. sync response returns:
+   active: true
+   productId: com.mylocaltrade.app.trader.team5.yearly
+6. persistedProductMatchesProvider becomes true;
+7. repeated Retry remains idempotent;
+8. historical/inactive product is not selected over the current active one;
+9. unknown active product remains fail-closed;
+10. inactive/expired entitlement remains fail-closed;
+11. cross-account RevenueCat identity remains rejected.
+
+
+DIAGNOSTIC TELEMETRY
+
+Keep the current PII-free diagnostic while validating the fix.
+
+After successful production validation, either:
+- remove the temporary diagnostic event, or
+- keep only a suitably low-noise/non-sensitive operational version if there is a clear production-support reason.
+
+Do not add account identifiers, emails, receipts, transaction IDs, tokens or RevenueCat customer IDs.
+
+
+VALIDATION
+
+Run:
+
+- focused RevenueCat reconciliation tests
+- Team billing tests
+- Task #156 lifecycle regression tests
+- full API tests
+- API typecheck
+- independent review of RevenueCat resource → active subscription → Store identifier resolution
+
+
+WHEN COMPLETE
+
+Do not deploy.
+Do not push to GitHub.
+
+Report:
+
+1. Exact RevenueCat API/resource chain used
+2. Why the old implementation produced providerProductId = null
+3. How the current active subscription is selected
+4. How the Store identifier is resolved
+5. How historical products are excluded
+6. Exact expected sync response for Team 5
+7. Tests/results
+8. Backend republish required yes/no
+9. Confirm whether Build 38 is sufficient for final validation
+10. Confirm no TestFlight build is required for this fix
+
+Explicitly confirm:
+
+“An active Team subscription is now authorized from RevenueCat’s current access-granting subscription and resolved to the real App Store Store product identifier before Team seats are granted.”

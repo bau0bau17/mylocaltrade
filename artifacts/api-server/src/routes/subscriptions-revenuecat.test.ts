@@ -18,8 +18,10 @@ vi.mock("../lib/revenueCatClient", () => ({
   getUncachableRevenueCatClient: vi.fn(async () => ({}) as unknown),
 }));
 vi.mock("@replit/revenuecat-sdk", () => ({
+  getProduct: vi.fn(),
   listEntitlements: vi.fn(),
   listCustomerActiveEntitlements: vi.fn(),
+  listSubscriptions: vi.fn(),
 }));
 vi.mock("../lib/push-notifications", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/push-notifications")>();
@@ -44,8 +46,10 @@ import {
 } from "../lib/revenuecat-reconciliation";
 import { resolveProductTier } from "../lib/team-billing";
 import {
+  getProduct,
   listEntitlements,
   listCustomerActiveEntitlements,
+  listSubscriptions,
 } from "@replit/revenuecat-sdk";
 import * as pushModule from "../lib/push-notifications";
 
@@ -74,6 +78,8 @@ const createdUserIds: number[] = [];
 
 const mockListEntitlements = listEntitlements as unknown as Mock;
 const mockListActive = listCustomerActiveEntitlements as unknown as Mock;
+const mockListSubscriptions = listSubscriptions as unknown as Mock;
+const mockGetProduct = getProduct as unknown as Mock;
 const mockSendPush = pushModule.sendPushToUser as unknown as Mock;
 
 function mockEntitlementCatalog() {
@@ -94,16 +100,33 @@ function mockActiveEntitlement(
   expiresAtMs: number | null = Date.now() + 30 * 24 * 60 * 60 * 1000,
   productIdentifier = "premium_monthly",
 ) {
+  const productResourceId = `prod-${productIdentifier}`;
   mockListActive.mockResolvedValue({
     data: {
       items: [
         {
           entitlement_id: ENTITLEMENT_OBJECT_ID,
           expires_at: expiresAtMs,
-          product_identifier: productIdentifier,
         },
       ],
     },
+    error: undefined,
+  });
+  mockListSubscriptions.mockResolvedValue({
+    data: {
+      items: [
+        {
+          status: "active",
+          gives_access: true,
+          product_id: productResourceId,
+          entitlements: { items: [{ id: ENTITLEMENT_OBJECT_ID }] },
+        },
+      ],
+    },
+    error: undefined,
+  });
+  mockGetProduct.mockResolvedValue({
+    data: { store_identifier: productIdentifier },
     error: undefined,
   });
 }
@@ -193,6 +216,8 @@ describe("RevenueCat subscription syncing", () => {
   beforeEach(() => {
     mockListEntitlements.mockReset();
     mockListActive.mockReset();
+    mockListSubscriptions.mockReset();
+    mockGetProduct.mockReset();
     mockSendPush.mockReset();
     mockSendPush.mockResolvedValue(true);
     mockEntitlementCatalog();
@@ -344,6 +369,228 @@ describe("RevenueCat subscription syncing", () => {
         if (savedTeamMap === undefined) delete process.env.TEAM_PRODUCT_SEAT_MAP;
         else process.env.TEAM_PRODUCT_SEAT_MAP = savedTeamMap;
       }
+    });
+
+    it("resolves Team 5 from the active subscription product resource, not an entitlement or historical product", async () => {
+      const trader = await createVerifiedTrader("team5-provider-product-resolution");
+      const team5Product = "com.mylocaltrade.app.trader.team5.yearly";
+      const historicalProduct = "com.mylocaltrade.app.trader.yearly";
+      const savedTeamMap = process.env.TEAM_PRODUCT_SEAT_MAP;
+      process.env.TEAM_PRODUCT_SEAT_MAP = JSON.stringify({ [team5Product]: 5 });
+      try {
+        mockListActive.mockResolvedValue({
+          data: {
+            items: [{ entitlement_id: ENTITLEMENT_OBJECT_ID, expires_at: Date.now() + 86_400_000 }],
+          },
+          error: undefined,
+        });
+        mockListSubscriptions.mockResolvedValue({
+          data: {
+            items: [
+              {
+                status: "expired",
+                gives_access: false,
+                product_id: "prod-historical",
+                entitlements: { items: [{ id: ENTITLEMENT_OBJECT_ID }] },
+              },
+              {
+                status: "active",
+                gives_access: true,
+                product_id: "prod-team5-current",
+                entitlements: { items: [{ id: ENTITLEMENT_OBJECT_ID }] },
+              },
+            ],
+          },
+          error: undefined,
+        });
+        mockGetProduct.mockImplementation(async ({ path }: { path: { product_id: string } }) => ({
+          data: {
+            store_identifier:
+              path.product_id === "prod-team5-current" ? team5Product : historicalProduct,
+          },
+          error: undefined,
+        }));
+
+        const res = await request(app)
+          .post("/api/subscriptions/revenuecat-sync")
+          .set("Authorization", `Bearer ${trader.token}`)
+          .send({});
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ active: true, productId: team5Product });
+        expect(mockGetProduct).toHaveBeenCalledTimes(1);
+        expect(mockGetProduct).toHaveBeenCalledWith(
+          expect.objectContaining({ path: expect.objectContaining({ product_id: "prod-team5-current" }) }),
+        );
+
+        const [subscription] = await db
+          .select({
+            status: subscriptionsTable.status,
+            productIdentifier: subscriptionsTable.productIdentifier,
+          })
+          .from(subscriptionsTable)
+          .where(eq(subscriptionsTable.userId, trader.id))
+          .limit(1);
+        expect(subscription).toMatchObject({
+          status: "active",
+          productIdentifier: team5Product,
+        });
+        expect(subscription.productIdentifier).toBe(res.body.productId);
+        expect(resolveProductTier(subscription.productIdentifier)).toEqual({
+          tier: "team_5",
+          seats: 5,
+        });
+
+        const repeat = await request(app)
+          .post("/api/subscriptions/revenuecat-sync")
+          .set("Authorization", `Bearer ${trader.token}`)
+          .send({});
+        expect(repeat.status).toBe(200);
+        expect(repeat.body).toMatchObject({ active: true, productId: team5Product });
+        expect(activationPushes(trader.id)).toHaveLength(1);
+      } finally {
+        if (savedTeamMap === undefined) delete process.env.TEAM_PRODUCT_SEAT_MAP;
+        else process.env.TEAM_PRODUCT_SEAT_MAP = savedTeamMap;
+      }
+    });
+
+    it("follows RevenueCat subscription pagination to resolve a current Team 5 subscription", async () => {
+      const trader = await createVerifiedTrader("team5-provider-pagination");
+      const team5Product = "com.mylocaltrade.app.trader.team5.yearly";
+      const savedTeamMap = process.env.TEAM_PRODUCT_SEAT_MAP;
+      process.env.TEAM_PRODUCT_SEAT_MAP = JSON.stringify({ [team5Product]: 5 });
+      try {
+        mockListActive.mockResolvedValue({
+          data: {
+            items: [{ entitlement_id: ENTITLEMENT_OBJECT_ID, expires_at: Date.now() + 86_400_000 }],
+          },
+          error: undefined,
+        });
+        mockListSubscriptions
+          .mockResolvedValueOnce({
+            data: {
+              items: [
+                {
+                  status: "expired",
+                  gives_access: false,
+                  product_id: "prod-historical",
+                  entitlements: { items: [{ id: ENTITLEMENT_OBJECT_ID }] },
+                },
+              ],
+              next_page:
+                "https://api.revenuecat.com/v2/projects/test/customers/test/subscriptions?starting_after=page-two",
+            },
+            error: undefined,
+          })
+          .mockResolvedValueOnce({
+            data: {
+              items: [
+                {
+                  status: "active",
+                  gives_access: true,
+                  product_id: "prod-team5-current",
+                  entitlements: { items: [{ id: ENTITLEMENT_OBJECT_ID }] },
+                },
+              ],
+            },
+            error: undefined,
+          });
+        mockGetProduct.mockResolvedValue({
+          data: { store_identifier: team5Product },
+          error: undefined,
+        });
+
+        const res = await request(app)
+          .post("/api/subscriptions/revenuecat-sync")
+          .set("Authorization", `Bearer ${trader.token}`)
+          .send({});
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ active: true, productId: team5Product });
+        expect(mockListSubscriptions).toHaveBeenCalledTimes(2);
+        expect(mockListSubscriptions).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            query: expect.objectContaining({ limit: 100, starting_after: "page-two" }),
+          }),
+        );
+        expect(resolveProductTier(res.body.productId)).toEqual({ tier: "team_5", seats: 5 });
+      } finally {
+        if (savedTeamMap === undefined) delete process.env.TEAM_PRODUCT_SEAT_MAP;
+        else process.env.TEAM_PRODUCT_SEAT_MAP = savedTeamMap;
+      }
+    });
+
+    it("fails closed when paginated subscriptions contain two current access-granting matches", async () => {
+      const trader = await createVerifiedTrader("ambiguous-provider-product");
+      mockListActive.mockResolvedValue({
+        data: {
+          items: [{ entitlement_id: ENTITLEMENT_OBJECT_ID, expires_at: Date.now() + 86_400_000 }],
+        },
+        error: undefined,
+      });
+      mockListSubscriptions
+        .mockResolvedValueOnce({
+          data: {
+            items: [
+              {
+                status: "active",
+                gives_access: true,
+                product_id: "prod-first",
+                entitlements: { items: [{ id: ENTITLEMENT_OBJECT_ID }] },
+              },
+            ],
+            next_page:
+              "https://api.revenuecat.com/v2/projects/test/customers/test/subscriptions?starting_after=page-two",
+          },
+          error: undefined,
+        })
+        .mockResolvedValueOnce({
+          data: {
+            items: [
+              {
+                status: "active",
+                gives_access: true,
+                product_id: "prod-second",
+                entitlements: { items: [{ id: ENTITLEMENT_OBJECT_ID }] },
+              },
+            ],
+          },
+          error: undefined,
+        });
+
+      const res = await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({});
+      expect(res.status).toBe(502);
+      expect(mockGetProduct).not.toHaveBeenCalled();
+      const rows = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id));
+      expect(rows).toHaveLength(0);
+    });
+
+    it("fails closed to zero Team seats for an unknown active provider Store product", async () => {
+      const trader = await createVerifiedTrader("unknown-provider-product");
+      const unknownProduct = "com.mylocaltrade.app.trader.team999.yearly";
+      mockActiveEntitlement(undefined, unknownProduct);
+
+      const res = await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({});
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ active: true, productId: unknownProduct });
+
+      const [subscription] = await db
+        .select({ productIdentifier: subscriptionsTable.productIdentifier })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(subscription.productIdentifier).toBe(unknownProduct);
+      expect(resolveProductTier(subscription.productIdentifier)).toEqual({
+        tier: "premium_solo",
+        seats: 0,
+      });
     });
 
     it("creates an active row, grants perks, and notifies exactly once when no row exists", async () => {

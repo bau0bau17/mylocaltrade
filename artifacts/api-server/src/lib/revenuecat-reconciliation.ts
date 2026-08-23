@@ -6,8 +6,10 @@ import {
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import {
+  getProduct,
   listCustomerActiveEntitlements,
   listEntitlements,
+  listSubscriptions,
 } from "@replit/revenuecat-sdk";
 import type { Logger } from "pino";
 import { getUncachableRevenueCatClient } from "./revenueCatClient";
@@ -24,7 +26,40 @@ const RC_PLAN_ID = "premium";
 interface RevenueCatActiveEntitlement {
   entitlement_id?: string;
   expires_at?: number | null;
-  product_identifier?: string;
+}
+
+interface RevenueCatSubscription {
+  status?: string;
+  gives_access?: boolean;
+  product_id?: string;
+  entitlements?: {
+    items?: Array<{
+      id?: string;
+    }>;
+  };
+}
+
+interface RevenueCatSubscriptionPage {
+  items?: RevenueCatSubscription[];
+  next_page?: string | null;
+}
+
+interface RevenueCatProduct {
+  store_identifier?: string;
+}
+
+const SUBSCRIPTIONS_PAGE_SIZE = 100;
+const MAX_SUBSCRIPTION_PAGES = 20;
+
+function getNextSubscriptionCursor(nextPage: string): string | null {
+  try {
+    const cursor = new URL(nextPage, "https://api.revenuecat.com").searchParams.get(
+      "starting_after",
+    );
+    return cursor || null;
+  } catch {
+    return null;
+  }
 }
 
 export type RevenueCatReconciliationResult =
@@ -144,6 +179,7 @@ export async function reconcileRevenueCatEntitlement(
   let activeEntitlements: RevenueCatActiveEntitlement[];
   let targetEntitlementId: string | null = null;
   let targetLookupKey: string | null = null;
+  let providerProductId: string | null = null;
   try {
     const client = await getUncachableRevenueCatClient();
     const { data: entlData } = await listEntitlements({
@@ -207,6 +243,86 @@ export async function reconcileRevenueCatEntitlement(
     return { status: "synced", active: false, productId: null };
   }
 
+  try {
+    const client = await getUncachableRevenueCatClient();
+    // An active-entitlement response proves access but does not reliably carry
+    // the App Store identifier. Resolve the one live subscription that both
+    // gives access and is linked to this entitlement; historical subscriptions
+    // and product references are never eligible to grant Team seats.
+    const matchingSubscriptions: RevenueCatSubscription[] = [];
+    const seenCursors = new Set<string>();
+    let startingAfter: string | undefined;
+    for (let pageNumber = 0; pageNumber < MAX_SUBSCRIPTION_PAGES; pageNumber++) {
+      const { data: rawSubscriptionsData, error: subscriptionsError } = await listSubscriptions({
+        client,
+        path: { project_id: REVENUECAT_PROJECT_ID, customer_id: rcCustomerId },
+        query: {
+          limit: SUBSCRIPTIONS_PAGE_SIZE,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        },
+      });
+      if (subscriptionsError) {
+        log.error({ err: subscriptionsError }, "RevenueCat subscription lookup failed");
+        return { status: "provider_error" };
+      }
+      const subscriptionsData = rawSubscriptionsData as RevenueCatSubscriptionPage | undefined;
+      matchingSubscriptions.push(
+        ...(subscriptionsData?.items ?? []).filter(
+          (subscription) =>
+            subscription.status === "active" &&
+            subscription.gives_access === true &&
+            !!subscription.product_id &&
+            (subscription.entitlements?.items ?? []).some(
+              (subscriptionEntitlement) => subscriptionEntitlement.id === entitlement.entitlement_id,
+            ),
+        ),
+      );
+      // Two qualifying subscriptions are ambiguous; further pagination cannot
+      // make that safe, so fail closed without extra provider calls.
+      if (matchingSubscriptions.length > 1) break;
+
+      if (!subscriptionsData?.next_page) break;
+      const nextCursor = getNextSubscriptionCursor(subscriptionsData.next_page);
+      if (!nextCursor || seenCursors.has(nextCursor)) {
+        log.warn("RevenueCat subscriptions pagination cursor was invalid or repeated");
+        return { status: "provider_error" };
+      }
+      seenCursors.add(nextCursor);
+      startingAfter = nextCursor;
+
+      if (pageNumber === MAX_SUBSCRIPTION_PAGES - 1) {
+        log.warn(
+          { subscriptionPages: MAX_SUBSCRIPTION_PAGES },
+          "RevenueCat subscriptions pagination limit reached",
+        );
+        return { status: "provider_error" };
+      }
+    }
+    if (matchingSubscriptions.length !== 1) {
+      log.warn(
+        { activeSubscriptionMatches: matchingSubscriptions.length },
+        "RevenueCat active entitlement did not resolve to exactly one access-granting subscription",
+      );
+      return { status: "provider_error" };
+    }
+
+    const { data: productData, error: productError } = await getProduct({
+      client,
+      path: {
+        project_id: REVENUECAT_PROJECT_ID,
+        product_id: matchingSubscriptions[0].product_id!,
+      },
+    });
+    if (productError || !(productData as RevenueCatProduct | undefined)?.store_identifier) {
+      log.error({ err: productError }, "RevenueCat product lookup failed");
+      return { status: "provider_error" };
+    }
+    providerProductId = (productData as RevenueCatProduct).store_identifier!;
+  } catch (error) {
+    log.error({ err: error }, "RevenueCat subscription/product resolution error");
+    return { status: "provider_error" };
+  }
+
   const periodEnd = expiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   let newlyActivated = false;
   await db.transaction(async (tx) => {
@@ -230,7 +346,7 @@ export async function reconcileRevenueCatEntitlement(
           currentPeriodEnd: periodEnd,
           cancelAtPeriodEnd: willRenew !== undefined ? !willRenew : existing.cancelAtPeriodEnd,
           originalPurchaseAt: existing.originalPurchaseAt ?? new Date(),
-          productIdentifier: entitlement.product_identifier ?? existing.productIdentifier ?? null,
+          productIdentifier: providerProductId,
           updatedAt: new Date(),
         })
         .where(eq(subscriptionsTable.userId, userId));
@@ -243,7 +359,7 @@ export async function reconcileRevenueCatEntitlement(
         currentPeriodEnd: periodEnd,
         cancelAtPeriodEnd: willRenew === false,
         originalPurchaseAt: new Date(),
-        productIdentifier: entitlement.product_identifier ?? null,
+          productIdentifier: providerProductId,
       });
     }
 
@@ -264,7 +380,7 @@ export async function reconcileRevenueCatEntitlement(
     await logAudit({
       userId,
       action: "SUBSCRIPTION_ACTIVATED",
-      details: { plan: RC_PLAN_ID, source: "revenuecat", productId: entitlement.product_identifier },
+        details: { plan: RC_PLAN_ID, source: "revenuecat", productId: providerProductId },
     });
     await logAudit({
       userId,
@@ -281,7 +397,7 @@ export async function reconcileRevenueCatEntitlement(
   return {
     status: "synced",
     active: true,
-    productId: entitlement.product_identifier ?? null,
+    productId: providerProductId,
     currentPeriodEnd: periodEnd.toISOString(),
   };
 }
