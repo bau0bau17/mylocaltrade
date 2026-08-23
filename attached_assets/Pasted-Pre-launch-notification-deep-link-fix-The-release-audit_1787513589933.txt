@@ -1,0 +1,126 @@
+Pre-launch notification deep-link fix.
+
+The release audit found that several actionable push notifications already include a conversationId/job context in their payload, but the mobile notification-response router does not currently route all of them to the relevant conversation/job.
+
+Please keep this task tightly scoped to notification tap routing.
+
+CURRENT ISSUE
+
+Push notifications for actions such as:
+
+- new/updated quote
+- quote accepted / hire-related action
+- booking / appointment update
+- booking confirmation
+- reassignment / colleague assignment where applicable
+
+may contain the relevant conversationId/job identifier, but tapping the notification can open the app without taking the user directly to the job/conversation that requires attention.
+
+EXPECTED BEHAVIOUR
+
+When a notification contains a valid conversationId/job context:
+
+- tapping it should open the relevant MyLocalTrade conversation/job directly;
+- the correct customer/trader role should land on the same existing conversation screen used when navigating normally inside the app;
+- the notification should not create a separate duplicate navigation flow.
+
+Please inspect the existing notification router first and reuse the current conversation deep-link/navigation logic.
+
+CHECK ALL ACTIONABLE NOTIFICATION TYPES
+
+Audit current push payloads and tap handling for at least:
+
+- messages
+- customer enquiries
+- trader leads
+- quotes
+- quote accepted / hired
+- appointments / bookings
+- booking changes / confirmations
+- job reminders
+- reassignment / employee assignment
+- verification notifications
+- subscription notifications where applicable
+
+Not every notification needs to open a conversation.
+
+Use the most appropriate existing destination for each notification type.
+
+For notifications that already work correctly, do not change them unnecessarily.
+
+FAIL-SAFE BEHAVIOUR
+
+If:
+- conversationId is missing;
+- the conversation no longer exists;
+- the logged-in user no longer has access;
+- the payload is malformed;
+
+fall back safely to the appropriate Messages / Enquiries / Home screen instead of crashing.
+
+Do not expose a conversation belonging to another account or company.
+
+ACCOUNT-SWITCH SAFETY
+
+Task #149 has already added account-data/session isolation.
+
+Do not bypass those protections.
+
+Notification navigation must respect the currently authenticated account and existing authorization checks.
+
+COLD / WARM APP STATES
+
+Verify tap behaviour for:
+
+1. App already open
+2. App in background
+3. App cold-started from the notification
+
+Avoid duplicate navigation if the same notification callback is processed more than once.
+
+DO NOT CHANGE
+
+Do not change:
+- push notification generation rules unless a missing identifier is proven
+- notification text/copy unnecessarily
+- quote or booking business logic
+- permissions
+- database schema
+- Expo notification provider configuration
+- APNs/FCM configuration
+- unrelated navigation
+
+TESTS
+
+Add/update focused tests for notification response routing where practical, including:
+
+- valid quote notification → correct conversation
+- valid booking notification → correct conversation
+- valid reassignment notification → correct destination
+- malformed/missing conversationId → safe fallback
+- inaccessible/stale conversation → no protected-data exposure
+- duplicate callback → no harmful duplicate navigation where applicable
+
+Run:
+- mobile TypeScript check
+- relevant mobile tests
+- focused final review of notification routing
+
+WHEN COMPLETE
+
+Commit and push to origin/main.
+
+Report:
+
+1. Final GitHub main SHA
+2. Notification types audited
+3. Which notification types were previously missing routing
+4. Exact destinations now used
+5. Cold/background/foreground behaviour
+6. Tests/typechecks and results
+7. Whether backend republish is required
+8. Whether a new TestFlight build is required
+
+Explicitly confirm:
+
+“Actionable quote, booking and reassignment notifications with valid job/conversation context now open the correct existing conversation/job screen while respecting the current authenticated account.”
