@@ -37,7 +37,7 @@ export default function PrivacyScreen() {
           Personal Data: We may collect personally identifiable information, such as your name, email address, telephone number, and location when you register for an account.
         </Text>
         <Text style={styles.paragraph}>
-          Trader Data: If you register as a tradesperson, we collect business details and verification documents. We do not collect or store your payment card details. Digital subscriptions are purchased through the app-store platform through which you buy them — Apple App Store for Apple purchases or Google Play where offered — with subscription status supported by RevenueCat. The relevant store processes payment under its own terms.
+          Trader Data: If you register as a tradesperson, we collect business details and verification documents. We do not collect or store your payment card details. Subscriptions purchased through the MyLocalTrade iOS app are processed by Apple through the App Store, with subscription status supported by RevenueCat.
         </Text>
         <Text style={styles.paragraph}>
           Technical Data: We automatically collect certain information about your device, including IP address, device type, operating system, and usage patterns.
@@ -97,7 +97,7 @@ export default function PrivacyScreen() {
         <Text style={styles.paragraph}>
           - To facilitate connections between customers and tradespeople{'\n'}
           - To manage your account and subscriptions{'\n'}
-          - To support store-managed digital subscriptions, with subscription status managed through RevenueCat{'\n'}
+          - To support Apple App Store subscriptions, with subscription status managed through RevenueCat{'\n'}
           - To improve our services and app functionality{'\n'}
           - To send service-related communications{'\n'}
           - To comply with legal and regulatory requirements
@@ -142,14 +142,14 @@ export default function PrivacyScreen() {
           MyLocalTrade does not process payments from customers to traders for the work described in an enquiry or quote. After a trader is hired, the customer and trader arrange payment for the actual work separately.
         </Text>
         <Text style={styles.paragraph}>
-          Store-managed subscriptions are separate from customer-to-trader job payments. They are purchased through the relevant app-store platform, with subscription status managed through RevenueCat. MyLocalTrade does not collect or store store payment-card details.
+          Subscriptions purchased in the MyLocalTrade iOS app are separate from customer-to-trader job payments and are processed by Apple through the App Store, with subscription status managed through RevenueCat. MyLocalTrade does not collect or store Apple payment-card details.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.heading}>9. Data Sharing</Text>
         <Text style={styles.paragraph}>
-          We may share your data with the providers that operate our service: the relevant app-store platform (Apple App Store or Google Play where offered) and RevenueCat for store-managed trader subscriptions; our communications providers, which may deliver verification messages; our email provider (Brevo); and our hosting provider. We do not sell your personal data to third parties. When you send an enquiry to a trader, the trader receives your name, the service required, your preferred date and your message so they can respond to your request. If you choose to provide a phone number with your enquiry, it is stored securely but is not shown to the trader before hire — your phone number and email address only become available to a trader after you accept their quote or hire them, as described in the Contact Details and Communication Between Users section above. Replies come back through the in-app messaging system.
+          We may share your data with the providers that operate our service: Apple (App Store) and RevenueCat for trader subscriptions purchased on iOS; our communications providers, which may deliver verification messages; our email provider (Brevo); and our hosting provider. We do not sell your personal data to third parties. When you send an enquiry to a trader, the trader receives your name, the service required, your preferred date and your message so they can respond to your request. If you choose to provide a phone number with your enquiry, it is stored securely but is not shown to the trader before hire — your phone number and email address only become available to a trader after you accept their quote or hire them, as described in the Contact Details and Communication Between Users section above. Replies come back through the in-app messaging system.
         </Text>
       </View>
 

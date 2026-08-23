@@ -85,8 +85,8 @@ export default function BillingScreen() {
         result.active && result.confirmed
           ? 'Your Premium plan has been restored.'
           : result.active
-              ? 'Your purchase platform found your subscription, but we could not yet confirm the server-authorized Team seats. Use Retry to update your plan.'
-              : 'We could not find an active subscription for this store account.',
+              ? 'Apple found your subscription, but we could not yet confirm the server-authorized Team seats. Use Retry to update your plan.'
+              : 'We could not find an active subscription for this Apple ID.',
       );
     } catch (e) {
       Alert.alert('Restore failed', e instanceof Error ? e.message : 'Try again.');
@@ -324,9 +324,9 @@ export default function BillingScreen() {
                 <Text style={s.secondaryBtnText}>Manage subscription</Text>
               </Pressable>
               <Text style={s.actionHint}>
-                Switch between available plans from Change plan. Your purchase platform applies
-                upgrades and downgrades within your subscription; update payment or cancel in that
-                platform's subscription settings.
+                Switch between available plans from Change plan. Apple applies upgrades and
+                downgrades within your subscription; update payment or cancel in your App Store
+                subscription settings.
               </Text>
               {!cancelled && (
                 <Pressable style={s.dangerBtn} onPress={() => setShowDowngrade(true)}>
