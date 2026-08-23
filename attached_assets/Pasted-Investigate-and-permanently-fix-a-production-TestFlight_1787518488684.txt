@@ -1,0 +1,238 @@
+Investigate and permanently fix a production/TestFlight subscription reconciliation bug triggered by Admin Reset Verification.
+
+IMPORTANT:
+Do not push to GitHub. I will use Replit Git Sync myself.
+Do not deploy/publish production.
+Do not change Apple/RevenueCat products or production environment variables unless the audit proves they are wrong.
+Do not create a new purchase to work around the issue.
+
+REAL REPRODUCTION CASE
+
+Trader account:
+sabaulucian@live.com
+
+Before the issue:
+- trader was fully verified/approved
+- existing active Apple/TestFlight subscription:
+  Team 5 Annual
+- Team page correctly had 5 employee seats
+
+Then I used the Admin Dashboard to RESET the trader's verification.
+
+I subsequently completed the verification process again and the trader was approved again.
+
+After re-approval, the Apple/RevenueCat subscription is still detected by the app as:
+
+Team 5 Annual
+ACTIVE
+
+but Billing and Team now show:
+
+“Plan update needs confirmation
+We could not confirm your latest plan. Your previous Team seats are still shown.”
+
+Retry / Restore produces:
+
+“Plan update pending
+Apple found your subscription, but we could not yet confirm the server-authorized Team seats.”
+
+The Team page still displays the previous 5 seats, but server confirmation never completes.
+
+
+FIRST: TRACE THE EXACT FAILURE
+
+Please inspect the complete current flow:
+
+1. Admin Reset Verification
+2. trader verification state reset
+3. trader verification re-submission
+4. admin approval/re-approval
+5. RevenueCat customer identity / appUserID
+6. active entitlement lookup
+7. active product ID
+8. subscription confirmation/reconciliation endpoint
+9. TEAM_PRODUCT_SEAT_MAP lookup
+10. server subscription persistence
+11. Team seat authorization
+12. mobile Retry
+13. Restore Purchases
+
+Determine exactly which server condition prevents the already-valid Team 5 subscription from being confirmed after verification has been reset and then approved again.
+
+Do not assume this is an Apple purchase failure.
+
+The screenshots demonstrate that Apple/RevenueCat already finds the subscription.
+The failure is specifically server confirmation of Team seats.
+
+
+VERIFY SEPARATION OF VERIFICATION AND BILLING
+
+Admin “Reset Verification” must NOT unintentionally:
+
+- delete or detach RevenueCat subscription ownership
+- change RevenueCat app user identity
+- clear an active subscription product ID
+- remove Team seat entitlement
+- clear billing ownership
+- invalidate an otherwise valid Apple subscription
+- permanently set a subscription confirmation state to pending
+- require the user to purchase the subscription again
+
+Verification status and paid subscription ownership must remain separate concerns.
+
+If product features are intentionally restricted while a trader is unverified, then once the trader is approved again the existing active subscription must automatically reconcile and restore its correct capabilities/seats.
+
+
+RE-APPROVAL RECONCILIATION
+
+After a previously subscribed trader becomes verified/approved again:
+
+- query/reconcile the current RevenueCat entitlement using the existing authenticated account
+- confirm the current RevenueCat product ID
+- derive Team seats from the existing server-authorized product mapping
+- persist the correct subscription state
+- clear any stale pending/unconfirmed state
+- return the correct plan and seats to the app
+
+For this case:
+
+com.mylocaltrade.app.trader.team5.yearly
+must resolve to:
+5 Team employee seats
+
+Do not hardcode this one product as a special-case fix.
+Use the existing shared Team product mapping.
+
+
+RETRY / RESTORE
+
+Audit the meaning of both actions.
+
+Retry:
+- should reconcile an already-detected entitlement with the backend.
+
+Restore Purchases:
+- should ask RevenueCat/StoreKit to restore ownership and then reconcile with the backend.
+
+If Apple/RevenueCat finds a valid active subscription, neither path should remain indefinitely in “server-authorized Team seats pending” when the backend already recognizes the product.
+
+Make both flows idempotent and safe to repeat.
+
+
+STALE STATE / CACHE
+
+Check whether Reset Verification or re-approval leaves behind:
+
+- stale subscription confirmation state
+- stale verification state
+- stale React Query cache
+- stale RevenueCat customer info
+- mismatched trader/profile/user ID
+- previous entitlement confirmation token/state
+- server record marked pending
+- seat count held only as previous/local fallback
+
+A full app restart must not be required for correctness, although normal refresh may still occur.
+
+
+SECURITY
+
+Do not weaken subscription verification.
+
+The backend must still fail closed for:
+
+- unknown product IDs
+- expired subscription
+- entitlement belonging to another account
+- malformed/untrusted client claims
+
+The fix must only allow a legitimately active RevenueCat subscription belonging to the authenticated trader to reconcile correctly.
+
+
+REGRESSION TEST
+
+Add an automated regression covering this exact lifecycle:
+
+1. verified trader
+2. active Team 5 subscription
+3. server reports 5 employee seats
+4. admin resets verification
+5. trader completes verification again
+6. admin approves trader again
+7. active Apple/RevenueCat entitlement is unchanged
+8. subscription reconciliation runs
+9. server again reports Team 5
+10. server reports 5 employee seats
+11. Billing has no “Plan update needs confirmation” warning
+12. Team has no pending-warning state
+13. no repurchase is required
+
+Also test:
+
+- Retry is idempotent
+- Restore after re-approval is idempotent
+- unknown Team product still fails closed
+- another user's entitlement cannot be used
+- verification reset itself does not erase paid subscription ownership
+
+
+CHECK CURRENT PRODUCTION CONFIGURATION READ-ONLY
+
+Confirm, without changing secrets, that the effective Team mapping still contains:
+
+com.mylocaltrade.app.trader.team5.yearly -> 5
+com.mylocaltrade.app.trader.team10.yearly -> 10
+com.mylocaltrade.app.trader.team20.yearly -> 20
+
+Do not print secret values.
+
+
+IMPORTANT UX REQUIREMENT
+
+Do not simply remove the warning.
+
+The warning currently reveals a genuine backend reconciliation failure.
+
+Fix the underlying state/reconciliation issue first.
+
+After a successful reconciliation the warning must disappear automatically and the Team page/Billing page must display the server-authorized current plan.
+
+
+VALIDATION
+
+Run:
+
+- focused subscription/reconciliation API tests
+- Team billing tests
+- verification reset/re-approval regression test
+- relevant RevenueCat lifecycle tests
+- mobile billing/Team tests
+- API TypeScript
+- mobile TypeScript
+- full API suite if practical
+
+Have an independent final review specifically inspect the verification-reset → subscription-reconciliation boundary.
+
+
+WHEN COMPLETE
+
+Do NOT push to GitHub.
+
+Report:
+
+1. Exact root cause
+2. Why Reset Verification triggered it
+3. Whether RevenueCat identity was affected
+4. Whether the server subscription record was affected
+5. Whether Team seat mapping was correct
+6. Files changed
+7. Exact behavior before vs after
+8. Regression tests added
+9. Test/typecheck results
+10. Whether production backend republish is required
+11. Whether a new TestFlight build is required
+12. Whether this existing affected account will self-heal after deploy + Retry, or whether a one-time server reconciliation is necessary
+
+Explicitly confirm:
+
+“A verified trader with an existing active Apple subscription can have verification reset and completed again without losing subscription ownership or Team seat authorization.”
