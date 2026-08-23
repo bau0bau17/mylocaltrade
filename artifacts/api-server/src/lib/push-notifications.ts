@@ -111,7 +111,10 @@ export async function sendPushToUser(
     to,
     title: payload.title,
     body: payload.body,
-    data: payload.data,
+    // Bind every response payload to the user the token currently belongs to.
+    // Mobile uses this to discard a stale notification after a shared device
+    // has switched accounts, before it can attempt a protected deep link.
+    data: { ...payload.data, recipientUserId: userId },
     sound: "default",
     channelId: "default",
   }));

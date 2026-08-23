@@ -38,6 +38,11 @@ import {
 } from "@workspace/api-client-react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "@/lib/api-url";
+import {
+  markNotificationResponseHandled,
+  notificationDestination,
+  notificationIsForUser,
+} from "@/lib/notification-response-routing";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -65,40 +70,47 @@ function useNotificationDeepLinks() {
   const router = useRouter();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  const navigatedFromInitialRef = useRef(false);
+  const handledNotificationResponses = useRef(new Set<string>());
 
   useEffect(() => {
     // expo-notifications has no native module on web — every API throws
     // "is not available on web". Skip deep-link wiring entirely there.
     if (Platform.OS === "web") return;
+    // Wait for the current authenticated identity. This avoids routing a
+    // notification while auth hydration is still resolving and ensures that an
+    // account switch gets a fresh, identity-scoped response handler.
+    if (!user) return;
     // Admins don't have customer/trader chats or leads — never deep-link them
     // into those surfaces (they'd hit the role-block screens).
     if (isAdmin) return;
 
-    const handle = (data: unknown) => {
-      if (!data || typeof data !== "object") return;
-      const d = data as { type?: string; conversationId?: number | string };
-      if (d.type === "new_message" && d.conversationId != null) {
-        router.push(`/messages/${d.conversationId}`);
-      } else if (d.type === "new_enquiry" || d.type === "lead_reminder") {
-        router.push("/trader-dashboard/leads");
-      } else if (d.type === "verification_update") {
-        // Verification status changes are surfaced on the trader dashboard.
-        router.push("/trader-dashboard");
-      } else if (d.type === "subscription_update") {
-        // Subscription/billing changes deep-link to the billing screen.
-        router.push("/trader-dashboard/billing");
+    let active = true;
+    const handle = (response: Notifications.NotificationResponse) => {
+      if (!active) return false;
+      const request = response.notification.request;
+      // Do this before any routing or dedupe state is changed. Push tokens can
+      // be reassigned on a shared device; an old response must never steer the
+      // newly authenticated account toward another account's conversation.
+      if (!notificationIsForUser(request.content.data, user.id)) {
+        return true; // consume stale/unbound cold-start responses without routing
       }
-      // "report_update" intentionally has no deep-link target — there is no
-      // report-status screen, so tapping simply opens the app; the body text
-      // carries the outcome.
+      if (!markNotificationResponseHandled(handledNotificationResponses.current, request.identifier)) {
+        return false;
+      }
+
+      const destination = notificationDestination(request.content.data);
+      if (destination) {
+        // This only changes the route. Conversation screens continue to fetch
+        // through the authenticated API, whose participant/company checks are
+        // the source of truth for stale or cross-account payloads.
+        router.push(destination);
+      }
+      return true;
     };
 
     // App was opened by tapping a notification while killed.
     Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response && !navigatedFromInitialRef.current) {
-        navigatedFromInitialRef.current = true;
-        handle(response.notification.request.content.data);
+      if (response && handle(response)) {
         // Clear so a future cold start doesn't re-navigate to a stale thread.
         const maybeClear = (
           Notifications as unknown as {
@@ -113,10 +125,13 @@ function useNotificationDeepLinks() {
 
     // Tap on a notification while app is foregrounded/backgrounded.
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      handle(response.notification.request.content.data);
+      handle(response);
     });
-    return () => sub.remove();
-  }, [router, isAdmin]);
+    return () => {
+      active = false;
+      sub.remove();
+    };
+  }, [router, user, isAdmin]);
 }
 
 // Keeps the unread-messages badges live: when a message push notification

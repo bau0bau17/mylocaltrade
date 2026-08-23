@@ -125,7 +125,7 @@ describe("sendPushToUser deleted-account guard", () => {
     ).toBe(true);
   });
 
-  it("still sends for a live user (guard does not over-block)", async () => {
+  it("still sends for a live user and binds the payload to that account", async () => {
     const userId = await createUser();
     await registerPushToken(userId, `ExponentPushToken[guard-live-${SUFFIX}]`, "ios");
     vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -135,9 +135,24 @@ describe("sendPushToUser deleted-account guard", () => {
     }));
     vi.stubGlobal("fetch", fetchSpy);
 
-    const result = await sendPushToUser(userId, { title: "t", body: "b" });
+    const result = await sendPushToUser(userId, {
+      title: "t",
+      body: "b",
+      data: { type: "quote_received", conversationId: 123, recipientUserId: 999 },
+    });
 
     expect(result).toBe(true);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const fetchCalls = fetchSpy.mock.calls as unknown as Array<[string, { body: string }]>;
+    const [, init] = fetchCalls[0]!;
+    expect(JSON.parse(init.body)).toEqual([
+      expect.objectContaining({
+        data: {
+          type: "quote_received",
+          conversationId: 123,
+          recipientUserId: userId,
+        },
+      }),
+    ]);
   });
 });
