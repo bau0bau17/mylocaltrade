@@ -62,6 +62,11 @@ export default function PricingScreen() {
   const [promoChecking, setPromoChecking] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [purchasing, setPurchasing] = useState<PlanKey | null>(null);
+  const {
+    isServerStateUpdating,
+    serverStateError,
+    retryServerState,
+  } = subscription;
 
   const { data: onboardingStatus, isLoading: isLoadingOnboarding, refetch: refetchOnboarding } = useGetTraderOnboardingStatus({
     query: {
@@ -157,8 +162,8 @@ export default function PricingScreen() {
     if (purchasing) return;
     setPurchasing(key);
     try {
-      const active = await subscription.purchase(pkg);
-      if (active) {
+      const result = await subscription.purchase(pkg);
+      if (result.active && result.confirmed) {
         const isTeam = key === 'team5' || key === 'team10' || key === 'team20';
         Alert.alert(
           `${PLAN_LABELS[key]} is now active`,
@@ -167,6 +172,11 @@ export default function PricingScreen() {
             : 'Your listing is now featured and boosted in local search. You can manage your plan any time from Billing.',
         );
         router.push('/trader-dashboard/billing');
+      } else if (result.active) {
+        Alert.alert(
+          'Plan update pending',
+          'Apple confirmed your purchase, but we could not yet confirm the server-authorized Team seats. Your previous allowance remains in place. Use Retry to update your plan.',
+        );
       }
     } catch (e) {
       // A user dismissing the Apple payment sheet is not an error worth surfacing.
@@ -187,11 +197,17 @@ export default function PricingScreen() {
       return;
     }
     try {
-      const active = await subscription.restore();
+      const result = await subscription.restore();
       Alert.alert(
-        active ? 'Subscription restored' : 'Nothing to restore',
-        active
+        result.active && result.confirmed
+          ? 'Subscription restored'
+          : result.active
+            ? 'Plan update pending'
+            : 'Nothing to restore',
+        result.active && result.confirmed
           ? 'Your Premium plan has been restored.'
+          : result.active
+            ? 'Apple found your subscription, but we could not yet confirm the server-authorized Team seats. Use Retry to update your plan.'
           : 'We could not find an active subscription for this Apple ID.',
       );
     } catch (e) {
@@ -340,6 +356,31 @@ export default function PricingScreen() {
           Get more local leads and priority placement so customers find your trade business first.
         </Text>
       </View>
+
+      {isServerStateUpdating || serverStateError ? (
+        <View style={[styles.planSyncCard, serverStateError && styles.planSyncError]}>
+          {isServerStateUpdating ? (
+            <ActivityIndicator size="small" color={Colors.light.primary} />
+          ) : (
+            <Feather name="alert-circle" size={18} color={Colors.light.warning} />
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.planSyncTitle}>
+              {isServerStateUpdating ? 'Updating your plan…' : 'Plan update needs confirmation'}
+            </Text>
+            <Text style={styles.planSyncBody}>
+              {isServerStateUpdating
+                ? 'Refreshing your server-authorized Team seats and availability.'
+                : serverStateError}
+            </Text>
+          </View>
+          {serverStateError ? (
+            <Pressable style={styles.planSyncRetry} onPress={() => void retryServerState()}>
+              <Text style={styles.planSyncRetryText}>Retry</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.benefitsCard}>
         <Text style={styles.benefitsTitle}>Why upgrade</Text>
@@ -719,6 +760,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 28,
   },
+  planSyncCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    borderColor: Colors.light.primary,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+  },
+  planSyncError: { backgroundColor: Colors.light.surface, borderColor: Colors.light.warning },
+  planSyncTitle: { color: Colors.light.text, fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  planSyncBody: { color: Colors.light.textSecondary, fontSize: 12, lineHeight: 17 },
+  planSyncRetry: {
+    backgroundColor: Colors.light.primary,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  planSyncRetryText: { color: Colors.light.white, fontSize: 12, fontWeight: '700' },
   headerIconWrap: {
     width: 56,
     height: 56,
