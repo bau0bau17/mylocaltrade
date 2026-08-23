@@ -8,6 +8,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl, avatarImageUrl } from '@/lib/api-url';
+import { useSubscription } from '@/lib/revenuecat';
+import { teamQueryKey } from '@/lib/team-billing-queries';
 
 // Owner-only team management (Company Teams Phase 1): active members,
 // pending invitations, invite / resend / cancel / remove. The API enforces
@@ -88,7 +90,12 @@ function formatJoined(iso: string): string {
 export default function TeamScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const {
+    isServerStateUpdating,
+    serverStateError,
+    retryServerState,
+  } = useSubscription();
   const qc = useQueryClient();
 
   const [inviteEmail, setInviteEmail] = useState('');
@@ -97,11 +104,11 @@ export default function TeamScreen() {
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
 
   const authHeaders = { Authorization: `Bearer ${token}` };
-  const teamKey = ['company', 'team'];
+  const teamKey = teamQueryKey(user?.id);
 
   const teamQuery = useQuery({
     queryKey: teamKey,
-    enabled: !!token,
+    enabled: !!token && user?.id != null,
     retry: false,
     queryFn: async (): Promise<TeamData> => {
       const res = await fetch(`${getApiUrl()}/api/company/team`, { headers: authHeaders });
@@ -273,6 +280,35 @@ export default function TeamScreen() {
       }
       keyboardShouldPersistTaps="handled"
     >
+      {isServerStateUpdating || serverStateError ? (
+        <View style={[styles.planSyncCard, serverStateError && styles.planSyncError]}>
+          {isServerStateUpdating ? (
+            <ActivityIndicator size="small" color={Colors.light.primary} />
+          ) : (
+            <Feather name="alert-circle" size={18} color={Colors.light.warning} />
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.planSyncTitle}>
+              {isServerStateUpdating ? 'Updating your plan…' : 'Plan update needs confirmation'}
+            </Text>
+            <Text style={styles.planSyncBody}>
+              {isServerStateUpdating
+                ? 'Refreshing your server-authorized Team seats and availability.'
+                : serverStateError}
+            </Text>
+          </View>
+          {serverStateError ? (
+            <Pressable
+              style={styles.planSyncRetry}
+              onPress={() => void retryServerState()}
+              accessibilityLabel="Retry plan update"
+            >
+              <Text style={styles.planSyncRetryText}>Retry</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       {/* Invite / seats */}
       <View style={styles.inviteCard}>
         {soloPlan ? (
@@ -575,6 +611,30 @@ export default function TeamScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
+  planSyncCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    borderColor: Colors.light.primary,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  planSyncError: {
+    backgroundColor: Colors.light.surface,
+    borderColor: Colors.light.warning,
+  },
+  planSyncTitle: { color: Colors.light.text, fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  planSyncBody: { color: Colors.light.textSecondary, fontSize: 12, lineHeight: 17 },
+  planSyncRetry: {
+    backgroundColor: Colors.light.primary,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  planSyncRetryText: { color: Colors.light.white, fontSize: 12, fontWeight: '700' },
   center: { alignItems: 'center', justifyContent: 'center' },
   inviteCard: {
     backgroundColor: Colors.light.card,
