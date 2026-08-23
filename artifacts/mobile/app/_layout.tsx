@@ -237,6 +237,32 @@ function RootLayoutNav() {
   );
 }
 
+/**
+ * Query cache eviction happens before AuthProvider exposes a new identity.
+ * Remounting account-bound providers and routes afterwards releases any active
+ * observers from the prior session, so a late Account A request has nowhere to
+ * render once Account B becomes active. The QueryClient itself stays mounted,
+ * retaining only the reviewed public cache entries.
+ */
+function IdentityScopedApp() {
+  const { user } = useAuth();
+  const identityKey = user ? `account:${user.id}` : "signed-out";
+
+  return (
+    <React.Fragment key={identityKey}>
+      <SubscriptionProvider>
+        <SearchRadiusProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <KeyboardProvider>
+              <RootLayoutNav />
+            </KeyboardProvider>
+          </GestureHandlerRootView>
+        </SearchRadiusProvider>
+      </SubscriptionProvider>
+    </React.Fragment>
+  );
+}
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -260,15 +286,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <SubscriptionProvider>
-              <SearchRadiusProvider>
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                  <KeyboardProvider>
-                    <RootLayoutNav />
-                  </KeyboardProvider>
-                </GestureHandlerRootView>
-              </SearchRadiusProvider>
-            </SubscriptionProvider>
+              <IdentityScopedApp />
           </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>

@@ -17,7 +17,8 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
-let _unauthorizedHandler: (() => void) | null = null;
+export type UnauthorizedHandler = (requestToken: string) => void;
+let _unauthorizedHandler: UnauthorizedHandler | null = null;
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -51,20 +52,29 @@ export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
  * The handler fires at most once per second (debounced) so a burst of
  * parallel 401s does not stack repeated sign-out work. Requests that supply
  * their own Authorization header (e.g. one-off poll tokens) do NOT trigger it.
+ * The handler receives the exact automatically-attached token so a late 401
+ * from an old session can be ignored after an account switch.
  * Pass `null` to clear the handler.
  */
-export function setUnauthorizedHandler(handler: (() => void) | null): void {
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
   _unauthorizedHandler = handler;
 }
 
-let _lastUnauthorizedAt = 0;
-function notifyUnauthorized(): void {
+let _lastUnauthorized: { token: string; at: number } | null = null;
+function notifyUnauthorized(requestToken: string): void {
   if (!_unauthorizedHandler) return;
   const now = Date.now();
-  if (now - _lastUnauthorizedAt < 1000) return;
-  _lastUnauthorizedAt = now;
+  // Debounce repeat 401s for one session only. A late Account A response must
+  // not suppress a real Account B 401 that follows immediately afterwards.
+  if (
+    _lastUnauthorized?.token === requestToken &&
+    now - _lastUnauthorized.at < 1000
+  ) {
+    return;
+  }
+  _lastUnauthorized = { token: requestToken, at: now };
   try {
-    _unauthorizedHandler();
+    _unauthorizedHandler(requestToken);
   } catch {
     // A sign-out handler failure must never mask the original ApiError.
   }
@@ -377,12 +387,12 @@ export async function customFetch<T = unknown>(
 
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
-  let sessionTokenAttached = false;
+  let sessionTokenAttached: string | null = null;
   if (_authTokenGetter && !headers.has("authorization")) {
     const token = await _authTokenGetter();
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
-      sessionTokenAttached = true;
+      sessionTokenAttached = token;
     }
   }
 
@@ -396,7 +406,7 @@ export async function customFetch<T = unknown>(
     // the session is dead. Requests with explicit Authorization headers
     // (poll tokens etc.) and unauthenticated requests are excluded.
     if (response.status === 401 && sessionTokenAttached) {
-      notifyUnauthorized();
+      notifyUnauthorized(sessionTokenAttached);
     }
     throw new ApiError(response, errorData, requestInfo);
   }
