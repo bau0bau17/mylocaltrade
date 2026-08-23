@@ -1,0 +1,185 @@
+Build 38 is installed and the issue is STILL reproducible.
+
+Do NOT make another speculative fix yet.
+Do NOT create another mobile build.
+Do NOT change RevenueCat products, Apple configuration, TEAM_PRODUCT_SEAT_MAP, or verification state.
+Do NOT push to GitHub. I will use Replit Git Sync myself.
+
+This must now be debugged from the LIVE runtime response end-to-end.
+
+CURRENT REAL RESULT
+
+Affected verified trader still has:
+
+- Team 5 Annual
+- ACTIVE
+- 0 of 5 employee seats used
+
+When pressing Retry:
+
+1. UI shows “Updating your plan…”
+2. RevenueCat/Apple finds the subscription
+3. the flow finishes
+4. UI returns to:
+
+“Plan update needs confirmation
+We could not confirm your latest plan. Your previous Team seats are still shown.”
+
+and the alert says:
+
+“Plan update pending
+Apple found your subscription, but we could not yet confirm the server-authorized Team seats.”
+
+This is happening on the newest TestFlight build 38.
+
+
+FIRST CHECK: DEPLOYMENT
+
+Before diagnosing code, prove whether the LIVE production backend currently contains the Task #156 backend changes.
+
+Report:
+
+- whether production was republished after Task #156
+- whether the live backend contains the shared reconciliation service introduced by #156
+- deployment/runtime version or other safe evidence proving that the currently running backend includes the fix
+
+If production is still running the pre-#156 backend, STOP and report that as the cause.
+Do not modify code.
+
+
+IF #156 IS LIVE, TRACE ONE REAL RETRY
+
+Inspect the live production requests generated when I press Retry.
+
+Do not rely only on “HTTP 200”.
+A 200 response is not enough.
+
+Trace the complete response semantics for:
+
+POST /api/subscriptions/revenuecat-sync
+
+and the subsequent Billing / Team refresh requests.
+
+For the affected account, report only safe/non-secret fields:
+
+- authenticated account matches expected trader: yes/no
+- trader verification status
+- canonical RevenueCat identity matches authenticated account: yes/no
+- active entitlement found: yes/no
+- RevenueCat product ID
+- TEAM_PRODUCT_SEAT_MAP resolution
+- resolved employee seat count
+- stored subscription status
+- stored product ID
+- stored Team seat state
+- HTTP status
+- exact non-sensitive confirmation fields returned to mobile
+
+Do not expose tokens, API keys, receipts, personal data, or RevenueCat secrets.
+
+
+VERY IMPORTANT
+
+Determine EXACTLY which condition causes mobile to decide:
+
+“server-authorized Team seats were not confirmed.”
+
+Trace the boolean/condition all the way from:
+
+RevenueCat customer info
+→ backend sync
+→ product mapping
+→ subscription persistence
+→ response payload
+→ mobile confirmation parser
+→ Team query refresh
+→ warning state
+
+
+CHECK THESE POSSIBLE FAILURE MODES
+
+A. Backend still returns 403
+
+If so, explain why the live account is still not considered VERIFIED.
+
+B. Backend returns 200 but confirmation=false / incomplete
+
+Find exactly which field is missing or false.
+
+C. Backend correctly resolves:
+
+com.mylocaltrade.app.trader.team5.yearly -> 5
+
+but does not include the authoritative seat confirmation expected by mobile.
+
+D. Sync response confirms correctly, but subsequent Team/Billing query returns stale data.
+
+E. Both backend responses are correct, but mobile keeps stale confirmation state.
+
+F. Task #156 refactor changed the response shape expected by the existing Retry flow.
+
+Pay special attention to this because the UI currently shows:
+
+“0 of 5 employee seats used”
+
+which suggests the 5-seat value exists somewhere even though the confirmation gate still fails.
+
+
+DO NOT HIDE THE WARNING
+
+Do not fix this by simply removing the warning or treating any active Apple subscription as confirmed.
+
+The warning must disappear ONLY when the backend has authoritatively confirmed:
+
+- authenticated owner
+- active entitlement
+- recognized Team product
+- correct server-side seat count
+
+
+TEST THE REAL CONDITION
+
+Once the exact cause is known, implement the smallest permanent fix.
+
+Then regression-test:
+
+VERIFIED trader
++ active Team 5 Apple entitlement
++ product maps to 5
+→ Retry
+→ backend confirms Team 5
+→ mobile receives authoritative confirmation
+→ Team query shows 5 seats
+→ Billing and Team warnings clear
+→ no repurchase
+→ no logout/login
+→ no app restart
+
+
+ALSO TEST
+
+- unknown product remains fail-closed
+- wrong RevenueCat identity remains rejected
+- unverified trader remains rejected
+- Team refresh failure remains retryable
+- repeated Retry is idempotent
+
+
+WHEN COMPLETE
+
+Do NOT deploy.
+Do NOT push to GitHub.
+
+Report:
+
+1. Was Task #156 actually live in production?
+2. Exact live Retry HTTP status
+3. Exact safe sync response fields
+4. Exact condition that failed
+5. Why UI could show 5 seats while still reporting “not confirmed”
+6. Exact backend/mobile defect
+7. Exact fix
+8. Tests added/results
+9. Backend republish required yes/no
+10. New TestFlight build required yes/no
+11. Whether the existing affected account will recover immediately after the fix
