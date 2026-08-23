@@ -15,6 +15,7 @@ import { useSubscription } from '@/lib/revenuecat';
 import { useTeamContext } from '@/hooks/useTeamContext';
 import { getYearlySavings } from '@/lib/pricing';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { subscriptionStatusQueryKey } from '@/lib/team-billing-queries';
 
 export default function BillingScreen() {
   const insets = useSafeAreaInsets();
@@ -24,10 +25,13 @@ export default function BillingScreen() {
   // Company Teams: billing is owner-only. Employees get an explainer card
   // instead of the billing surface (and we skip the status call — the server
   // answers 403 OWNER_ONLY for them anyway).
-  const { isEmployee, roleUnknown } = useTeamContext();
+  const { isEmployee, roleUnknown, userId } = useTeamContext();
 
   const { data: status, isLoading, refetch } = useGetSubscriptionStatus({
-    query: { queryKey: ['/api/subscriptions/status'], enabled: !isEmployee && !roleUnknown },
+    query: {
+      queryKey: subscriptionStatusQueryKey(userId),
+      enabled: !isEmployee && !roleUnknown,
+    },
   });
   const { data: plansData } = useGetSubscriptionPlans();
   const { mutateAsync: cancelSub, isPending: cancelling } = useCancelSubscription();
@@ -39,7 +43,13 @@ export default function BillingScreen() {
   // Depend on the stable members, NOT the whole `subscription` object: the
   // provider rebuilds that object every render, so depending on it would make
   // this focus effect run on every render and spin an infinite refresh loop.
-  const { isSupported: subSupported, refresh: subRefresh } = subscription;
+  const {
+    isSupported: subSupported,
+    refresh: subRefresh,
+    isServerStateUpdating,
+    serverStateError,
+    retryServerState,
+  } = subscription;
   // Pull-to-refresh keeps its own gesture-local spinner state (shared app
   // convention — see usePullToRefresh). Driving the RefreshControl from
   // react-query's `isRefetching` held the iOS spinner's content inset open on
@@ -64,12 +74,18 @@ export default function BillingScreen() {
 
   const restoreApple = async () => {
     try {
-      const active = await subscription.restore();
+      const result = await subscription.restore();
       await refetch();
       Alert.alert(
-        active ? 'Subscription restored' : 'Nothing to restore',
-        active
+        result.active && result.confirmed
+          ? 'Subscription restored'
+          : result.active
+            ? 'Plan update pending'
+            : 'Nothing to restore',
+        result.active && result.confirmed
           ? 'Your Premium plan has been restored.'
+          : result.active
+            ? 'Apple found your subscription, but we could not yet confirm the server-authorized Team seats. Use Retry to update your plan.'
           : 'We could not find an active subscription for this Apple ID.',
       );
     } catch (e) {
@@ -226,6 +242,31 @@ export default function BillingScreen() {
             {periodEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </Text>
         )}
+
+        {isServerStateUpdating || serverStateError ? (
+          <View style={[s.planSyncCard, serverStateError && s.planSyncError]}>
+            {isServerStateUpdating ? (
+              <ActivityIndicator size="small" color={Colors.light.primary} />
+            ) : (
+              <Feather name="alert-circle" size={18} color={Colors.light.warning} />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={s.planSyncTitle}>
+                {isServerStateUpdating ? 'Updating your plan…' : 'Plan update needs confirmation'}
+              </Text>
+              <Text style={s.planSyncBody}>
+                {isServerStateUpdating
+                  ? 'Refreshing your server-authorized Team seats and availability.'
+                  : serverStateError}
+              </Text>
+            </View>
+            {serverStateError ? (
+              <Pressable style={s.planSyncRetry} onPress={() => void retryServerState()}>
+                <Text style={s.planSyncRetryText}>Retry</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {isPremium && teamSeats ? (
           <Text style={s.meta}>
@@ -429,6 +470,27 @@ const s = StyleSheet.create({
   badgeTextInactive: { color: Colors.light.textMuted },
   badgeTextCancelled: { color: '#92400E' },
   meta: { fontSize: 13, color: Colors.light.textSecondary, marginBottom: 12 },
+  planSyncCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.light.primaryMuted,
+    borderColor: Colors.light.primary,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+  },
+  planSyncError: { backgroundColor: Colors.light.surface, borderColor: Colors.light.warning },
+  planSyncTitle: { color: Colors.light.text, fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  planSyncBody: { color: Colors.light.textSecondary, fontSize: 11, lineHeight: 16 },
+  planSyncRetry: {
+    backgroundColor: Colors.light.primary,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  planSyncRetryText: { color: Colors.light.white, fontSize: 12, fontWeight: '700' },
   cancelBanner: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#FEF3C7', borderRadius: 10, padding: 10, marginBottom: 12 },
   cancelText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 },
   savingsBanner: { flexDirection: 'row', gap: 8, alignItems: 'center', backgroundColor: Colors.light.secondaryMuted, borderRadius: 10, padding: 10, marginBottom: 12 },
