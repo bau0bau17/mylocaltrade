@@ -1,0 +1,172 @@
+Continue Task #156 — the Team 5 server confirmation is now fixed in production, but final validation exposed a new subscription-plan loading regression.
+
+Do NOT close Task #156 yet.
+Do NOT create another TestFlight build yet.
+Do NOT change Apple products, RevenueCat products/offerings, TEAM_PRODUCT_SEAT_MAP, verification state, subscription ownership, or credentials.
+Do NOT push to GitHub. I will use Replit Git Sync myself.
+Do NOT deploy while investigating.
+
+CONFIRMED SUCCESS
+
+After the latest backend republish, TestFlight Build 38 now correctly shows:
+
+Team 5 Annual
+ACTIVE
+
+The previous:
+
+“Plan update needs confirmation”
+
+warning has disappeared.
+
+So the server-side Store product resolution fix works.
+
+
+NEW REPRODUCTION
+
+On the same Build 38:
+
+Billing & Plan
+→ Change plan
+→ Subscription Plans
+
+The page opens but the subscription plans never render.
+
+The UI remains indefinitely on the loading spinner beneath “Choose Your Plan”.
+
+There is no visible error message.
+
+This happens after the existing Team 5 subscription has been successfully confirmed.
+
+
+FIRST: TRACE THE CURRENT PLAN-LOADING FLOW
+
+Do not guess.
+
+Trace the current Build 38 code path for:
+
+Change plan
+→ Subscription Plans screen
+→ subscription provider
+→ RevenueCat offerings/packages
+→ package/product filtering
+→ loading/error/ready state
+
+Identify exactly which condition keeps the spinner visible.
+
+
+CHECK REVENUECAT READ-ONLY
+
+Using the existing configuration, verify read-only:
+
+1. Does RevenueCat currently return an offering for this app/account?
+2. Which offering is current?
+3. Which packages are returned?
+4. Which Store product identifiers are attached to those packages?
+5. Are Solo and Team packages still present as expected?
+6. Is the currently-owned Team 5 package intentionally filtered from the choices?
+7. After filtering the current product, are other valid upgrade/downgrade packages still available?
+
+Do not change any RevenueCat configuration.
+
+
+CHECK FOR STATE-MACHINE REGRESSION
+
+Pay special attention to whether the successful reconciliation now leaves one of these states stuck:
+
+- offeringsLoading
+- subscriptionLoading
+- confirmationPending
+- syncing
+- restoring
+- refreshing
+- customerInfo refresh
+- Team query refresh
+
+The Billing screen is no longer showing a confirmation warning, so a successful reconciliation must not leave the plan-selection screen waiting on an obsolete confirmation/sync flag.
+
+
+CHECK ERROR HANDLING
+
+The Subscription Plans screen must never spin forever.
+
+Determine whether:
+
+A. RevenueCat getOfferings never resolves
+
+B. getOfferings throws but the error state is swallowed
+
+C. offerings resolve but packages are empty after filtering
+
+D. packages exist but a loading boolean never returns to false
+
+E. current product filtering accidentally removes all plans
+
+F. package IDs / product IDs are being confused
+
+G. a RevenueCat CustomerInfo refresh race after the recent reconciliation prevents the offerings query from completing
+
+
+IMPORTANT PRODUCT-ID SEMANTICS
+
+We just fixed a Store product-ID vs RevenueCat resource-ID issue server-side.
+
+Audit the mobile plan selector for the same class of mistake.
+
+Ensure filtering/comparison uses the correct identifiers:
+
+- RevenueCat package identifier where package identity is intended
+- App Store product identifier where Store product identity is intended
+
+Do not compare these interchangeably.
+
+
+EXPECTED BEHAVIOR
+
+For an active Team 5 subscriber:
+
+Change plan must load the currently available valid alternatives allowed by the subscription group.
+
+The screen must not remain indefinitely on a spinner.
+
+If RevenueCat genuinely returns no available alternatives, show a clear non-loading empty/error state rather than infinite loading.
+
+
+ADD REGRESSION COVERAGE
+
+Test at minimum:
+
+1. active Team 5 subscriber + valid offerings → plans render;
+2. current Team 5 product is handled correctly;
+3. alternative Team/Solo plans display according to existing business rules;
+4. offerings request error → retryable error UI, not infinite spinner;
+5. empty offering → explicit empty state, not infinite spinner;
+6. product identifier vs package identifier comparisons use the correct fields;
+7. successful subscription reconciliation does not leave plan selector in loading state;
+8. repeated navigation Billing → Change plan works.
+
+
+DO NOT CHANGE THE WORKING SERVER FIX
+
+The production confirmation currently works.
+
+Do not alter the new server-side active-entitlement → subscription → product → store_identifier resolution unless this investigation proves a direct issue.
+
+
+WHEN COMPLETE
+
+Do not deploy.
+Do not push to GitHub.
+
+Report:
+
+1. Exact cause of the infinite spinner
+2. Whether RevenueCat offerings currently return correctly
+3. Current offering/package IDs found
+4. Exact state/condition that remained loading
+5. Whether this was related to the recent reconciliation fix
+6. Exact fix
+7. Tests/results
+8. Whether backend republish is required
+9. Whether a new TestFlight build is required
+10. Whether Build 38 can be used for any remaining server-only validation
