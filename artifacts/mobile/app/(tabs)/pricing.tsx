@@ -66,6 +66,8 @@ export default function PricingScreen() {
     isServerStateUpdating,
     serverStateError,
     retryServerState,
+    offeringsState,
+    offeringsError,
   } = subscription;
 
   const { data: onboardingStatus, isLoading: isLoadingOnboarding, refetch: refetchOnboarding } = useGetTraderOnboardingStatus({
@@ -482,8 +484,11 @@ export default function PricingScreen() {
 
       {subscription.isSupported ? (
         <View style={styles.plansContainer}>
-          {!subscription.isReady ? (
-            <ActivityIndicator size="large" color={Colors.light.primary} style={{ marginVertical: 24 }} />
+          {!subscription.isReady || offeringsState === 'initializing' ? (
+            <View style={styles.offeringsStatus}>
+              <ActivityIndicator size="large" color={Colors.light.primary} />
+              <Text style={styles.offeringsStatusText}>Loading subscription options…</Text>
+            </View>
           ) : (
             <>
               {subscription.hasTraderSubscription && (
@@ -501,21 +506,46 @@ export default function PricingScreen() {
                 </View>
               )}
 
-              {!anyPackage ? (
-                !subscription.hasTraderSubscription && (
-                  <View style={styles.gateBanner}>
-                    <Feather name="alert-circle" size={18} color={Colors.light.primary} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.gateTitle}>Plans unavailable</Text>
-                      <Text style={styles.gateBody}>
-                        We could not load subscription options right now. Please try again shortly.
-                      </Text>
-                      <Pressable style={styles.gateBtn} onPress={() => subscription.refresh()}>
-                        <Text style={styles.gateBtnText}>Retry</Text>
-                      </Pressable>
-                    </View>
+              {offeringsState === 'offerings-error' || offeringsState === 'provider-error' ? (
+                <View style={styles.gateBanner} testID="subscription-offerings-error">
+                  <Feather name="alert-circle" size={18} color={Colors.light.warning} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.gateTitle}>Plans unavailable</Text>
+                    <Text style={styles.gateBody}>
+                      {offeringsError ?? 'We could not load subscription options right now. Please retry.'}
+                    </Text>
+                    <Pressable
+                      style={styles.gateBtn}
+                      testID="subscription-offerings-retry"
+                      onPress={() => void subscription.refresh()}
+                    >
+                      <Text style={styles.gateBtnText}>Retry</Text>
+                    </Pressable>
                   </View>
-                )
+                </View>
+              ) : offeringsState === 'offerings-empty' || !anyPackage ? (
+                <View style={styles.gateBanner} testID="subscription-offerings-empty">
+                  <Feather name="info" size={18} color={Colors.light.primary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.gateTitle}>
+                      {subscription.hasTraderSubscription
+                        ? 'No plan changes available'
+                        : 'Plans unavailable'}
+                    </Text>
+                    <Text style={styles.gateBody}>
+                      {subscription.hasTraderSubscription
+                        ? 'Your current plan is active, but no alternative subscription options are available right now.'
+                        : 'There are no subscription options available right now. Please retry shortly.'}
+                    </Text>
+                    <Pressable
+                      style={styles.gateBtn}
+                      testID="subscription-offerings-retry"
+                      onPress={() => void subscription.refresh()}
+                    >
+                      <Text style={styles.gateBtnText}>Retry</Text>
+                    </Pressable>
+                  </View>
+                </View>
               ) : (
                 <>
                   <Text style={styles.iapHeading}>
@@ -809,6 +839,15 @@ const styles = StyleSheet.create({
   },
   plansContainer: {
     marginBottom: 32,
+  },
+  offeringsStatus: {
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 24,
+  },
+  offeringsStatusText: {
+    color: Colors.light.textMuted,
+    fontSize: 14,
   },
   iapHeading: {
     fontSize: 18,

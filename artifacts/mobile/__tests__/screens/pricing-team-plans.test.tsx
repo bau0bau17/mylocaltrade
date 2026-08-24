@@ -19,7 +19,7 @@
  */
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { act, render, screen, fireEvent } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -183,6 +183,10 @@ function mockSubscriptionValue(overrides: SubscriptionOverrides = {}) {
     isSupported: true,
     hasTraderSubscription: false,
     isReady: true,
+    isLoading: false,
+    offeringsState: 'ready',
+    offeringsError: null,
+    isIdentityTransitioning: false,
     monthlyPackage: PKG_MONTHLY,
     annualPackage: PKG_ANNUAL,
     team5Package: PKG_TEAM5,
@@ -319,7 +323,100 @@ describe('PricingScreen Phase C team plans', () => {
     expect(screen.queryByText('Basic')).toBeNull();
   });
 
-  it('switching passes the SELECTED package to RevenueCat purchase', () => {
+  it('active Team 5 subscriber is settled and sees the other valid plan choices', () => {
+    mockSubscriptionValue({
+      hasTraderSubscription: true,
+      activeProductId: PKG_TEAM5.product.identifier,
+      activeTeamTier: 'team5',
+      activeCadence: 'annual',
+      isServerStateUpdating: false,
+      serverStateError: null,
+    });
+
+    render(<PricingScreen />, { wrapper: freshWrapper() });
+
+    expect(screen.queryByText('Loading subscription options…')).toBeNull();
+    expect(screen.getByText(/team 5 annual is active/i)).toBeTruthy();
+    expect(screen.getByText(/current plan/i)).toBeTruthy();
+    expect(screen.getAllByText(/switch to this plan/i).length).toBe(4);
+  });
+
+  it('shows a retryable non-spinner state when RevenueCat offerings fail', () => {
+    const refresh = jest.fn().mockResolvedValue(undefined);
+    mockSubscriptionValue({
+      offeringsState: 'offerings-error',
+      offeringsError: 'We could not load subscription options. Please retry.',
+      refresh,
+    });
+
+    render(<PricingScreen />, { wrapper: freshWrapper() });
+
+    expect(screen.queryByText('Loading subscription options…')).toBeNull();
+    expect(screen.getByTestId('subscription-offerings-error')).toBeTruthy();
+    expect(screen.getByText('Plans unavailable')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('subscription-offerings-retry'));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an active Team 5 plan visible and shows an explicit empty-alternatives state', () => {
+    const refresh = jest.fn().mockResolvedValue(undefined);
+    mockSubscriptionValue({
+      hasTraderSubscription: true,
+      activeProductId: PKG_TEAM5.product.identifier,
+      activeTeamTier: 'team5',
+      activeCadence: 'annual',
+      monthlyPackage: null,
+      annualPackage: null,
+      team5Package: null,
+      team10Package: null,
+      team20Package: null,
+      offeringsState: 'offerings-empty',
+      refresh,
+    });
+
+    render(<PricingScreen />, { wrapper: freshWrapper() });
+
+    expect(screen.getByText(/team 5 annual is active/i)).toBeTruthy();
+    expect(screen.getByTestId('subscription-offerings-empty')).toBeTruthy();
+    expect(screen.getByText('No plan changes available')).toBeTruthy();
+    expect(screen.queryByText('Loading subscription options…')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('subscription-offerings-retry'));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles after repeated Billing-to-plans mounts instead of retaining a loading gate', () => {
+    mockSubscriptionValue({
+      isReady: false,
+      isLoading: true,
+      offeringsState: 'initializing',
+      isIdentityTransitioning: true,
+    });
+    const first = render(<PricingScreen />, { wrapper: freshWrapper() });
+    expect(screen.getByText('Loading subscription options…')).toBeTruthy();
+    first.unmount();
+
+    mockSubscriptionValue({
+      hasTraderSubscription: true,
+      activeProductId: PKG_TEAM5.product.identifier,
+      activeTeamTier: 'team5',
+      activeCadence: 'annual',
+      isReady: true,
+      isLoading: false,
+      offeringsState: 'ready',
+      isIdentityTransitioning: false,
+      isServerStateUpdating: false,
+      serverStateError: null,
+    });
+    render(<PricingScreen />, { wrapper: freshWrapper() });
+
+    expect(screen.queryByText('Loading subscription options…')).toBeNull();
+    expect(screen.getByText('Team 5 Annual')).toBeTruthy();
+    expect(screen.getAllByText(/switch to this plan/i).length).toBe(4);
+  });
+
+  it('switching passes the SELECTED package to RevenueCat purchase', async () => {
     const purchase = jest.fn().mockResolvedValue(true);
     mockSubscriptionValue({
       hasTraderSubscription: true,
@@ -338,7 +435,9 @@ describe('PricingScreen Phase C team plans', () => {
 
     const switchButtons = screen.getAllByText(/switch to this plan/i);
     expect(switchButtons.length).toBe(1);
-    fireEvent.press(switchButtons[0]);
+    await act(async () => {
+      fireEvent.press(switchButtons[0]);
+    });
 
     expect(purchase).toHaveBeenCalledTimes(1);
     expect(purchase).toHaveBeenCalledWith(PKG_TEAM20);

@@ -181,6 +181,32 @@ export const isPurchasesSupported =
 type PurchasesDefault = typeof import('react-native-purchases').default;
 let purchases: PurchasesDefault | null = null;
 let configurePromise: Promise<PurchasesDefault | null> | null = null;
+const REVENUECAT_REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * Native SDK calls do not expose cancellation. Bound every readiness request so
+ * a stalled native bridge or network request becomes an explicit retryable
+ * state instead of leaving a mounted subscription screen loading forever.
+ */
+async function withRevenueCatTimeout<T>(
+  promise: Promise<T>,
+  operation: string,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`${operation} timed out. Please try again.`)),
+          REVENUECAT_REQUEST_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 async function ensureConfigured(): Promise<PurchasesDefault | null> {
   if (!isPurchasesSupported) return null;
@@ -188,7 +214,10 @@ async function ensureConfigured(): Promise<PurchasesDefault | null> {
   if (!configurePromise) {
     configurePromise = (async () => {
       try {
-        const mod = await import('react-native-purchases');
+        // Keep the native module inside the support guard. A deferred require
+        // remains lazy in Metro (so web/Expo Go never evaluates it), while also
+        // allowing Jest's normal native-module mock to exercise readiness.
+        const mod = require('react-native-purchases') as typeof import('react-native-purchases');
         const P = mod.default;
         P.setLogLevel(
           DIAGNOSTICS_ENABLED ? mod.LOG_LEVEL.VERBOSE : mod.LOG_LEVEL.WARN,
@@ -221,11 +250,17 @@ async function ensureConfigured(): Promise<PurchasesDefault | null> {
               `usingTestKey=${__DEV__ && TEST_API_KEY.length > 0}`,
           );
         }
-        await P.configure({ apiKey: platformApiKey });
+        // The installed RevenueCat SDK declares configure() as synchronous; it
+        // can still throw and is handled by this surrounding catch.
+        P.configure({ apiKey: platformApiKey });
         purchases = P;
         return P;
       } catch (e) {
         console.warn('RevenueCat configure failed', e);
+        // A timed-out configuration promise cannot be safely reused on Retry.
+        // The native SDK may finish in the background, but the next foreground
+        // attempt must run a fresh configuration/readiness cycle.
+        configurePromise = null;
         return null;
       }
     })();
@@ -261,6 +296,18 @@ export type SubscriptionActionResult = {
   /** The API independently confirmed and refreshed server-owned plan state. */
   confirmed: boolean;
 };
+
+/**
+ * The state of the current account's RevenueCat readiness cycle. `isReady`
+ * means this cycle settled; consumers use this detail to distinguish a usable
+ * offering from an empty or retryable failure state.
+ */
+export type RevenueCatReadinessState =
+  | 'initializing'
+  | 'ready'
+  | 'offerings-empty'
+  | 'offerings-error'
+  | 'provider-error';
 
 function defaultSyncRetryDelay(attempt: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, attempt * 250));
@@ -438,9 +485,16 @@ function resolveCadence(
 interface SubscriptionContextValue {
   /** True when IAP can run (native build with API key). */
   isSupported: boolean;
-  /** Provider finished its first configure + fetch. */
+  /** True once the current RevenueCat identity cycle has reached a terminal state. */
   isReady: boolean;
+  /** True only while the current identity's offerings/customer-info cycle runs. */
   isLoading: boolean;
+  /** Detailed terminal/loading state for plan-selection UI. */
+  offeringsState: RevenueCatReadinessState;
+  /** Safe user-facing message for an offerings or provider readiness failure. */
+  offeringsError: string | null;
+  /** True while RevenueCat changes from one canonical app identity to another. */
+  isIdentityTransitioning: boolean;
   monthlyPackage: PurchasesPackage | null;
   annualPackage: PurchasesPackage | null;
   /**
@@ -495,8 +549,11 @@ const SubscriptionContext = createContext<SubscriptionContextValue | undefined>(
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user, token } = useAuth();
   const queryClient = useQueryClient();
-  const [isReady, setIsReady] = useState(!isPurchasesSupported);
-  const [isLoading, setIsLoading] = useState(false);
+  const [offeringsState, setOfferingsState] = useState<RevenueCatReadinessState>(
+    isPurchasesSupported ? 'initializing' : 'ready',
+  );
+  const [offeringsError, setOfferingsError] = useState<string | null>(null);
+  const [isIdentityTransitioning, setIsIdentityTransitioning] = useState(false);
   const [isServerStateUpdating, setIsServerStateUpdating] = useState(false);
   const [serverStateError, setServerStateError] = useState<string | null>(null);
   const [offering, setOffering] = useState<PurchasesOffering | null>(null);
@@ -505,6 +562,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   // Every identity transition gets a generation. Async native SDK calls from a
   // prior account must not overwrite the new account's provider state.
   const identityGenerationRef = useRef(0);
+  // A Retry can start another read for the same account. Only the most recent
+  // current-generation cycle may settle the shared provider state.
+  const readinessCycleRef = useRef(0);
+  // Retry and offer-dependent actions wait for a canonical logIn/logOut to
+  // finish; they must never read or purchase against the prior SDK account.
+  const identityTransitionPromiseRef = useRef<Promise<void> | null>(null);
   const lastInfoSigRef = useRef<string | undefined>(undefined);
   // Once-per-session guard for the "former subscriber, no active entitlement"
   // sync below: without it every foreground refresh of an already-downgraded
@@ -532,46 +595,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     [applyCustomerInfo],
   );
 
-  const loadOfferings = useCallback(async (identityGeneration?: number) => {
-    const P = await ensureConfigured();
-    if (!P) return;
-    try {
-      const offerings = await P.getOfferings();
-      if (
-        identityGeneration !== undefined &&
-        identityGeneration !== identityGenerationRef.current
-      ) {
-        return;
-      }
-      if (DIAGNOSTICS_ENABLED) {
-        const cur = offerings.current;
-        console.log(
-          '[RC] getOfferings ->',
-          JSON.stringify({
-            allOfferingIds: Object.keys(offerings.all ?? {}),
-            currentId: cur?.identifier ?? null,
-            currentPackageCount: cur?.availablePackages?.length ?? 0,
-            hasMonthlyShortcut: !!cur?.monthly,
-            hasAnnualShortcut: !!cur?.annual,
-            packages: (cur?.availablePackages ?? []).map((p) => ({
-              packageId: p.identifier,
-              packageType: p.packageType,
-              productId: p.product.identifier,
-              priceString: p.product.priceString,
-            })),
-          }),
-        );
-      }
-      const next = offerings.current ?? null;
-      // Skip redundant updates (see offeringSignature): an identical re-fetch
-      // must not change state, or it re-renders subscribers and can spin a loop.
-      const sig = offeringSignature(next);
-      if (sig !== lastOfferingSigRef.current) {
-        lastOfferingSigRef.current = sig;
-        setOffering(next);
-      }
-    } catch (e) {
-      console.warn('RevenueCat getOfferings failed', e);
+  /**
+   * Identity changes can chain (A → B → C) while an earlier caller is waiting.
+   * Keep waiting until the latest transition has settled, not just the promise
+   * that happened to be current when the caller started.
+   */
+  const waitForIdentityTransition = useCallback(async (): Promise<void> => {
+    while (identityTransitionPromiseRef.current) {
+      await identityTransitionPromiseRef.current;
     }
   }, []);
 
@@ -586,98 +617,269 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       providedInfo?: CustomerInfo | null,
       {
         forceSync = false,
-        identityGeneration = identityGenerationRef.current,
+        identityGeneration: requestedGeneration,
       }: { forceSync?: boolean; identityGeneration?: number } = {},
     ): Promise<boolean> => {
+      await waitForIdentityTransition();
       if (!token || user?.id == null) return false;
-      const requestGeneration = identityGeneration;
+      const requestGeneration = requestedGeneration ?? identityGenerationRef.current;
       if (requestGeneration !== identityGenerationRef.current) return false;
 
-      let info = providedInfo ?? null;
-      if (!info) {
-        const P = await ensureConfigured();
-        if (!P) return false;
-        try {
-          info = await P.getCustomerInfo();
-          if (!applyCustomerInfoIfCurrent(info, requestGeneration)) return false;
-        } catch (e) {
-          console.warn('RevenueCat confirmation refresh failed', e);
-          if (requestGeneration === identityGenerationRef.current) {
-            setServerStateError('We could not confirm your latest plan. Please try again.');
-          }
-          return false;
-        }
-      }
-
-      const entitlement = findActiveTraderEntitlement(info);
-      const syncInactive = hadTraderEntitlement(info) && !syncedInactiveRef.current;
-      if (!entitlement && !syncInactive && !forceSync) return true;
-
-      if (entitlement) syncedInactiveRef.current = false;
-      setIsServerStateUpdating(true);
-
-      const confirmed = await confirmBackendSubscriptionSync(
-        entitlement?.productIdentifier ?? null,
-        () => syncEntitlementWithBackend(token, entitlement?.willRenew),
-      );
-      if (requestGeneration !== identityGenerationRef.current) return false;
-      if (confirmed) {
-        if (!entitlement) syncedInactiveRef.current = true;
-        try {
-          await refreshTeamBillingQueries(queryClient, user.id);
-        } catch (error) {
-          console.warn('RevenueCat Team query refresh failed', error);
-          if (requestGeneration === identityGenerationRef.current) {
-            setIsServerStateUpdating(false);
-            setServerStateError(
-              'Your plan was confirmed, but we could not refresh your Team seats. Please try again.',
+      let beganServerUpdate = false;
+      try {
+        let info = providedInfo ?? null;
+        if (!info) {
+          const P = await withRevenueCatTimeout(
+            ensureConfigured(),
+            'RevenueCat setup',
+          );
+          if (!P) return false;
+          try {
+            info = await withRevenueCatTimeout(
+              P.getCustomerInfo(),
+              'RevenueCat customer information',
             );
+            if (!applyCustomerInfoIfCurrent(info, requestGeneration)) return false;
+          } catch (e) {
+            console.warn('RevenueCat confirmation refresh failed', e);
+            if (requestGeneration === identityGenerationRef.current) {
+              setServerStateError('We could not confirm your latest plan. Please try again.');
+            }
+            return false;
           }
-          return false;
         }
-        if (requestGeneration !== identityGenerationRef.current) return false;
-        // Keep a previous warning visible while a recovery is in-flight. It is
-        // cleared only once RevenueCat, the server, and server-owned Team
-        // queries all agree on the new state.
-        setServerStateError(null);
-        setIsServerStateUpdating(false);
-        return true;
-      }
 
-      setIsServerStateUpdating(false);
-      setServerStateError('We could not confirm your latest plan. Your previous Team seats are still shown.');
-      return false;
+        const entitlement = findActiveTraderEntitlement(info);
+        const syncInactive = hadTraderEntitlement(info) && !syncedInactiveRef.current;
+        if (!entitlement && !syncInactive && !forceSync) return true;
+
+        if (entitlement) syncedInactiveRef.current = false;
+        beganServerUpdate = true;
+        setIsServerStateUpdating(true);
+
+        const confirmed = await withRevenueCatTimeout(
+          confirmBackendSubscriptionSync(
+            entitlement?.productIdentifier ?? null,
+            () => syncEntitlementWithBackend(token, entitlement?.willRenew),
+          ),
+          'Plan confirmation',
+        );
+        if (requestGeneration !== identityGenerationRef.current) return false;
+        if (confirmed) {
+          if (!entitlement) syncedInactiveRef.current = true;
+          try {
+            await withRevenueCatTimeout(
+              refreshTeamBillingQueries(queryClient, user.id),
+              'Team seat refresh',
+            );
+          } catch (error) {
+            console.warn('RevenueCat Team query refresh failed', error);
+            if (requestGeneration === identityGenerationRef.current) {
+              setServerStateError(
+                'Your plan was confirmed, but we could not refresh your Team seats. Please try again.',
+              );
+            }
+            return false;
+          }
+          if (requestGeneration !== identityGenerationRef.current) return false;
+          // Keep a previous warning visible while a recovery is in-flight. It is
+          // cleared only once RevenueCat, the server, and server-owned Team
+          // queries all agree on the new state.
+          setServerStateError(null);
+          return true;
+        }
+
+        setServerStateError(
+          'We could not confirm your latest plan. Your previous Team seats are still shown.',
+        );
+        return false;
+      } catch (error) {
+        console.warn('RevenueCat server-state refresh failed', error);
+        if (requestGeneration === identityGenerationRef.current) {
+          setServerStateError('We could not confirm your latest plan. Please try again.');
+        }
+        return false;
+      } finally {
+        if (beganServerUpdate && requestGeneration === identityGenerationRef.current) {
+          setIsServerStateUpdating(false);
+        }
+      }
     },
-    [applyCustomerInfoIfCurrent, queryClient, token, user?.id],
+    [
+      applyCustomerInfoIfCurrent,
+      queryClient,
+      token,
+      user?.id,
+      waitForIdentityTransition,
+    ],
   );
 
-  // Configure once and load offerings.
+  const beginReadinessCycle = useCallback(
+    (identityGeneration: number, identityTransition: boolean): number => {
+      const cycle = ++readinessCycleRef.current;
+      if (identityGeneration === identityGenerationRef.current) {
+        setOfferingsState('initializing');
+        setOfferingsError(null);
+        setIsIdentityTransitioning(identityTransition);
+      }
+      return cycle;
+    },
+    [],
+  );
+
+  const settleReadinessCycle = useCallback(
+    (
+      identityGeneration: number,
+      cycle: number,
+      state: Exclude<RevenueCatReadinessState, 'initializing'>,
+      error: string | null,
+    ): boolean => {
+      if (
+        identityGeneration !== identityGenerationRef.current ||
+        cycle !== readinessCycleRef.current
+      ) {
+        return false;
+      }
+      setOfferingsState(state);
+      setOfferingsError(error);
+      setIsIdentityTransitioning(false);
+      return true;
+    },
+    [],
+  );
+
+  /**
+   * Read the current identity's offering and customer info as one bounded,
+   * generation-owned cycle. A stale cycle never settles shared state: its
+   * successor has already begun and is responsible for the terminal state.
+   */
+  const runReadinessCycle = useCallback(
+    async (
+      identityGeneration: number,
+      cycle: number,
+      providedInfo?: CustomerInfo | null,
+      isCancelled: () => boolean = () => false,
+    ): Promise<void> => {
+      const isCurrent = () =>
+        !isCancelled() &&
+        identityGeneration === identityGenerationRef.current &&
+        cycle === readinessCycleRef.current;
+      const settle = (
+        state: Exclude<RevenueCatReadinessState, 'initializing'>,
+        error: string | null,
+      ) => settleReadinessCycle(identityGeneration, cycle, state, error);
+
+      try {
+        const P = await withRevenueCatTimeout(
+          ensureConfigured(),
+          'RevenueCat setup',
+        );
+        if (!isCurrent()) return;
+        if (!P) {
+          settle(
+            'provider-error',
+            'Subscription services are temporarily unavailable. Please retry.',
+          );
+          return;
+        }
+
+        let offerings;
+        try {
+          offerings = await withRevenueCatTimeout(
+            P.getOfferings(),
+            'Subscription options',
+          );
+        } catch (error) {
+          console.warn('RevenueCat getOfferings failed', error);
+          if (isCurrent()) {
+            settle(
+              'offerings-error',
+              'We could not load subscription options. Please retry.',
+            );
+          }
+          return;
+        }
+        if (!isCurrent()) return;
+
+        if (DIAGNOSTICS_ENABLED) {
+          const currentOffering = offerings.current;
+          console.log(
+            '[RC] getOfferings ->',
+            JSON.stringify({
+              allOfferingIds: Object.keys(offerings.all ?? {}),
+              currentId: currentOffering?.identifier ?? null,
+              currentPackageCount: currentOffering?.availablePackages?.length ?? 0,
+              hasMonthlyShortcut: !!currentOffering?.monthly,
+              hasAnnualShortcut: !!currentOffering?.annual,
+              packages: (currentOffering?.availablePackages ?? []).map((p) => ({
+                packageId: p.identifier,
+                packageType: p.packageType,
+                productId: p.product.identifier,
+                priceString: p.product.priceString,
+              })),
+            }),
+          );
+        }
+        const nextOffering = offerings.current ?? null;
+        const offeringSig = offeringSignature(nextOffering);
+        if (offeringSig !== lastOfferingSigRef.current) {
+          lastOfferingSigRef.current = offeringSig;
+          setOffering(nextOffering);
+        }
+
+        let info = providedInfo ?? null;
+        if (!info) {
+          try {
+            info = await withRevenueCatTimeout(
+              P.getCustomerInfo(),
+              'RevenueCat customer information',
+            );
+          } catch (error) {
+            console.warn('RevenueCat customer-info readiness failed', error);
+            if (isCurrent()) {
+              settle(
+                'provider-error',
+                'We could not refresh your subscription. Please retry.',
+              );
+            }
+            return;
+          }
+        }
+        if (!isCurrent() || !applyCustomerInfoIfCurrent(info, identityGeneration)) return;
+
+        const hasPackages = (nextOffering?.availablePackages?.length ?? 0) > 0;
+        if (!settle(hasPackages ? 'ready' : 'offerings-empty', null)) return;
+
+        // Server reconciliation remains authoritative for seats, but it must
+        // never hold the plan selector hostage. It has its own visible pending
+        // or retry state while this successfully-read offering stays usable.
+        void refreshServerState(info, { identityGeneration });
+      } catch (error) {
+        console.warn('RevenueCat readiness cycle failed', error);
+        if (isCurrent()) {
+          settle(
+            'provider-error',
+            'Subscription services are temporarily unavailable. Please retry.',
+          );
+        }
+      }
+    },
+    [applyCustomerInfoIfCurrent, refreshServerState, settleReadinessCycle],
+  );
+
+  // Configure and read the initially active (anonymous or already signed-in)
+  // RevenueCat identity. If identity setup advances the generation while this
+  // is pending, that newer cycle owns terminal readiness.
   useEffect(() => {
     if (!isPurchasesSupported) return;
     let cancelled = false;
-    (async () => {
-      const identityGeneration = identityGenerationRef.current;
-      setIsLoading(true);
-      const P = await ensureConfigured();
-      if (!P || cancelled || identityGeneration !== identityGenerationRef.current) {
-        if (!cancelled && identityGeneration === identityGenerationRef.current) {
-          setIsReady(true);
-          setIsLoading(false);
-        }
-        return;
-      }
-      await loadOfferings(identityGeneration);
-      if (cancelled || identityGeneration !== identityGenerationRef.current) return;
-      await refreshServerState(undefined, { identityGeneration });
-      if (!cancelled && identityGeneration === identityGenerationRef.current) {
-        setIsReady(true);
-        setIsLoading(false);
-      }
-    })();
+    const identityGeneration = identityGenerationRef.current;
+    const cycle = beginReadinessCycle(identityGeneration, false);
+    void runReadinessCycle(identityGeneration, cycle, undefined, () => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [loadOfferings, refreshServerState]);
+  }, [beginReadinessCycle, runReadinessCycle]);
 
   // Identify the RevenueCat user with the CANONICAL app user id so the server
   // can verify the same subscriber. The id is an opaque server-generated
@@ -692,52 +894,111 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (appUserId === lastUserIdRef.current) return;
     lastUserIdRef.current = appUserId;
     const identityGeneration = ++identityGenerationRef.current;
+    const cycle = beginReadinessCycle(identityGeneration, true);
+    let cancelled = false;
     // Do not expose prior account state while the new SDK identity resolves.
     syncedInactiveRef.current = false;
     lastInfoSigRef.current = undefined;
+    lastOfferingSigRef.current = undefined;
     setCustomerInfo(null);
+    setOffering(null);
     setServerStateError(null);
     setIsServerStateUpdating(false);
-    (async () => {
-      const P = await ensureConfigured();
-      if (!P) return;
+    // Native logIn/logOut cannot be cancelled. Keep a serialization barrier
+    // until the actual SDK call settles even if the UI-facing 15s timeout
+    // fires, otherwise a late old-account completion could corrupt a Retry.
+    const priorIdentityTransition = identityTransitionPromiseRef.current;
+    const nativeIdentityOperation = (async () => {
+      if (priorIdentityTransition) await priorIdentityTransition;
+      if (identityGeneration !== identityGenerationRef.current) {
+        return { status: 'stale' as const };
+      }
+      const P = await withRevenueCatTimeout(
+        ensureConfigured(),
+        'RevenueCat setup',
+      );
+      if (!P) return { status: 'unavailable' as const };
+      if (appUserId) {
+        const result = await P.logIn(appUserId);
+        return { status: 'ready' as const, info: result.customerInfo };
+      }
+      const info = await P.logOut();
+      return { status: 'ready' as const, info };
+    })();
+    const identityBarrier = nativeIdentityOperation.then(
+      () => undefined,
+      () => undefined,
+    );
+    identityTransitionPromiseRef.current = identityBarrier;
+    void identityBarrier.finally(() => {
+      if (identityTransitionPromiseRef.current === identityBarrier) {
+        identityTransitionPromiseRef.current = null;
+      }
+    });
+
+    const transition = (async () => {
       try {
-        if (appUserId) {
-          const { customerInfo: info } = await P.logIn(appUserId);
-          if (identityGeneration !== identityGenerationRef.current) return;
-          applyCustomerInfo(info);
-          void refreshServerState(info, { identityGeneration });
-        } else {
-          const info = await P.logOut();
-          if (identityGeneration !== identityGenerationRef.current) return;
-          applyCustomerInfo(info);
+        const result = await withRevenueCatTimeout(
+          nativeIdentityOperation,
+          'RevenueCat account setup',
+        );
+        if (
+          cancelled ||
+          identityGeneration !== identityGenerationRef.current ||
+          result.status === 'stale'
+        ) {
+          return;
         }
+        if (result.status === 'unavailable') {
+          settleReadinessCycle(
+            identityGeneration,
+            cycle,
+            'provider-error',
+            'Subscription services are temporarily unavailable. Please retry.',
+          );
+          return;
+        }
+
+        const info = result.info;
+        if (cancelled || identityGeneration !== identityGenerationRef.current) return;
+        if (!applyCustomerInfoIfCurrent(info, identityGeneration)) return;
+        await runReadinessCycle(
+          identityGeneration,
+          cycle,
+          info,
+          () => cancelled,
+        );
       } catch (e) {
         console.warn('RevenueCat identity change failed', e);
+        if (!cancelled) {
+          settleReadinessCycle(
+            identityGeneration,
+            cycle,
+            'provider-error',
+            'We could not switch subscription accounts. Please retry.',
+          );
+        }
       }
     })();
-  }, [user?.revenuecatId, applyCustomerInfo, refreshServerState]);
+    void transition;
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user?.revenuecatId,
+    applyCustomerInfoIfCurrent,
+    beginReadinessCycle,
+    runReadinessCycle,
+    settleReadinessCycle,
+  ]);
 
   const refresh = useCallback(async () => {
     if (!isPurchasesSupported) return;
+    await waitForIdentityTransition();
     const identityGeneration = identityGenerationRef.current;
-    setIsLoading(true);
-    await loadOfferings(identityGeneration);
-    if (identityGeneration !== identityGenerationRef.current) return;
-    const P = await ensureConfigured();
-    if (P) {
-      try {
-        const info = await P.getCustomerInfo();
-        if (!applyCustomerInfoIfCurrent(info, identityGeneration)) return;
-        await refreshServerState(info, { identityGeneration });
-      } catch (e) {
-        if (identityGeneration === identityGenerationRef.current) {
-          console.warn('RevenueCat refresh failed', e);
-        }
-      }
-    }
-    if (identityGeneration === identityGenerationRef.current) setIsLoading(false);
-  }, [applyCustomerInfoIfCurrent, loadOfferings, refreshServerState]);
+    const cycle = beginReadinessCycle(identityGeneration, false);
+    await runReadinessCycle(identityGeneration, cycle);
+  }, [beginReadinessCycle, runReadinessCycle, waitForIdentityTransition]);
 
   // Refresh entitlement state whenever the app returns to the foreground —
   // e.g. after the user cancels or changes the subscription in the App Store
@@ -814,6 +1075,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const purchase = useCallback(
     async (pkg: PurchasesPackage): Promise<SubscriptionActionResult> => {
+      await waitForIdentityTransition();
       const identityGeneration = identityGenerationRef.current;
       const P = await ensureConfigured();
       if (!P) throw new Error('In-app purchases are not available in this build.');
@@ -828,10 +1090,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         : false;
       return { active: !!ent, confirmed };
     },
-    [applyCustomerInfoIfCurrent, ensureIdentified, refreshServerState],
+    [
+      applyCustomerInfoIfCurrent,
+      ensureIdentified,
+      refreshServerState,
+      waitForIdentityTransition,
+    ],
   );
 
   const restore = useCallback(async (): Promise<SubscriptionActionResult> => {
+    await waitForIdentityTransition();
     const identityGeneration = identityGenerationRef.current;
     const P = await ensureConfigured();
     if (!P) throw new Error('In-app purchases are not available in this build.');
@@ -851,9 +1119,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       confirmed = await refreshServerState(info, { forceSync: true, identityGeneration });
     }
     return { active: !!ent, confirmed };
-  }, [applyCustomerInfoIfCurrent, ensureIdentified, refreshServerState]);
+  }, [
+    applyCustomerInfoIfCurrent,
+    ensureIdentified,
+    refreshServerState,
+    waitForIdentityTransition,
+  ]);
 
   const manageSubscriptions = useCallback(async () => {
+    await waitForIdentityTransition();
     const identityGeneration = identityGenerationRef.current;
     const P = await ensureConfigured();
     if (!P || identityGeneration !== identityGenerationRef.current) return;
@@ -866,9 +1140,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.warn('RevenueCat showManageSubscriptions failed', e);
     }
-  }, [refreshServerState]);
+  }, [refreshServerState, waitForIdentityTransition]);
 
   const presentPaywall = useCallback(async (): Promise<SubscriptionActionResult> => {
+    await waitForIdentityTransition();
     const identityGeneration = identityGenerationRef.current;
     const UI = await ensurePurchasesUI();
     if (!UI) throw new Error('In-app purchases are not available in this build.');
@@ -894,9 +1169,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
     }
     return { active, confirmed };
-  }, [offering, applyCustomerInfoIfCurrent, refreshServerState]);
+  }, [
+    offering,
+    applyCustomerInfoIfCurrent,
+    refreshServerState,
+    waitForIdentityTransition,
+  ]);
 
   const presentCustomerCenter = useCallback(async (): Promise<void> => {
+    await waitForIdentityTransition();
     const identityGeneration = identityGenerationRef.current;
     const UI = await ensurePurchasesUI();
     if (!UI || identityGeneration !== identityGenerationRef.current) return;
@@ -907,9 +1188,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.warn('RevenueCat presentCustomerCenter failed', e);
     }
-  }, [refreshServerState]);
+  }, [refreshServerState, waitForIdentityTransition]);
 
   const activeEntitlement = findActiveTraderEntitlement(customerInfo);
+  const isReady = offeringsState !== 'initializing';
+  const isLoading = offeringsState === 'initializing';
 
   // Memoize so the context value only changes when its inputs actually change.
   // Without this the object is rebuilt every render, and any consumer that
@@ -920,6 +1203,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       isSupported: isPurchasesSupported,
       isReady,
       isLoading,
+      offeringsState,
+      offeringsError,
+      isIdentityTransitioning,
       monthlyPackage: pickPackage(offering, 'monthly'),
       annualPackage: pickPackage(offering, 'annual'),
       team5Package: pickTeamPackage(offering, 'team5'),
@@ -950,6 +1236,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     [
       isReady,
       isLoading,
+      offeringsState,
+      offeringsError,
+      isIdentityTransitioning,
       isServerStateUpdating,
       serverStateError,
       offering,

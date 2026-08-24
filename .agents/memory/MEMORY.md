@@ -85,3 +85,4 @@
 - [Team billing flag-ON tests](team-billing-flag-on-tests.md) — suite must pass in all flag combos; plan-less fixture owners 403 fail-closed everywhere (working as designed); fixture conventions inside.
 - [Team seat accounting split](team-seat-accounting-split.md) — seat display/invite gating ALWAYS plan-based (owner never counts); TEAM_BILLING_ENFORCED gates only suspensions; allowance field presence = enforcement on.
 - [Verification reapproval billing recovery](verification-reapproval-billing-recovery.md) — reapproval must reconcile the preserved server-owned entitlement before telling mounted clients to refresh; active repeats are transition-idempotent.
+- [RevenueCat readiness identity barrier](revenuecat-readiness-identity-barrier.md) — UI timeouts may settle readiness, but never release the native identity serialization lock before logIn/logOut settles.
