@@ -39,7 +39,7 @@
         "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_qHukXmrQAVympYwzJvgUmuuFcrW",
         "EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID": "Trader Subscription"
       },
-      "node": "22.13.0",
+      "node": "22.18.0",
       "pnpm": "11.18.0"
     }
   },
