@@ -86,3 +86,4 @@
 - [Team seat accounting split](team-seat-accounting-split.md) — seat display/invite gating ALWAYS plan-based (owner never counts); TEAM_BILLING_ENFORCED gates only suspensions; allowance field presence = enforcement on.
 - [Verification reapproval billing recovery](verification-reapproval-billing-recovery.md) — reapproval must reconcile the preserved server-owned entitlement before telling mounted clients to refresh; active repeats are transition-idempotent.
 - [RevenueCat readiness identity barrier](revenuecat-readiness-identity-barrier.md) — UI timeouts may settle readiness, but never release the native identity serialization lock before logIn/logOut settles.
+- [Patched dependency resolution](patched-dependency-resolution.md) — verify a patch through the consumer’s resolved package; stale pnpm virtual-store copies can survive normal installs.

@@ -1,0 +1,157 @@
+Implement a tightly scoped pre-launch dependency security hardening pass based on the completed read-only audit.
+
+IMPORTANT:
+Do NOT use Replit “Fix all”.
+Do NOT blindly upgrade the entire dependency tree.
+Do NOT deploy.
+Do NOT push to GitHub — I will use Replit Git Sync myself.
+Do NOT change application behavior, APIs, database schema, RevenueCat, Twilio, Apple configuration, or business logic.
+
+GOAL
+
+Resolve the highest-value security findings before App Store launch with the smallest compatible dependency changes.
+
+PRIORITY 1
+
+1. orval
+Current: 8.5.3
+Required safe target: >= 8.22.0
+
+Orval is a direct dev/code-generation dependency in @workspace/api-spec.
+
+Upgrade Orval safely and:
+
+- run the existing API code generation;
+- inspect generated-client diffs;
+- do not accept unrelated generated changes blindly;
+- confirm the generated API client remains compatible;
+- run all consumers' typechecks/tests.
+
+Do not process any untrusted remote OpenAPI input.
+
+2. qs
+Current: 6.15.2 through Express
+Required safe target: >= 6.16.0
+
+This is an API runtime dependency.
+
+Use the least invasive compatible resolution.
+Do not replace Express or alter query parsing behavior unless required.
+
+Run API route/security regressions after the update.
+
+3. fast-uri
+Current: 3.1.5
+Required safe target: >= 3.1.6
+
+Prefer the narrowest compatible pnpm resolution/override.
+Verify both Orval/Ajv and Expo-related dependency paths remain compatible.
+
+4. js-yaml
+Current: 4.3.0
+Required safe target: >= 4.3.1
+
+Raise the existing v4 resolution/override safely.
+Run API-spec/codegen and Expo/mobile typechecks.
+
+PRIORITY 2
+
+5. nanoid
+
+Current installed versions include:
+3.3.11
+3.3.16
+
+Target:
+>= 3.3.18
+
+If a safe patch-level pnpm resolution can deduplicate these without changing Expo Router/React Navigation APIs, apply it.
+
+Run mobile navigation/router tests.
+
+6. image-size 1.2.1
+
+The audit found that the repository declares a patch, but the installed package does not contain the expected JXL/ICNS loop-progress guards.
+
+Do NOT force image-size 2.x into Metro blindly.
+
+First determine why the pnpm patch is not actually applied.
+
+Preferred order:
+
+A. Correct the existing patch application if it remains supported and deterministic.
+B. If the parent Expo/Metro dependency now supports a fixed image-size release, update through that supported parent path.
+C. Only use a direct major-version override if compatibility is proven.
+
+After the change, inspect the actual installed source to prove the vulnerable loop logic is no longer present.
+
+DEFER FOR THIS TASK
+
+Do not upgrade these unless required transitively by the safe changes above:
+
+- browserslist
+- @xmldom/xmldom
+- fflate
+- decode-uri-component
+
+Report them as remaining findings instead.
+
+SECURITY / COMPATIBILITY REQUIREMENTS
+
+Do not:
+
+- use --force
+- use broad wildcard overrides
+- suppress Security Center findings without remediation
+- delete lockfile and regenerate the whole dependency graph unnecessarily
+- upgrade Expo, React Native, React Navigation, or Express major versions
+- alter production functionality to satisfy dependency tests
+
+VALIDATION
+
+Run:
+
+- API TypeScript
+- mobile TypeScript
+- admin TypeScript if affected
+- API full test suite
+- mobile full test suite
+- API-spec codegen
+- generated-client diff review
+- relevant navigation/router tests
+- dependency graph verification
+- pnpm audit / available workspace security scan if available
+
+For image-size, verify the installed source after installation, not only package.json or lockfile metadata.
+
+Have an independent review check:
+
+- Orval generated-client compatibility
+- qs runtime compatibility
+- pnpm override safety
+- Expo/Metro compatibility
+- image-size patch actually being effective
+
+WHEN COMPLETE
+
+Do NOT deploy.
+Do NOT push to GitHub.
+
+Report:
+
+1. Packages changed
+2. Before/after versions
+3. Which CVEs/findings are actually resolved
+4. Remaining Security Center findings
+5. Whether generated API files changed
+6. Whether any application behavior changed
+7. API/mobile/admin tests and typechecks
+8. Whether backend republish is required
+9. Whether a new TestFlight build is required
+10. Whether the resulting dependency state is safe for the App Store release candidate
+
+Explicitly separate:
+
+- resolved before-launch findings
+- intentionally deferred low-exposure tooling findings
+- anything still requiring manual review

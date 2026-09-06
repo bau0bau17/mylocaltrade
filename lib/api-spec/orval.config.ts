@@ -53,10 +53,13 @@ export default defineConfig({
       target: "generated",
       schemas: { path: "generated/types", type: "typescript" },
       mode: "split",
+      indexFiles: false,
       clean: true,
       prettier: true,
       override: {
         zod: {
+          version: 3,
+          variant: "classic",
           coerce: {
             query: ['boolean', 'number', 'string'],
             param: ['boolean', 'number', 'string'],
