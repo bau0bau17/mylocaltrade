@@ -1,0 +1,111 @@
+Implement the final low-risk dependency security cleanup before App Store release.
+
+IMPORTANT:
+Do NOT use “Fix all”.
+Do NOT upgrade unrelated dependencies.
+Do NOT upgrade Expo, React Native, React Navigation, Metro, or backend framework major versions.
+Do NOT deploy.
+Do NOT push to GitHub — I will use Replit Git Sync myself.
+
+TARGET 1
+
+Upgrade the transitive mobile dependency:
+
+decode-uri-component
+current: 0.2.2
+target: >= 0.5.0
+
+Current path:
+Expo Router / React Navigation
+→ query-string
+→ decode-uri-component
+
+Use the narrowest compatible pnpm resolution/override.
+
+Do NOT change Expo Router or React Navigation major versions.
+
+After upgrade, verify:
+
+- Universal Links still work
+- /open?t=leads
+- /open?c=<conversation id>
+- support links
+- team invite links
+- malformed query strings
+- encoded query parameters
+- logged-out deep-link continuation
+- Account A link while Account B is signed in
+
+No malformed/deep link may crash, hang, or bypass authorization.
+
+
+TARGET 2
+
+Upgrade:
+
+fflate
+current: 0.6.10
+target: >= 0.6.11
+
+Use the narrowest compatible patch-level resolution.
+
+Do not upgrade three / three-stdlib APIs unless required.
+
+There is currently no project source using archive decompression directly, so this should remain a dependency-only compatibility fix.
+
+
+DO NOT MODIFY
+
+Do not change:
+
+- image-size 1.2.1 or its existing local security patch
+- browserslist
+- @xmldom/xmldom
+- RevenueCat
+- Twilio
+- Apple configuration
+- TEAM_PRODUCT_SEAT_MAP
+- EAS Node version
+- pnpm version
+- application business logic
+
+
+VALIDATION
+
+Run:
+
+- mobile TypeScript
+- full mobile tests
+- deep-link / Universal Link routing tests
+- account-switch isolation tests
+- dependency graph verification
+
+Confirm the actually installed versions resolve to:
+
+decode-uri-component >= 0.5.0
+fflate >= 0.6.11
+
+Have an independent review check:
+
+- Expo Router / React Navigation compatibility
+- deep-link parsing behavior
+- no authorization regression
+- no broad dependency override side effects
+
+
+WHEN COMPLETE
+
+Do NOT deploy.
+Do NOT push to GitHub.
+
+Report:
+
+1. Before/after versions
+2. Files changed
+3. Exact pnpm override/resolution used
+4. Tests/typechecks
+5. Deep-link regression result
+6. Remaining Security Center findings
+7. Backend republish required yes/no
+8. New TestFlight build required yes/no
+9. Whether the resulting dependency state is suitable for the App Store release candidate
