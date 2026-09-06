@@ -1,0 +1,82 @@
+Perform a final READ-ONLY launch security audit of the 7 remaining Security Center findings.
+
+Do NOT click Fix all.
+Do NOT upgrade anything yet.
+Do NOT modify package.json, pnpm-lock.yaml, patches, overrides, Expo, Metro, React Native, or navigation dependencies.
+Do NOT deploy.
+Do NOT push to GitHub — I will use Replit Git Sync myself.
+
+Remaining findings currently shown by Replit Security Center:
+
+- image-size 1.2.1 — High (2 findings)
+- browserslist 4.28.1 — High (2 findings)
+- fflate 0.6.10 — High
+- @xmldom/xmldom 0.8.13 — Medium
+- decode-uri-component 0.2.2 — Medium
+
+For EACH unique dependency, determine:
+
+1. Exact CVE/advisory reported.
+2. Whether the installed version is truly vulnerable.
+3. Direct vs transitive dependency.
+4. Exact parent dependency/workspace path introducing it.
+5. Whether it is used in:
+   - iOS app runtime
+   - API runtime
+   - admin runtime
+   - build/dev tooling only
+   - test-only tooling
+6. Whether untrusted user/network input can realistically reach the vulnerable code path.
+7. Minimum safe patched version.
+8. Whether a safe patch/minor upgrade exists without upgrading Expo/React Native/React Navigation major versions.
+9. Whether the existing image-size patch is actually applied to the installed package and really mitigates the specific Security Center advisory.
+10. Deduplicate duplicate findings so we understand how many actual unique vulnerabilities remain.
+
+For image-size specifically:
+- inspect the actual installed package source;
+- verify whether the vulnerable loop/path identified by the advisory is present;
+- verify whether the repo's pnpm patch is actually applied;
+- do not rely only on package.json or lockfile metadata.
+
+For browserslist:
+- determine whether it is build/tooling only;
+- confirm whether the advisory can affect production users.
+
+For fflate:
+- determine exactly where it is used and whether it processes untrusted data in production.
+
+For @xmldom/xmldom:
+- determine whether any untrusted XML reaches it in production.
+
+For decode-uri-component:
+- identify the navigation/router dependency path;
+- determine whether exploitation is possible through application-controlled/deep-link URL input;
+- do not recommend a major React Navigation upgrade unless truly necessary.
+
+Return a concise table:
+
+package
+installed version
+severity
+CVE/advisory
+dependency path
+runtime/tooling
+reachable from untrusted input yes/no
+minimum safe version
+upgrade risk
+launch verdict
+
+Use launch verdicts:
+
+A. MUST FIX before App Store submission
+B. SHOULD FIX before launch if low-risk
+C. SAFE TO DEFER with justification
+D. FALSE POSITIVE / already mitigated
+
+Then give one overall conclusion:
+
+“Safe to proceed with App Store release candidate”
+or
+“Do not release yet”
+
+Do not make any changes.
