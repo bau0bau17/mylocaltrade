@@ -54,6 +54,12 @@ export const usersTable = pgTable(
   isSuperAdmin: boolean("is_super_admin").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   emailVerified: boolean("email_verified").notNull().default(false),
+  // Required at registration for both customers and traders. This is a
+  // declaration, not age verification: no date of birth or identity signal is
+  // collected. Keeping the flag and timestamp together makes the declaration
+  // auditable without changing existing verification flows.
+  ageLegalCapacityAccepted: boolean("age_legal_capacity_accepted").notNull().default(false),
+  ageLegalCapacityAcceptedAt: timestamp("age_legal_capacity_accepted_at"),
   emailVerificationToken: text("email_verification_token"),
   emailVerificationTokenExpiresAt: timestamp("email_verification_token_expires_at"),
   emailVerificationSentAt: timestamp("email_verification_sent_at"),

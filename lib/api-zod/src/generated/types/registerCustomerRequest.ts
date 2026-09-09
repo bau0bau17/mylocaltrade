@@ -16,4 +16,6 @@ export interface RegisterCustomerRequest {
      */
   fullName: string;
   phone?: string;
+  /** Confirms the user is 18 or older and legally capable of entering the relevant service arrangements. This is a declaration only; no date of birth is collected. */
+  ageLegalCapacityAccepted: boolean;
 }

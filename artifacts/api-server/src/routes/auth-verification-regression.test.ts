@@ -346,6 +346,35 @@ describe("Concurrent link + code redemption", () => {
   });
 });
 
+describe("Registration age/legal-capacity declaration", () => {
+  it("rejects a customer registration without the declaration", async () => {
+    const response = await request(app)
+      .post("/api/auth/register/customer")
+      .send({ email: emailFor("missing-age-customer"), password: PASSWORD, fullName: "Missing Declaration" });
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects a trader registration without the declaration", async () => {
+    const response = await request(app)
+      .post("/api/auth/register/trader")
+      .send({
+        email: emailFor("missing-age-trader"),
+        password: PASSWORD,
+        confirmPassword: PASSWORD,
+        termsAccepted: true,
+        privacyAccepted: true,
+        contactName: "Missing Declaration",
+        businessName: "Missing Declaration Ltd",
+        phone: "07000000001",
+        mainCategory: "plumbing",
+        businessAddress: "1 Test Street",
+        town: "London",
+        postcode: "SW1A 1AA",
+      });
+    expect(response.status).toBe(400);
+  });
+});
+
 describe("Re-registration after deletion (end-to-end via real endpoints)", () => {
   it("a customer can re-register on a released email, verify via the NEW link and log in", async () => {
     const email = emailFor("rereg-customer");
@@ -360,7 +389,7 @@ describe("Re-registration after deletion (end-to-end via real endpoints)", () =>
 
     const reg = await request(app)
       .post("/api/auth/register/customer")
-      .send({ email, password: PASSWORD, fullName: `Reg ${SUFFIX}` });
+      .send({ email, password: PASSWORD, fullName: `Reg ${SUFFIX}`, ageLegalCapacityAccepted: true });
     expect(reg.status).toBe(201);
     expect(reg.body.pollToken).toBeTruthy();
 
@@ -371,6 +400,8 @@ describe("Re-registration after deletion (end-to-end via real endpoints)", () =>
       .limit(1);
     createdUserIds.push(newRow.id);
     expect(newRow.emailVerified).toBe(false);
+    expect(newRow.ageLegalCapacityAccepted).toBe(true);
+    expect(newRow.ageLegalCapacityAcceptedAt).toBeInstanceOf(Date);
     expect(newRow.emailVerificationToken).toBeTruthy();
 
     // Poll (what the app's verify screen does) reports unverified pre-link.
@@ -415,6 +446,7 @@ describe("Re-registration after deletion (end-to-end via real endpoints)", () =>
         confirmPassword: PASSWORD,
         termsAccepted: true,
         privacyAccepted: true,
+        ageLegalCapacityAccepted: true,
         contactName: `Reg ${SUFFIX}`,
         businessName: `Reg Biz ${SUFFIX}`,
         phone: "07000000001",
@@ -431,6 +463,8 @@ describe("Re-registration after deletion (end-to-end via real endpoints)", () =>
       .where(eq(usersTable.email, email.toLowerCase()))
       .limit(1);
     createdUserIds.push(newRow.id);
+    expect(newRow.ageLegalCapacityAccepted).toBe(true);
+    expect(newRow.ageLegalCapacityAcceptedAt).toBeInstanceOf(Date);
 
     // Simulate the in-app code path: overwrite the OTP hash with a known code
     // (the emailed value is not observable in tests).

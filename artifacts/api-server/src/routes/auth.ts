@@ -320,6 +320,10 @@ async function findUserByEmail(email: string, kind: "app" | "admin") {
 router.post("/auth/register/customer", async (req, res) => {
   try {
     const body = RegisterCustomerBody.parse(req.body);
+    if (body.ageLegalCapacityAccepted !== true) {
+      res.status(400).json({ error: "You must confirm that you are 18 or older and legally capable of entering the relevant service arrangements." });
+      return;
+    }
 
     // Admin-portal rows (role "admin") are a separate identity space and
     // never block an app registration with the same email.
@@ -355,6 +359,8 @@ router.post("/auth/register/customer", async (req, res) => {
         // identity is never client-influenced (see lib/revenuecat-identity).
         revenuecatId: generateRevenueCatId(),
         emailVerified: false,
+        ageLegalCapacityAccepted: true,
+        ageLegalCapacityAcceptedAt: new Date(),
         emailVerificationToken: verificationToken,
         emailVerificationTokenExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
         emailVerificationSentAt: new Date(),
@@ -416,6 +422,10 @@ router.post("/auth/register/trader", async (req, res) => {
     }
     if (body.termsAccepted !== true || body.privacyAccepted !== true) {
       res.status(400).json({ error: "You must accept the Terms and Privacy Policy to continue." });
+      return;
+    }
+    if (body.ageLegalCapacityAccepted !== true) {
+      res.status(400).json({ error: "You must confirm that you are 18 or older and legally capable of entering the relevant service arrangements." });
       return;
     }
 
@@ -531,6 +541,8 @@ router.post("/auth/register/trader", async (req, res) => {
         // identity is never client-influenced (see lib/revenuecat-identity).
         revenuecatId: generateRevenueCatId(),
         emailVerified: false,
+        ageLegalCapacityAccepted: true,
+        ageLegalCapacityAcceptedAt: now,
         emailVerificationToken: verificationToken,
         emailVerificationTokenExpiresAt: new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS),
         emailVerificationSentAt: now,

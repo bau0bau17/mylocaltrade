@@ -1,0 +1,82 @@
+Pre-launch children-access and age-eligibility audit.
+
+IMPORTANT:
+Audit first.
+Do NOT add age verification or an 18+ gate unless the existing product/legal model actually requires it.
+Do NOT duplicate existing age/eligibility controls.
+Do NOT deploy.
+Do NOT push to GitHub — I will use Replit Git Sync myself.
+
+READ-ONLY AUDIT FIRST
+
+Inspect current:
+- registration flows
+- Terms
+- Privacy
+- Safety Advice
+- Customer and Trader eligibility wording
+- trader verification requirements
+- app-store-facing age assumptions
+- any DOB/age fields
+- moderation/safety controls
+- marketing/landing copy
+
+Determine:
+
+1. Does MyLocalTrade currently state a minimum user age?
+2. Is Customer account creation restricted by age?
+3. Is Trader account creation restricted by age/business capacity?
+4. Is age data collected?
+5. Is age verification performed?
+6. Is the service reasonably designed for adults arranging property/service work?
+7. Are any features specifically attractive to or directed at children?
+8. Does any current wording conflict with an adults-only intended audience?
+9. Is there a documented “likely to be accessed by children” assessment in repo/admin/legal docs?
+
+DO NOT implement controls merely to make the app look stricter.
+
+IF A GAP EXISTS
+
+Create a concise internal children-access assessment document and align user-facing Terms/registration wording only as needed.
+
+Preferred product position, if supported by the existing service model:
+- customers must be legally capable of entering into service arrangements;
+- traders must meet the existing business/account eligibility requirements;
+- MyLocalTrade is not designed for children.
+
+Do NOT:
+- collect DOB unless actually necessary;
+- add biometric/ID age verification;
+- add intrusive age assurance without a proven requirement;
+- change trader identity-verification scope.
+
+If a simple age eligibility declaration is necessary, use the least intrusive design and explain why.
+
+TESTS
+
+If registration or Terms acceptance changes:
+- test customer registration
+- trader registration
+- legal acceptance persistence
+- no regression to verification/login
+
+WHEN COMPLETE
+
+Do NOT deploy.
+Do NOT push to GitHub.
+
+Report:
+1. Current age/children-access position
+2. Whether the service is likely/unlikely to be accessed by children and why
+3. Existing controls already present
+4. Gaps found
+5. Any implementation made
+6. Whether DOB/age verification was added (preferably no unless necessary)
+7. Files changed
+8. Tests/results
+9. Backend republish required yes/no
+10. New TestFlight build required yes/no
+11. Any manual policy review still required
+
+If no product change is needed, explicitly say:
+“The current product can remain unchanged; only the documented children-access assessment was required.”

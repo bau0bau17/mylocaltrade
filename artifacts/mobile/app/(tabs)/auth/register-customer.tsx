@@ -20,6 +20,7 @@ export default function RegisterCustomerScreen() {
     phone: '',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [ageLegalCapacityAccepted, setAgeLegalCapacityAccepted] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleRegister = async () => {
@@ -45,6 +46,11 @@ export default function RegisterCustomerScreen() {
       return;
     }
 
+    if (!ageLegalCapacityAccepted) {
+      setErrorMsg('Please confirm that you are at least 18 and legally able to enter service arrangements.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { email, pollToken } = await registerCustomer({
@@ -52,6 +58,7 @@ export default function RegisterCustomerScreen() {
         email: formData.email.trim(),
         password: formData.password,
         phone: formData.phone.trim() || undefined,
+         ageLegalCapacityAccepted: true,
       });
       router.replace({ pathname: '/auth/verify-email', params: { email, pollToken } });
     } catch (error: unknown) {
@@ -186,10 +193,27 @@ export default function RegisterCustomerScreen() {
           </View>
         )}
 
+        <Pressable
+          style={styles.checkboxRow}
+          onPress={() => setAgeLegalCapacityAccepted(value => !value)}
+          accessibilityRole="checkbox"
+          accessibilityLabel="Confirm that you are at least 18 and legally able to enter service arrangements"
+          accessibilityHint="This declaration is required to create an account. No date of birth is collected."
+          accessibilityState={{ checked: ageLegalCapacityAccepted }}
+        >
+          <View style={[styles.checkbox, ageLegalCapacityAccepted && styles.checkboxChecked]}>
+            {ageLegalCapacityAccepted && <Feather name="check" size={14} color={Colors.light.white} />}
+          </View>
+          <Text style={styles.checkboxLabel}>
+            I confirm that I am at least 18 years old and legally able to enter service arrangements.{' '}
+            <Text style={styles.checkboxHint}>No date of birth is collected.</Text>
+          </Text>
+        </Pressable>
+
         <Pressable 
-          style={[styles.button, isLoading && styles.buttonDisabled]} 
+          style={[styles.button, (!ageLegalCapacityAccepted || isLoading) && styles.buttonDisabled]}
           onPress={handleRegister}
-          disabled={isLoading}
+          disabled={isLoading || !ageLegalCapacityAccepted}
         >
           {isLoading ? (
             <ActivityIndicator color={Colors.light.white} />
@@ -294,6 +318,37 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.light.error,
     fontWeight: '500',
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+    lineHeight: 19,
+  },
+  checkboxHint: {
+    color: Colors.light.textMuted,
   },
   button: {
     backgroundColor: Colors.light.primary,

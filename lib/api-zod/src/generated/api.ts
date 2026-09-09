@@ -33,7 +33,8 @@ export const RegisterCustomerBody = zod.object({
   "email": zod.string().email(),
   "password": zod.string().min(registerCustomerBodyPasswordMin),
   "fullName": zod.string().min(1).max(registerCustomerBodyFullNameMax),
-  "phone": zod.string().optional()
+  "phone": zod.string().optional(),
+  "ageLegalCapacityAccepted": zod.boolean().describe('Confirms the user is 18 or older and legally capable of entering the relevant service arrangements. This is a declaration only; no date of birth is collected.')
 })
 
 export const RegisterCustomerResponse = zod.object({
@@ -64,6 +65,7 @@ export const RegisterTraderBody = zod.object({
   "confirmPassword": zod.string().min(registerTraderBodyConfirmPasswordMin).describe('Must match `password` exactly. Validated server-side.'),
   "termsAccepted": zod.boolean().describe('User explicitly accepted the current Terms of Service.'),
   "privacyAccepted": zod.boolean().describe('User explicitly accepted the current Privacy Policy.'),
+  "ageLegalCapacityAccepted": zod.boolean().describe('Confirms the trader is 18 or older and legally capable of entering the relevant service arrangements. This is a declaration only; no date of birth is collected.'),
   "contactName": zod.string().min(1).max(registerTraderBodyContactNameMax),
   "businessName": zod.string(),
   "companyNumber": zod.string().optional().describe('Optional UK Companies House registration number. If present, the\nbackend treats the trader as having selected a confirmed match\nfrom the Companies House live search and skips the manual\n\"under review\" step for the business identity check.\n'),

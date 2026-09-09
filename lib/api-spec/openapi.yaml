@@ -2740,10 +2740,14 @@ components:
           maxLength: 100
         phone:
           type: string
+        ageLegalCapacityAccepted:
+          type: boolean
+          description: Confirms the user is 18 or older and legally capable of entering the relevant service arrangements. This is a declaration only; no date of birth is collected.
       required:
         - email
         - password
         - fullName
+        - ageLegalCapacityAccepted
 
     RegisterTraderRequest:
       type: object
@@ -2764,6 +2768,9 @@ components:
         privacyAccepted:
           type: boolean
           description: User explicitly accepted the current Privacy Policy.
+        ageLegalCapacityAccepted:
+          type: boolean
+          description: Confirms the trader is 18 or older and legally capable of entering the relevant service arrangements. This is a declaration only; no date of birth is collected.
         contactName:
           type: string
           minLength: 1
@@ -2803,6 +2810,7 @@ components:
         - confirmPassword
         - termsAccepted
         - privacyAccepted
+        - ageLegalCapacityAccepted
         - contactName
         - businessName
         - phone

@@ -19,6 +19,8 @@ export interface RegisterTraderRequest {
   termsAccepted: boolean;
   /** User explicitly accepted the current Privacy Policy. */
   privacyAccepted: boolean;
+  /** Confirms the trader is 18 or older and legally capable of entering the relevant service arrangements. This is a declaration only; no date of birth is collected. */
+  ageLegalCapacityAccepted: boolean;
   /**
      * @minLength 1
      * @maxLength 100

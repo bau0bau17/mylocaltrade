@@ -46,6 +46,7 @@ export default function RegisterTraderScreen() {
   const lastQueryRef = useRef<string>('');
 
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [ageLegalCapacityAccepted, setAgeLegalCapacityAccepted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -159,6 +160,10 @@ export default function RegisterTraderScreen() {
       setErrorMsg('Please accept the Terms and Privacy Policy to continue.');
       return;
     }
+    if (!ageLegalCapacityAccepted) {
+      setErrorMsg('Please confirm that you are at least 18 and legally able to enter service arrangements.');
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -177,6 +182,7 @@ export default function RegisterTraderScreen() {
         postcode: formData.postcode.trim().toUpperCase(),
         termsAccepted: true,
         privacyAccepted: true,
+        ageLegalCapacityAccepted: true,
       };
       const { email, pollToken } = await registerTrader(payload);
       router.replace({ pathname: '/auth/verify-email', params: { email, pollToken } });
@@ -505,6 +511,23 @@ export default function RegisterTraderScreen() {
           </Text>
         </Pressable>
 
+        <Pressable
+          style={styles.checkboxRow}
+          onPress={() => setAgeLegalCapacityAccepted(v => !v)}
+          accessibilityRole="checkbox"
+          accessibilityLabel="Confirm that you are at least 18 and legally able to enter service arrangements"
+          accessibilityHint="This declaration is required to create an account. No date of birth is collected."
+          accessibilityState={{ checked: ageLegalCapacityAccepted }}
+        >
+          <View style={[styles.checkbox, ageLegalCapacityAccepted && styles.checkboxChecked]}>
+            {ageLegalCapacityAccepted && <Feather name="check" size={14} color={Colors.light.white} />}
+          </View>
+          <Text style={styles.checkboxLabel}>
+            I confirm that I am at least 18 years old and legally able to enter service arrangements.{' '}
+            <Text style={styles.checkboxHint}>No date of birth is collected.</Text>
+          </Text>
+        </Pressable>
+
         <Text style={styles.helperText}>
           After signup, you'll be asked to verify your email, phone number, business details and insurance/qualifications where applicable.
         </Text>
@@ -517,9 +540,9 @@ export default function RegisterTraderScreen() {
         ) : null}
 
         <Pressable
-          style={[styles.button, isLoading && styles.buttonDisabled]}
+          style={[styles.button, (!ageLegalCapacityAccepted || isLoading) && styles.buttonDisabled]}
           onPress={handleRegister}
-          disabled={isLoading}
+          disabled={isLoading || !ageLegalCapacityAccepted}
         >
           {isLoading ? (
             <ActivityIndicator color={Colors.light.white} />
@@ -760,6 +783,9 @@ const styles = StyleSheet.create({
   checkboxLink: {
     color: Colors.light.primary,
     fontWeight: '600',
+  },
+  checkboxHint: {
+    color: Colors.light.textMuted,
   },
   helperText: {
     fontSize: 12,
