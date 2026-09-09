@@ -1,0 +1,53 @@
+Correct the Cookie Policy to reflect the live hosting-layer GAESA cookie.
+
+IMPORTANT:
+Do not add a cookie banner.
+Do not change hosting/CDN/session-affinity configuration.
+Do not change admin authentication or functional storage.
+Do not deploy.
+Do not push to GitHub — I will use Replit Git Sync myself.
+
+The live browser audit confirmed:
+
+- mylocaltrade.co.uk sets a first-party GAESA cookie immediately
+- it is issued by Google Frontend hosting
+- approximately 30-day expiry was observed
+- no analytics, advertising, marketing, replay, pixels, tag managers, or third-party embeds are active
+- no other public-site cookies/storage were found
+- admin uses only necessary/functional storage
+
+The current local Cookie Policy incorrectly states that the public website sets no cookies.
+
+Update all current Cookie Policy representations so they accurately say:
+
+- the public site may receive a hosting-layer GAESA cookie from the Google hosting infrastructure;
+- its observed purpose is routing/session affinity/load-balancing functionality;
+- it is not used by MyLocalTrade for analytics, advertising, profiling, or marketing;
+- no non-essential analytics/marketing cookies are currently used;
+- therefore no cookie-consent banner is currently required;
+- if non-essential tracking is introduced later, consent requirements will be reviewed before activation.
+
+Do not overstate unsupported provider details.
+Do not call GAESA a marketing or analytics cookie.
+Do not invent a retention period; if duration is mentioned, say that the observed live cookie had an approximately 30-day expiry and hosting behavior may change.
+
+Update consistently:
+- native mobile Cookie Policy
+- public prebuilt Cookie Policy HTML
+- matching JavaScript asset if required
+
+Run:
+- mobile typecheck
+- relevant mobile/legal tests
+- syntax validation for the prebuilt asset
+- independent final review
+
+Report:
+1. exact wording changed
+2. files changed
+3. tests/typechecks
+4. landing/web republish required yes/no
+5. new TestFlight build required yes/no
+
+Do not deploy.
+Do not push to GitHub.

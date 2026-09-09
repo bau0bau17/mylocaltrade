@@ -37,13 +37,13 @@ export default function CookiePolicyScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>2. Public website and admin dashboard</Text>
         <Text style={styles.paragraph}>
-          <Text style={styles.bold}>Public website:</Text> The public landing site currently does not set cookies or use browser storage, analytics or marketing cookies, tracking, or third-party embeds.
+          <Text style={styles.bold}>Public website:</Text> The public landing site currently uses no non-essential analytics or marketing cookies and no consent banner is required for this current behavior. It may receive a first-party GAESA cookie from Google hosting infrastructure; its observed purpose is routing, session affinity and load balancing. MyLocalTrade does not use GAESA for analytics, advertising, profiling or marketing. The observed cookie had an approximately 30-day expiry, and hosting behavior may change.
         </Text>
         <Text style={styles.paragraph}>
           <Text style={styles.bold}>Admin dashboard:</Text> The functional <Text style={styles.bold}>sidebar_state</Text> cookie remembers the sidebar for 7 days. Functional <Text style={styles.bold}>admin-theme</Text> storage remembers the theme, and necessary <Text style={styles.bold}>mlt_admin_token</Text> storage keeps an administrator authenticated. These are first-party browser storage items.
         </Text>
         <Text style={styles.paragraph}>
-          The public site and admin dashboard currently use no analytics or marketing tracking. We make no general claim that third parties set browser cookies.
+          The public site and admin dashboard currently use no non-essential analytics or marketing tracking.
         </Text>
       </View>
 
