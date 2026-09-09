@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ResolveUserReportRequestAction } from './resolveUserReportRequestAction';
+import type { ResolveUserReportRequestOutcome } from './resolveUserReportRequestOutcome';
 
 export interface ResolveUserReportRequest {
   action: ResolveUserReportRequestAction;
   notes?: string;
+  outcome?: ResolveUserReportRequestOutcome;
 }

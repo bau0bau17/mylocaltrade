@@ -8,6 +8,9 @@ import Colors from '@/constants/colors';
 import {
   useGetMyTraderReviews,
   useReplyToReview,
+  useCreateReport,
+  useGetReportCategories,
+  getGetReportCategoriesQueryKey,
   type Review,
 } from '@workspace/api-client-react';
 
@@ -40,6 +43,15 @@ export default function TraderReviewsScreen() {
 
   const [replyOpen, setReplyOpen] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
+  const { data: reportCategories } = useGetReportCategories({
+    query: { queryKey: getGetReportCategoriesQueryKey() },
+  });
+  const reportMutation = useCreateReport({
+    mutation: {
+      onSuccess: () => Alert.alert('Review reported', 'Thanks — our team will review this report.'),
+      onError: () => Alert.alert('Could not report review', 'Please try again.'),
+    },
+  });
 
   const submitReply = async (reviewId: number) => {
     const text = replyText.trim();
@@ -55,6 +67,24 @@ export default function TraderReviewsScreen() {
     } catch (e) {
       Alert.alert('Could not post reply', e instanceof Error ? e.message : 'Try again later.');
     }
+  };
+
+  const reportReview = (reviewId: number) => {
+    const options = (reportCategories?.categories.customer ?? [])
+      .filter((option) => option.value.toUpperCase() !== 'CSEA' && !option.label.toUpperCase().includes('CSEA'));
+    Alert.alert('Report this review', 'Choose a reason.', [
+      ...options.map((option) => ({
+        text: option.label,
+        onPress: () => {
+          const submit = (detail: string) => reportMutation.mutate({
+            data: { reportedRole: 'customer', reviewId, category: option.value, detail: detail.trim() || undefined },
+          });
+          if (Alert.prompt) Alert.prompt('Add details', 'Tell us briefly what happened.', submit);
+          else submit(option.value === 'OTHER' ? '' : option.label);
+        },
+      })),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
   };
 
   if (isLoading) {
@@ -113,6 +143,15 @@ export default function TraderReviewsScreen() {
 
                 <Stars rating={r.rating} />
                 <Text style={styles.reviewText}>{r.text}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Report review ${r.id}`}
+                  onPress={() => reportReview(r.id)}
+                  style={styles.reportReviewBtn}
+                >
+                  <Feather name="flag" size={13} color={Colors.light.textMuted} />
+                  <Text style={styles.reportReviewText}>Report this review</Text>
+                </Pressable>
 
                 {r.status === 'REJECTED' && r.moderationNotes ? (
                   <View style={styles.modNote}>
@@ -219,6 +258,8 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   statusText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4, textTransform: 'uppercase' },
   reviewText: { fontSize: 13, color: Colors.light.text, lineHeight: 19 },
+  reportReviewBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, alignSelf: 'flex-start' },
+  reportReviewText: { fontSize: 12, color: Colors.light.textMuted },
   modNote: { padding: 10, borderRadius: 10, backgroundColor: Colors.light.errorMuted, borderWidth: 1, borderColor: Colors.light.error },
   modNoteLabel: { fontSize: 10, fontWeight: '700', color: Colors.light.error, letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 4 },
   modNoteText: { fontSize: 12, color: Colors.light.error, lineHeight: 17 },

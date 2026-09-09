@@ -12,6 +12,8 @@ import {
   messagesTable,
   conversationReportsTable,
   userReportsTable,
+  reportAppealsTable,
+  REPORT_OUTCOMES,
   cancellationRequestsTable,
   REPORT_CATEGORIES,
   reviewsTable,
@@ -66,6 +68,17 @@ import { reconcileDocumentsState } from "./trader-documents";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
+
+// CSEA access is fail-closed and deliberately separate from adminOnly. The
+// allowlist contains staff emails, not user IDs, so deployment can rotate
+// access without a schema role migration. Missing/blank env means nobody.
+async function requireCseaSpecialist(req: AuthenticatedRequest, res: any): Promise<boolean> {
+  const allowlist = (process.env.CSEA_SPECIALIST_ADMIN_EMAILS ?? "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+  if (!allowlist.length) { res.status(403).json({ error: "CSEA specialist access is not configured" }); return false; }
+  const [user] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, req.userId)).limit(1);
+  if (!user?.email || !allowlist.includes(user.email.toLowerCase())) { res.status(403).json({ error: "CSEA specialist access required" }); return false; }
+  return true;
+}
 
 // A document no longer needs expiry attention once the trader has uploaded a
 // newer document of the same type that an admin has APPROVED and that is not
@@ -1954,15 +1967,16 @@ router.get("/admin/subscriptions", authMiddleware, adminOnly, async (req, res) =
 
 const ResolveReportBody = z.object({
   action: z.enum(["resolve", "dismiss", "block"]),
+  outcome: z.enum(REPORT_OUTCOMES).optional(),
   notes: z.string().max(1000).optional(),
 });
 
 router.get("/admin/conversation-reports", authMiddleware, adminOnly, async (req, res) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
-    const where = status
-      ? eq(conversationReportsTable.status, status)
-      : isNotNull(conversationReportsTable.id);
+     const where = status
+       ? and(eq(conversationReportsTable.status, status), isNull(conversationReportsTable.cseaEscalatedAt))
+       : and(isNotNull(conversationReportsTable.id), isNull(conversationReportsTable.cseaEscalatedAt));
     const traderUsers = alias(usersTable, "trader_users");
     const rows = await db
       .select({
@@ -2000,7 +2014,12 @@ router.get("/admin/conversation-reports", authMiddleware, adminOnly, async (req,
           reportedByUserId: report.reportedByUserId,
           reportedByRole: report.reportedByRole,
           reason: report.reason,
+           category: report.category,
+           detail: report.detail,
+           messageId: report.messageId,
           status: report.status,
+           outcome: report.outcome,
+           outcomeAt: report.outcomeAt?.toISOString() ?? null,
           resolutionNotes: report.resolutionNotes,
           resolvedAt: report.resolvedAt?.toISOString() ?? null,
           createdAt: report.createdAt.toISOString(),
@@ -2053,6 +2072,11 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
       res.status(404).json({ error: "Conversation not found" });
       return;
     }
+    const [cseaReport] = await db.select({ id: conversationReportsTable.id })
+      .from(conversationReportsTable)
+      .where(and(eq(conversationReportsTable.conversationId, id), isNotNull(conversationReportsTable.cseaEscalatedAt)))
+      .limit(1);
+    if (cseaReport && !(await requireCseaSpecialist(req as AuthenticatedRequest, res))) return;
     // Admins may only read message bodies for ACTIVE moderation: the
     // conversation is currently REPORTED, or at least one OPEN report exists.
     // Historical (DISMISSED/RESOLVED) reports do NOT re-grant access.
@@ -2230,8 +2254,10 @@ router.post("/admin/conversation-reports/:id/resolve", authMiddleware, adminOnly
       res.status(404).json({ error: "Report not found" });
       return;
     }
+    if (report.cseaEscalatedAt && !(await requireCseaSpecialist(req as AuthenticatedRequest, res))) return;
 
     const newStatus = body.action === "dismiss" ? "DISMISSED" : "RESOLVED";
+    const outcome = body.outcome ?? (body.action === "dismiss" ? "NO_VIOLATION" : "ACTION_TAKEN");
     await db
       .update(conversationReportsTable)
       .set({
@@ -2239,6 +2265,8 @@ router.post("/admin/conversation-reports/:id/resolve", authMiddleware, adminOnly
         resolutionNotes: body.notes ?? null,
         resolvedByAdminId: adminId,
         resolvedAt: new Date(),
+        outcome,
+        outcomeAt: new Date(),
       })
       .where(eq(conversationReportsTable.id, id));
 
@@ -2300,6 +2328,7 @@ router.post("/admin/conversation-reports/:id/resolve", authMiddleware, adminOnly
           reportId: id,
           conversationId: report.conversationId,
           action: body.action,
+          outcome,
         },
         notes: body.notes,
       });
@@ -2429,6 +2458,7 @@ router.post("/admin/users/:userId/unsuspend", authMiddleware, adminOnly, async (
 
 const ResolveUserReportBody = z.object({
   action: z.enum(["resolve", "dismiss"]),
+  outcome: z.enum(REPORT_OUTCOMES).optional(),
   notes: z.string().max(1000).optional(),
 });
 
@@ -2440,9 +2470,9 @@ function reportCategoryLabel(reportedRole: string, value: string): string {
 router.get("/admin/user-reports", authMiddleware, adminOnly, async (req, res) => {
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
-    const where = status
-      ? eq(userReportsTable.status, status)
-      : isNotNull(userReportsTable.id);
+     const where = status
+       ? and(eq(userReportsTable.status, status), isNull(userReportsTable.cseaEscalatedAt))
+       : and(isNotNull(userReportsTable.id), isNull(userReportsTable.cseaEscalatedAt));
     const reporterUsers = alias(usersTable, "reporter_users");
     const reportedUsers = alias(usersTable, "reported_users");
     const rows = await db
@@ -2480,6 +2510,11 @@ router.get("/admin/user-reports", authMiddleware, adminOnly, async (req, res) =>
         resolutionNotes: report.resolutionNotes,
         resolvedAt: report.resolvedAt?.toISOString() ?? null,
         conversationId: report.conversationId,
+         reviewId: report.reviewId,
+         outcome: report.outcome,
+         outcomeAt: report.outcomeAt?.toISOString() ?? null,
+         cseaEscalatedAt: report.cseaEscalatedAt?.toISOString() ?? null,
+         cseaEscalatedByAdminId: report.cseaEscalatedByAdminId,
         createdAt: report.createdAt.toISOString(),
       })),
     });
@@ -2508,8 +2543,10 @@ router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async 
       res.status(404).json({ error: "Report not found" });
       return;
     }
+    if (report.cseaEscalatedAt && !(await requireCseaSpecialist(req as AuthenticatedRequest, res))) return;
 
     const newStatus = body.action === "dismiss" ? "DISMISSED" : "RESOLVED";
+    const outcome = body.outcome ?? (body.action === "dismiss" ? "NO_VIOLATION" : "ACTION_TAKEN");
     await db
       .update(userReportsTable)
       .set({
@@ -2517,6 +2554,8 @@ router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async 
         resolutionNotes: body.notes ?? null,
         resolvedByAdminId: adminId,
         resolvedAt: new Date(),
+        outcome,
+        outcomeAt: new Date(),
       })
       .where(eq(userReportsTable.id, id));
 
@@ -2528,6 +2567,7 @@ router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async 
         reportId: id,
         reportedRole: report.reportedRole,
         action: body.action,
+          outcome,
       },
       notes: body.notes,
     });
@@ -2538,10 +2578,10 @@ router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async 
     void sendPushToUser(report.reporterUserId, {
       title: "Report reviewed",
       body:
-        body.action === "dismiss"
+         body.outcome === "INSUFFICIENT_EVIDENCE" || body.action === "dismiss"
           ? "We've reviewed your report. No further action was needed this time — thank you for flagging it."
           : "We've reviewed your report and taken appropriate action. Thank you for helping keep the community safe.",
-      data: { type: "report_update" },
+       data: { type: "report_update", reportId: String(id), outcome },
     }).catch((err) => req.log.warn({ err }, "Failed to send report-resolved push"));
 
     res.json({ ok: true, status: newStatus, action: body.action });
@@ -2553,6 +2593,99 @@ router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async 
     req.log.error({ err: error }, "Resolve user report failed");
     res.status(500).json({ error: "Failed to resolve report" });
   }
+});
+
+// Appeal queue and resolution reuse the report moderation records. Appeal
+// decisions are internal; reporters only see the safe status on their appeal.
+router.get("/admin/report-appeals", authMiddleware, adminOnly, async (_req, res) => {
+  const rows = await db.select().from(reportAppealsTable).orderBy(desc(reportAppealsTable.createdAt));
+  res.json({ appeals: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), resolvedAt: r.resolvedAt?.toISOString() ?? null })) });
+});
+router.post("/admin/report-appeals/:id/resolve", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    const body = z.object({ action: z.enum(["resolve", "dismiss"]), outcome: z.enum(REPORT_OUTCOMES), notes: z.string().max(1000).optional() }).parse(req.body);
+    const adminId = (req as AuthenticatedRequest).userId;
+    const [appeal] = await db.select().from(reportAppealsTable).where(eq(reportAppealsTable.id, id)).limit(1);
+    if (!appeal) { res.status(404).json({ error: "Appeal not found" }); return; }
+    await db.update(reportAppealsTable).set({ status: body.action === "dismiss" ? "DISMISSED" : "RESOLVED", resolution: body.outcome, resolutionNotes: body.notes ?? null, resolvedByAdminId: adminId, resolvedAt: new Date() }).where(eq(reportAppealsTable.id, id));
+    await logAudit({ userId: appeal.appellantUserId, action: "REPORT_APPEAL_RESOLVED", performedBy: adminId, details: { appealId: id, reportId: appeal.reportId, outcome: body.outcome }, notes: body.notes });
+    res.json({ ok: true, status: body.action === "dismiss" ? "DISMISSED" : "RESOLVED", outcome: body.outcome });
+  } catch (error) {
+    if (error instanceof z.ZodError) { res.status(400).json({ error: "Invalid appeal resolution", details: error.issues }); return; }
+    res.status(500).json({ error: "Failed to resolve appeal" });
+  }
+});
+
+// Restricted internal escalation: never appears in the public category list.
+router.post("/admin/user-reports/:id/csea-escalate", authMiddleware, adminOnly, async (req, res) => {
+  const id = Number.parseInt(String(req.params.id), 10);
+  const adminId = (req as AuthenticatedRequest).userId;
+  if (!(await requireCseaSpecialist(req as AuthenticatedRequest, res))) return;
+  const [report] = await db.select().from(userReportsTable).where(eq(userReportsTable.id, id)).limit(1);
+  if (!report) { res.status(404).json({ error: "Report not found" }); return; }
+  if (report.category !== "SUSPECTED_ILLEGAL_CONTENT" || report.cseaEscalatedAt) { res.status(409).json({ error: "Report is not an eligible CSEA candidate" }); return; }
+  await db.update(userReportsTable).set({ cseaEscalatedAt: new Date(), cseaEscalatedByAdminId: adminId }).where(eq(userReportsTable.id, id));
+  await logAudit({ userId: report.reportedUserId, action: "CSEA_RESTRICTED_ESCALATION", performedBy: adminId, details: { reportId: id } });
+  res.json({ ok: true, status: "ESCALATED" });
+});
+
+router.post("/admin/conversation-reports/:id/csea-escalate", authMiddleware, adminOnly, async (req, res) => {
+  const id = Number.parseInt(String(req.params.id), 10);
+  const specialist = req as AuthenticatedRequest;
+  if (!(await requireCseaSpecialist(specialist, res))) return;
+  const [report] = await db.select().from(conversationReportsTable).where(eq(conversationReportsTable.id, id)).limit(1);
+  if (!report) { res.status(404).json({ error: "Report not found" }); return; }
+  if (report.category !== "SUSPECTED_ILLEGAL_CONTENT" || report.cseaEscalatedAt) { res.status(409).json({ error: "Report is not an eligible CSEA candidate" }); return; }
+  const [conv] = await db.select({ customerId: conversationsTable.customerId }).from(conversationsTable).where(eq(conversationsTable.id, report.conversationId)).limit(1);
+  await db.update(conversationReportsTable).set({ cseaEscalatedAt: new Date(), cseaEscalatedByAdminId: specialist.userId }).where(eq(conversationReportsTable.id, id));
+  if (conv) await logAudit({ userId: conv.customerId, action: "CSEA_RESTRICTED_ESCALATION", performedBy: specialist.userId, details: { conversationReportId: id, conversationId: report.conversationId } });
+  res.json({ ok: true, status: "ESCALATED" });
+});
+
+// Specialist queue intentionally returns only the minimum identity/context
+// needed for manual handling, and is never mounted through generic queues.
+router.get("/admin/csea-reports", authMiddleware, adminOnly, async (req, res) => {
+  if (!(await requireCseaSpecialist(req as AuthenticatedRequest, res))) return;
+  const userReports = await db.select().from(userReportsTable).where(and(isNotNull(userReportsTable.cseaEscalatedAt), isNull(userReportsTable.cseaHandledAt))).orderBy(desc(userReportsTable.cseaEscalatedAt));
+  const conversationReports = await db.select().from(conversationReportsTable).where(and(isNotNull(conversationReportsTable.cseaEscalatedAt), isNull(conversationReportsTable.cseaHandledAt))).orderBy(desc(conversationReportsTable.cseaEscalatedAt));
+  res.json({ userReports, conversationReports });
+});
+
+// Specialist intake candidate queue: only explicit illegal-content reports
+// that have not yet been escalated, with no unrestricted moderation identity.
+router.get("/admin/csea-candidates", authMiddleware, adminOnly, async (req, res) => {
+  if (!(await requireCseaSpecialist(req as AuthenticatedRequest, res))) return;
+  const userReports = await db.select().from(userReportsTable).where(and(eq(userReportsTable.category, "SUSPECTED_ILLEGAL_CONTENT"), isNull(userReportsTable.cseaEscalatedAt))).orderBy(desc(userReportsTable.createdAt));
+  const conversationReports = await db.select().from(conversationReportsTable).where(and(eq(conversationReportsTable.category, "SUSPECTED_ILLEGAL_CONTENT"), isNull(conversationReportsTable.cseaEscalatedAt))).orderBy(desc(conversationReportsTable.createdAt));
+  res.json({ userReports, conversationReports });
+});
+
+router.post("/admin/csea-reports/user/:id/complete", authMiddleware, adminOnly, async (req, res) => {
+  const specialist = req as AuthenticatedRequest;
+  if (!(await requireCseaSpecialist(specialist, res))) return;
+  const id = Number.parseInt(String(req.params.id), 10);
+  const [report] = await db.select().from(userReportsTable).where(eq(userReportsTable.id, id)).limit(1);
+  if (!report || !report.cseaEscalatedAt) { res.status(404).json({ error: "Escalated report not found" }); return; }
+  if (report.cseaHandledAt) { res.status(409).json({ error: "Report is already handled" }); return; }
+  const handledAt = new Date();
+  await db.update(userReportsTable).set({ cseaHandledAt: handledAt, cseaHandledByAdminId: specialist.userId }).where(eq(userReportsTable.id, id));
+  await logAudit({ userId: report.reportedUserId, action: "CSEA_RESTRICTED_COMPLETED", performedBy: specialist.userId, details: { reportId: id } });
+  res.json({ ok: true, handledAt: handledAt.toISOString() });
+});
+
+router.post("/admin/csea-reports/conversation/:id/complete", authMiddleware, adminOnly, async (req, res) => {
+  const specialist = req as AuthenticatedRequest;
+  if (!(await requireCseaSpecialist(specialist, res))) return;
+  const id = Number.parseInt(String(req.params.id), 10);
+  const [report] = await db.select().from(conversationReportsTable).where(eq(conversationReportsTable.id, id)).limit(1);
+  if (!report || !report.cseaEscalatedAt) { res.status(404).json({ error: "Escalated report not found" }); return; }
+  if (report.cseaHandledAt) { res.status(409).json({ error: "Report is already handled" }); return; }
+  const handledAt = new Date();
+  await db.update(conversationReportsTable).set({ cseaHandledAt: handledAt, cseaHandledByAdminId: specialist.userId }).where(eq(conversationReportsTable.id, id));
+  const [conv] = await db.select({ customerId: conversationsTable.customerId }).from(conversationsTable).where(eq(conversationsTable.id, report.conversationId)).limit(1);
+  if (conv) await logAudit({ userId: conv.customerId, action: "CSEA_RESTRICTED_COMPLETED", performedBy: specialist.userId, details: { conversationReportId: id, conversationId: report.conversationId } });
+  res.json({ ok: true, handledAt: handledAt.toISOString() });
 });
 
 // GET /api/admin/cancellation-requests — support queue of cooling-off /

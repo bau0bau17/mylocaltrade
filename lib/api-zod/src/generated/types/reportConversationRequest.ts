@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ReportConversationRequestCategory } from './reportConversationRequestCategory';
 
 export interface ReportConversationRequest {
   /**
@@ -12,4 +13,6 @@ export interface ReportConversationRequest {
      * @maxLength 2000
      */
   reason: string;
+  category?: ReportConversationRequestCategory;
+  detail?: string | null;
 }

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
-import { Flag, Check, X, AlertTriangle } from "lucide-react";
+import { Flag, Check, X, AlertTriangle, ShieldAlert } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 
@@ -27,11 +27,20 @@ interface AdminUserReport {
   categoryLabel: string;
   detail: string | null;
   status: "OPEN" | "RESOLVED" | "DISMISSED";
+  outcome?: ReportOutcome | null;
+  outcomeAt: string | null;
+  reviewId: number | null;
+  cseaEscalatedAt: string | null;
+  cseaEscalatedByAdminId: number | null;
   resolutionNotes: string | null;
   resolvedAt: string | null;
   conversationId: number | null;
   createdAt: string;
 }
+
+type ReportOutcome = "ACTION_TAKEN" | "NO_VIOLATION" | "INSUFFICIENT_EVIDENCE" | "REFERRED_ESCALATED";
+const OUTCOMES: ReportOutcome[] = ["ACTION_TAKEN", "NO_VIOLATION", "INSUFFICIENT_EVIDENCE", "REFERRED_ESCALATED"];
+const outcomeLabel = (value: string) => value.replace(/_/g, " ");
 
 const STATUS_TONE: Record<string, string> = {
   OPEN: "bg-red-500/10 text-red-600 border-red-500/30",
@@ -138,6 +147,12 @@ function ReportCard({ report }: { report: AdminUserReport }) {
           </div>
           <div className="flex gap-2 items-center flex-wrap">
             <Badge variant="outline">{report.reportedRole}</Badge>
+            {report.category === "SUSPECTED_ILLEGAL_CONTENT" ? (
+              <Badge variant="outline" className="bg-red-500/20 text-red-700 border-red-500/60 font-bold">
+                <ShieldAlert className="w-3 h-3 mr-1" /> Suspected illegal content
+              </Badge>
+            ) : null}
+            {report.outcome ? <Badge variant="outline">{outcomeLabel(report.outcome)}</Badge> : null}
             <Badge variant="outline" className={STATUS_TONE[report.status]}>
               {report.status}
             </Badge>
@@ -161,6 +176,8 @@ function ReportCard({ report }: { report: AdminUserReport }) {
             ) : null}
           </div>
         </div>
+        {report.reviewId ? <p className="text-xs text-muted-foreground">Linked review #{report.reviewId}</p> : null}
+        {report.outcomeAt ? <p className="text-xs text-muted-foreground">Outcome recorded {formatDateTime(report.outcomeAt)}</p> : null}
         {report.detail ? (
           <div>
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
@@ -177,7 +194,7 @@ function ReportCard({ report }: { report: AdminUserReport }) {
             <p className="text-sm whitespace-pre-wrap">{report.resolutionNotes}</p>
           </div>
         ) : null}
-        {report.status === "OPEN" ? <ResolveActions reportId={report.id} /> : null}
+        {report.status === "OPEN" && !report.cseaEscalatedAt ? <ResolveActions reportId={report.id} /> : null}
       </CardContent>
     </Card>
   );
@@ -187,6 +204,7 @@ function ResolveActions({ reportId }: { reportId: number }) {
   const qc = useQueryClient();
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
+  const [outcome, setOutcome] = useState<ReportOutcome>("ACTION_TAKEN");
 
   const violation = useMemo(() => detectContactInfo(notes), [notes]);
   const violationText = violation ? contactViolationMessage(violation) : null;
@@ -195,7 +213,7 @@ function ResolveActions({ reportId }: { reportId: number }) {
     mutationFn: (action: "resolve" | "dismiss") =>
       api<{ ok: boolean }>(`/api/admin/user-reports/${reportId}/resolve`, {
         method: "POST",
-        body: { action, notes: notes.trim() || undefined },
+        body: { action, outcome: action === "dismiss" ? "NO_VIOLATION" : outcome, notes: notes.trim() || undefined },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "user-reports"] });
@@ -209,6 +227,11 @@ function ResolveActions({ reportId }: { reportId: number }) {
   return (
     <div className="flex flex-col gap-2 w-full">
       <div className="flex gap-2 flex-wrap">
+        <label className="sr-only" htmlFor={`outcome-${reportId}`}>Moderation outcome</label>
+        <select id={`outcome-${reportId}`} value={outcome} onChange={(e) => setOutcome(e.target.value as ReportOutcome)}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm" data-testid={`outcome-${reportId}`}>
+          {OUTCOMES.map((item) => <option key={item} value={item}>{outcomeLabel(item)}</option>)}
+        </select>
         <Button
           size="sm"
           variant="default"

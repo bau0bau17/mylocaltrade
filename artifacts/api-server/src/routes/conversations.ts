@@ -32,6 +32,7 @@ import {
   reviewsTable,
   quotesTable,
   bookingsTable,
+  CONVERSATION_REPORT_CATEGORIES,
 } from "@workspace/db/schema";
 import { and, eq, desc, sql, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -59,6 +60,7 @@ import { ensureHired } from "../lib/hire";
 import { serializeQuote } from "../lib/quotes";
 import { serializeBooking } from "../lib/bookings";
 import { customerPhoneVerified, sendPhoneVerificationRequired } from "../lib/customer-phone-gate";
+import { logAudit } from "../lib/trader-status";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -69,6 +71,7 @@ const SendMessageBody = z.object({
 
 const ReportBody = z.object({
   reason: z.string().trim().min(5).max(2000),
+  category: z.enum(CONVERSATION_REPORT_CATEGORIES).optional(),
 });
 
 const CancelConversationBody = z.object({
@@ -1643,6 +1646,8 @@ router.post("/conversations/:id/report", authMiddleware, requireActiveSeat, asyn
       reportedByUserId: userId,
       reportedByRole: isCustomer ? "customer" : "trader",
       reason: body.reason,
+      category: body.category ?? "OTHER",
+      detail: body.reason,
       status: "OPEN",
     });
 
@@ -1650,6 +1655,11 @@ router.post("/conversations/:id/report", authMiddleware, requireActiveSeat, asyn
       .update(conversationsTable)
       .set({ status: "REPORTED", updatedAt: new Date() })
       .where(eq(conversationsTable.id, id));
+
+    // Keep the existing conversation moderation audit trail, without exposing
+    // reporter identity to the other participant.
+    const participantId = isCustomer ? conv.customerId : conv.traderUserId;
+    void logAudit({ userId: participantId, action: "CONVERSATION_REPORT_CREATED", performedBy: userId, details: { reportType: body.category ?? "OTHER", conversationId: id } });
 
     res.status(201).json({ ok: true });
   } catch (error: unknown) {
@@ -1659,6 +1669,42 @@ router.post("/conversations/:id/report", authMiddleware, requireActiveSeat, asyn
     }
     req.log.error({ err: error }, "Report conversation failed");
     res.status(500).json({ error: "Failed to report conversation" });
+  }
+});
+
+// Report one message while preserving the existing whole-conversation report.
+// The message/conversation relationship and participant access are both
+// derived server-side to prevent cross-thread IDOR.
+router.post("/conversations/:id/messages/:messageId/report", authMiddleware, requireActiveSeat, async (req, res) => {
+  try {
+    const conversationId = Number.parseInt(String(req.params.id), 10);
+    const messageId = Number.parseInt(String(req.params.messageId), 10);
+    if (!Number.isFinite(conversationId) || !Number.isFinite(messageId)) {
+      res.status(400).json({ error: "Invalid conversation or message id" });
+      return;
+    }
+    const body = ReportBody.parse(req.body);
+    const { userId, userRole } = req as AuthenticatedRequest;
+    const actor = await getActorContext(userId, userRole);
+    const [conv] = await db.select().from(conversationsTable).where(eq(conversationsTable.id, conversationId)).limit(1);
+    if (!conv) { res.status(404).json({ error: "Conversation not found" }); return; }
+    const isCustomer = actor.role === "customer" && conv.customerId === userId;
+    const isTrader = actor.role === "trader" && actor.traderProfileId === conv.traderProfileId;
+    if (!isCustomer && !isTrader) { res.status(403).json({ error: "You do not have access to this conversation" }); return; }
+    const [message] = await db.select({ id: messagesTable.id }).from(messagesTable)
+      .where(and(eq(messagesTable.id, messageId), eq(messagesTable.conversationId, conversationId))).limit(1);
+    if (!message) { res.status(404).json({ error: "Message not found in this conversation" }); return; }
+    const [created] = await db.insert(conversationReportsTable).values({
+      conversationId, messageId, reportedByUserId: userId,
+      reportedByRole: isCustomer ? "customer" : "trader",
+      category: body.category ?? "OTHER", detail: body.reason, reason: body.reason, status: "OPEN",
+    }).returning({ id: conversationReportsTable.id });
+    await db.update(conversationsTable).set({ status: "REPORTED", updatedAt: new Date() }).where(eq(conversationsTable.id, conversationId));
+    void logAudit({ userId: isCustomer ? conv.customerId : conv.traderUserId, action: "CONVERSATION_REPORT_CREATED", performedBy: userId, details: { reportId: created.id, conversationId, messageId, category: body.category ?? "OTHER" } });
+    res.status(201).json({ ok: true, reportId: created.id });
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) { res.status(400).json({ error: "Invalid report", details: error.issues }); return; }
+    req.log.error({ err: error }, "Report message failed"); res.status(500).json({ error: "Failed to report message" });
   }
 });
 

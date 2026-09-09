@@ -5,6 +5,7 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AdminConversationReportOutcome } from './adminConversationReportOutcome';
 import type { AdminConversationReportStatus } from './adminConversationReportStatus';
 
 export interface AdminConversationReport {
@@ -13,9 +14,14 @@ export interface AdminConversationReport {
   reportedByUserId: number;
   reportedByRole: string;
   reason: string;
+  category?: string;
+  detail?: string | null;
+  messageId?: number | null;
   status: AdminConversationReportStatus;
   resolutionNotes?: string | null;
   resolvedAt?: Date | null;
+  outcome?: AdminConversationReportOutcome;
+  outcomeAt?: Date | null;
   createdAt: Date;
   traderBusinessName: string;
   customerFullName: string;

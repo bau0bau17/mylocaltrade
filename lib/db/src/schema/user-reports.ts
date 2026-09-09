@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { traderProfilesTable } from "./trader-profiles";
 import { conversationsTable } from "./conversations";
+import { reviewsTable } from "./reviews";
 
 // Profile-level reports about a *person* (a trader or a customer), as opposed to
 // `conversation_reports` which are about a specific chat thread. A customer can
@@ -29,6 +30,15 @@ export const userReportsTable = pgTable(
     resolvedAt: timestamp("resolved_at"),
     // Optional context if the report was raised from within a conversation.
     conversationId: integer("conversation_id").references(() => conversationsTable.id),
+    reviewId: integer("review_id").references(() => reviewsTable.id),
+    // Moderation decision is deliberately separate from queue status so the
+    // reporter can receive a safe, stable outcome without internal notes.
+    outcome: varchar("outcome", { length: 24 }),
+    outcomeAt: timestamp("outcome_at"),
+    cseaEscalatedAt: timestamp("csea_escalated_at"),
+    cseaEscalatedByAdminId: integer("csea_escalated_by_admin_id").references(() => usersTable.id),
+    cseaHandledAt: timestamp("csea_handled_at"),
+    cseaHandledByAdminId: integer("csea_handled_by_admin_id").references(() => usersTable.id),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
@@ -59,6 +69,8 @@ export interface ReportCategoryOption {
 // Predefined, structured reasons so reports are consistent and moderation-friendly
 // rather than free text only. "OTHER" always requires a written detail.
 export const TRADER_REPORT_CATEGORIES: readonly ReportCategoryOption[] = [
+  { value: "SUSPECTED_ILLEGAL_CONTENT", label: "Suspected illegal content" },
+  { value: "FAKE_MISLEADING_REVIEW", label: "Fake or misleading review" },
   { value: "MISLEADING_PROFILE", label: "Misleading profile information" },
   { value: "FRAUD", label: "Suspected fraud or dishonesty" },
   { value: "UNSAFE_WORK", label: "Unsafe work or safety concern" },
@@ -69,6 +81,8 @@ export const TRADER_REPORT_CATEGORIES: readonly ReportCategoryOption[] = [
 ] as const;
 
 export const CUSTOMER_REPORT_CATEGORIES: readonly ReportCategoryOption[] = [
+  { value: "SUSPECTED_ILLEGAL_CONTENT", label: "Suspected illegal content" },
+  { value: "FAKE_MISLEADING_REVIEW", label: "Fake or misleading review" },
   { value: "ABUSIVE_BEHAVIOUR", label: "Abusive or threatening behaviour" },
   { value: "SPAM_TIMEWASTING", label: "Spam or time-wasting" },
   { value: "FRAUDULENT_ENQUIRY", label: "Fraudulent or scam enquiry" },

@@ -26,7 +26,7 @@ export default function ReportTraderScreen() {
 
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          If you have concerns about a trader listed on MyLocalTrade, please let us know. We review all reports and may suspend or remove a trader's listing where appropriate.
+          If you have concerns about a trader or suspected illegal content on MyLocalTrade, please report it using the form below. A report is an allegation for review, not a finding.
         </Text>
         <Text style={styles.paragraph}>
           MyLocalTrade is a platform connecting customers with independent local traders. Traders are not employees, agents or representatives of MyLocalTrade.
@@ -74,7 +74,7 @@ export default function ReportTraderScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>What happens next</Text>
         <Text style={styles.paragraph}>
-          We aim to acknowledge reports within 2 working days. Where appropriate, we will investigate, contact the trader for their response, and may suspend or remove their listing while we review. We will keep you informed of the outcome where possible.
+          We review reports using the information available to us. Possible outcomes include no further action, safety measures, or action on an account or listing. We may not be able to share confidential details. You can view a safe outcome and challenge a decided report from Report status. Reports are not an emergency service.
         </Text>
       </View>
     </ScrollView>

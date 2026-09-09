@@ -16,4 +16,6 @@ export interface CreateReportRequest {
   detail?: string;
   /** Required when reportedRole is "customer" (the customer is derived from this conversation). Optional context for trader reports. */
   conversationId?: number;
+  /** A review on the authenticated trader's own profile. */
+  reviewId?: number;
 }

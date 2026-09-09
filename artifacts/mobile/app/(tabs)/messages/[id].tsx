@@ -55,6 +55,8 @@ import {
   useUpdateConversationTraderStatus,
   useCloseConversation,
   useReportConversation,
+  useReportConversationMessage,
+  ReportConversationRequestCategory,
   useMuteConversation,
   useAcceptConversationOffer,
   useCompleteConversationJob,
@@ -189,6 +191,21 @@ const QUOTE_STATUS_LABEL: Record<string, string> = {
   REVISED: "Revised",
   EXPIRED: "Expired",
 };
+
+const CHAT_REPORT_OPTIONS: { value: ReportConversationRequestCategory; label: string }[] = [
+  { value: ReportConversationRequestCategory.SUSPECTED_ILLEGAL_CONTENT, label: "Suspected illegal content" },
+  { value: ReportConversationRequestCategory.HARASSMENT_ABUSE, label: "Harassment or abuse" },
+  { value: ReportConversationRequestCategory.FRAUD_SCAM, label: "Fraud or scam" },
+  { value: ReportConversationRequestCategory.UNSAFE_CONTENT_CONDUCT, label: "Unsafe content or conduct" },
+  { value: ReportConversationRequestCategory.OTHER, label: "Other" },
+];
+
+function chooseChatReportCategory(onChoose: (category: ReportConversationRequestCategory) => void) {
+  Alert.alert("Report this conversation", "Choose the reason that best describes the concern.", [
+    ...CHAT_REPORT_OPTIONS.map((option) => ({ text: option.label, onPress: () => onChoose(option.value) })),
+    { text: "Cancel", style: "cancel" as const },
+  ]);
+}
 
 export default function ConversationThreadScreen() {
   const { id, returnTo } = useLocalSearchParams<{ id: string; returnTo?: string }>();
@@ -345,6 +362,7 @@ export default function ConversationThreadScreen() {
   });
 
   const reportMutation = useReportConversation();
+  const messageReportMutation = useReportConversationMessage();
 
   const muteMutation = useMuteConversation({
     mutation: {
@@ -1061,30 +1079,51 @@ export default function ConversationThreadScreen() {
   }, [conv?.muted, conv?.mutedUntil]);
 
   const onReport = () => {
-    Alert.prompt?.(
-      "Report this conversation",
-      "Tell us briefly what happened (this is reviewed by our admin team).",
-      (reason) => {
-        const trimmed = (reason ?? "").trim();
-        if (trimmed.length < 5) return;
+    chooseChatReportCategory((category) => {
+      const submit = (detail: string) => {
+        const trimmed = detail.trim();
+        if (category === "OTHER" && trimmed.length < 10) return;
         reportMutation.mutate(
-          { id: conversationId, data: { reason: trimmed } },
+          { id: conversationId, data: { category, reason: trimmed || category, detail: trimmed || null } },
           {
             onSuccess: () => Alert.alert("Reported", "Thanks — our team will review this conversation."),
             onError: () => Alert.alert("Error", "Could not submit report."),
           },
         );
-      },
-    );
-    // Android fallback
-    if (!Alert.prompt) {
-      reportMutation.mutate(
-        { id: conversationId, data: { reason: "Reported from mobile app" } },
-        {
-          onSuccess: () => Alert.alert("Reported", "Thanks — our team will review this conversation."),
+      };
+      if (Alert.prompt) Alert.prompt("Add details", "Tell us briefly what happened.", submit);
+      else submit(category === "OTHER" ? "" : category);
+    });
+  };
+
+  // Message reports retain both IDs in the generated mutation variables.
+  const onReportMessage = (messageId: number) => {
+    Alert.alert("Report this message", "Choose the reason that best describes this message.", [
+      ...CHAT_REPORT_OPTIONS.map((option) => ({
+        text: option.label,
+        onPress: () => {
+          const submit = (reason: string) => {
+            const trimmed = reason.trim();
+            if (trimmed.length < 5) return;
+            messageReportMutation.mutate(
+              // The API currently types the shared conversation report body;
+              // category is accepted by the message-report contract.
+              { id: conversationId, messageId, data: { category: option.value, reason: trimmed } },
+              {
+                onSuccess: () => Alert.alert("Message reported", "Thanks — our team will review this message."),
+                onError: () => Alert.alert("Error", "Could not submit message report."),
+              },
+            );
+          };
+          if (Alert.prompt) {
+            Alert.prompt("Add details", "Tell us briefly what happened.", submit);
+          } else {
+            submit(`Reported message as ${option.label}`);
+          }
         },
-      );
-    }
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
   };
 
   // NOTE: every early return must stay BELOW all hooks (rules of hooks) —
@@ -1356,12 +1395,26 @@ export default function ConversationThreadScreen() {
             : item.body;
           return (
             <View style={[styles.bubbleWrap, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-              <View style={[styles.bubble, mine ? styles.bubbleMineBg : styles.bubbleTheirsBg]}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Report message ${item.id}`}
+                onLongPress={() => onReportMessage(item.id)}
+                style={[styles.bubble, mine ? styles.bubbleMineBg : styles.bubbleTheirsBg]}
+              >
                 <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{displayBody}</Text>
                 <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
                   {fmtTime(item.createdAt)}
                 </Text>
-              </View>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Report message ${item.id}`}
+                hitSlop={8}
+                onPress={() => onReportMessage(item.id)}
+                style={styles.messageReportButton}
+              >
+                <Feather name="flag" size={12} color={Colors.light.textMuted} />
+              </Pressable>
             </View>
           );
         }}
@@ -2866,6 +2919,11 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   bubbleTimeMine: { color: "rgba(255,255,255,0.75)" },
+  messageReportButton: {
+    alignSelf: "center",
+    marginHorizontal: 6,
+    padding: 4,
+  },
   claimBanner: {
     flexDirection: "row",
     alignItems: "center",

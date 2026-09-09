@@ -9,10 +9,15 @@ import {
   REPORT_CATEGORIES,
   isValidReportCategory,
   type ReportSubject,
+  reviewsTable,
+  conversationReportsTable,
+  reportAppealsTable,
+  REPORT_OUTCOMES,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
+import { logAudit } from "../lib/trader-status";
 
 const router: IRouter = Router();
 
@@ -22,7 +27,13 @@ const CreateReportBody = z.object({
   category: z.string().trim().min(1).max(48),
   detail: z.string().trim().max(2000).optional(),
   conversationId: z.number().int().positive().optional(),
+  reviewId: z.number().int().positive().optional(),
 });
+
+const AppealBody = z.object({ reason: z.string().trim().min(10).max(2000) });
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === "object" && error != null && "code" in error && (error as { code?: string }).code === "23505";
+}
 
 // GET /api/report-categories — public list of the predefined reasons, keyed by
 // the subject being reported. Mobile renders the picker from this so the client
@@ -47,12 +58,13 @@ router.post("/reports", authMiddleware, async (req, res) => {
     // Enforce the two supported directions: a customer reports a trader, a
     // trader reports a customer.
     const expectedSubject: ReportSubject = reporterRole === "customer" ? "trader" : "customer";
-    if (body.reportedRole !== expectedSubject) {
+    const isReviewReport = body.reviewId != null;
+    if (body.reportedRole !== expectedSubject && !isReviewReport) {
       res.status(400).json({ error: `A ${reporterRole} can only report a ${expectedSubject}` });
       return;
     }
 
-    if (!isValidReportCategory(body.reportedRole, body.category)) {
+    if (!isValidReportCategory(isReviewReport ? "customer" : body.reportedRole, body.category)) {
       res.status(400).json({ error: "Invalid report category" });
       return;
     }
@@ -70,7 +82,19 @@ router.post("/reports", authMiddleware, async (req, res) => {
     let reportedTraderProfileId: number | null = null;
     let conversationId: number | null = null;
 
-    if (body.reportedRole === "trader") {
+    if (body.reviewId) {
+      // A trader may report a customer-authored review on that trader's own
+      // profile. Derive both customer and profile from the review; do not trust
+      // client-supplied IDs for the relationship.
+      const membership = reporterRole === "trader" ? await getActiveMembership(userId) : null;
+      const [review] = await db.select().from(reviewsTable).where(eq(reviewsTable.id, body.reviewId)).limit(1);
+      if (!review || !membership || review.traderId !== membership.traderProfileId) {
+        res.status(403).json({ error: "You can only report a review on your own trader profile" });
+        return;
+      }
+      reportedUserId = review.customerId;
+      reportedTraderProfileId = review.traderId;
+    } else if (body.reportedRole === "trader") {
       if (!body.traderProfileId) {
         res.status(400).json({ error: "traderProfileId is required when reporting a trader" });
         return;
@@ -126,20 +150,24 @@ router.post("/reports", authMiddleware, async (req, res) => {
       res.status(400).json({ error: "You cannot report yourself" });
       return;
     }
+    if (body.reviewId) {
+    }
 
-    await db.insert(userReportsTable).values({
+    const [created] = await db.insert(userReportsTable).values({
       reporterUserId: userId,
       reporterRole,
       reportedUserId,
-      reportedRole: body.reportedRole,
+      reportedRole: body.reviewId ? "customer" : body.reportedRole,
       reportedTraderProfileId,
       category: body.category,
       detail,
       conversationId,
       status: "OPEN",
-    });
+      reviewId: body.reviewId ?? null,
+    }).returning({ id: userReportsTable.id });
+    await logAudit({ userId: reportedUserId, action: "USER_REPORT_CREATED", performedBy: userId, details: { reportId: created.id, category: body.category } });
 
-    res.status(201).json({ ok: true });
+    res.status(201).json({ ok: true, reportId: created.id });
   } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "Invalid report", details: error.issues });
@@ -147,6 +175,76 @@ router.post("/reports", authMiddleware, async (req, res) => {
     }
     req.log.error({ err: error }, "Create user report failed");
     res.status(500).json({ error: "Failed to submit report" });
+  }
+});
+
+// Reporters receive only their own reports and a safe decision summary.
+router.get("/reports", authMiddleware, async (req, res) => {
+  const { userId } = req as AuthenticatedRequest;
+  const reports = await db.select({
+    id: userReportsTable.id, category: userReportsTable.category, status: userReportsTable.status,
+    outcome: userReportsTable.outcome, outcomeAt: userReportsTable.outcomeAt,
+    createdAt: userReportsTable.createdAt,
+  }).from(userReportsTable).where(eq(userReportsTable.reporterUserId, userId));
+  const chatReports = await db.select({
+    id: conversationReportsTable.id, category: conversationReportsTable.category,
+    status: conversationReportsTable.status, outcome: conversationReportsTable.outcome,
+    outcomeAt: conversationReportsTable.outcomeAt, createdAt: conversationReportsTable.createdAt,
+    cseaEscalatedAt: conversationReportsTable.cseaEscalatedAt,
+  }).from(conversationReportsTable).where(eq(conversationReportsTable.reportedByUserId, userId));
+  const userAppeals = reports.length ? await db.select().from(reportAppealsTable).where(eq(reportAppealsTable.appellantUserId, userId)) : [];
+  const chatAppeals = chatReports.length ? await db.select().from(reportAppealsTable).where(eq(reportAppealsTable.appellantUserId, userId)) : [];
+  res.json({ reports: [
+    ...reports.map((r) => {
+      const appeal = userAppeals.find((a) => a.reportId === r.id);
+      return { ...r, reportType: "user", outcomeAt: r.outcomeAt?.toISOString() ?? null, createdAt: r.createdAt.toISOString(), appeal: appeal ? { id: appeal.id, status: appeal.status, outcome: appeal.resolution } : null };
+    }),
+    ...chatReports.map((r) => {
+      const appeal = chatAppeals.find((a) => a.conversationReportId === r.id);
+      return { ...r, reportType: "conversation", outcomeAt: r.outcomeAt?.toISOString() ?? null, createdAt: r.createdAt.toISOString(), cseaEscalated: !!r.cseaEscalatedAt, appeal: appeal ? { id: appeal.id, status: appeal.status, outcome: appeal.resolution } : null };
+    }),
+  ] });
+});
+
+router.post("/conversation-reports/:id/appeal", authMiddleware, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    const body = AppealBody.parse(req.body);
+    const { userId } = req as AuthenticatedRequest;
+    const [report] = await db.select().from(conversationReportsTable)
+      .where(and(eq(conversationReportsTable.id, id), eq(conversationReportsTable.reportedByUserId, userId))).limit(1);
+    if (!report) { res.status(404).json({ error: "Report not found" }); return; }
+    if (!report.outcome || report.status === "OPEN" || report.cseaEscalatedAt) { res.status(409).json({ error: "This report has not received a final decision" }); return; }
+    const existing = await db.select({ id: reportAppealsTable.id }).from(reportAppealsTable)
+      .where(and(eq(reportAppealsTable.conversationReportId, id), eq(reportAppealsTable.appellantUserId, userId))).limit(1);
+    if (existing.length) { res.status(409).json({ error: "Only one appeal is permitted for a report" }); return; }
+    const [appeal] = await db.insert(reportAppealsTable).values({ conversationReportId: id, appellantUserId: userId, reason: body.reason }).returning({ id: reportAppealsTable.id });
+    await logAudit({ userId, action: "REPORT_APPEAL_CREATED", performedBy: userId, details: { conversationReportId: id, appealId: appeal.id } });
+    res.status(201).json({ appealId: appeal.id, status: "OPEN" });
+  } catch (error) {
+    if (isUniqueViolation(error)) { res.status(409).json({ error: "Only one appeal is permitted for this report" }); return; }
+    if (error instanceof z.ZodError) { res.status(400).json({ error: "Invalid appeal", details: error.issues }); return; }
+    req.log.error({ err: error }, "Create conversation report appeal failed"); res.status(500).json({ error: "Failed to create appeal" });
+  }
+});
+
+router.post("/reports/:id/appeal", authMiddleware, async (req, res) => {
+  try {
+    const id = Number.parseInt(String(req.params.id), 10);
+    const body = AppealBody.parse(req.body);
+    const { userId } = req as AuthenticatedRequest;
+    const [report] = await db.select().from(userReportsTable).where(and(eq(userReportsTable.id, id), eq(userReportsTable.reporterUserId, userId))).limit(1);
+    if (!report) { res.status(404).json({ error: "Report not found" }); return; }
+    if (!report.outcome || report.status === "OPEN" || report.cseaEscalatedAt) { res.status(409).json({ error: "This report has not received a final decision" }); return; }
+    const existing = await db.select({ id: reportAppealsTable.id }).from(reportAppealsTable).where(and(eq(reportAppealsTable.reportId, id), eq(reportAppealsTable.appellantUserId, userId))).limit(1);
+    if (existing.length) { res.status(409).json({ error: "Only one appeal is permitted for a report" }); return; }
+    const [appeal] = await db.insert(reportAppealsTable).values({ reportId: id, appellantUserId: userId, reason: body.reason }).returning({ id: reportAppealsTable.id });
+    await logAudit({ userId, action: "REPORT_APPEAL_CREATED", performedBy: userId, details: { reportId: id, appealId: appeal.id } });
+    res.status(201).json({ appealId: appeal.id, status: "OPEN" });
+  } catch (error) {
+    if (isUniqueViolation(error)) { res.status(409).json({ error: "Only one appeal is permitted for this report" }); return; }
+    if (error instanceof z.ZodError) { res.status(400).json({ error: "Invalid appeal", details: error.issues }); return; }
+    req.log.error({ err: error }, "Create report appeal failed"); res.status(500).json({ error: "Failed to create appeal" });
   }
 });
 

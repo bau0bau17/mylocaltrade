@@ -1294,12 +1294,25 @@ export interface MuteConversationResponse {
   mutedUntil?: string | null;
 }
 
+export type ReportConversationRequestCategory = typeof ReportConversationRequestCategory[keyof typeof ReportConversationRequestCategory];
+
+
+export const ReportConversationRequestCategory = {
+  SUSPECTED_ILLEGAL_CONTENT: 'SUSPECTED_ILLEGAL_CONTENT',
+  HARASSMENT_ABUSE: 'HARASSMENT_ABUSE',
+  FRAUD_SCAM: 'FRAUD_SCAM',
+  UNSAFE_CONTENT_CONDUCT: 'UNSAFE_CONTENT_CONDUCT',
+  OTHER: 'OTHER',
+} as const;
+
 export interface ReportConversationRequest {
   /**
      * @minLength 5
      * @maxLength 2000
      */
   reason: string;
+  category?: ReportConversationRequestCategory;
+  detail?: string | null;
 }
 
 export interface CancelConversationRequest {
@@ -1320,15 +1333,30 @@ export const AdminConversationReportStatus = {
   DISMISSED: 'DISMISSED',
 } as const;
 
+export type AdminConversationReportOutcome = typeof AdminConversationReportOutcome[keyof typeof AdminConversationReportOutcome] | null;
+
+
+export const AdminConversationReportOutcome = {
+  ACTION_TAKEN: 'ACTION_TAKEN',
+  NO_VIOLATION: 'NO_VIOLATION',
+  INSUFFICIENT_EVIDENCE: 'INSUFFICIENT_EVIDENCE',
+  REFERRED_ESCALATED: 'REFERRED_ESCALATED',
+} as const;
+
 export interface AdminConversationReport {
   id: number;
   conversationId: number;
   reportedByUserId: number;
   reportedByRole: string;
   reason: string;
+  category?: string;
+  detail?: string | null;
+  messageId?: number | null;
   status: AdminConversationReportStatus;
   resolutionNotes?: string | null;
   resolvedAt?: string | null;
+  outcome?: AdminConversationReportOutcome;
+  outcomeAt?: string | null;
   createdAt: string;
   traderBusinessName: string;
   customerFullName: string;
@@ -1382,9 +1410,20 @@ export const ResolveReportRequestAction = {
   block: 'block',
 } as const;
 
+export type ResolveReportRequestOutcome = typeof ResolveReportRequestOutcome[keyof typeof ResolveReportRequestOutcome];
+
+
+export const ResolveReportRequestOutcome = {
+  ACTION_TAKEN: 'ACTION_TAKEN',
+  NO_VIOLATION: 'NO_VIOLATION',
+  INSUFFICIENT_EVIDENCE: 'INSUFFICIENT_EVIDENCE',
+  REFERRED_ESCALATED: 'REFERRED_ESCALATED',
+} as const;
+
 export interface ResolveReportRequest {
   action: ResolveReportRequestAction;
   notes?: string;
+  outcome?: ResolveReportRequestOutcome;
 }
 
 export interface ResolveReportResponse {
@@ -1677,6 +1716,8 @@ export interface CreateReportRequest {
   detail?: string;
   /** Required when reportedRole is "customer" (the customer is derived from this conversation). Optional context for trader reports. */
   conversationId?: number;
+  /** A review on the authenticated trader's own profile. */
+  reviewId?: number;
 }
 
 export interface ReportCategoryOption {
@@ -1736,9 +1777,20 @@ export const ResolveUserReportRequestAction = {
   dismiss: 'dismiss',
 } as const;
 
+export type ResolveUserReportRequestOutcome = typeof ResolveUserReportRequestOutcome[keyof typeof ResolveUserReportRequestOutcome];
+
+
+export const ResolveUserReportRequestOutcome = {
+  ACTION_TAKEN: 'ACTION_TAKEN',
+  NO_VIOLATION: 'NO_VIOLATION',
+  INSUFFICIENT_EVIDENCE: 'INSUFFICIENT_EVIDENCE',
+  REFERRED_ESCALATED: 'REFERRED_ESCALATED',
+} as const;
+
 export interface ResolveUserReportRequest {
   action: ResolveUserReportRequestAction;
   notes?: string;
+  outcome?: ResolveUserReportRequestOutcome;
 }
 
 export type UpdateAvatar200 = {
@@ -1868,6 +1920,47 @@ export const GetAdminUserReportsStatus = {
   RESOLVED: 'RESOLVED',
   DISMISSED: 'DISMISSED',
 } as const;
+
+export type AppealReportBody = {
+  /**
+     * @minLength 10
+     * @maxLength 2000
+     */
+  reason: string;
+};
+
+export type AppealConversationReportBody = {
+  /**
+     * @minLength 10
+     * @maxLength 2000
+     */
+  reason: string;
+};
+
+export type ResolveAdminReportAppealBodyAction = typeof ResolveAdminReportAppealBodyAction[keyof typeof ResolveAdminReportAppealBodyAction];
+
+
+export const ResolveAdminReportAppealBodyAction = {
+  resolve: 'resolve',
+  dismiss: 'dismiss',
+} as const;
+
+export type ResolveAdminReportAppealBodyOutcome = typeof ResolveAdminReportAppealBodyOutcome[keyof typeof ResolveAdminReportAppealBodyOutcome];
+
+
+export const ResolveAdminReportAppealBodyOutcome = {
+  ACTION_TAKEN: 'ACTION_TAKEN',
+  NO_VIOLATION: 'NO_VIOLATION',
+  INSUFFICIENT_EVIDENCE: 'INSUFFICIENT_EVIDENCE',
+  REFERRED_ESCALATED: 'REFERRED_ESCALATED',
+} as const;
+
+export type ResolveAdminReportAppealBody = {
+  action: ResolveAdminReportAppealBodyAction;
+  outcome: ResolveAdminReportAppealBodyOutcome;
+  /** @maxLength 1000 */
+  notes?: string;
+};
 
 export type SearchCompaniesHouseParams = {
 /**

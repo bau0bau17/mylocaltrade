@@ -86,6 +86,9 @@ export default function CodeOfConductScreen() {
         <Text style={styles.paragraph}>
           We may suspend or remove a trader's listing where we believe this Code has been breached, where required documents are missing or expired, or where we receive credible reports of unsafe or dishonest behaviour.
         </Text>
+        <Text style={styles.paragraph}>
+          Users can report suspected illegal content and other concerns through the app. Reports are assessed fairly and privately; possible outcomes include no further action, safety measures, or action on an account or listing. A person affected by a decided report may use Report status to challenge the outcome.
+        </Text>
       </View>
     </ScrollView>
   );

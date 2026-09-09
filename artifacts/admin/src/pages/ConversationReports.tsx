@@ -11,6 +11,10 @@ import { ShieldAlert, MessageSquare, Eye, Check, X, Ban, AlertTriangle, UserX, U
 import { formatDateTime } from "@/lib/format";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 
+type ReportOutcome = "ACTION_TAKEN" | "NO_VIOLATION" | "INSUFFICIENT_EVIDENCE" | "REFERRED_ESCALATED";
+const OUTCOMES: ReportOutcome[] = ["ACTION_TAKEN", "NO_VIOLATION", "INSUFFICIENT_EVIDENCE", "REFERRED_ESCALATED"];
+const outcomeLabel = (value: string) => value.replace(/_/g, " ");
+
 const gbp = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 function formatPounds(amountPence: number): string {
   return gbp.format(amountPence / 100);
@@ -30,6 +34,12 @@ interface AdminConversationReport {
   reportedByRole: string;
   reason: string;
   status: "OPEN" | "RESOLVED" | "DISMISSED";
+  outcome?: ReportOutcome | null;
+  outcomeAt: string | null;
+  category?: string;
+  detail?: string | null;
+  messageId?: number | null;
+  cseaEscalatedAt?: string | null;
   resolutionNotes: string | null;
   resolvedAt: string | null;
   createdAt: string;
@@ -245,6 +255,12 @@ function ReportCard({
                 Auto-flagged
               </Badge>
             ) : null}
+            {report.category === "SUSPECTED_ILLEGAL_CONTENT" ? (
+              <Badge variant="outline" className="bg-red-500/20 text-red-700 border-red-500/60 font-bold" data-testid={`badge-illegal-${report.id}`}>
+                <ShieldAlert className="w-3 h-3 mr-1" /> Suspected illegal content
+              </Badge>
+            ) : null}
+            {report.outcome ? <Badge variant="outline">{outcomeLabel(report.outcome)}</Badge> : null}
             {report.contactBypassAttempts > 0 ? (
               <Badge
                 variant="outline"
@@ -302,6 +318,7 @@ function ReportCard({
             </Badge>
             <Badge variant="outline">{report.conversationStatus.replace(/_/g, " ")}</Badge>
           </div>
+          {report.outcomeAt ? <p className="text-xs text-muted-foreground">Outcome recorded {formatDateTime(report.outcomeAt)}</p> : null}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -310,6 +327,7 @@ function ReportCard({
             Reason
           </div>
           <p className="text-sm whitespace-pre-wrap">{report.reason}</p>
+          {report.messageId ? <p className="text-xs text-muted-foreground">Reported message #{report.messageId}</p> : null}
         </div>
         {report.resolutionNotes ? (
           <div>
@@ -324,7 +342,7 @@ function ReportCard({
             <Eye className="w-4 h-4 mr-1" />
             {expanded ? "Hide messages" : "View messages"}
           </Button>
-          {report.status === "OPEN" ? (
+          {report.status === "OPEN" && !report.cseaEscalatedAt ? (
             <ResolveActions reportId={report.id} />
           ) : null}
         </div>
@@ -671,6 +689,7 @@ function ResolveActions({ reportId }: { reportId: number }) {
   const qc = useQueryClient();
   const [notes, setNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
+  const [outcome, setOutcome] = useState<ReportOutcome>("ACTION_TAKEN");
 
   const violation = useMemo(() => detectContactInfo(notes), [notes]);
   const violationText = violation ? contactViolationMessage(violation) : null;
@@ -679,7 +698,7 @@ function ResolveActions({ reportId }: { reportId: number }) {
     mutationFn: (action: "resolve" | "dismiss" | "block") =>
       api<{ ok: boolean }>(`/api/admin/conversation-reports/${reportId}/resolve`, {
         method: "POST",
-        body: { action, notes: notes.trim() || undefined },
+        body: { action, outcome: action === "dismiss" ? "NO_VIOLATION" : outcome, notes: notes.trim() || undefined },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "conversation-reports"] });
@@ -693,6 +712,11 @@ function ResolveActions({ reportId }: { reportId: number }) {
   return (
     <div className="flex flex-col gap-2 w-full">
       <div className="flex gap-2 flex-wrap">
+        <label className="sr-only" htmlFor={`conversation-outcome-${reportId}`}>Moderation outcome</label>
+        <select id={`conversation-outcome-${reportId}`} value={outcome} onChange={(e) => setOutcome(e.target.value as ReportOutcome)}
+          className="h-9 rounded-md border border-input bg-background px-2 text-sm" data-testid={`outcome-${reportId}`}>
+          {OUTCOMES.map((item) => <option key={item} value={item}>{outcomeLabel(item)}</option>)}
+        </select>
         <Button
           size="sm"
           variant="default"

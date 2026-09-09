@@ -76,6 +76,7 @@ const INNER_ROUTES: {
   { name: "cookie-policy", title: "Cookie Policy", parent: "/legal-support" },
   { name: "complaints", title: "Complaints Procedure", parent: "/legal-support" },
   { name: "report-trader", title: "Report a Trader", parent: "/legal-support" },
+  { name: "report-status", title: "Report status", parent: "/legal-support" },
   { name: "safety-advice", title: "Customer Safety Advice", parent: "/legal-support" },
   { name: "code-of-conduct", title: "Trader Code of Conduct", parent: "/legal-support" },
   { name: "how-verification-works", title: "How Verification Works", parent: "/legal-support" },

@@ -1,0 +1,122 @@
+Pre-launch Online Safety Act readiness audit and targeted implementation.
+
+IMPORTANT:
+Audit first.
+Do NOT duplicate controls that already exist.
+Only implement genuine gaps.
+Do NOT deploy.
+Do NOT push to GitHub — I will use Replit Git Sync myself.
+Do NOT weaken existing moderation/reporting/account-isolation controls.
+
+FIRST — READ-ONLY AUDIT
+
+Inspect the CURRENT mobile app, API, admin dashboard, Terms, Privacy, Complaints, Code of Conduct, Safety Advice, reporting flows, review moderation, chat moderation, account suspension, and admin audit history.
+
+Determine whether the following already exist and are complete:
+
+1. Explicit user-facing ability to report suspected illegal content.
+2. Clear report categories that distinguish:
+   - illegal content
+   - harassment/abuse
+   - fraud/scam
+   - fake/misleading review
+   - unsafe trader/customer conduct
+   - other
+3. Ability to report:
+   - conversation/chat content
+   - user/customer
+   - trader/profile
+   - review
+4. Server-side authorization and durable moderation record.
+5. Admin queue/status for illegal-content reports.
+6. Admin outcome:
+   - upheld/action taken
+   - no violation
+   - insufficient evidence
+   - referred/escalated
+7. User-facing outcome/decision communication.
+8. Complaint/appeal path if a user disputes moderation action or report outcome.
+9. Terms/Safety/Complaints wording explaining:
+   - what can be reported
+   - how reports are handled
+   - possible actions
+   - how to challenge a decision
+10. A clear safety/contact route in the app.
+11. Audit trail for moderation decisions.
+12. Existing child-safety/CSEA escalation wording or operational hook, if any.
+
+DO NOT implement anything already present and adequate.
+
+IMPLEMENT ONLY MISSING ITEMS
+
+If gaps exist, add the smallest cohesive solution using existing reporting/admin patterns.
+
+Requirements:
+
+- “Illegal content” must be an explicit selectable report reason.
+- Reuse the existing moderation/report infrastructure where possible.
+- Do not create a parallel moderation system unless necessary.
+- Reports must be authenticated and authorization-checked.
+- Do not expose reporter identity unnecessarily to the reported user.
+- Admin decisions must be auditable.
+- Add a simple appeal/complaint route for moderation outcomes.
+- Appeals must reference the original report/decision where possible.
+- The app must not promise legal conclusions it cannot make.
+- Use neutral wording such as “suspected illegal content”.
+- Existing emergency/safety advice should remain clear that MyLocalTrade is not an emergency service.
+
+CHILD SAFETY / CSEA
+
+Audit current handling first.
+
+If no explicit operational handling exists:
+- add a restricted admin escalation category/path for suspected child sexual exploitation/abuse content;
+- do not expose detailed sensitive content more widely than needed;
+- make the workflow auditable;
+- do not invent an external reporting integration if none exists;
+- document any manual operational step clearly for administrators.
+
+LEGAL COPY
+
+Update only the legal/help text required to accurately reflect the actual implemented controls.
+
+Do not rewrite unrelated Privacy, Apple billing, RevenueCat, Twilio, or job-payment wording.
+
+TESTS
+
+Add focused regression coverage for:
+- illegal-content report creation;
+- report authorization;
+- admin decision;
+- appeal creation;
+- unauthorized access rejected;
+- existing general/chat reporting still works;
+- moderation audit history remains intact.
+
+Run:
+- API typecheck/tests
+- mobile typecheck/tests
+- admin typecheck/tests if changed
+- independent final review
+
+WHEN COMPLETE
+
+Do NOT deploy.
+Do NOT push to GitHub.
+
+Report:
+
+1. What already existed
+2. Exact gaps found
+3. What was implemented
+4. Files changed
+5. User-facing reporting categories
+6. Admin moderation/appeal flow
+7. Child-safety/CSEA handling status
+8. Tests/results
+9. Backend republish required yes/no
+10. New TestFlight build required yes/no
+11. Any manual operational/legal step still required
+
+If everything is already adequate, explicitly say:
+“No additional Online Safety implementation is required from the current codebase.”

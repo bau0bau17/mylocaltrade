@@ -88,6 +88,13 @@ export default function LegalSupportScreen() {
             sub="How to make a complaint"
             onPress={() => router.push('/complaints')}
           />
+          <View style={styles.separator} />
+          <MenuRow
+            icon="activity"
+            label="Report status"
+            sub="See outcomes and challenge a decision"
+            onPress={() => router.push('/report-status')}
+          />
         </View>
 
         <Text style={styles.sectionLabel}>Support</Text>

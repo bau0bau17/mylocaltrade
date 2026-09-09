@@ -2337,12 +2337,36 @@ export const reportConversationBodyReasonMax = 2000;
 
 
 export const ReportConversationBody = zod.object({
-  "reason": zod.string().min(reportConversationBodyReasonMin).max(reportConversationBodyReasonMax)
+  "reason": zod.string().min(reportConversationBodyReasonMin).max(reportConversationBodyReasonMax),
+  "category": zod.enum(['SUSPECTED_ILLEGAL_CONTENT', 'HARASSMENT_ABUSE', 'FRAUD_SCAM', 'UNSAFE_CONTENT_CONDUCT', 'OTHER']).optional(),
+  "detail": zod.string().nullish()
 })
 
 export const ReportConversationResponse = zod.object({
   "ok": zod.boolean()
 })
+
+
+/**
+ * @summary Report one message in a conversation
+ */
+export const ReportConversationMessageParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "messageId": zod.coerce.number().int()
+})
+
+export const reportConversationMessageBodyReasonMin = 5;
+export const reportConversationMessageBodyReasonMax = 2000;
+
+
+
+export const ReportConversationMessageBody = zod.object({
+  "reason": zod.string().min(reportConversationMessageBodyReasonMin).max(reportConversationMessageBodyReasonMax),
+  "category": zod.enum(['SUSPECTED_ILLEGAL_CONTENT', 'HARASSMENT_ABUSE', 'FRAUD_SCAM', 'UNSAFE_CONTENT_CONDUCT', 'OTHER']).optional(),
+  "detail": zod.string().nullish()
+})
+
+export const ReportConversationMessageResponse = zod.void()
 
 
 /**
@@ -2394,9 +2418,14 @@ export const GetAdminConversationReportsResponse = zod.object({
   "reportedByUserId": zod.number().int(),
   "reportedByRole": zod.string(),
   "reason": zod.string(),
+  "category": zod.string().optional(),
+  "detail": zod.string().nullish(),
+  "messageId": zod.number().int().nullish(),
   "status": zod.enum(['OPEN', 'RESOLVED', 'DISMISSED']),
   "resolutionNotes": zod.string().nullish(),
   "resolvedAt": zod.date().nullish(),
+  "outcome": zod.enum(['ACTION_TAKEN', 'NO_VIOLATION', 'INSUFFICIENT_EVIDENCE', 'REFERRED_ESCALATED']).nullish(),
+  "outcomeAt": zod.date().nullish(),
   "createdAt": zod.date(),
   "traderBusinessName": zod.string(),
   "customerFullName": zod.string(),
@@ -2463,7 +2492,8 @@ export const ResolveAdminConversationReportParams = zod.object({
 
 export const ResolveAdminConversationReportBody = zod.object({
   "action": zod.enum(['resolve', 'dismiss', 'block']),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "outcome": zod.enum(['ACTION_TAKEN', 'NO_VIOLATION', 'INSUFFICIENT_EVIDENCE', 'REFERRED_ESCALATED']).optional()
 })
 
 export const ResolveAdminConversationReportResponse = zod.object({
@@ -2471,6 +2501,12 @@ export const ResolveAdminConversationReportResponse = zod.object({
   "status": zod.string(),
   "action": zod.string()
 })
+
+
+/**
+ * @summary Get the authenticated user's reports and safe outcomes
+ */
+export const GetMyReportsResponse = zod.unknown()
 
 
 /**
@@ -2485,7 +2521,8 @@ export const CreateReportBody = zod.object({
   "traderProfileId": zod.number().int().optional().describe('Required when reportedRole is \"trader\".'),
   "category": zod.string(),
   "detail": zod.string().max(createReportBodyDetailMax).optional(),
-  "conversationId": zod.number().int().optional().describe('Required when reportedRole is \"customer\" (the customer is derived from this conversation). Optional context for trader reports.')
+  "conversationId": zod.number().int().optional().describe('Required when reportedRole is \"customer\" (the customer is derived from this conversation). Optional context for trader reports.'),
+  "reviewId": zod.number().int().optional().describe('A review on the authenticated trader\'s own profile.')
 })
 
 export const CreateReportResponse = zod.object({
@@ -2551,7 +2588,8 @@ export const ResolveAdminUserReportParams = zod.object({
 
 export const ResolveAdminUserReportBody = zod.object({
   "action": zod.enum(['resolve', 'dismiss']),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "outcome": zod.enum(['ACTION_TAKEN', 'NO_VIOLATION', 'INSUFFICIENT_EVIDENCE', 'REFERRED_ESCALATED']).optional()
 })
 
 export const ResolveAdminUserReportResponse = zod.object({
@@ -2559,6 +2597,113 @@ export const ResolveAdminUserReportResponse = zod.object({
   "status": zod.string(),
   "action": zod.string()
 })
+
+
+/**
+ * @summary Submit one appeal linked to a decided report
+ */
+export const AppealReportParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const appealReportBodyReasonMin = 10;
+export const appealReportBodyReasonMax = 2000;
+
+
+
+export const AppealReportBody = zod.object({
+  "reason": zod.string().min(appealReportBodyReasonMin).max(appealReportBodyReasonMax)
+})
+
+export const AppealReportResponse = zod.void()
+
+
+/**
+ * @summary Submit one appeal for an authenticated user's decided chat report
+ */
+export const AppealConversationReportParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const appealConversationReportBodyReasonMin = 10;
+export const appealConversationReportBodyReasonMax = 2000;
+
+
+
+export const AppealConversationReportBody = zod.object({
+  "reason": zod.string().min(appealConversationReportBodyReasonMin).max(appealConversationReportBodyReasonMax)
+})
+
+export const AppealConversationReportResponse = zod.void()
+
+
+/**
+ * @summary Admin appeal queue
+ */
+export const GetAdminReportAppealsResponse = zod.unknown()
+
+
+/**
+ * @summary Resolve an appeal
+ */
+export const ResolveAdminReportAppealParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const resolveAdminReportAppealBodyNotesMax = 1000;
+
+
+
+export const ResolveAdminReportAppealBody = zod.object({
+  "action": zod.enum(['resolve', 'dismiss']),
+  "outcome": zod.enum(['ACTION_TAKEN', 'NO_VIOLATION', 'INSUFFICIENT_EVIDENCE', 'REFERRED_ESCALATED']),
+  "notes": zod.string().max(resolveAdminReportAppealBodyNotesMax).optional()
+})
+
+export const ResolveAdminReportAppealResponse = zod.unknown()
+
+
+/**
+ * @summary Restricted CSEA specialist queue
+ */
+export const GetCseaReportsResponse = zod.unknown()
+
+
+/**
+ * @summary Restricted specialist intake candidates
+ */
+export const GetCseaCandidatesResponse = zod.unknown()
+
+
+export const CompleteCseaUserReportParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const CompleteCseaUserReportResponse = zod.unknown()
+
+
+export const CompleteCseaConversationReportParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const CompleteCseaConversationReportResponse = zod.unknown()
+
+
+export const EscalateConversationCseaReportParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const EscalateConversationCseaReportResponse = zod.unknown()
+
+
+/**
+ * @summary Restricted admin escalation for suspected CSEA content
+ */
+export const EscalateCseaReportParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const EscalateCseaReportResponse = zod.unknown()
 
 
 /**

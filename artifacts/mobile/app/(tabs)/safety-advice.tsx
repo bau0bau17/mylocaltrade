@@ -78,9 +78,13 @@ export default function SafetyAdviceScreen() {
         </Text>
         <Text style={styles.paragraph}>
           • Report the trader from the "Report a Trader" page in the app{'\n'}
+          • Report suspected illegal content using the in-app report form and check any outcome in "Report status"{'\n'}
           • Contact Citizens Advice (citizensadvice.org.uk){'\n'}
           • Contact your local Trading Standards office{'\n'}
           • In an emergency, call 999
+        </Text>
+        <Text style={styles.paragraph}>
+          Reports are reviewed using the information available to us. We may take safety action, act on an account or listing, or take no further action. Reports are private where possible, but do not include unnecessary personal information. This is not an emergency service; call 999 if there is immediate danger.
         </Text>
       </View>
     </ScrollView>

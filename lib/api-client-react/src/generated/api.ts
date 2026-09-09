@@ -25,6 +25,8 @@ import type {
   AdminListReviewsParams,
   AdminReviewsResponse,
   AdminUserReportListResponse,
+  AppealConversationReportBody,
+  AppealReportBody,
   AuthResponse,
   BookingResponse,
   BookingSlotsResponse,
@@ -85,6 +87,7 @@ import type {
   RequestUploadUrlRequest,
   ResendVerificationRequest,
   ResetPasswordRequest,
+  ResolveAdminReportAppealBody,
   ResolveReportRequest,
   ResolveReportResponse,
   ResolveUserReportRequest,
@@ -5507,6 +5510,89 @@ export const useReportConversation = <TError = ErrorType<unknown>,
       return useMutation(getReportConversationMutationOptions(options));
     }
 
+export const getReportConversationMessageUrl = (id: number,
+    messageId: number,) => {
+
+
+
+
+  return `/api/conversations/${id}/messages/${messageId}/report`
+}
+
+/**
+ * @summary Report one message in a conversation
+ */
+export const reportConversationMessage = async (id: number,
+    messageId: number,
+    reportConversationRequest: ReportConversationRequest, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+return customFetch<void>(getReportConversationMessageUrl(id,messageId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reportConversationRequest)
+  }
+);}
+
+
+
+
+
+export const getReportConversationMessageMutationKey = () => ['reportConversationMessage'] as const;
+
+export const getReportConversationMessageMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportConversationMessage>>, TError,ReportConversationMessageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reportConversationMessage>>, TError,ReportConversationMessageMutationVariables, TContext> => {
+
+const mutationKey = getReportConversationMessageMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reportConversationMessage>>, ReportConversationMessageMutationVariables> = (props) => {
+          const {id,messageId,data} = props ?? {};
+
+          return  reportConversationMessage(id,messageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReportConversationMessageMutationResult = NonNullable<Awaited<ReturnType<typeof reportConversationMessage>>>
+    export type ReportConversationMessageMutationBody = BodyType<ReportConversationRequest>
+    export type ReportConversationMessageMutationError = ErrorType<unknown>
+    export type ReportConversationMessageMutationVariables = {id: number;messageId: number;data: BodyType<ReportConversationRequest>}
+
+    /**
+ * @summary Report one message in a conversation
+ */
+export const useReportConversationMessage = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reportConversationMessage>>, TError,ReportConversationMessageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reportConversationMessage>>,
+        TError,
+        ReportConversationMessageMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReportConversationMessageMutationOptions(options));
+    }
+
 export const getRegisterPushTokenUrl = () => {
 
 
@@ -5909,6 +5995,83 @@ export const useResolveAdminConversationReport = <TError = ErrorType<unknown>,
       return useMutation(getResolveAdminConversationReportMutationOptions(options));
     }
 
+export const getGetMyReportsUrl = () => {
+
+
+
+
+  return `/api/reports`
+}
+
+/**
+ * @summary Get the authenticated user's reports and safe outcomes
+ */
+export const getMyReports = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getGetMyReportsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyReportsQueryKey = () => {
+    return [
+    `/api/reports`
+    ] as const;
+    }
+
+
+export const getGetMyReportsQueryOptions = <TData = Awaited<ReturnType<typeof getMyReports>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyReportsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyReports>>> = ({ signal }) => getMyReports({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyReports>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyReportsQueryResult = NonNullable<Awaited<ReturnType<typeof getMyReports>>>
+export type GetMyReportsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the authenticated user's reports and safe outcomes
+ */
+
+export function useGetMyReports<TData = Awaited<ReturnType<typeof getMyReports>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyReportsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getCreateReportUrl = () => {
 
 
@@ -6229,6 +6392,758 @@ export const useResolveAdminUserReport = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getResolveAdminUserReportMutationOptions(options));
+    }
+
+export const getAppealReportUrl = (id: number,) => {
+
+
+
+
+  return `/api/reports/${id}/appeal`
+}
+
+/**
+ * @summary Submit one appeal linked to a decided report
+ */
+export const appealReport = async (id: number,
+    appealReportBody: AppealReportBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+return customFetch<void>(getAppealReportUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(appealReportBody)
+  }
+);}
+
+
+
+
+
+export const getAppealReportMutationKey = () => ['appealReport'] as const;
+
+export const getAppealReportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appealReport>>, TError,AppealReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof appealReport>>, TError,AppealReportMutationVariables, TContext> => {
+
+const mutationKey = getAppealReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof appealReport>>, AppealReportMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  appealReport(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AppealReportMutationResult = NonNullable<Awaited<ReturnType<typeof appealReport>>>
+    export type AppealReportMutationBody = BodyType<AppealReportBody>
+    export type AppealReportMutationError = ErrorType<unknown>
+    export type AppealReportMutationVariables = {id: number;data: BodyType<AppealReportBody>}
+
+    /**
+ * @summary Submit one appeal linked to a decided report
+ */
+export const useAppealReport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appealReport>>, TError,AppealReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof appealReport>>,
+        TError,
+        AppealReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAppealReportMutationOptions(options));
+    }
+
+export const getAppealConversationReportUrl = (id: number,) => {
+
+
+
+
+  return `/api/conversation-reports/${id}/appeal`
+}
+
+/**
+ * @summary Submit one appeal for an authenticated user's decided chat report
+ */
+export const appealConversationReport = async (id: number,
+    appealConversationReportBody: AppealConversationReportBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+return customFetch<void>(getAppealConversationReportUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(appealConversationReportBody)
+  }
+);}
+
+
+
+
+
+export const getAppealConversationReportMutationKey = () => ['appealConversationReport'] as const;
+
+export const getAppealConversationReportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appealConversationReport>>, TError,AppealConversationReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof appealConversationReport>>, TError,AppealConversationReportMutationVariables, TContext> => {
+
+const mutationKey = getAppealConversationReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof appealConversationReport>>, AppealConversationReportMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  appealConversationReport(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AppealConversationReportMutationResult = NonNullable<Awaited<ReturnType<typeof appealConversationReport>>>
+    export type AppealConversationReportMutationBody = BodyType<AppealConversationReportBody>
+    export type AppealConversationReportMutationError = ErrorType<unknown>
+    export type AppealConversationReportMutationVariables = {id: number;data: BodyType<AppealConversationReportBody>}
+
+    /**
+ * @summary Submit one appeal for an authenticated user's decided chat report
+ */
+export const useAppealConversationReport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appealConversationReport>>, TError,AppealConversationReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof appealConversationReport>>,
+        TError,
+        AppealConversationReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAppealConversationReportMutationOptions(options));
+    }
+
+export const getGetAdminReportAppealsUrl = () => {
+
+
+
+
+  return `/api/admin/report-appeals`
+}
+
+/**
+ * @summary Admin appeal queue
+ */
+export const getAdminReportAppeals = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getGetAdminReportAppealsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminReportAppealsQueryKey = () => {
+    return [
+    `/api/admin/report-appeals`
+    ] as const;
+    }
+
+
+export const getGetAdminReportAppealsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminReportAppeals>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminReportAppeals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminReportAppealsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminReportAppeals>>> = ({ signal }) => getAdminReportAppeals({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminReportAppeals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminReportAppealsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminReportAppeals>>>
+export type GetAdminReportAppealsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Admin appeal queue
+ */
+
+export function useGetAdminReportAppeals<TData = Awaited<ReturnType<typeof getAdminReportAppeals>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminReportAppeals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminReportAppealsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getResolveAdminReportAppealUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/report-appeals/${id}/resolve`
+}
+
+/**
+ * @summary Resolve an appeal
+ */
+export const resolveAdminReportAppeal = async (id: number,
+    resolveAdminReportAppealBody: ResolveAdminReportAppealBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Array.isArray(h)) return Object.fromEntries(h);
+    return h;
+  };
+return customFetch<void>(getResolveAdminReportAppealUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(resolveAdminReportAppealBody)
+  }
+);}
+
+
+
+
+
+export const getResolveAdminReportAppealMutationKey = () => ['resolveAdminReportAppeal'] as const;
+
+export const getResolveAdminReportAppealMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveAdminReportAppeal>>, TError,ResolveAdminReportAppealMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveAdminReportAppeal>>, TError,ResolveAdminReportAppealMutationVariables, TContext> => {
+
+const mutationKey = getResolveAdminReportAppealMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveAdminReportAppeal>>, ResolveAdminReportAppealMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  resolveAdminReportAppeal(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveAdminReportAppealMutationResult = NonNullable<Awaited<ReturnType<typeof resolveAdminReportAppeal>>>
+    export type ResolveAdminReportAppealMutationBody = BodyType<ResolveAdminReportAppealBody>
+    export type ResolveAdminReportAppealMutationError = ErrorType<unknown>
+    export type ResolveAdminReportAppealMutationVariables = {id: number;data: BodyType<ResolveAdminReportAppealBody>}
+
+    /**
+ * @summary Resolve an appeal
+ */
+export const useResolveAdminReportAppeal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveAdminReportAppeal>>, TError,ResolveAdminReportAppealMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveAdminReportAppeal>>,
+        TError,
+        ResolveAdminReportAppealMutationVariables,
+        TContext
+      > => {
+      return useMutation(getResolveAdminReportAppealMutationOptions(options));
+    }
+
+export const getGetCseaReportsUrl = () => {
+
+
+
+
+  return `/api/admin/csea-reports`
+}
+
+/**
+ * @summary Restricted CSEA specialist queue
+ */
+export const getCseaReports = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getGetCseaReportsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCseaReportsQueryKey = () => {
+    return [
+    `/api/admin/csea-reports`
+    ] as const;
+    }
+
+
+export const getGetCseaReportsQueryOptions = <TData = Awaited<ReturnType<typeof getCseaReports>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCseaReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCseaReportsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCseaReports>>> = ({ signal }) => getCseaReports({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCseaReports>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCseaReportsQueryResult = NonNullable<Awaited<ReturnType<typeof getCseaReports>>>
+export type GetCseaReportsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Restricted CSEA specialist queue
+ */
+
+export function useGetCseaReports<TData = Awaited<ReturnType<typeof getCseaReports>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCseaReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCseaReportsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCseaCandidatesUrl = () => {
+
+
+
+
+  return `/api/admin/csea-candidates`
+}
+
+/**
+ * @summary Restricted specialist intake candidates
+ */
+export const getCseaCandidates = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getGetCseaCandidatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCseaCandidatesQueryKey = () => {
+    return [
+    `/api/admin/csea-candidates`
+    ] as const;
+    }
+
+
+export const getGetCseaCandidatesQueryOptions = <TData = Awaited<ReturnType<typeof getCseaCandidates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCseaCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCseaCandidatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCseaCandidates>>> = ({ signal }) => getCseaCandidates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCseaCandidates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCseaCandidatesQueryResult = NonNullable<Awaited<ReturnType<typeof getCseaCandidates>>>
+export type GetCseaCandidatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Restricted specialist intake candidates
+ */
+
+export function useGetCseaCandidates<TData = Awaited<ReturnType<typeof getCseaCandidates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCseaCandidates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCseaCandidatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCompleteCseaUserReportUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/csea-reports/user/${id}/complete`
+}
+
+export const completeCseaUserReport = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getCompleteCseaUserReportUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompleteCseaUserReportMutationKey = () => ['completeCseaUserReport'] as const;
+
+export const getCompleteCseaUserReportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeCseaUserReport>>, TError,CompleteCseaUserReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeCseaUserReport>>, TError,CompleteCseaUserReportMutationVariables, TContext> => {
+
+const mutationKey = getCompleteCseaUserReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeCseaUserReport>>, CompleteCseaUserReportMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  completeCseaUserReport(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteCseaUserReportMutationResult = NonNullable<Awaited<ReturnType<typeof completeCseaUserReport>>>
+
+    export type CompleteCseaUserReportMutationError = ErrorType<unknown>
+    export type CompleteCseaUserReportMutationVariables = {id: number}
+
+    export const useCompleteCseaUserReport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeCseaUserReport>>, TError,CompleteCseaUserReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeCseaUserReport>>,
+        TError,
+        CompleteCseaUserReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCompleteCseaUserReportMutationOptions(options));
+    }
+
+export const getCompleteCseaConversationReportUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/csea-reports/conversation/${id}/complete`
+}
+
+export const completeCseaConversationReport = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getCompleteCseaConversationReportUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCompleteCseaConversationReportMutationKey = () => ['completeCseaConversationReport'] as const;
+
+export const getCompleteCseaConversationReportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeCseaConversationReport>>, TError,CompleteCseaConversationReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeCseaConversationReport>>, TError,CompleteCseaConversationReportMutationVariables, TContext> => {
+
+const mutationKey = getCompleteCseaConversationReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeCseaConversationReport>>, CompleteCseaConversationReportMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  completeCseaConversationReport(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteCseaConversationReportMutationResult = NonNullable<Awaited<ReturnType<typeof completeCseaConversationReport>>>
+
+    export type CompleteCseaConversationReportMutationError = ErrorType<unknown>
+    export type CompleteCseaConversationReportMutationVariables = {id: number}
+
+    export const useCompleteCseaConversationReport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeCseaConversationReport>>, TError,CompleteCseaConversationReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeCseaConversationReport>>,
+        TError,
+        CompleteCseaConversationReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCompleteCseaConversationReportMutationOptions(options));
+    }
+
+export const getEscalateConversationCseaReportUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/conversation-reports/${id}/csea-escalate`
+}
+
+export const escalateConversationCseaReport = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getEscalateConversationCseaReportUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getEscalateConversationCseaReportMutationKey = () => ['escalateConversationCseaReport'] as const;
+
+export const getEscalateConversationCseaReportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof escalateConversationCseaReport>>, TError,EscalateConversationCseaReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof escalateConversationCseaReport>>, TError,EscalateConversationCseaReportMutationVariables, TContext> => {
+
+const mutationKey = getEscalateConversationCseaReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof escalateConversationCseaReport>>, EscalateConversationCseaReportMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  escalateConversationCseaReport(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EscalateConversationCseaReportMutationResult = NonNullable<Awaited<ReturnType<typeof escalateConversationCseaReport>>>
+
+    export type EscalateConversationCseaReportMutationError = ErrorType<unknown>
+    export type EscalateConversationCseaReportMutationVariables = {id: number}
+
+    export const useEscalateConversationCseaReport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof escalateConversationCseaReport>>, TError,EscalateConversationCseaReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof escalateConversationCseaReport>>,
+        TError,
+        EscalateConversationCseaReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getEscalateConversationCseaReportMutationOptions(options));
+    }
+
+export const getEscalateCseaReportUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/user-reports/${id}/csea-escalate`
+}
+
+/**
+ * @summary Restricted admin escalation for suspected CSEA content
+ */
+export const escalateCseaReport = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getEscalateCseaReportUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getEscalateCseaReportMutationKey = () => ['escalateCseaReport'] as const;
+
+export const getEscalateCseaReportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof escalateCseaReport>>, TError,EscalateCseaReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof escalateCseaReport>>, TError,EscalateCseaReportMutationVariables, TContext> => {
+
+const mutationKey = getEscalateCseaReportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof escalateCseaReport>>, EscalateCseaReportMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  escalateCseaReport(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EscalateCseaReportMutationResult = NonNullable<Awaited<ReturnType<typeof escalateCseaReport>>>
+
+    export type EscalateCseaReportMutationError = ErrorType<unknown>
+    export type EscalateCseaReportMutationVariables = {id: number}
+
+    /**
+ * @summary Restricted admin escalation for suspected CSEA content
+ */
+export const useEscalateCseaReport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof escalateCseaReport>>, TError,EscalateCseaReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof escalateCseaReport>>,
+        TError,
+        EscalateCseaReportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getEscalateCseaReportMutationOptions(options));
     }
 
 export const getSearchCompaniesHouseUrl = (params: SearchCompaniesHouseParams,) => {

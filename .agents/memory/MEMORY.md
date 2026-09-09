@@ -88,3 +88,4 @@
 - [RevenueCat readiness identity barrier](revenuecat-readiness-identity-barrier.md) — UI timeouts may settle readiness, but never release the native identity serialization lock before logIn/logOut settles.
 - [Patched dependency resolution](patched-dependency-resolution.md) — verify a patch through the consumer’s resolved package; stale pnpm virtual-store copies can survive normal installs.
 - [ESM decoder with CommonJS query-string](esm-decoder-query-string-interop.md) — decoder 0.5.0 needs the small query-string 7 import bridge; direct override crashes URL parsing.
+- [CSEA specialist moderation](csea-specialist-moderation.md) — safeguarding escalation is fail-closed, specialist-only, and separate from ordinary report decisions.

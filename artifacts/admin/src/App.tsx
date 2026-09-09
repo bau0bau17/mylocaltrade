@@ -20,6 +20,8 @@ import OutreachContacts from "@/pages/OutreachContacts";
 import ReviewsPage from "@/pages/Reviews";
 import ConversationReportsPage from "@/pages/ConversationReports";
 import UserReportsPage from "@/pages/UserReports";
+import ReportAppealsPage from "@/pages/ReportAppeals";
+import CseaReportsPage from "@/pages/CseaReports";
 import Subscriptions from "@/pages/Subscriptions";
 import SeatExemptions from "@/pages/SeatExemptions";
 import PromoCodes from "@/pages/PromoCodes";
@@ -53,6 +55,8 @@ function ProtectedRoutes() {
           <Route path="/reviews" component={ReviewsPage} />
           <Route path="/conversation-reports" component={ConversationReportsPage} />
           <Route path="/user-reports" component={UserReportsPage} />
+          <Route path="/report-appeals" component={ReportAppealsPage} />
+          <Route path="/csea-reports" component={CseaReportsPage} />
           <Route path="/subscriptions" component={Subscriptions} />
           <Route path="/seat-exemptions" component={SeatExemptions} />
           <Route path="/promo-codes" component={PromoCodes} />

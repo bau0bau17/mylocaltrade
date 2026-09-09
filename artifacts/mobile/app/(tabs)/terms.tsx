@@ -184,6 +184,16 @@ export default function TermsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.heading}>15. Reports and challenges</Text>
+        <Text style={styles.paragraph}>
+          You can report suspected illegal content and other concerns using the in-app reporting form. A report is reviewed information, not a finding. Depending on the circumstances, we may take no further action, apply safety measures, or act on an account or listing. We protect report information as described in our Privacy Policy and share only what is appropriate.
+        </Text>
+        <Text style={styles.paragraph}>
+          You can view the safe outcome of your decided report in Report status and submit one challenge where available. Reports are not an emergency service; contact emergency services if someone is in immediate danger.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.heading}>Contact</Text>
         <View style={styles.contactCard}>
           <Text style={styles.contactText}>

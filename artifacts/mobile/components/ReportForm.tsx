@@ -51,6 +51,7 @@ export function ReportForm({
         setCategory(null);
         setDetail('');
         onSubmitted?.();
+         router.push('/report-status');
       },
       onError: (err: unknown) => {
         const msg =
