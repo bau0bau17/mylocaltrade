@@ -1,0 +1,241 @@
+Pre-launch cookie / tracking compliance audit and targeted implementation for the CURRENT MyLocalTrade stack.
+
+IMPORTANT:
+Audit first.
+Do NOT add a cookie banner unless the current production-facing web/admin implementation actually uses non-essential cookies or similar tracking.
+Do NOT add a CMP just because a Cookie Policy exists.
+Do NOT modify mobile app behavior unless the audit proves the mobile app uses browser-style tracking/storage that requires consent.
+Do NOT deploy.
+Do NOT push to GitHub — I will use Replit Git Sync myself.
+
+CURRENT PROJECT CONTEXT
+
+MyLocalTrade currently has:
+- a public landing/legal website;
+- an admin dashboard;
+- a native iOS app;
+- an existing Cookie Policy;
+- one previously identified admin sidebar preference cookie;
+- no known requirement yet for advertising/marketing tracking;
+- legal/privacy copy already updated in earlier pre-launch tasks.
+
+We need to determine the ACTUAL runtime use before implementing anything.
+
+FIRST — READ-ONLY AUDIT
+
+Inspect the current source for:
+
+1. Public landing website
+2. Public legal pages
+3. Admin dashboard
+4. Any browser-rendered app/web routes
+5. Analytics integrations
+6. Marketing pixels
+7. Tag managers
+8. Session replay / heatmaps
+9. Advertising/tracking SDKs
+10. Embedded third-party widgets
+11. Cookies
+12. localStorage
+13. sessionStorage
+14. IndexedDB if used
+15. third-party scripts capable of setting cookies/storage
+
+Search specifically for technologies/providers such as:
+
+- Google Analytics / GA4
+- Google Tag Manager
+- Meta/Facebook Pixel
+- TikTok Pixel
+- Microsoft Clarity
+- Hotjar
+- Mixpanel
+- PostHog
+- Segment
+- Sentry browser/session replay
+- Intercom/chat widgets
+- YouTube/video embeds
+- social embeds
+- ad platforms
+- affiliate tracking
+- reCAPTCHA / similar third-party browser technologies
+- any other analytics or tracking package actually present
+
+Do not assume a dependency is active just because it exists in package metadata.
+Trace whether it is actually initialized/executed in production-facing code.
+
+CLASSIFY EVERY STORAGE/TRACKING ITEM
+
+For each cookie/storage/tracker found, classify it as:
+
+A. Strictly necessary
+B. Functional
+C. Analytics
+D. Advertising/marketing
+E. Security/fraud prevention
+F. Unknown / requires manual verification
+
+Report:
+
+- name/key
+- first-party or third-party
+- purpose
+- approximate duration if determinable
+- where it is created
+- whether it runs before consent
+- whether it is actually active in production code
+- whether user consent is required
+
+SPECIFICALLY VERIFY
+
+1. The admin sidebar preference cookie/storage:
+   - confirm whether it is strictly necessary/functional;
+   - determine whether it needs consent;
+   - do not break authenticated admin UX.
+
+2. Whether the public landing page currently sets ANY cookie on first visit.
+
+3. Whether any non-essential JavaScript executes before consent.
+
+4. Whether external resources can set third-party cookies automatically.
+
+5. Whether the existing Cookie Policy accurately describes ACTUAL current behavior.
+
+6. Whether the native iOS app has any cookie-consent relevance at all.
+   Do not add a web-style cookie banner inside the native app unless technically and legally justified.
+
+DECISION RULE
+
+IF the current public website/admin only uses strictly necessary or essential functional storage:
+
+- DO NOT add a cookie consent banner.
+- DO NOT create Accept/Reject UI.
+- Correct the Cookie Policy only if it currently overstates analytics, advertising, or third-party cookie use.
+- Make the policy describe the actual current implementation accurately.
+- Explicitly report:
+  “No cookie-consent banner is required by the current implementation.”
+
+IF ANY NON-ESSENTIAL ANALYTICS / MARKETING / TRACKING IS ACTUALLY ACTIVE:
+
+Implement the smallest compliant preference mechanism.
+
+Required behavior:
+
+1. Non-essential tracking disabled by default.
+2. Clear first-visit choice:
+   - Reject non-essential
+   - Accept
+   - Manage preferences
+3. Reject must be as easy/prominent as Accept.
+4. Categories should match ACTUAL technologies only.
+5. Persist the choice.
+6. Allow users to reopen/change/revoke preferences later.
+7. No analytics/marketing script may initialize before valid consent.
+8. Strictly necessary technologies remain enabled.
+9. No dark patterns.
+10. Do not reload unnecessarily if runtime toggling is safe.
+11. If a reload is technically required to remove third-party state, explain it clearly.
+
+CONSENT RECORDING
+
+If a consent mechanism is required:
+
+- store the minimum evidence needed;
+- include consent version and timestamp;
+- do not create unnecessary personal profiles;
+- avoid backend persistence unless there is a clear operational/legal need;
+- if client-side consent storage is sufficient, prefer that simpler model.
+
+PUBLIC UI
+
+If needed, add a visible “Cookie settings” / “Privacy choices” entry so consent can be changed later.
+
+It should be accessible from the public footer/legal area.
+
+Do not interfere with:
+- Terms
+- Privacy
+- Online Safety reporting
+- complaints
+- age eligibility
+- RevenueCat/Apple billing
+- Twilio Verify/RCS
+- account authentication
+
+COOKIE POLICY ALIGNMENT
+
+Update Cookie Policy ONLY to reflect the final real implementation.
+
+Include:
+- cookies/storage actually used;
+- purposes;
+- essential vs non-essential classification;
+- how to change preferences;
+- third-party providers only if actually used;
+- avoid claiming analytics/advertising if none exists.
+
+Do not invent providers or retention periods.
+
+TESTS
+
+If NO consent UI is required:
+
+Add/adjust tests only where useful to confirm:
+- no non-essential tracking initializes;
+- necessary admin preference still works;
+- policy wording matches implementation.
+
+If consent UI IS required, test:
+
+1. First visit with no preference
+2. Reject non-essential
+3. Accept
+4. Manage preferences
+5. Preference persistence
+6. Preference withdrawal/change
+7. Non-essential scripts blocked before consent
+8. Non-essential scripts enabled only after consent
+9. Necessary storage continues working
+10. Reopening Cookie Settings
+11. No regression to public navigation/admin login
+
+VALIDATION
+
+Run:
+- relevant web/admin typechecks
+- relevant web/admin tests
+- legal-copy tests if present
+- independent final review
+
+Do not run unrelated expensive suites unless required by changed shared code.
+
+WHEN COMPLETE
+
+Do NOT deploy.
+Do NOT push to GitHub.
+
+Report:
+
+1. Exact cookies/storage/tracking technologies found
+2. Which are actually active in production-facing code
+3. Classification for each
+4. Whether a consent banner is legally/technically required by the CURRENT implementation
+5. What already existed
+6. Exact gaps found
+7. What was implemented, if anything
+8. Cookie Policy changes
+9. Files changed
+10. Tests/typechecks
+11. Landing/web republish required yes/no
+12. Admin republish required yes/no
+13. Backend republish required yes/no
+14. New TestFlight build required yes/no
+15. Any provider/live-browser behavior that still needs manual verification
+
+If only necessary storage is used, explicitly confirm:
+
+“No cookie-consent banner is required by the current implementation; the Cookie Policy accurately reflects the actual storage/tracking behavior.”
+
+If non-essential tracking exists, explicitly confirm:
+
+“Non-essential tracking is blocked by default and only runs after valid user consent.”

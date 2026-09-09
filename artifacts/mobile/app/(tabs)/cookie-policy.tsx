@@ -20,7 +20,7 @@ export default function CookiePolicyScreen() {
 
       <View style={styles.section}>
         <Text style={styles.paragraph}>
-          This Cookie Policy explains how MyLocalTrade ("we", "us", "our") uses cookies and similar technologies in the MyLocalTrade application and on any related web pages.
+          This Cookie Policy explains how MyLocalTrade ("we", "us", "our") uses cookies and device storage in the MyLocalTrade application, public website and admin dashboard.
         </Text>
         <Text style={styles.paragraph}>
           MyLocalTrade is a platform that connects customers with independent local traders.
@@ -28,39 +28,43 @@ export default function CookiePolicyScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>1. What are cookies?</Text>
+        <Text style={styles.heading}>1. Cookies and storage</Text>
         <Text style={styles.paragraph}>
-          Cookies are small text files placed on your device when you use an app or visit a website. Mobile apps use similar technologies such as local storage and device identifiers. We refer to all of these collectively as "cookies" in this policy.
+          Cookies are small text files placed on a browser device. Mobile apps use device storage instead; this policy distinguishes the two rather than treating all storage as cookies.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>2. Types of cookies we use</Text>
+        <Text style={styles.heading}>2. Public website and admin dashboard</Text>
         <Text style={styles.paragraph}>
-          <Text style={styles.bold}>Strictly necessary:</Text> Required to keep you signed in, remember your session and operate core features such as enquiries and reviews. These cannot be switched off.
+          <Text style={styles.bold}>Public website:</Text> The public landing site currently does not set cookies or use browser storage, analytics or marketing cookies, tracking, or third-party embeds.
         </Text>
         <Text style={styles.paragraph}>
-          <Text style={styles.bold}>Functional:</Text> Remember small preferences inside the app, such as your recent searches and view options. Saved traders are stored on our servers against your account, not in cookies.
+          <Text style={styles.bold}>Admin dashboard:</Text> The functional <Text style={styles.bold}>sidebar_state</Text> cookie remembers the sidebar for 7 days. Functional <Text style={styles.bold}>admin-theme</Text> storage remembers the theme, and necessary <Text style={styles.bold}>mlt_admin_token</Text> storage keeps an administrator authenticated. These are first-party browser storage items.
         </Text>
         <Text style={styles.paragraph}>
-          <Text style={styles.bold}>Analytics:</Text> Help us understand how the app is used so we can improve it. Where required, these are only used with your consent.
-        </Text>
-        <Text style={styles.paragraph}>
-          <Text style={styles.bold}>Payment provider:</Text> Trader subscriptions are purchased through the Apple App Store and subscription status is managed by RevenueCat.
+          The public site and admin dashboard currently use no analytics or marketing tracking. We make no general claim that third parties set browser cookies.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>3. Managing cookies</Text>
+        <Text style={styles.heading}>3. Native app device storage</Text>
         <Text style={styles.paragraph}>
-          You can clear cookies and local storage from your device settings or from your browser at any time. Disabling strictly necessary cookies may stop parts of the app from working correctly.
+          The native app uses AsyncStorage on your device for session and authentication data, preferences, recent searches and cached location data (with its existing expiry). Operational/functional AsyncStorage also includes a push notification token: registration starts after session restoration or login, and the token is stored only after notification permission is granted. For each booking, a functional prompt marker may be stored when a confirmed booking is viewed, and an event marker may be stored after you authorize adding it to your calendar. These are not analytics or advertising. The app currently uses no analytics or marketing tracking.
         </Text>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.heading}>4. Third parties</Text>
+        <Text style={styles.heading}>4. Managing cookies and storage</Text>
         <Text style={styles.paragraph}>
-          We use trusted third parties to deliver email (Brevo), subscriptions (the Apple App Store and RevenueCat) and hosting. These providers may set their own cookies under their own policies.
+          You can clear browser cookies and storage through browser settings, or app storage through your device settings. Clearing necessary authentication storage may sign you out; clearing functional storage may reset preferences.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.heading}>5. Future changes</Text>
+        <Text style={styles.paragraph}>
+          Any future non-essential tracking would require a policy and consent review before activation. We would update this policy before introducing it.
         </Text>
       </View>
 

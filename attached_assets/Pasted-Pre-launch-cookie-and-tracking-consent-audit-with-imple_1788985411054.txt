@@ -1,0 +1,97 @@
+Pre-launch cookie and tracking-consent audit with implementation only if required.
+
+IMPORTANT:
+Audit first.
+Do NOT add a cookie banner just because a Cookie Policy exists.
+Only implement consent controls if the live web/admin surfaces actually use non-essential cookies or similar tracking.
+Do NOT deploy.
+Do NOT push to GitHub — I will use Replit Git Sync myself.
+
+READ-ONLY AUDIT FIRST
+
+Inspect:
+- public landing website
+- admin dashboard
+- analytics integrations
+- third-party scripts
+- cookie usage
+- localStorage/sessionStorage where relevant
+- embedded providers
+- Cookie Policy wording
+
+Classify every cookie/storage/tracking technology as:
+
+A. strictly necessary
+B. functional
+C. analytics
+D. advertising/marketing
+E. unknown/unverified
+
+Confirm specifically:
+- admin sidebar preference cookie
+- analytics SDKs
+- marketing pixels
+- embedded third-party tracking
+- consent-dependent scripts
+
+IF ONLY STRICTLY NECESSARY TECHNOLOGY IS USED
+
+Do NOT add a consent banner.
+
+Instead:
+- make sure Cookie Policy accurately states what is actually used;
+- remove inaccurate claims about analytics/third-party cookies if not used.
+
+IF NON-ESSENTIAL COOKIES/TRACKING ARE USED
+
+Implement a compliant preference flow:
+
+- Reject non-essential
+- Accept
+- Manage preferences
+- non-essential categories disabled by default
+- persist user choice
+- easy way to change/revoke consent later
+- load analytics/marketing only after valid consent
+- do not use dark patterns
+- Reject must be as accessible as Accept
+
+Keep strictly necessary cookies operational regardless of consent.
+
+Do not build a complex CMP unless required.
+
+ADMIN
+
+Do not interfere with necessary authenticated admin functionality.
+If admin-only non-essential analytics exist, apply the same consent principles appropriately.
+
+TESTS
+
+Add focused tests for:
+- first visit
+- reject
+- accept
+- manage preferences
+- consent persistence
+- consent withdrawal
+- non-essential scripts blocked before consent
+- necessary cookies continue working
+
+WHEN COMPLETE
+
+Do NOT deploy.
+Do NOT push to GitHub.
+
+Report:
+1. Exact cookies/storage/tracking found
+2. Necessary vs non-essential classification
+3. Whether a consent banner was actually required
+4. What was implemented or corrected
+5. Files changed
+6. Tests/results
+7. Whether landing/web republish is required
+8. Whether backend republish is required
+9. Whether a new TestFlight build is required
+
+If no non-essential cookies exist, explicitly say:
+“No cookie-consent banner is required by the current implementation; policy wording was audited for accuracy.”
