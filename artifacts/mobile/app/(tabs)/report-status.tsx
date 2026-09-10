@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -24,20 +24,58 @@ type ReportItem = {
   appeal?: { id: number; status: string; outcome?: string | null } | null;
 };
 
+const APPEAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+function appealDeadline(outcomeAt?: string | null): Date | null {
+  if (!outcomeAt) return null;
+  const decidedAt = new Date(outcomeAt);
+  if (Number.isNaN(decidedAt.getTime())) return null;
+  return new Date(decidedAt.getTime() + APPEAL_WINDOW_MS);
+}
+
+function formatUkDate(date: Date): string {
+  return date.toLocaleDateString('en-GB');
+}
+
 export default function ReportStatusScreen() {
   const { isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const qc = useQueryClient();
-  const { data, isLoading, isError } = useGetMyReports({
+  const { data, isLoading, isError, refetch } = useGetMyReports({
     query: { enabled: isAuthenticated, queryKey: getGetMyReportsQueryKey() },
   });
+  const isFocusedRef = useRef(false);
   const [appealFor, setAppealFor] = useState<ReportItem | null>(null);
   const [reason, setReason] = useState('');
   const profileAppeal = useAppealReport();
   const conversationAppeal = useAppealConversationReport();
   const reports = ((data as unknown as { reports?: ReportItem[] } | undefined)?.reports ?? []);
+
+  // This tab can stay mounted, and React Query's web focus integration does
+  // not receive React Navigation focus events. Refresh both report outcomes
+  // and appeal outcomes whenever this screen becomes visible.
+  useFocusEffect(
+    useCallback(() => {
+      isFocusedRef.current = true;
+      if (isAuthenticated) void refetch();
+      return () => {
+        isFocusedRef.current = false;
+      };
+    }, [isAuthenticated, refetch]),
+  );
+
+  // An administrator may resolve a report while the app is backgrounded. On
+  // return, refresh only if this status screen is still the visible route.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && isFocusedRef.current && isAuthenticated) {
+        void refetch();
+      }
+    });
+    return () => subscription.remove();
+  }, [isAuthenticated, refetch]);
 
   const submitAppeal = () => {
     if (!appealFor || reason.trim().length < 10) return;
@@ -69,6 +107,7 @@ export default function ReportStatusScreen() {
       <View style={styles.intro}>
         <Text style={styles.heading}>Your reports</Text>
         <Text style={styles.paragraph}>We review reports of suspected illegal content and other concerns. Outcomes may include no further action, safety measures, or action on an account or listing. We share only information appropriate to your report.</Text>
+        <Text style={styles.paragraph}>An appeal is a separate review of a decided report and does not automatically reverse the original decision. Safety handling may continue independently of an appeal.</Text>
       </View>
       {isLoading ? <ActivityIndicator color={Colors.light.primary} /> : isError ? (
         <Text style={styles.paragraph}>We couldn't load your report status. Please try again later.</Text>
@@ -76,6 +115,8 @@ export default function ReportStatusScreen() {
         <Text style={styles.paragraph}>You have not submitted any reports.</Text>
       ) : reports.map((report) => {
         const decided = !!report.outcome;
+        const deadline = appealDeadline(report.outcomeAt);
+        const appealAvailable = decided && !!deadline && Date.now() <= deadline.getTime();
         return (
           <View key={`${report.reportType}-${report.id}`} style={styles.card}>
             <Text style={styles.cardTitle}>{report.category.replaceAll('_', ' ')}</Text>
@@ -83,18 +124,23 @@ export default function ReportStatusScreen() {
             {report.outcome ? <Text style={styles.meta}>Outcome: {report.outcome}</Text> : <Text style={styles.meta}>Under review</Text>}
             {report.outcomeAt ? <Text style={styles.meta}>Decided {new Date(report.outcomeAt).toLocaleDateString('en-GB')}</Text> : null}
             {report.appeal ? (
-              <Text style={styles.meta}>Challenge: {report.appeal.status}{report.appeal.outcome ? ` — ${report.appeal.outcome}` : ''}</Text>
-            ) : decided ? <Pressable onPress={() => { setAppealFor(report); setReason(''); }}><Text style={styles.link}>Challenge this outcome</Text></Pressable> : null}
+              <Text style={styles.meta}>Appeal: {report.appeal.status}{report.appeal.outcome ? ` — ${report.appeal.outcome}` : ''}</Text>
+            ) : appealAvailable && deadline ? (
+              <>
+                <Text style={styles.meta}>Appeal available until {formatUkDate(deadline)}</Text>
+                <Pressable onPress={() => { setAppealFor(report); setReason(''); }}><Text style={styles.link}>Appeal this outcome</Text></Pressable>
+              </>
+            ) : decided ? <Text style={styles.meta}>Appeal period ended</Text> : null}
           </View>
         );
       })}
       {appealFor ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Challenge report outcome</Text>
-          <Text style={styles.paragraph}>Explain why you think this decision should be reviewed. We allow one challenge for each decided report.</Text>
+           <Text style={styles.paragraph}>Explain why you think this decision should be reviewed. This is a separate review and does not automatically reverse the decision. Safety handling may continue independently of an appeal. We allow one appeal for each decided report.</Text>
           <TextInput value={reason} onChangeText={setReason} multiline maxLength={2000} style={styles.input} placeholder="At least 10 characters" placeholderTextColor={Colors.light.textMuted} />
           <Pressable style={[styles.button, reason.trim().length < 10 && styles.disabled]} disabled={reason.trim().length < 10 || profileAppeal.isPending || conversationAppeal.isPending} onPress={submitAppeal}>
-            {(profileAppeal.isPending || conversationAppeal.isPending) ? <ActivityIndicator color={Colors.light.white} /> : <Text style={styles.buttonText}>Submit challenge</Text>}
+             {(profileAppeal.isPending || conversationAppeal.isPending) ? <ActivityIndicator color={Colors.light.white} /> : <Text style={styles.buttonText}>Submit appeal</Text>}
           </Pressable>
           <Pressable onPress={() => setAppealFor(null)}><Text style={styles.cancel}>Cancel</Text></Pressable>
         </View>

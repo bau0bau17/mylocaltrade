@@ -10,6 +10,7 @@ import {
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { ObjectNotFoundError, ObjectStorageService } from "./objectStorage";
 import { logger } from "./logger";
+import { isConversationEvidenceHeld } from "./conversation-report-evidence";
 
 // --- Account-deletion storage cleanup (GDPR finalisation) ---
 //
@@ -213,6 +214,11 @@ export async function processAccountCleanupJob(
         { userId, category: obj.category, integrity: "account_cleanup_invalid_path" },
         "Account cleanup: path failed namespace validation — skipped permanently",
       );
+      continue;
+    }
+    if (await isConversationEvidenceHeld(userId, obj.path)) {
+      obj.state = "held";
+      obj.error = "held for active moderation evidence";
       continue;
     }
     try {

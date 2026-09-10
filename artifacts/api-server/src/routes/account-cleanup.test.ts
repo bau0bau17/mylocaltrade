@@ -55,6 +55,10 @@ import {
   traderDocumentsTable,
   traderAuditLogTable,
   accountCleanupJobsTable,
+  conversationsTable,
+  conversationReportsTable,
+  conversationReportEvidenceTable,
+  reportAppealsTable,
 } from "@workspace/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import app from "../app";
@@ -184,6 +188,18 @@ afterAll(async () => {
     await db
       .delete(traderAuditLogTable)
       .where(inArray(traderAuditLogTable.userId, createdUserIds));
+    await db
+      .delete(conversationReportEvidenceTable)
+      .where(inArray(conversationReportEvidenceTable.ownerUserId, createdUserIds));
+    await db
+      .delete(reportAppealsTable)
+      .where(inArray(reportAppealsTable.appellantUserId, createdUserIds));
+    await db
+      .delete(conversationReportsTable)
+      .where(inArray(conversationReportsTable.reportedByUserId, createdUserIds));
+    await db
+      .delete(conversationsTable)
+      .where(inArray(conversationsTable.customerId, createdUserIds));
     await db
       .delete(traderProfilesTable)
       .where(inArray(traderProfilesTable.userId, createdUserIds));
@@ -393,5 +409,205 @@ describe("sweepAccountCleanupJobs — retroactive backfill", () => {
     expect(job.enqueuedBy).toBe("orphan-sweep");
     expect(job.status).toBe("DONE");
     expect(fileGone(stray)).toBe(true);
+  });
+});
+
+describe("moderation evidence retention during account cleanup", () => {
+  it("keeps an actively held report attachment and releases it after the 30-day window", async () => {
+    const customerId = await createUser("trader", "evidence-owner");
+    const traderId = await createUser("trader", "evidence-counterparty");
+    const profileId = await createProfile(traderId, "evidence-counterparty");
+    const [conversation] = await db
+      .insert(conversationsTable)
+      .values({
+        customerId,
+        traderUserId: traderId,
+        traderProfileId: profileId,
+        serviceRequired: "Evidence fixture",
+        status: "ACTIVE",
+        traderStatus: "NEW",
+      })
+      .returning({ id: conversationsTable.id });
+    const [report] = await db
+      .insert(conversationReportsTable)
+      .values({
+        conversationId: conversation.id,
+        reportedByUserId: customerId,
+        reportedByRole: "customer",
+        reason: "Protected evidence fixture",
+        category: "OTHER",
+        status: "OPEN",
+      })
+      .returning({ id: conversationReportsTable.id });
+    const path = `/objects/customer-uploads/${customerId}/v/protected-photo.jpg`;
+    await db.insert(conversationReportEvidenceTable).values({
+      conversationReportId: report.id,
+      conversationId: conversation.id,
+      ownerUserId: customerId,
+      kind: "message-attachment",
+      sourceRef: path,
+      holdUntil: null,
+    });
+    seedFile(path);
+    const [job] = await db
+      .insert(accountCleanupJobsTable)
+      .values({
+        userId: customerId,
+        status: "PENDING",
+        enqueuedBy: "complete",
+        objects: [{ path, category: "customer-upload", state: "pending" }],
+      })
+      .returning();
+
+    const held = await processAccountCleanupJob(job);
+    expect(held.status).toBe("PARTIAL");
+    expect(fileGone(path)).toBe(false);
+    const heldRow = await jobFor(customerId);
+    expect(heldRow.objects[0].state).toBe("held");
+
+    await db
+      .update(conversationReportEvidenceTable)
+      .set({ holdUntil: new Date(Date.now() - 1) })
+      .where(eq(conversationReportEvidenceTable.id, (await db
+        .select({ id: conversationReportEvidenceTable.id })
+        .from(conversationReportEvidenceTable)
+        .where(eq(conversationReportEvidenceTable.conversationReportId, report.id))
+        .limit(1))[0].id));
+    await sweepAccountCleanupJobs();
+    expect(fileGone(path)).toBe(true);
+    expect((await jobFor(customerId)).status).toBe("DONE");
+  });
+
+  it("re-holds expired evidence during CSEA escalation and releases it after specialist completion", async () => {
+    const customerId = await createUser("trader", "csea-evidence-owner");
+    const traderId = await createUser("trader", "csea-evidence-counterparty");
+    const profileId = await createProfile(traderId, "csea-evidence-counterparty");
+    const [conversation] = await db
+      .insert(conversationsTable)
+      .values({
+        customerId,
+        traderUserId: traderId,
+        traderProfileId: profileId,
+        serviceRequired: "CSEA evidence fixture",
+        status: "ACTIVE",
+        traderStatus: "NEW",
+      })
+      .returning({ id: conversationsTable.id });
+    const [report] = await db
+      .insert(conversationReportsTable)
+      .values({
+        conversationId: conversation.id,
+        reportedByUserId: customerId,
+        reportedByRole: "customer",
+        reason: "Suspected illegal content fixture",
+        category: "SUSPECTED_ILLEGAL_CONTENT",
+        status: "RESOLVED",
+        outcome: "REFERRED_ESCALATED",
+      })
+      .returning({ id: conversationReportsTable.id });
+    const [appeal] = await db
+      .insert(reportAppealsTable)
+      .values({
+        conversationReportId: report.id,
+        appellantUserId: customerId,
+        reason: "Appeal fixture for active CSEA investigation",
+        status: "OPEN",
+      })
+      .returning({ id: reportAppealsTable.id });
+    const path = `/objects/customer-uploads/${customerId}/v/csea-protected-photo.jpg`;
+    const [evidence] = await db
+      .insert(conversationReportEvidenceTable)
+      .values({
+        conversationReportId: report.id,
+        conversationId: conversation.id,
+        ownerUserId: customerId,
+        kind: "message-attachment",
+        sourceRef: path,
+        // Simulate the ordinary 30-day moderation hold having elapsed.
+        holdUntil: new Date(Date.now() - 1),
+      })
+      .returning({ id: conversationReportEvidenceTable.id });
+    seedFile(path);
+    const [job] = await db
+      .insert(accountCleanupJobsTable)
+      .values({
+        userId: customerId,
+        status: "PENDING",
+        enqueuedBy: "complete",
+        objects: [{ path, category: "customer-upload", state: "pending" }],
+      })
+      .returning();
+
+    // The expired ordinary hold would normally permit deletion. Escalation
+    // must transactionally reopen it before cleanup gets a chance to delete.
+    const previousAllowlist = process.env.CSEA_SPECIALIST_ADMIN_EMAILS;
+    process.env.CSEA_SPECIALIST_ADMIN_EMAILS = emailFor("admin-ops");
+    try {
+      const escalation = await request(app)
+        .post(`/api/admin/conversation-reports/${report.id}/csea-escalate`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(escalation.status).toBe(200);
+      const reopened = await db
+        .select({ holdUntil: conversationReportEvidenceTable.holdUntil })
+        .from(conversationReportEvidenceTable)
+        .where(eq(conversationReportEvidenceTable.id, evidence.id));
+      expect(reopened[0].holdUntil).toBeNull();
+
+      const duringCsea = await processAccountCleanupJob(job);
+      expect(duringCsea.status).toBe("PARTIAL");
+      expect(fileGone(path)).toBe(false);
+
+      // Even after the ordinary report is terminally resolved, the shared
+      // settlement helper must preserve the indefinite CSEA hold.
+      const ordinaryResolution = await request(app)
+        .post(`/api/admin/conversation-reports/${report.id}/resolve`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ action: "resolve", outcome: "ACTION_TAKEN" });
+      expect(ordinaryResolution.status).toBe(200);
+      const afterReportResolution = await db
+        .select({ holdUntil: conversationReportEvidenceTable.holdUntil })
+        .from(conversationReportEvidenceTable)
+        .where(eq(conversationReportEvidenceTable.id, evidence.id));
+      expect(afterReportResolution[0].holdUntil).toBeNull();
+      const duringResolvedCsea = await processAccountCleanupJob(job);
+      expect(duringResolvedCsea.status).toBe("PARTIAL");
+      expect(fileGone(path)).toBe(false);
+
+      // Resolving an ordinary appeal while CSEA is still unhandled must not
+      // shorten that hold either.
+      const ordinaryAppealResolution = await request(app)
+        .post(`/api/admin/report-appeals/${appeal.id}/resolve`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ action: "dismiss", outcome: "NO_VIOLATION" });
+      expect(ordinaryAppealResolution.status).toBe(200);
+      const afterAppealResolution = await db
+        .select({ holdUntil: conversationReportEvidenceTable.holdUntil })
+        .from(conversationReportEvidenceTable)
+        .where(eq(conversationReportEvidenceTable.id, evidence.id));
+      expect(afterAppealResolution[0].holdUntil).toBeNull();
+
+      const completion = await request(app)
+        .post(`/api/admin/csea-reports/conversation/${report.id}/complete`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(completion.status).toBe(200);
+      const afterCompletion = await db
+        .select({ holdUntil: conversationReportEvidenceTable.holdUntil })
+        .from(conversationReportEvidenceTable)
+        .where(eq(conversationReportEvidenceTable.id, evidence.id));
+      expect(afterCompletion[0].holdUntil).not.toBeNull();
+
+      // The route starts a fresh 30-day appeal window. Move that test hold
+      // beyond the current policy window, then normal cleanup may proceed.
+      await db
+        .update(conversationReportEvidenceTable)
+        .set({ holdUntil: new Date(Date.now() - 1) })
+        .where(eq(conversationReportEvidenceTable.id, evidence.id));
+      await sweepAccountCleanupJobs();
+      expect(fileGone(path)).toBe(true);
+      expect((await jobFor(customerId)).status).toBe("DONE");
+    } finally {
+      if (previousAllowlist === undefined) delete process.env.CSEA_SPECIALIST_ADMIN_EMAILS;
+      else process.env.CSEA_SPECIALIST_ADMIN_EMAILS = previousAllowlist;
+    }
   });
 });

@@ -1,0 +1,507 @@
+Pre-launch audit and targeted fix for three live MyLocalTrade issues:
+
+A. Apple/RevenueCat subscription plan-change state
+B. Report Status not updating after admin resolution
+C. Conversation report evidence must include images in Admin
+
+IMPORTANT:
+Audit first.
+Do NOT guess.
+Implement only proven gaps.
+
+Do NOT:
+- change Apple products;
+- change RevenueCat products, offerings, entitlements, ownership or credentials;
+- change TEAM_PRODUCT_SEAT_MAP;
+- reset verification;
+- alter subscription ownership manually;
+- redesign the moderation system;
+- remove existing reporting capabilities;
+- deploy;
+- create a TestFlight build;
+- push to GitHub.
+
+I will use Replit Git Sync myself.
+
+
+==================================================
+A. SUBSCRIPTION CHANGE:
+TEAM 20 ANNUAL → PREMIUM MONTHLY £9.99
+==================================================
+
+REAL DEVICE RESULT
+
+The trader was subscribed to:
+
+Team 20 Annual
+
+The user then chose:
+
+Premium Monthly — £9.99/month
+
+Apple displayed:
+
+“You are currently subscribed to this.
+Your subscription to Premium Monthly renews on 11 Sep 2026 for £9.99.”
+
+However MyLocalTrade Billing still displays:
+
+Team 20 Annual
+ACTIVE
+Renews on 11 Sep 2026
+
+and Team 20 benefits/seats remain active.
+
+DO A READ-ONLY TRACE FIRST.
+
+Inspect the current RevenueCat customer/subscription state and relevant production logs/events for this account without exposing:
+
+- email
+- RevenueCat customer ID
+- receipts
+- transaction IDs
+- auth tokens
+- API keys
+- secrets
+- personal data
+
+Report safely:
+
+- current effective Store product
+- current active entitlement
+- current period end
+- willRenew
+- any PRODUCT_CHANGE event/state
+- current/old product
+- scheduled/new product if provider exposes it
+- whether the change is pending or already effective
+- whether Apple/RevenueCat intends the next renewal to be Premium Monthly
+- whether the backend currently stores any pending/next-plan information
+
+
+APPLE / REVENUECAT SEMANTICS
+
+Do NOT assume Team 20 → Premium Monthly should become effective immediately.
+
+Preserve correct App Store subscription behavior:
+
+UPGRADE:
+Higher subscription level may become effective immediately.
+
+DOWNGRADE:
+Lower subscription level normally leaves the current subscription active until renewal, then changes to the lower plan.
+
+CROSSGRADE:
+Same level + same duration may be immediate.
+Same level + different duration may be deferred until renewal.
+
+A RevenueCat PRODUCT_CHANGE signal must NOT be treated as proof that the future product is already the effective entitlement.
+
+Do NOT remove currently paid Team 20 access before Apple/RevenueCat says the new plan is effective.
+
+
+KEY QUESTION
+
+Determine whether current entitlement behavior is actually correct and only the MyLocalTrade UI wording is misleading.
+
+If Team 20 remains effective until 11 Sep and Premium Monthly is scheduled to start on 11 Sep, then MyLocalTrade should NOT misleadingly say:
+
+“Team 20 Annual — Renews on 11 Sep”
+
+if Team 20 will not actually renew.
+
+Preferred UX, ONLY if server/provider-authoritative pending-plan information exists:
+
+CURRENT PLAN
+Team 20 Annual
+Active until 11 Sep 2026
+
+SCHEDULED CHANGE
+Premium Monthly — £9.99/month
+Starts 11 Sep 2026
+
+or equivalent clear wording.
+
+Do not invent a pending subscription from the user's local selection.
+
+Only display a future plan when Apple/RevenueCat/server-authoritative state proves it.
+
+
+RENEWAL BEHAVIOUR
+
+Verify what should happen when the renewal actually occurs:
+
+- RevenueCat effective product becomes Premium Monthly
+- server subscription state updates
+- Team employee-seat allowance becomes Solo/no Team seats
+- Billing displays Premium Monthly
+- no manual user intervention required
+
+Also inspect what happens if the user changes/cancels the scheduled downgrade in Apple subscription settings before renewal.
+
+
+REGRESSION COVERAGE
+
+Add tests for:
+
+1. Team 20 → Premium Monthly deferred downgrade
+2. Team 20 access retained until period end
+3. pending product shown only when authoritative
+4. wording does not say Team 20 “renews” when a lower plan is scheduled
+5. renewal activates Premium Monthly
+6. Team seats are removed only when the new product actually becomes effective
+7. immediate upgrades continue working where Apple makes them immediate
+8. different-duration crossgrades remain deferred where applicable
+9. PRODUCT_CHANGE does not prematurely replace current entitlement
+10. pending change cancellation/update is eventually reflected correctly
+
+
+==================================================
+B. REPORT STATUS DOES NOT UPDATE AFTER ADMIN RESOLUTION
+==================================================
+
+REAL DEVICE RESULT
+
+The Report Status screen shows reports as:
+
+Status: OPEN
+Under review
+
+even though those reports were already resolved by an administrator.
+
+Trace the complete path:
+
+Admin moderation decision
+→ database report/moderation record
+→ report-status API
+→ mobile query/cache
+→ Report Status UI
+
+
+FOR THE AFFECTED REPORTS, CHECK SAFELY:
+
+- database report status
+- moderation outcome
+- decision timestamp
+- appeal eligibility
+- public-safe outcome returned by API
+- mobile query/cache state
+
+Do not expose:
+
+- private admin notes
+- specialist CSEA notes
+- reporter identity to the reported person
+- protected moderation data
+
+
+DETERMINE EXACTLY WHERE THE STALE STATE EXISTS
+
+Check whether:
+
+A. Admin resolution updates a moderation record but fails to update the parent report.
+
+B. Report Status API maps final outcomes back to OPEN incorrectly.
+
+C. Mobile React Query/cache remains stale.
+
+D. Report Status screen does not refetch on focus.
+
+E. Existing moderation notification/event does not invalidate the report-status query.
+
+F. Multiple report types use inconsistent status fields.
+
+G. An appeal-related state accidentally keeps a resolved report visually OPEN.
+
+
+EXPECTED BEHAVIOUR
+
+After an administrator resolves a report, the reporter must eventually see the authoritative final result without:
+
+- logout
+- reinstall
+- clearing application data
+
+At minimum:
+
+Opening or refocusing Report Status must fetch fresh data.
+
+Final outcomes should display appropriate public-safe wording such as:
+
+- Action taken
+- No violation found
+- Insufficient evidence
+- Referred / escalated
+
+Appeal should appear only where the existing moderation rules permit it.
+
+If an appeal is submitted, distinguish clearly between:
+
+Original report outcome
+and
+Appeal status
+
+Do not turn a resolved parent report back into OPEN merely because an appeal exists.
+
+
+ADD TESTS
+
+1. OPEN → admin resolution → reporter sees final outcome
+2. refocusing Report Status fetches current state
+3. multiple reports update independently
+4. appeal eligibility correct
+5. appeal does not incorrectly overwrite parent report status
+6. unauthorized report access rejected
+7. no private moderator data returned to reporter
+
+
+==================================================
+C. REPORT THIS CONVERSATION:
+ADMIN MUST SEE IMAGE EVIDENCE
+==================================================
+
+IMPORTANT CORRECTION:
+
+KEEP BOTH conversation menu actions:
+
+- Report this conversation
+- Report this customer
+
+Do NOT hide or remove either one.
+
+They have different purposes:
+
+“Report this conversation” reports conversation/message content and associated evidence.
+
+“Report this customer” reports the customer/account/behaviour.
+
+The real issue is:
+
+When a user submits “Report this conversation”, the Admin moderation view currently does NOT show the photos/images contained in that conversation.
+
+
+AUDIT FIRST
+
+Trace:
+
+conversation messages
+→ image/photo attachments
+→ storage/object references
+→ conversation API
+→ conversation report record
+→ report-detail/moderation API
+→ Admin moderation UI
+
+Determine whether:
+
+A. Admin API already receives image metadata but Admin does not render it.
+
+B. Report-detail API omits attachments.
+
+C. Secure media URLs are missing.
+
+D. Only text messages are copied into moderation evidence.
+
+E. Original enquiry photos are stored separately and therefore excluded.
+
+F. Image-only messages disappear from moderation transcript.
+
+
+EXPECTED ADMIN MODERATION EXPERIENCE
+
+When an authorised moderator opens a reported conversation, show the relevant conversation evidence including:
+
+- text messages
+- photo/image messages
+- messages containing multiple photos
+- image-only messages
+- sender
+- timestamp
+- chronological order
+- original enquiry images IF they are part of the reported conversation context and relevant to the evidence
+
+Images should appear under the correct message in the transcript.
+
+Use:
+
+- useful thumbnail
+- secure click/tap to larger preview
+- correct aspect ratio
+- graceful fallback when an image is unavailable/deleted
+
+Do not expose raw private storage paths or internal object identifiers unnecessarily.
+
+
+SECURITY REQUIREMENTS
+
+Images must remain protected by existing authenticated admin authorization.
+
+Do NOT:
+- create permanently public media URLs;
+- expose private conversation images to unauthorized admins;
+- weaken conversation authorization;
+- bypass object-storage access controls.
+
+Use the project's existing secure/signed media-access mechanism if one already exists.
+
+
+VERY IMPORTANT — CSEA RESTRICTION
+
+Preserve the restricted CSEA workflow created in the Online Safety work.
+
+If a case is escalated into restricted CSEA handling:
+
+- ordinary admins must NOT regain access to sensitive images through the generic conversation-report endpoint;
+- specialist authorization must continue to be enforced;
+- ordinary moderation queues/detail views must remain restricted exactly as designed.
+
+Add explicit regression coverage for this.
+
+
+REPORT EVIDENCE / PRESERVATION
+
+Determine whether the report currently:
+
+1. references the LIVE conversation;
+or
+2. preserves a snapshot of the evidence as it existed when reported.
+
+Report this explicitly.
+
+If a user can later delete/remove an image/message and thereby remove the evidence from an already-filed moderation report, identify that as an integrity gap.
+
+Do NOT automatically build a new evidence-retention/archive architecture.
+
+First determine current behaviour.
+
+If a minimal existing-data solution can preserve references/snapshots safely, explain and implement only if necessary for reliable moderation.
+
+Avoid duplicate image copies unless truly required.
+
+
+REPORT ACTIONS
+
+Keep BOTH:
+
+Report this conversation
+Report this customer
+
+Do not merge them.
+
+Confirm their functional difference in the final report:
+
+Report this conversation:
+- content/message evidence
+- illegal content
+- harassment/abuse
+- fraud/scam
+- unsafe content/conduct
+- other conversation-related concerns
+
+Report this customer:
+- account/user conduct
+- customer-specific behaviour
+- profile/account moderation context
+
+Do not change reporting categories unless required by an actual bug.
+
+
+==================================================
+VALIDATION
+==================================================
+
+Run all relevant validation.
+
+SUBSCRIPTIONS:
+- RevenueCat lifecycle tests
+- Team subscription tests
+- plan-change/downgrade tests
+- API typecheck/tests
+- mobile Billing tests/typecheck
+
+REPORT STATUS:
+- reporting API tests
+- mobile Report Status tests
+- moderation outcome tests
+- appeal tests
+
+CONVERSATION IMAGES:
+- Admin moderation tests
+- API authorization/media tests
+- secure media-access tests
+- CSEA restriction tests
+
+Run admin/mobile/API full suites if shared code changes justify them.
+
+Request an independent final review focused on:
+
+- Apple/RevenueCat lifecycle correctness
+- no premature entitlement downgrade
+- report-state consistency
+- moderation privacy
+- secure image access
+- CSEA isolation
+
+
+==================================================
+WHEN COMPLETE
+==================================================
+
+Do NOT deploy.
+Do NOT push to GitHub.
+Do NOT create TestFlight build.
+
+Return one final structured report:
+
+
+SUBSCRIPTIONS
+
+1. Exact effective current product
+2. Exact pending/scheduled product, if any
+3. Whether Team 20 → Premium Monthly is deferred
+4. Whether keeping Team 20 access until renewal is correct
+5. Whether current Billing wording was misleading
+6. Exact subscription UI/server fix
+7. What happens automatically at renewal
+
+
+REPORT STATUS
+
+8. Exact reason resolved reports remained OPEN
+9. Which layer caused it:
+   - DB
+   - API mapping
+   - cache/query lifecycle
+   - UI
+10. Exact fix
+11. How/when Report Status now refreshes
+12. Appeal behaviour
+
+
+CONVERSATION REPORT IMAGES
+
+13. Why images were missing in Admin
+14. Whether image metadata already existed in API
+15. Exact implementation fix
+16. Which image types Admin can now see
+17. How secure access is enforced
+18. CSEA access behaviour
+19. Whether evidence survives later message/image deletion
+20. Functional distinction between:
+    Report this conversation
+    and
+    Report this customer
+
+
+RELEASE IMPACT
+
+21. Files changed
+22. Tests/typechecks
+23. Database migration required yes/no
+24. Backend production republish required yes/no
+25. Admin republish required yes/no
+26. Landing/web republish required yes/no
+27. New TestFlight build required yes/no
+28. Any environment-variable/configuration change required
+29. Any manual App Store/RevenueCat action required
+30. Whether all three areas are ready for the App Store release candidate after deployment/build

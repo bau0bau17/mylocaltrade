@@ -84,7 +84,7 @@ export default function SafetyAdviceScreen() {
           • In an emergency, call 999
         </Text>
         <Text style={styles.paragraph}>
-          Reports are reviewed using the information available to us. We may take safety action, act on an account or listing, or take no further action. Reports are private where possible, but do not include unnecessary personal information. This is not an emergency service; call 999 if there is immediate danger.
+           Reports are reviewed using the information available to us. We may take safety action, act on an account or listing, or take no further action. After a decision, you may appeal within 30 days through Report status. An appeal is a separate review and does not automatically reverse the decision; safety handling may continue independently of an appeal. Reports are private where possible, but do not include unnecessary personal information. This is not an emergency service; call 999 if there is immediate danger.
         </Text>
       </View>
     </ScrollView>

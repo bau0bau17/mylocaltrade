@@ -36,7 +36,7 @@ export default function ComplaintsScreen() {
           If the issue cannot be resolved directly, you can also report the trader to us so we can review whether their listing should remain on MyLocalTrade.
         </Text>
         <Text style={styles.paragraph}>
-          Use the in-app report form for suspected illegal content or other safety concerns. Reports are handled privately and may lead to no further action, safety measures, or action on an account or listing. After a decision, you can view the outcome and submit one challenge through Report status.
+            Use the in-app report form for suspected illegal content or other safety concerns. Reports are handled privately and may lead to no further action, safety measures, or action on an account or listing. After a decision, you can view the outcome and submit one appeal within 30 days through Report status. An appeal is a separate review and does not automatically reverse the decision; safety handling may continue independently of an appeal.
         </Text>
       </View>
 
@@ -61,7 +61,7 @@ export default function ComplaintsScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>4. Our response</Text>
         <Text style={styles.paragraph}>
-          We aim to acknowledge your complaint within 2 working days and to provide a substantive response within 30 days. If we need longer to investigate, we will let you know.
+           We aim to acknowledge your complaint within 2 working days and to provide a substantive response within 30 days. This complaint response timing is separate from the 30-day appeal period for a decided report. If we need longer to investigate, we will let you know.
         </Text>
         <Text style={styles.paragraph}>
           The reporting process is separate from an emergency response. If there is an immediate danger, contact emergency services.

@@ -41,6 +41,8 @@
 - [Deletion email release](deletion-email-release.md) — every terminal deletion path must free the email (users + trader_profiles mirror, `.invalid` placeholder), keep audits; reopen check scans ALL case-variants; TOCTOU guard in releasePriorEmail.
 - [Pull-to-refresh conventions](pull-to-refresh-conventions.md) — cover empty states; scope refetch fns; never drive RefreshControl from isRefetching (focus refetch holds the iOS inset open = blank top gap).
 - [Legal versioning & re-acceptance](legal-versioning-reacceptance.md) — versions live server-side; re-acceptance is trader-only (users table has no version fields); legal copy must stay stage-accurate (contact hidden pre-hire, RCS trader-only).
+- [Moderation appeal deadline](moderation-appeal-deadline.md) — appeal eligibility is 30 days from the decision, separate from the complaints response target.
+- [Public policy language](public-policy-language.md) — legal/help copy is neutral and cross-surface aligned; public pages never expose internal workflow terminology.
 - [Trader phone OTP — Twilio Verify](trader-phone-otp-twilio.md) — SMS via Twilio Verify (email fallback); phoneOtpHash=null ⇒ Twilio owns code; backend-only (mobile fetch, keep response shape); per-number rate limit lives in the handler on canonical E.164, not middleware.
 - [Customer phone verification gate](customer-phone-gate.md) — first-contact 403 PHONE_VERIFICATION_REQUIRED gate; Twilio helpers must all be kind-aware; new send-otp paths need explicit IP limiter entry.
 - [Document expiry admin surfaces](document-expiry-surfaces.md) — "superseded by approved replacement" filter must hit ALL expiring-doc queries; expiry is date-based, edits reconcile trader state immediately.
@@ -77,6 +79,7 @@
 - [Account deletion storage cleanup](account-deletion-storage-gap.md) — gap FIXED: durable account_cleanup_jobs outbox + hourly sweep w/ orphan backfill; namespace-contained deletes; no false DONE on listing failure.
 - [RevenueCat canonical identity](revenuecat-canonical-identity.md) — rc_<32hex> server ids, lazy backfill IS the migration; numeric alias gated on existing subscription row; webhook fail-closed 2xx acks; prod schema push BEFORE build.
 - [RevenueCat product lookup](revenuecat-product-lookup.md) — active-entitlement v2 responses name only an entitlement; resolve the access-granting subscription’s product resource before comparing Store product IDs.
+- [RevenueCat product-change authority](revenuecat-product-change-authority.md) — PRODUCT_CHANGE is not expiry authority; retain current access/seats unless an effective provider reconciliation confirms the new product.
 - [Pending-deletion auth contract](account-deletion-pending-403.md) — cancellable deletion = 403 ACCOUNT_DELETION_PENDING (not 401/forceLogout); status/cancel routes stay reachable; cancel is winner-only CAS (never resurrect terminal).
 - [Campaign retention lifecycle](campaign-retention-lifecycle.md) — delete = never-queued drafts only (TEST_SENT blocks it); terminal → archive; anonymise keeps status/sentAt for quota; schedule in docs/data-retention.md.
 - [No test files under Expo app/](expo-route-tree-test-files.md) — Metro bundles app/**/*.test.* as routes → device crash; jest+typecheck stay green; guard test + clean-cache bundle are the tripwires.
@@ -89,3 +92,5 @@
 - [Patched dependency resolution](patched-dependency-resolution.md) — verify a patch through the consumer’s resolved package; stale pnpm virtual-store copies can survive normal installs.
 - [ESM decoder with CommonJS query-string](esm-decoder-query-string-interop.md) — decoder 0.5.0 needs the small query-string 7 import bridge; direct override crashes URL parsing.
 - [CSEA specialist moderation](csea-specialist-moderation.md) — safeguarding escalation is fail-closed, specialist-only, and separate from ordinary report decisions.
+- [CSEA escalation and appeal independence](csea-escalation-appeal-independence.md) — an open appeal never blocks specialist escalation; active CSEA retains restricted evidence.
+- [Conversation report evidence retention](conversation-report-evidence-retention.md) — active cases hold private media through the enforced appeal period; never copy sensitive evidence bytes.

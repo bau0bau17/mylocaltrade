@@ -238,7 +238,7 @@ export default function BillingScreen() {
 
         {periodEnd && (
           <Text style={s.meta}>
-            {cancelled ? 'Premium active until ' : 'Renews on '}
+            {cancelled ? 'Premium active until ' : 'Current access through '}
             {periodEnd.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
           </Text>
         )}

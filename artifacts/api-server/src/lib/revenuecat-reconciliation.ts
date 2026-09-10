@@ -156,6 +156,7 @@ export async function reconcileRevenueCatEntitlement(
   userId: number,
   log: Pick<Logger, "error" | "warn">,
   willRenew?: boolean,
+  options?: { allowInactiveDowngrade?: boolean },
 ): Promise<RevenueCatReconciliationResult> {
   if (!REVENUECAT_PROJECT_ID) return { status: "not_configured" };
 
@@ -224,7 +225,12 @@ export async function reconcileRevenueCatEntitlement(
       .from(subscriptionsTable)
       .where(eq(subscriptionsTable.userId, userId))
       .limit(1);
-    if (existing?.status === "active") {
+    // PRODUCT_CHANGE is not an expiry authority. Apple/RevenueCat can briefly
+    // expose an incomplete entitlement view while a future plan selection is
+    // being processed; callers handling that event must preserve the known
+    // current entitlement and Team seats until an explicit expiration/pause.
+    const allowInactiveDowngrade = options?.allowInactiveDowngrade ?? true;
+    if (existing?.status === "active" && allowInactiveDowngrade) {
       await downgradeExpiredSubscription(userId);
       await reconcileCompanySeats(profile.id, "revenuecat-sync:no_active_entitlement").catch((error) =>
         log.error({ err: error }, "seat reconciliation after sync downgrade failed"),

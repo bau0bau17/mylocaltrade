@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,6 +52,7 @@ function jobClaimedByOtherName(err: unknown): string | null | undefined {
 }
 import {
   useGetConversation,
+  useGetCustomerUploadUrl,
   useSendConversationMessage,
   useUpdateConversationTraderStatus,
   useCloseConversation,
@@ -80,6 +82,20 @@ import {
   type Quote,
   type Booking,
 } from "@workspace/api-client-react";
+
+const MAX_MESSAGE_PHOTOS = 5;
+const MAX_MESSAGE_PHOTO_BYTES = 8 * 1024 * 1024;
+const MESSAGE_IMAGE_MIMES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+
+function guessMessageImageMime(uri: string, fallback?: string | null): string {
+  if (fallback && MESSAGE_IMAGE_MIMES.includes(fallback)) return fallback;
+  const ext = uri.split("?")[0].split(".").pop()?.toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "heic") return "image/heic";
+  if (ext === "heif") return "image/heif";
+  return "image/jpeg";
+}
 import {
   addBookingToCalendar,
   hasPromptedForBooking,
@@ -270,6 +286,7 @@ export default function ConversationThreadScreen() {
       },
     },
   });
+  const { mutateAsync: getUploadUrl } = useGetCustomerUploadUrl();
 
   const updateStatusMutation = useUpdateConversationTraderStatus({
     mutation: {
@@ -378,6 +395,10 @@ export default function ConversationThreadScreen() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [photoViewer, setPhotoViewer] = useState<number | null>(null);
+  const [messageAttachments, setMessageAttachments] = useState<
+    { uri: string; objectPath: string }[]
+  >([]);
+  const [uploadingMessagePhoto, setUploadingMessagePhoto] = useState(false);
   // Full-screen viewer for the other party's profile photo in the header.
   const [profilePhotoOpen, setProfilePhotoOpen] = useState(false);
   const [quoteOpen, setQuoteOpen] = useState(false);
@@ -643,9 +664,59 @@ export default function ConversationThreadScreen() {
   );
   const violationText = violation ? contactViolationMessage(violation) : null;
 
+  const addMessagePhoto = async () => {
+    if (uploadingMessagePhoto || messageAttachments.length >= MAX_MESSAGE_PHOTOS) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Please allow photo library access to attach photos.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+      allowsEditing: false,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const mimeType = guessMessageImageMime(asset.uri, asset.mimeType ?? null);
+    if (!MESSAGE_IMAGE_MIMES.includes(mimeType)) {
+      Alert.alert("Unsupported", "Please choose a JPEG, PNG, WEBP or HEIC image.");
+      return;
+    }
+    if ((asset.fileSize ?? 0) > MAX_MESSAGE_PHOTO_BYTES) {
+      Alert.alert("File too large", "Each image must be 8 MB or smaller.");
+      return;
+    }
+    setUploadingMessagePhoto(true);
+    try {
+      const upload = await getUploadUrl({
+        data: {
+          filename: asset.fileName || `conversation-photo-${Date.now()}.jpg`,
+          mimeType,
+          sizeBytes: asset.fileSize || 1,
+        },
+      });
+      const localFile = await fetch(asset.uri);
+      const put = await fetch(upload.uploadURL, {
+        method: "PUT",
+        headers: { "Content-Type": mimeType },
+        body: await localFile.blob(),
+      });
+      if (!put.ok) throw new Error("Upload to storage failed");
+      setMessageAttachments((current) => [
+        ...current,
+        { uri: asset.uri, objectPath: upload.objectPath },
+      ]);
+    } catch (error) {
+      Alert.alert("Upload failed", error instanceof Error ? error.message : "Could not upload image.");
+    } finally {
+      setUploadingMessagePhoto(false);
+    }
+  };
+
   const onSend = () => {
     const body = text.trim();
-    if (!body) return;
+    if (!body && messageAttachments.length === 0) return;
     if (closed) {
       Alert.alert("Conversation closed", "This conversation can no longer accept messages.");
       return;
@@ -655,9 +726,18 @@ export default function ConversationThreadScreen() {
       return;
     }
     sendMutation.mutate(
-      { id: conversationId, data: { body } },
       {
-        onSuccess: () => setText(""),
+        id: conversationId,
+        data: {
+          body,
+          attachmentUrls: messageAttachments.map((attachment) => attachment.objectPath),
+        },
+      },
+      {
+        onSuccess: () => {
+          setText("");
+          setMessageAttachments([]);
+        },
         onError: (err: unknown) => {
           if (handleClaimedByOther(err)) return;
           const msg =
@@ -1401,7 +1481,23 @@ export default function ConversationThreadScreen() {
                 onLongPress={() => onReportMessage(item.id)}
                 style={[styles.bubble, mine ? styles.bubbleMineBg : styles.bubbleTheirsBg]}
               >
-                <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{displayBody}</Text>
+                {displayBody ? (
+                  <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{displayBody}</Text>
+                ) : null}
+                {item.attachments?.length ? (
+                  <View style={styles.messagePhotoGrid}>
+                    {item.attachments.map((uri: string, index: number) => (
+                      <Pressable
+                        key={`${uri}-${index}`}
+                        onPress={() => void Linking.openURL(uri)}
+                        accessibilityRole="imagebutton"
+                        accessibilityLabel={`Open message photo ${index + 1}`}
+                      >
+                        <Image source={{ uri }} style={styles.messagePhotoThumb} resizeMode="cover" />
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
                 <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
                   {fmtTime(item.createdAt)}
                 </Text>
@@ -1490,7 +1586,49 @@ export default function ConversationThreadScreen() {
               <Text style={styles.violationText}>{violationText}</Text>
             </View>
           ) : null}
+          {messageAttachments.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.messageAttachmentDraftRow}
+            >
+              {messageAttachments.map((attachment, index) => (
+                <View key={attachment.objectPath} style={styles.messageAttachmentDraft}>
+                  <Image source={{ uri: attachment.uri }} style={styles.messageAttachmentDraftImage} />
+                  <Pressable
+                    style={styles.messageAttachmentRemove}
+                    onPress={() =>
+                      setMessageAttachments((current) =>
+                        current.filter((_, attachmentIndex) => attachmentIndex !== index),
+                      )
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove attached image ${index + 1}`}
+                  >
+                    <Feather name="x" size={14} color={Colors.light.white} />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
           <View style={styles.composerRow}>
+            <Pressable
+              style={[
+                styles.attachPhotoBtn,
+                (uploadingMessagePhoto || messageAttachments.length >= MAX_MESSAGE_PHOTOS) &&
+                  styles.sendBtnDisabled,
+              ]}
+              onPress={() => void addMessagePhoto()}
+              disabled={uploadingMessagePhoto || messageAttachments.length >= MAX_MESSAGE_PHOTOS}
+              accessibilityRole="button"
+              accessibilityLabel="Attach a photo"
+            >
+              {uploadingMessagePhoto ? (
+                <ActivityIndicator size="small" color={Colors.light.primary} />
+              ) : (
+                <Feather name="image" size={19} color={Colors.light.primary} />
+              )}
+            </Pressable>
             <TextInput
               style={[styles.input, violationText ? styles.inputBlocked : null]}
               value={text}
@@ -1503,9 +1641,18 @@ export default function ConversationThreadScreen() {
             <Pressable
               style={[
                 styles.sendBtn,
-                (!text.trim() || sendMutation.isPending || !!violation) && styles.sendBtnDisabled,
+                ((!text.trim() && messageAttachments.length === 0) ||
+                  sendMutation.isPending ||
+                  uploadingMessagePhoto ||
+                  !!violation) &&
+                  styles.sendBtnDisabled,
               ]}
-              disabled={!text.trim() || sendMutation.isPending || !!violation}
+              disabled={
+                (!text.trim() && messageAttachments.length === 0) ||
+                sendMutation.isPending ||
+                uploadingMessagePhoto ||
+                !!violation
+              }
               onPress={onSend}
             >
               {sendMutation.isPending ? (
@@ -2981,6 +3128,52 @@ const styles = StyleSheet.create({
     borderColor: Colors.light.border,
     color: Colors.light.text,
     fontSize: 14,
+  },
+  attachPhotoBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    backgroundColor: Colors.light.card,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  messageAttachmentDraftRow: {
+    gap: 8,
+    paddingBottom: 8,
+  },
+  messageAttachmentDraft: {
+    width: 52,
+    height: 52,
+    position: "relative",
+  },
+  messageAttachmentDraftImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+  },
+  messageAttachmentRemove: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.light.error,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  messagePhotoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 6,
+  },
+  messagePhotoThumb: {
+    width: 100,
+    height: 100,
+    borderRadius: 10,
   },
   sendBtn: {
     width: 44,

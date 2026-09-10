@@ -769,8 +769,14 @@ router.post("/webhooks/revenuecat", async (req, res) => {
     const grant =
       type === "INITIAL_PURCHASE" ||
       type === "RENEWAL" ||
-      type === "PRODUCT_CHANGE" ||
       type === "UNCANCELLATION";
+    // A product-change notification can represent an Apple plan change that is
+    // scheduled for the next renewal. The webhook payload alone does not
+    // distinguish that future selection from an immediately effective change,
+    // so it must never directly replace the current access-granting product or
+    // reconcile Team seats. We instead re-read RevenueCat's effective active
+    // entitlement after the ledger transaction below.
+    const productChange = type === "PRODUCT_CHANGE";
     const scheduleCancel = type === "CANCELLATION";
     const revoke = type === "EXPIRATION" || type === "SUBSCRIPTION_PAUSED";
     // Payment failed but access continues (Apple grace/retry period). We only
@@ -779,7 +785,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
     const billingIssue = type === "BILLING_ISSUE";
 
     // TEST pings, TRANSFER, etc. — nothing to enforce.
-    if (!grant && !scheduleCancel && !revoke && !billingIssue) {
+    if (!grant && !productChange && !scheduleCancel && !revoke && !billingIssue) {
       res.json({ success: true, ignored: "type" });
       return;
     }
@@ -875,8 +881,9 @@ router.post("/webhooks/revenuecat", async (req, res) => {
     let outOfOrder = false;
     let billingIssueRecorded = false;
 
-    // Store product that triggered this event — persisted on grants so the
-    // team tier can be derived server-side (PRODUCT_CHANGE updates it too).
+    // Store product that triggered this event. It is persisted only after an
+    // authoritative active-entitlement reconciliation; a PRODUCT_CHANGE event
+    // may name a product scheduled for a future Apple renewal.
     const eventProductId =
       typeof event.product_id === "string" && event.product_id.length > 0
         ? event.product_id
@@ -1049,7 +1056,7 @@ router.post("/webhooks/revenuecat", async (req, res) => {
       return;
     }
 
-    // Seat allowance may have changed (grant/product change/expiry) — bring
+    // Seat allowance may have changed (grant/expiry) — bring
     // seated employees in line. Post-commit and best-effort: a reconciliation
     // hiccup must not fail the webhook ack (the next lifecycle event or owner
     // action reconciles again).
@@ -1065,6 +1072,22 @@ router.post("/webhooks/revenuecat", async (req, res) => {
         }
       } catch (err) {
         req.log.error({ err }, "seat reconciliation after webhook failed");
+      }
+    }
+
+    if (productChange && !outOfOrder) {
+      // Do not use event.product_id as the effective product. RevenueCat's
+      // active access-granting subscription is the authority here, which keeps
+      // Team seats intact for a deferred downgrade and still applies an
+      // immediately-effective Apple upgrade/crossgrade.
+      const reconciliation = await reconcileRevenueCatEntitlement(userId, req.log, undefined, {
+        allowInactiveDowngrade: false,
+      });
+      if (reconciliation.status !== "synced") {
+        req.log.warn(
+          { userId, reconciliationStatus: reconciliation.status },
+          "RevenueCat product change received but effective entitlement could not be reconciled",
+        );
       }
     }
 
@@ -1089,7 +1112,12 @@ router.post("/webhooks/revenuecat", async (req, res) => {
       }
     }
 
-    res.json({ success: true, type, applied: applied || billingIssueRecorded });
+    res.json({
+      success: true,
+      type,
+      applied: applied || billingIssueRecorded,
+      reconciled: productChange,
+    });
   } catch (error) {
     req.log.error({ err: error }, "RevenueCat webhook failed");
     res.status(500).json({ success: false, message: "Webhook processing failed" });

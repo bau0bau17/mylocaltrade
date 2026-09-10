@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, varchar, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, varchar, timestamp, boolean, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -16,7 +16,10 @@ export const messagesTable = pgTable(
     readAt: timestamp("read_at"),
     editedAt: timestamp("edited_at"),
     deletedAt: timestamp("deleted_at"),
+    // New messages may carry up to five private image paths. attachmentUrl is
+    // retained for legacy rows and is never returned to clients directly.
     attachmentUrl: varchar("attachment_url", { length: 500 }),
+    attachmentUrls: jsonb("attachment_urls").$type<string[]>().notNull().default([]),
     aiSafetyFlag: varchar("ai_safety_flag", { length: 32 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },

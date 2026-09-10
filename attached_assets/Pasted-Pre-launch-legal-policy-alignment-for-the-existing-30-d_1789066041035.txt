@@ -1,0 +1,143 @@
+Pre-launch legal/policy alignment for the existing 30-day moderation appeal window.
+
+IMPORTANT:
+Audit first.
+Do NOT change the existing 30-day appeal logic unless the current product/legal wording proves a direct conflict that cannot be solved by disclosure.
+Do NOT change evidence retention, CSEA logic, moderation outcomes, complaints response timing, or account deletion behavior.
+Do NOT deploy.
+Do NOT push to GitHub — I will use Replit Git Sync myself.
+
+CURRENT IMPLEMENTATION
+
+The moderation/reporting system currently enforces a 30-day period in which an eligible user may appeal a resolved moderation decision.
+
+The evidence-retention system also relies on this 30-day appeal window.
+
+However, current user-facing wording does not explicitly disclose the 30-day appeal deadline.
+
+IMPORTANT DISTINCTION
+
+The existing Complaints wording already mentions 30 days for a substantive complaint response.
+
+That is NOT the same thing as the moderation appeal deadline.
+
+Do not merge or confuse these two different 30-day concepts.
+
+FIRST — AUDIT CURRENT COPY
+
+Inspect:
+
+- Terms
+- Complaints
+- Report Status
+- Safety / reporting guidance
+- moderation outcome UI
+- appeal UI
+- any public legal/help equivalents
+
+Determine whether the moderation appeal deadline is already disclosed anywhere.
+
+If it already is complete and consistent, do not duplicate wording.
+
+
+IF THE GAP EXISTS
+
+Add concise, accurate wording explaining:
+
+- an eligible moderation decision can be appealed;
+- the appeal must be submitted within 30 days of the moderation decision;
+- after that period, the appeal option may no longer be available;
+- submitting an appeal does not automatically reverse the original decision;
+- MyLocalTrade reviews appeals separately from the original moderation decision;
+- safety escalation, including restricted specialist handling where applicable, may continue independently of an ordinary appeal.
+
+Do NOT publicly mention CSEA operational details, specialist email allowlists, internal queues, or restricted evidence-handling implementation.
+
+Use neutral user-facing wording.
+
+REPORT STATUS UX
+
+Where an eligible resolved report is displayed:
+
+- make the appeal deadline understandable;
+- if practical using existing decision timestamps, show something like:
+  “Appeal available until [date]”
+  rather than requiring the user to calculate 30 days themselves.
+
+After the appeal window expires:
+- do not show an active Appeal action;
+- use clear wording such as “Appeal period ended” if useful.
+
+Do not expose internal moderator notes.
+
+
+TERMS / COMPLAINTS ALIGNMENT
+
+Keep these concepts separate:
+
+1. Moderation appeal deadline:
+   30 days from the relevant moderation decision.
+
+2. General complaints procedure:
+   existing acknowledgement / substantive-response timelines.
+
+Do not accidentally state that all complaints must be made within 30 days unless that is already the intended policy.
+
+Update only the surfaces required for consistency.
+
+
+PUBLIC / MOBILE CONSISTENCY
+
+If the relevant Terms/Complaints/legal pages have both:
+- native mobile representation
+- prebuilt public HTML/JS representation
+
+keep them synchronized.
+
+Do not rewrite unrelated:
+- Privacy
+- Cookie Policy
+- Apple subscription/refund wording
+- Twilio/RCS wording
+- children-access wording
+- job-payment wording.
+
+
+TESTS
+
+Add/update focused tests for:
+
+- eligible resolved report within 30 days → Appeal available;
+- deadline displayed correctly if implemented;
+- after 30 days → Appeal unavailable;
+- existing appeal remains visible appropriately;
+- general complaints 30-day response wording remains distinct;
+- no private moderation/CSEA details leak into user-facing copy.
+
+Run:
+- mobile typecheck/tests
+- relevant API tests if deadline data/API changes
+- legal-copy synchronization checks
+- independent final review if available
+
+
+WHEN COMPLETE
+
+Do NOT deploy.
+Do NOT push to GitHub.
+
+Report:
+
+1. What wording already existed
+2. Exact mismatch found
+3. Exact wording added
+4. Surfaces changed
+5. Whether “Appeal available until [date]” is shown
+6. Confirmation that complaint-response timing and appeal deadline remain separate
+7. Files changed
+8. Tests/typechecks
+9. Backend republish required yes/no
+10. Landing/web republish required yes/no
+11. Admin republish required yes/no
+12. New TestFlight build required yes/no
+13. Whether moderation/reporting legal wording is now release-ready

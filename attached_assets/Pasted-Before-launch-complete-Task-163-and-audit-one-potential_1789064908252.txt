@@ -1,0 +1,96 @@
+Before launch, complete Task #163 and audit one potentially unsafe CSEA rule.
+
+IMPORTANT:
+Do not deploy.
+Do not push to GitHub — I will use Replit Git Sync myself.
+Do not change unrelated moderation, subscription, RevenueCat, Twilio, Apple or account flows.
+
+FIRST — VERIFY THIS BEHAVIOUR
+
+The last implementation report states:
+
+“CSEA escalation is blocked while an appeal is open.”
+
+Audit the actual code and tests.
+
+If this literally means that a suspected CSEA case cannot be escalated to the restricted specialist workflow while an appeal exists, this must be corrected.
+
+An appeal must NOT delay or prevent safety escalation of suspected CSEA content.
+
+Preferred rule:
+
+- CSEA specialist escalation is independent from the ordinary appeal lifecycle.
+- An open appeal may continue, but it must not block escalation.
+- Once escalated, ordinary admins must continue to lose access to restricted evidence.
+- Specialist-only authorization remains enforced.
+- No appeal route may expose restricted CSEA evidence to ordinary admins.
+- Audit history must preserve both the moderation/appeal lifecycle and specialist escalation lifecycle.
+
+Do not treat CSEA escalation as a legal finding.
+Do not expose CSEA as a public report category.
+
+
+TASK #163 — STORAGE-BACKED EVIDENCE REGRESSION
+
+Add end-to-end/storage-backed regression coverage for:
+
+1. chat image upload finalization into immutable private storage;
+2. image-only chat message;
+3. multiple attachments;
+4. report-time evidence manifest creation;
+5. signed moderator access to protected media;
+6. expired signed URL does not make evidence public;
+7. upload sweeper does not delete media protected by an active moderation report;
+8. account cleanup enters PARTIAL/retryable state rather than destroying protected evidence;
+9. 30-day appeal retention behaviour;
+10. permitted appeal reactivates/extends the evidence hold according to the current policy;
+11. evidence becomes eligible for normal cleanup only after all moderation/appeal retention requirements are satisfied;
+12. CSEA-linked evidence remains specialist-only;
+13. open appeal does not prevent CSEA specialist escalation;
+14. ordinary admin cannot use another endpoint to access CSEA media;
+15. missing/deleted object is handled safely and does not leak storage information.
+
+Also verify that the 30-day appeal period is consistent with the current user-facing Terms/Complaints/Online Safety wording.
+
+If the product currently promises a different appeal period or no period is disclosed, report the mismatch before changing legal copy.
+
+
+VALIDATION
+
+Run:
+- storage-backed moderation tests
+- CSEA authorization tests
+- cleanup/sweeper tests
+- appeal lifecycle tests
+- API typecheck
+- Admin typecheck
+- relevant API/Admin full suites
+
+Request an independent final security review focused on:
+- evidence retention
+- cleanup safety
+- CSEA isolation
+- appeal vs escalation independence
+- signed media access
+
+WHEN COMPLETE
+
+Do not deploy.
+Do not push to GitHub.
+
+Report:
+
+1. What “CSEA escalation is blocked while an appeal is open” actually meant in code
+2. Whether it was changed
+3. Final CSEA + appeal lifecycle
+4. Evidence retention lifecycle
+5. Exact behaviour after the 30-day appeal window
+6. Whether cleanup can ever destroy evidence while a valid moderation/appeal hold exists
+7. Storage-backed test results
+8. Full test/typecheck results
+9. Database migration required yes/no
+10. Production schema update required yes/no
+11. Backend republish required yes/no
+12. Admin republish required yes/no
+13. New TestFlight build required yes/no
+14. Whether conversation reporting/evidence is now release-ready

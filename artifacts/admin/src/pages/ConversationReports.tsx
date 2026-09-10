@@ -68,6 +68,7 @@ interface AdminConvMessage {
   body: string;
   systemMessage: boolean;
   createdAt: string;
+  attachments: AdminConvAttachment[];
 }
 
 interface AdminConvQuote {
@@ -79,6 +80,11 @@ interface AdminConvQuote {
   validUntil: string | null;
   status: string;
   revisionOfQuoteId: number | null;
+  createdAt: string;
+}
+
+interface AdminConvAttachment {
+  url: string;
   createdAt: string;
 }
 
@@ -124,6 +130,15 @@ interface AdminConvResponse {
   };
   messagesAccessible: boolean;
   messages: AdminConvMessage[];
+  enquiryAttachments?: AdminConvAttachment[];
+  enquiry?: {
+    id: number;
+    message: string;
+    serviceRequired: string;
+    status: string;
+    createdAt: string;
+    attachments: AdminConvAttachment[];
+  } | null;
   quotes?: AdminConvQuote[];
   booking?: AdminConvBooking | null;
   contactBypass: {
@@ -353,6 +368,7 @@ function ReportCard({
 }
 
 function ConversationMessages({ conversationId }: { conversationId: number }) {
+  const [unavailableImages, setUnavailableImages] = useState<Record<string, boolean>>({});
   const { data, isLoading, error } = useQuery({
     queryKey: ["admin", "conversation", conversationId],
     queryFn: () => api<AdminConvResponse>(`/api/admin/conversations/${conversationId}`),
@@ -464,6 +480,44 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
       ) : null}
     </div>
   ) : null;
+  const enquiry = data.enquiry ?? null;
+  const enquiryAttachments = enquiry?.attachments ?? data.enquiryAttachments ?? [];
+  const enquiryEvidencePanel = enquiryAttachments.length > 0 ? (
+    <div
+      className="border rounded-md bg-muted/30 p-3 space-y-2"
+      data-testid={`enquiry-image-evidence-${conversationId}`}
+    >
+      <div className="flex items-center gap-2 font-semibold text-sm">
+        <Eye className="w-4 h-4 text-muted-foreground" />
+        Enquiry image evidence ({enquiryAttachments.length})
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Original customer enquiry attachments. Access links expire shortly.
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {enquiryAttachments.map((attachment, index) => (
+          <div key={attachment.url} className="space-y-1">
+            {unavailableImages[attachment.url] ? (
+              <div className="h-28 rounded border border-dashed flex items-center justify-center px-2 text-center text-xs text-muted-foreground">
+                Image unavailable
+              </div>
+            ) : (
+              <a href={attachment.url} target="_blank" rel="noopener noreferrer" aria-label={`Open enquiry image ${index + 1} at full size`}>
+                <img
+                  src={attachment.url}
+                  alt={`Enquiry image evidence ${index + 1}`}
+                  loading="lazy"
+                  onError={() => setUnavailableImages((current) => ({ ...current, [attachment.url]: true }))}
+                  className="h-28 w-full rounded border object-cover hover:opacity-80"
+                />
+              </a>
+            )}
+            <p className="text-xs text-muted-foreground">{formatDateTime(attachment.createdAt)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : null;
   if (!data.messagesAccessible) {
     return (
       <div className="space-y-3">
@@ -486,6 +540,16 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
       {assignedPanel}
       {bookingPanel}
       {bypassPanel}
+      {enquiry ? (
+        <div className="border rounded-md bg-muted/30 p-3 space-y-1" data-testid={`enquiry-context-${conversationId}`}>
+          <div className="font-semibold text-sm">Original enquiry</div>
+          <p className="text-sm whitespace-pre-wrap break-words">{enquiry.message}</p>
+          <p className="text-xs text-muted-foreground">
+            {enquiry.serviceRequired} · {enquiry.status} · {formatDateTime(enquiry.createdAt)}
+          </p>
+        </div>
+      ) : null}
+      {enquiryEvidencePanel}
       {quotes.length > 0 ? (
         <div
           className="border rounded-md bg-muted/30 p-3 space-y-2"
@@ -537,7 +601,36 @@ function ConversationMessages({ conversationId }: { conversationId: number }) {
               </span>
               <span className="text-xs text-muted-foreground">{formatDateTime(m.createdAt)}</span>
             </div>
-            <p className={m.systemMessage ? "italic text-muted-foreground" : ""}>{m.body}</p>
+            {m.body ? <p className={m.systemMessage ? "italic text-muted-foreground" : ""}>{m.body}</p> : null}
+            {m.attachments?.length ? (
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {m.attachments.map((attachment, index) => (
+                  <div key={attachment.url} className="space-y-1">
+                    {unavailableImages[attachment.url] ? (
+                      <div className="h-28 rounded border border-dashed flex items-center justify-center px-2 text-center text-xs text-muted-foreground">
+                        Image unavailable
+                      </div>
+                    ) : (
+                      <a
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Open message ${m.id} image ${index + 1} at full size`}
+                        data-testid={`message-image-${m.id}-${index}`}
+                      >
+                        <img
+                          src={attachment.url}
+                          alt={`Message image evidence ${index + 1}`}
+                          loading="lazy"
+                          onError={() => setUnavailableImages((current) => ({ ...current, [attachment.url]: true }))}
+                          className="h-28 w-full rounded border object-cover hover:opacity-80"
+                        />
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         ))
       )}

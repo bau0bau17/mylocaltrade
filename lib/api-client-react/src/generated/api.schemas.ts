@@ -997,6 +997,8 @@ export interface ConversationMessage {
   editedAt?: string | null;
   deletedAt?: string | null;
   createdAt: string;
+  /** Short-lived signed URLs for this message's private image attachments. */
+  attachments: string[];
 }
 
 export type QuotePriceType = typeof QuotePriceType[keyof typeof QuotePriceType];
@@ -1244,13 +1246,21 @@ export interface CompareOffersResponse {
   totalGroups: number;
 }
 
-export interface SendMessageRequest {
+export type SendMessageRequest = (unknown & {
   /**
      * @minLength 1
      * @maxLength 4000
      */
-  body: string;
-}
+  body?: string;
+  /**
+     * Private object paths previously issued to the authenticated sender.
+     * @minItems 1
+     * @maxItems 5
+     * @items.minLength 1
+     * @items.maxLength 512
+     */
+  attachmentUrls?: string[];
+});
 
 export type UpdateTraderStatusRequestTraderStatus = typeof UpdateTraderStatusRequestTraderStatus[keyof typeof UpdateTraderStatusRequestTraderStatus];
 

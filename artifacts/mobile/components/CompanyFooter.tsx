@@ -24,15 +24,18 @@ export function CompanyFooter() {
         <Pressable onPress={() => router.push('/refund')} style={styles.linkItem} hitSlop={6}>
           <Text style={styles.linkText}>Billing</Text>
         </Pressable>
+        <Pressable onPress={() => router.push('/legal-support')} style={styles.linkItem} hitSlop={6}>
+          <Text style={styles.linkText}>Legal & Support</Text>
+        </Pressable>
       </View>
 
       <View style={styles.companyBlock}>
         <View style={styles.companyNameRow}>
           <Feather name="briefcase" size={11} color={Colors.light.textMuted} />
-          <Text style={styles.companyName}>MyLocalTrade</Text>
+          <Text style={styles.companyName}>Service Provider LTD</Text>
         </View>
         <Text style={styles.companyDetail}>Registered in England and Wales</Text>
-        <Text style={styles.companyDetail}>Company details available on request</Text>
+        <Text style={styles.companyDetail}>Company No. 15830141</Text>
       </View>
 
       <Text style={styles.copyright}>

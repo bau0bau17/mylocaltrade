@@ -14,6 +14,7 @@ export * from "./reviews";
 export * from "./conversations";
 export * from "./messages";
 export * from "./conversation-reports";
+export * from "./conversation-report-evidence";
 export * from "./user-reports";
 export * from "./report-appeals";
 export * from "./push-tokens";

@@ -34,7 +34,7 @@ import {
   bookingsTable,
   CONVERSATION_REPORT_CATEGORIES,
 } from "@workspace/db/schema";
-import { and, eq, desc, sql, inArray, isNull } from "drizzle-orm";
+import { and, eq, desc, sql, inArray, isNull, asc } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 // Second reference to users for joining the TRADER user on a conversation
@@ -61,13 +61,28 @@ import { serializeQuote } from "../lib/quotes";
 import { serializeBooking } from "../lib/bookings";
 import { customerPhoneVerified, sendPhoneVerificationRequired } from "../lib/customer-phone-gate";
 import { logAudit } from "../lib/trader-status";
+import { captureConversationReportEvidence } from "../lib/conversation-report-evidence";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
 
-const SendMessageBody = z.object({
-  body: z.string().trim().min(1).max(4000),
-});
+const MAX_MESSAGE_ATTACHMENTS = 5;
+const MAX_MESSAGE_IMAGE_BYTES = 8 * 1024 * 1024;
+const MESSAGE_IMAGE_MIMES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+const SendMessageBody = z
+  .object({
+    body: z.string().trim().max(4000).default(""),
+    attachmentUrls: z.array(z.string().min(1).max(512)).max(MAX_MESSAGE_ATTACHMENTS).default([]),
+  })
+  .refine((value) => value.body.length > 0 || value.attachmentUrls.length > 0, {
+    message: "Enter a message or attach at least one image",
+  });
 
 const ReportBody = z.object({
   reason: z.string().trim().min(5).max(2000),
@@ -203,7 +218,7 @@ function traderViewerCanAct(c: ConversationRow, viewerUserId: number): boolean {
   );
 }
 
-function serializeMessage(m: MessageRow) {
+function serializeMessage(m: MessageRow, attachments: string[] = []) {
   return {
     id: m.id,
     conversationId: m.conversationId,
@@ -215,7 +230,51 @@ function serializeMessage(m: MessageRow) {
     editedAt: m.editedAt?.toISOString() ?? null,
     deletedAt: m.deletedAt?.toISOString() ?? null,
     createdAt: m.createdAt.toISOString(),
+    attachments,
   };
+}
+
+class InvalidMessageAttachmentError extends Error {}
+
+async function validateMessageAttachmentPaths(
+  rawPaths: string[],
+  userId: number,
+): Promise<string[]> {
+  const paths = Array.from(new Set(rawPaths));
+  try {
+    return await Promise.all(
+      paths.map((path) =>
+        storage.verifyCustomerUploadObject(path, userId, {
+          maxBytes: MAX_MESSAGE_IMAGE_BYTES,
+          allowedMimes: MESSAGE_IMAGE_MIMES,
+          label: "message image",
+        }),
+      ),
+    );
+  } catch (error) {
+    throw new InvalidMessageAttachmentError(
+      error instanceof Error ? error.message : "An attachment could not be verified",
+    );
+  }
+}
+
+async function signMessageAttachments(
+  paths: string[],
+  conversationId: number,
+  logger: { warn: (obj: unknown, message: string) => void },
+): Promise<string[]> {
+  const signed = await Promise.all(
+    Array.from(new Set(paths)).map(async (path) => {
+      try {
+        await storage.getObjectEntityFile(path);
+        return await storage.getObjectEntityReadURL(path, 900);
+      } catch (error) {
+        logger.warn({ err: error, conversationId }, "Failed to sign conversation message attachment");
+        return null;
+      }
+    }),
+  );
+  return signed.filter((url): url is string => url != null);
 }
 
 async function getActorContext(userId: number, userRole: string) {
@@ -384,7 +443,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
       .select()
       .from(messagesTable)
       .where(eq(messagesTable.conversationId, id))
-      .orderBy(messagesTable.createdAt);
+      .orderBy(asc(messagesTable.createdAt), asc(messagesTable.id));
 
     // Mark unread messages from the other side as read for the viewer.
     const otherRole = isCustomer ? "trader" : "customer";
@@ -536,6 +595,21 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
       }
     }
 
+    const serializedMessages = await Promise.all(
+      messages.map(async (message) =>
+        serializeMessage(
+          message,
+          await signMessageAttachments(
+            [message.attachmentUrl, ...(message.attachmentUrls ?? [])].filter(
+              (path): path is string => !!path,
+            ),
+            id,
+            req.log,
+          ),
+        ),
+      ),
+    );
+
     res.json({
       conversation: serializeConversation(row.conv, {
         customerName: row.customerName,
@@ -561,7 +635,7 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
           row.conv.assignedTraderUserId != null &&
           jobIsActive(row.conv),
       }),
-      messages: messages.map(serializeMessage),
+      messages: serializedMessages,
       enquiryAttachments,
       quotes: quoteRows.map((q) => serializeQuote(q)),
       contactDetails,
@@ -606,6 +680,7 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
       res.status(409).json({ error: "This conversation is closed" });
       return;
     }
+    const attachmentUrls = await validateMessageAttachmentPaths(body.attachmentUrls, userId);
 
     // Account-level suspension (admin moderation): suspended users cannot
     // send messages. Checked after participant authorization so outsiders
@@ -648,7 +723,11 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
     }
 
     const senderRole = isCustomer ? "customer" : "trader";
-    const preview = body.body.slice(0, 200);
+    const preview = body.body
+      ? body.body.slice(0, 200)
+      : attachmentUrls.length === 1
+        ? "[Photo]"
+        : `[${attachmentUrls.length} photos]`;
     const newStatus = isCustomer ? "AWAITING_TRADER_REPLY" : "AWAITING_CUSTOMER_REPLY";
 
     // Atomic: insert the message AND advance conversation counters/status
@@ -671,6 +750,7 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
           senderUserId: userId,
           senderRole,
           body: body.body,
+          attachmentUrls,
         })
         .returning();
       await tx
@@ -789,10 +869,25 @@ router.post("/conversations/:id/messages", authMiddleware, async (req, res) => {
       }
     })();
 
-    res.status(201).json(serializeMessage(created));
+    res.status(201).json(
+      serializeMessage(
+        created,
+        await signMessageAttachments(
+          [created.attachmentUrl, ...(created.attachmentUrls ?? [])].filter(
+            (path): path is string => !!path,
+          ),
+          id,
+          req.log,
+        ),
+      ),
+    );
   } catch (error: unknown) {
-    if (error instanceof z.ZodError) {
-      res.status(400).json({ error: "Invalid message", details: error.issues });
+    if (error instanceof z.ZodError || error instanceof InvalidMessageAttachmentError) {
+      res.status(400).json(
+        error instanceof InvalidMessageAttachmentError
+          ? { error: error.message }
+          : { error: "Invalid message", details: error.issues },
+      );
       return;
     }
     if (error instanceof SeatSuspendedError) {
@@ -1641,20 +1736,30 @@ router.post("/conversations/:id/report", authMiddleware, requireActiveSeat, asyn
       return;
     }
 
-    await db.insert(conversationReportsTable).values({
-      conversationId: id,
-      reportedByUserId: userId,
-      reportedByRole: isCustomer ? "customer" : "trader",
-      reason: body.reason,
-      category: body.category ?? "OTHER",
-      detail: body.reason,
-      status: "OPEN",
+    await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(conversationReportsTable)
+        .values({
+          conversationId: id,
+          reportedByUserId: userId,
+          reportedByRole: isCustomer ? "customer" : "trader",
+          reason: body.reason,
+          category: body.category ?? "OTHER",
+          detail: body.reason,
+          status: "OPEN",
+        })
+        .returning({ id: conversationReportsTable.id });
+      await captureConversationReportEvidence(tx, {
+        reportId: created.id,
+        conversationId: id,
+        enquiryId: conv.enquiryId,
+        customerId: conv.customerId,
+      });
+      await tx
+        .update(conversationsTable)
+        .set({ status: "REPORTED", updatedAt: new Date() })
+        .where(eq(conversationsTable.id, id));
     });
-
-    await db
-      .update(conversationsTable)
-      .set({ status: "REPORTED", updatedAt: new Date() })
-      .where(eq(conversationsTable.id, id));
 
     // Keep the existing conversation moderation audit trail, without exposing
     // reporter identity to the other participant.
@@ -1694,12 +1799,28 @@ router.post("/conversations/:id/messages/:messageId/report", authMiddleware, req
     const [message] = await db.select({ id: messagesTable.id }).from(messagesTable)
       .where(and(eq(messagesTable.id, messageId), eq(messagesTable.conversationId, conversationId))).limit(1);
     if (!message) { res.status(404).json({ error: "Message not found in this conversation" }); return; }
-    const [created] = await db.insert(conversationReportsTable).values({
-      conversationId, messageId, reportedByUserId: userId,
-      reportedByRole: isCustomer ? "customer" : "trader",
-      category: body.category ?? "OTHER", detail: body.reason, reason: body.reason, status: "OPEN",
-    }).returning({ id: conversationReportsTable.id });
-    await db.update(conversationsTable).set({ status: "REPORTED", updatedAt: new Date() }).where(eq(conversationsTable.id, conversationId));
+    const created = await db.transaction(async (tx) => {
+      const [createdReport] = await tx
+        .insert(conversationReportsTable)
+        .values({
+          conversationId, messageId, reportedByUserId: userId,
+          reportedByRole: isCustomer ? "customer" : "trader",
+          category: body.category ?? "OTHER", detail: body.reason, reason: body.reason, status: "OPEN",
+        })
+        .returning({ id: conversationReportsTable.id });
+      await captureConversationReportEvidence(tx, {
+        reportId: createdReport.id,
+        conversationId,
+        enquiryId: conv.enquiryId,
+        customerId: conv.customerId,
+        messageId,
+      });
+      await tx
+        .update(conversationsTable)
+        .set({ status: "REPORTED", updatedAt: new Date() })
+        .where(eq(conversationsTable.id, conversationId));
+      return createdReport;
+    });
     void logAudit({ userId: isCustomer ? conv.customerId : conv.traderUserId, action: "CONVERSATION_REPORT_CREATED", performedBy: userId, details: { reportId: created.id, conversationId, messageId, category: body.category ?? "OTHER" } });
     res.status(201).json({ ok: true, reportId: created.id });
   } catch (error: unknown) {

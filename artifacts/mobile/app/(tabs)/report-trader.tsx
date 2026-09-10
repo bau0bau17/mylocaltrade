@@ -74,7 +74,7 @@ export default function ReportTraderScreen() {
       <View style={styles.section}>
         <Text style={styles.heading}>What happens next</Text>
         <Text style={styles.paragraph}>
-          We review reports using the information available to us. Possible outcomes include no further action, safety measures, or action on an account or listing. We may not be able to share confidential details. You can view a safe outcome and challenge a decided report from Report status. Reports are not an emergency service.
+           We review reports using the information available to us. Possible outcomes include no further action, safety measures, or action on an account or listing. We may not be able to share confidential details. You can view an outcome and appeal a decided report within 30 days from Report status. An appeal is a separate review and does not automatically reverse the decision; safety handling may continue independently of an appeal. Reports are not an emergency service.
         </Text>
       </View>
     </ScrollView>

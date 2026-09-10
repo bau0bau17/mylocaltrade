@@ -1846,7 +1846,8 @@ export const GetConversationResponse = zod.object({
   "readAt": zod.date().nullish(),
   "editedAt": zod.date().nullish(),
   "deletedAt": zod.date().nullish(),
-  "createdAt": zod.date()
+  "createdAt": zod.date(),
+  "attachments": zod.array(zod.string()).describe('Short-lived signed URLs for this message\'s private image attachments.')
 })),
   "enquiryAttachments": zod.array(zod.string()).optional().describe('Short-lived signed GET URLs for the photos the customer attached to\nthe original enquiry. Empty when there were none. Both parties to the\nconversation are authorised to view these.\n'),
   "quotes": zod.array(zod.object({
@@ -1903,13 +1904,36 @@ export const SendConversationMessageParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
-export const sendConversationMessageBodyBodyMax = 4000;
+export const sendConversationMessageBodyOneBodyMax = 4000;
+
+export const sendConversationMessageBodyOneAttachmentUrlsItemMax = 512;
+
+export const sendConversationMessageBodyOneAttachmentUrlsMax = 5;
+
+export const sendConversationMessageBodyTwoBodyMax = 4000;
+
+export const sendConversationMessageBodyTwoAttachmentUrlsItemMax = 512;
+
+export const sendConversationMessageBodyTwoAttachmentUrlsMax = 5;
+
+export const sendConversationMessageBodyThreeBodyMax = 4000;
+
+export const sendConversationMessageBodyThreeAttachmentUrlsItemMax = 512;
+
+export const sendConversationMessageBodyThreeAttachmentUrlsMax = 5;
 
 
 
-export const SendConversationMessageBody = zod.object({
-  "body": zod.string().min(1).max(sendConversationMessageBodyBodyMax)
-})
+export const SendConversationMessageBody = zod.union([zod.object({
+  "body": zod.string().min(1).max(sendConversationMessageBodyOneBodyMax),
+  "attachmentUrls": zod.array(zod.string().min(1).max(sendConversationMessageBodyOneAttachmentUrlsItemMax)).min(1).max(sendConversationMessageBodyOneAttachmentUrlsMax).optional().describe('Private object paths previously issued to the authenticated sender.')
+}),zod.object({
+  "body": zod.string().min(1).max(sendConversationMessageBodyTwoBodyMax).optional(),
+  "attachmentUrls": zod.array(zod.string().min(1).max(sendConversationMessageBodyTwoAttachmentUrlsItemMax)).min(1).max(sendConversationMessageBodyTwoAttachmentUrlsMax).describe('Private object paths previously issued to the authenticated sender.')
+})]).and(zod.object({
+  "body": zod.string().min(1).max(sendConversationMessageBodyThreeBodyMax).optional(),
+  "attachmentUrls": zod.array(zod.string().min(1).max(sendConversationMessageBodyThreeAttachmentUrlsItemMax)).min(1).max(sendConversationMessageBodyThreeAttachmentUrlsMax).optional().describe('Private object paths previously issued to the authenticated sender.')
+}))
 
 export const SendConversationMessageResponse = zod.object({
   "id": zod.number().int(),
@@ -1921,7 +1945,8 @@ export const SendConversationMessageResponse = zod.object({
   "readAt": zod.date().nullish(),
   "editedAt": zod.date().nullish(),
   "deletedAt": zod.date().nullish(),
-  "createdAt": zod.date()
+  "createdAt": zod.date(),
+  "attachments": zod.array(zod.string()).describe('Short-lived signed URLs for this message\'s private image attachments.')
 })
 
 

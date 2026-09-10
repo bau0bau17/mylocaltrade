@@ -6,10 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface SendMessageRequest {
+export type SendMessageRequest = (unknown & {
   /**
      * @minLength 1
      * @maxLength 4000
      */
-  body: string;
-}
+  body?: string;
+  /**
+     * Private object paths previously issued to the authenticated sender.
+     * @minItems 1
+     * @maxItems 5
+     * @items.minLength 1
+     * @items.maxLength 512
+     */
+  attachmentUrls?: string[];
+});

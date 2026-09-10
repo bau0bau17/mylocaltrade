@@ -18,6 +18,10 @@ import { and, eq } from "drizzle-orm";
 import { authMiddleware } from "../lib/auth";
 import type { AuthenticatedRequest } from "../lib/types";
 import { logAudit } from "../lib/trader-status";
+import {
+  CONVERSATION_REPORT_APPEAL_WINDOW_MS,
+  reopenConversationReportEvidenceHold,
+} from "../lib/conversation-report-evidence";
 
 const router: IRouter = Router();
 
@@ -190,7 +194,6 @@ router.get("/reports", authMiddleware, async (req, res) => {
     id: conversationReportsTable.id, category: conversationReportsTable.category,
     status: conversationReportsTable.status, outcome: conversationReportsTable.outcome,
     outcomeAt: conversationReportsTable.outcomeAt, createdAt: conversationReportsTable.createdAt,
-    cseaEscalatedAt: conversationReportsTable.cseaEscalatedAt,
   }).from(conversationReportsTable).where(eq(conversationReportsTable.reportedByUserId, userId));
   const userAppeals = reports.length ? await db.select().from(reportAppealsTable).where(eq(reportAppealsTable.appellantUserId, userId)) : [];
   const chatAppeals = chatReports.length ? await db.select().from(reportAppealsTable).where(eq(reportAppealsTable.appellantUserId, userId)) : [];
@@ -201,7 +204,7 @@ router.get("/reports", authMiddleware, async (req, res) => {
     }),
     ...chatReports.map((r) => {
       const appeal = chatAppeals.find((a) => a.conversationReportId === r.id);
-      return { ...r, reportType: "conversation", outcomeAt: r.outcomeAt?.toISOString() ?? null, createdAt: r.createdAt.toISOString(), cseaEscalated: !!r.cseaEscalatedAt, appeal: appeal ? { id: appeal.id, status: appeal.status, outcome: appeal.resolution } : null };
+      return { ...r, reportType: "conversation", outcomeAt: r.outcomeAt?.toISOString() ?? null, createdAt: r.createdAt.toISOString(), appeal: appeal ? { id: appeal.id, status: appeal.status, outcome: appeal.resolution } : null };
     }),
   ] });
 });
@@ -215,10 +218,24 @@ router.post("/conversation-reports/:id/appeal", authMiddleware, async (req, res)
       .where(and(eq(conversationReportsTable.id, id), eq(conversationReportsTable.reportedByUserId, userId))).limit(1);
     if (!report) { res.status(404).json({ error: "Report not found" }); return; }
     if (!report.outcome || report.status === "OPEN" || report.cseaEscalatedAt) { res.status(409).json({ error: "This report has not received a final decision" }); return; }
+    if (
+      !report.outcomeAt ||
+      Date.now() - report.outcomeAt.getTime() > CONVERSATION_REPORT_APPEAL_WINDOW_MS
+    ) {
+      res.status(409).json({ error: "The appeal period for this report has ended" });
+      return;
+    }
     const existing = await db.select({ id: reportAppealsTable.id }).from(reportAppealsTable)
       .where(and(eq(reportAppealsTable.conversationReportId, id), eq(reportAppealsTable.appellantUserId, userId))).limit(1);
     if (existing.length) { res.status(409).json({ error: "Only one appeal is permitted for a report" }); return; }
-    const [appeal] = await db.insert(reportAppealsTable).values({ conversationReportId: id, appellantUserId: userId, reason: body.reason }).returning({ id: reportAppealsTable.id });
+    const appeal = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(reportAppealsTable)
+        .values({ conversationReportId: id, appellantUserId: userId, reason: body.reason })
+        .returning({ id: reportAppealsTable.id });
+      await reopenConversationReportEvidenceHold(tx, id);
+      return created;
+    });
     await logAudit({ userId, action: "REPORT_APPEAL_CREATED", performedBy: userId, details: { conversationReportId: id, appealId: appeal.id } });
     res.status(201).json({ appealId: appeal.id, status: "OPEN" });
   } catch (error) {
@@ -236,6 +253,13 @@ router.post("/reports/:id/appeal", authMiddleware, async (req, res) => {
     const [report] = await db.select().from(userReportsTable).where(and(eq(userReportsTable.id, id), eq(userReportsTable.reporterUserId, userId))).limit(1);
     if (!report) { res.status(404).json({ error: "Report not found" }); return; }
     if (!report.outcome || report.status === "OPEN" || report.cseaEscalatedAt) { res.status(409).json({ error: "This report has not received a final decision" }); return; }
+    if (
+      !report.outcomeAt ||
+      Date.now() - report.outcomeAt.getTime() > CONVERSATION_REPORT_APPEAL_WINDOW_MS
+    ) {
+      res.status(409).json({ error: "The appeal period for this report has ended" });
+      return;
+    }
     const existing = await db.select({ id: reportAppealsTable.id }).from(reportAppealsTable).where(and(eq(reportAppealsTable.reportId, id), eq(reportAppealsTable.appellantUserId, userId))).limit(1);
     if (existing.length) { res.status(409).json({ error: "Only one appeal is permitted for a report" }); return; }
     const [appeal] = await db.insert(reportAppealsTable).values({ reportId: id, appellantUserId: userId, reason: body.reason }).returning({ id: reportAppealsTable.id });

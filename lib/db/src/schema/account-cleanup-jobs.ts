@@ -36,7 +36,8 @@ export type AccountCleanupStatus = (typeof ACCOUNT_CLEANUP_STATUSES)[number];
 
 // Per-object states: pending (not yet attempted), deleted, missing (already
 // gone = success), invalid (failed path validation — never attempted, kept
-// for audit), error (storage failure; retried by the sweep).
+// for audit), held (active moderation evidence; retried by the sweep), error
+// (storage failure; retried by the sweep).
 export type AccountCleanupObject = {
   path: string;
   category:
@@ -45,7 +46,7 @@ export type AccountCleanupObject = {
     | "gallery"
     | "verification-document"
     | "customer-upload";
-  state: "pending" | "deleted" | "missing" | "invalid" | "error";
+  state: "pending" | "held" | "deleted" | "missing" | "invalid" | "error";
   error?: string;
 };
 

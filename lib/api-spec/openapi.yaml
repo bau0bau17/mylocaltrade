@@ -4087,7 +4087,12 @@ components:
         createdAt:
           type: string
           format: date-time
-      required: [id, conversationId, senderRole, body, systemMessage, createdAt]
+        attachments:
+          type: array
+          description: Short-lived signed URLs for this message's private image attachments.
+          items:
+            type: string
+      required: [id, conversationId, senderRole, body, systemMessage, createdAt, attachments]
 
     ConversationDetailResponse:
       type: object
@@ -4474,12 +4479,23 @@ components:
 
     SendMessageRequest:
       type: object
+      anyOf:
+        - required: [body]
+        - required: [attachmentUrls]
       properties:
         body:
           type: string
           minLength: 1
           maxLength: 4000
-      required: [body]
+        attachmentUrls:
+          type: array
+          description: Private object paths previously issued to the authenticated sender.
+          minItems: 1
+          maxItems: 5
+          items:
+            type: string
+            minLength: 1
+            maxLength: 512
 
     UpdateTraderStatusRequest:
       type: object

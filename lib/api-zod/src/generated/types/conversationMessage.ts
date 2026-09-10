@@ -18,4 +18,6 @@ export interface ConversationMessage {
   editedAt?: Date | null;
   deletedAt?: Date | null;
   createdAt: Date;
+  /** Short-lived signed URLs for this message's private image attachments. */
+  attachments: string[];
 }

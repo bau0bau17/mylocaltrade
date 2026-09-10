@@ -1,0 +1,177 @@
+Complete the conversation-report evidence implementation before launch.
+
+The previous fix is only PARTIAL.
+
+IMPORTANT FINDING:
+The Admin report detail currently derives images only from the conversation's linked enquiry.
+
+That does NOT satisfy the requirement to review the actual reported conversation evidence.
+
+A user may send image/photo attachments later in chat, and those images may themselves be the reason the conversation was reported.
+
+Do not change the working subscription or Report Status fixes.
+Do not redesign the moderation system.
+Do not remove either:
+- Report this conversation
+- Report this customer
+
+Do not deploy.
+Do not push to GitHub — I will use Replit Git Sync myself.
+
+
+==================================================
+1. AUDIT ACTUAL CHAT IMAGE STORAGE
+==================================================
+
+Trace the CURRENT message attachment model:
+
+conversation
+→ messages
+→ image/photo attachments
+→ storage/object references
+→ report creation
+→ admin report-detail endpoint
+
+Determine:
+
+- how later chat photos are stored;
+- whether multiple photos per message are supported;
+- whether image-only messages are represented;
+- whether message attachments are already exposed through an existing authenticated conversation API;
+- whether original enquiry images use a different data model.
+
+Do not assume enquiry images are equivalent to conversation attachments.
+
+
+==================================================
+2. ADMIN MUST SEE THE ACTUAL CONVERSATION
+==================================================
+
+For “Report this conversation”, the authorised moderation transcript should include, in chronological order:
+
+- text messages;
+- image-only messages;
+- text + image messages;
+- multiple images attached to one message;
+- sender;
+- timestamp;
+- relevant original enquiry images where they are part of the conversation context.
+
+Images must appear with the message they belong to.
+
+Use:
+- thumbnail;
+- secure larger preview;
+- aspect-ratio preservation;
+- safe unavailable-image state.
+
+Do not expose raw object paths.
+
+
+==================================================
+3. SECURITY
+==================================================
+
+Preserve:
+
+- authenticated admin authorization;
+- moderation-case authorization;
+- reporter privacy;
+- conversation authorization boundaries;
+- CSEA specialist-only restrictions.
+
+For a restricted CSEA case, ordinary admins must NOT obtain message/image evidence through another generic endpoint.
+
+Use short-lived signed URLs or the existing protected-media mechanism.
+
+Never make private conversation media permanently public.
+
+
+==================================================
+4. REPORT-TIME EVIDENCE INTEGRITY
+==================================================
+
+The previous report confirmed that evidence currently remains live and may disappear if an object is deleted before moderation.
+
+Audit whether messages or attachments can actually be:
+
+- deleted by users;
+- removed by account deletion;
+- removed by cleanup jobs;
+- replaced.
+
+If an open moderation report can lose the exact content that was reported, implement the SMALLEST proportionate preservation mechanism.
+
+Preferred approach:
+
+At report creation, persist an evidence manifest/reference for the conversation state relevant to the report, including the message and attachment identifiers required to retrieve the reported evidence.
+
+While a report or permitted appeal remains active, prevent ordinary cleanup/deletion from silently destroying referenced moderation evidence where technically reasonable.
+
+Do NOT create duplicate media copies unless necessary.
+
+If preserving the underlying object requires a temporary moderation/legal retention hold, use the narrowest existing storage mechanism and document:
+- when the hold starts;
+- when it ends;
+- who can access the evidence.
+
+Do not invent indefinite retention.
+
+If a snapshot/hold is not technically appropriate, explain the alternative and its limitations before implementing it.
+
+
+==================================================
+5. TESTS
+==================================================
+
+Add regression coverage for:
+
+1. enquiry image visible in report;
+2. later chat image visible in report;
+3. image-only message visible;
+4. text + image message;
+5. multiple attachments;
+6. chronological ordering;
+7. unauthorized moderator denied;
+8. ordinary admin denied restricted CSEA evidence;
+9. expired signed URL does not make media public;
+10. missing attachment handled safely;
+11. report-time evidence cannot silently disappear during an active moderation case, according to the implemented retention design.
+
+
+Run:
+
+- relevant API tests/typecheck
+- admin tests/typecheck
+- moderation/CSEA tests
+- storage/media tests
+
+Because this is release-candidate moderation code, also run the full API and Admin test suites if practical.
+
+Request independent final review.
+
+
+==================================================
+WHEN COMPLETE
+==================================================
+
+Do NOT deploy.
+Do NOT push to GitHub.
+
+Report:
+
+1. Why later chat images were previously missing
+2. Exact attachment model
+3. Which images Admin can now see
+4. How images are mapped to the correct message
+5. Secure media-access mechanism
+6. Exact evidence-preservation behaviour
+7. Retention/cleanup behaviour while a report or appeal is active
+8. CSEA access behaviour
+9. Files changed
+10. Tests/typechecks
+11. Database migration required yes/no
+12. Backend republish required yes/no
+13. Admin republish required yes/no
+14. New TestFlight build required yes/no
+15. Whether conversation reporting is now release-ready

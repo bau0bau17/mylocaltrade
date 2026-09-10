@@ -1028,6 +1028,88 @@ describe("RevenueCat subscription syncing", () => {
       expect(sub.productIdentifier).toBe("com.mylocaltrade.app.trader.yearly");
     });
 
+    it("does not let a product-change webhook replace the provider-confirmed current Team product", async () => {
+      const trader = await createVerifiedTrader("wh-deferred-product-change");
+      const team20 = "com.mylocaltrade.app.trader.team20.yearly";
+      const premiumMonthly = "com.mylocaltrade.app.trader.monthly";
+      const now = Date.now();
+
+      // RevenueCat's active access-granting resource remains Team 20. This is
+      // the state Apple exposes while a downgrade is scheduled for renewal.
+      mockActiveEntitlement(now + 24 * 60 * 60 * 1000, team20);
+      const initial = await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({});
+      expect(initial.status).toBe(200);
+
+      const changed = await request(app)
+        .post("/api/webhooks/revenuecat")
+        .set("Authorization", WEBHOOK_SECRET)
+        .send({
+          event: {
+            id: `evt-deferred-change-${SUFFIX}`,
+            type: "PRODUCT_CHANGE",
+            app_user_id: trader.rcId,
+            entitlement_ids: [ENTITLEMENT_KEY],
+            // A future product selection must not be trusted as current access.
+            product_id: premiumMonthly,
+            expiration_at_ms: now + 24 * 60 * 60 * 1000,
+            event_timestamp_ms: now + 1,
+          },
+        });
+      await settle();
+
+      expect(changed.status).toBe(200);
+      expect(changed.body).toMatchObject({ success: true, reconciled: true, applied: false });
+      const [sub] = await db
+        .select({ productIdentifier: subscriptionsTable.productIdentifier })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub.productIdentifier).toBe(team20);
+    });
+
+    it("preserves the current Team product when a product-change lookup has no active entitlement", async () => {
+      const trader = await createVerifiedTrader("wh-product-change-provider-gap");
+      const team20 = "com.mylocaltrade.app.trader.team20.yearly";
+      const now = Date.now();
+      mockActiveEntitlement(now + 24 * 60 * 60 * 1000, team20);
+      await request(app)
+        .post("/api/subscriptions/revenuecat-sync")
+        .set("Authorization", `Bearer ${trader.token}`)
+        .send({});
+
+      // A transient provider gap during a product-change event is not proof
+      // that access expired. Expiration and pause webhooks remain the only
+      // destructive webhook authorities.
+      mockListActive.mockResolvedValue({ data: { items: [] }, error: undefined });
+      const changed = await request(app)
+        .post("/api/webhooks/revenuecat")
+        .set("Authorization", WEBHOOK_SECRET)
+        .send({
+          event: {
+            id: `evt-product-change-gap-${SUFFIX}`,
+            type: "PRODUCT_CHANGE",
+            app_user_id: trader.rcId,
+            entitlement_ids: [ENTITLEMENT_KEY],
+            product_id: "com.mylocaltrade.app.trader.monthly",
+            event_timestamp_ms: now + 1,
+          },
+        });
+
+      expect(changed.status).toBe(200);
+      const [sub] = await db
+        .select({
+          status: subscriptionsTable.status,
+          productIdentifier: subscriptionsTable.productIdentifier,
+        })
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, trader.id))
+        .limit(1);
+      expect(sub).toMatchObject({ status: "active", productIdentifier: team20 });
+    });
+
     it("acknowledges and skips events for other entitlements", async () => {
       const trader = await createVerifiedTrader("wh-other-entl");
       const res = await request(app)

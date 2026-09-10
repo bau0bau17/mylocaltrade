@@ -1,0 +1,211 @@
+Pre-launch legal/policy consistency audit and synchronization.
+
+Goal:
+Make all user-facing legal, safety, reporting and subscription-policy wording consistent between:
+
+1. Native mobile app
+2. Public landing website
+
+IMPORTANT:
+Audit first.
+Do not rewrite policies unnecessarily.
+Preserve all already-correct legal and product decisions.
+Do not deploy.
+Do not push to GitHub — I will use Replit Git Sync myself.
+
+==================================================
+AUDIT ALL CURRENT USER-FACING POLICY SURFACES
+==================================================
+
+Inspect and compare the native/mobile and public-web versions of:
+
+- Terms
+- Privacy Policy
+- Cookie Policy
+- Complaints
+- Customer Safety Advice
+- Report a Trader / reporting guidance
+- moderation appeal wording
+- account deletion wording
+- subscription / cancellation / refund wording
+- age / 18+ wording
+- verification wording
+- marketplace / job-payment disclaimer
+- any footer/legal navigation linking these pages
+
+Also check whether Trader-specific wording exists separately anywhere and whether it contradicts the general Terms.
+
+==================================================
+PRESERVE THESE CURRENT PRODUCT RULES
+==================================================
+
+Do not change these unless there is an actual contradiction:
+
+APPLE / BILLING
+- Current iOS launch uses Apple App Store in-app subscriptions.
+- Cancellation/management is through the App Store.
+- Refund wording must not imply MyLocalTrade directly controls Apple refunds.
+- Do not add Google Play wording before Android launch.
+- MyLocalTrade does not process payment for the underlying trader/customer job.
+
+MODERATION
+- Eligible moderation decisions can be appealed within 30 days of the decision.
+- After the 30-day appeal window expires, the appeal option is unavailable.
+- An appeal is a separate review and does not automatically reverse the original decision.
+- Safety handling may continue independently.
+- Do not expose CSEA/internal specialist workflow details publicly.
+
+COMPLAINTS
+- Keep the moderation appeal deadline separate from the general complaints process.
+- Existing complaint acknowledgement and substantive-response commitments must remain clearly distinct.
+
+AGE
+- Service is intended for adults aged 18+.
+- Keep current legal-capacity declaration consistent with registration.
+- Do not invent DOB checks, biometric age checks or age-verification services that do not exist.
+
+VERIFICATION
+- Do not imply that verification guarantees quality, honesty, competence, safety or outcome.
+- Use accurate wording describing the checks actually performed.
+
+MESSAGING / OTP
+- Phone/RCS/SMS verification is for account access, security and trust.
+- Never describe OTP messaging as marketing.
+- Do not reintroduce old inaccurate customer SMS/RCS claims.
+
+MARKETPLACE
+- MyLocalTrade is a marketplace/intermediary.
+- Trader and customer arrange the job.
+- MyLocalTrade does not process the underlying job payment.
+- Do not accidentally describe traders as employees or agents of MyLocalTrade.
+
+COOKIES / TRACKING
+- Preserve the current finding that MyLocalTrade does not currently use non-essential analytics/advertising tracking on the public landing site.
+- Preserve accurate hosting-cookie wording where applicable.
+- Do not add a cookie banner unless the actual implementation now requires one.
+
+==================================================
+CONSISTENCY REQUIREMENTS
+==================================================
+
+For every equivalent policy/page:
+
+- legal meaning must match;
+- deadlines must match;
+- terminology must match;
+- contact details must match;
+- subscription wording must match;
+- complaint/report/appeal wording must match;
+- age requirement must match;
+- marketplace disclaimers must match.
+
+Do not require the text to be character-for-character identical if one surface needs shorter mobile wording, but the legal meaning must be equivalent.
+
+Use UK English.
+
+==================================================
+CONTACT DETAILS
+==================================================
+
+Audit all policy/contact surfaces.
+
+Do not use dead or nonexistent email addresses.
+
+Preserve the currently intended monitored business/contact routes.
+
+Do not invent:
+support@mylocaltrade.co.uk
+or any other mailbox unless it actually exists.
+
+==================================================
+PUBLIC LANDING IMPLEMENTATION
+==================================================
+
+The public legal pages use pre-rendered HTML plus matching hydrated JavaScript bundles.
+
+If a public page is changed:
+
+- update the server-rendered HTML;
+- update the matching hydrated bundle/source representation;
+- verify they remain synchronized;
+- check for stale policy text in old bundles/routes;
+- do not leave HTML and hydration content with different legal wording.
+
+==================================================
+NAVIGATION
+==================================================
+
+Verify users can reasonably reach:
+
+- Terms
+- Privacy
+- Cookie Policy
+- Complaints
+- Safety/reporting guidance
+
+from appropriate mobile and public-site locations.
+
+Do not redesign navigation unless a required policy is genuinely inaccessible.
+
+==================================================
+FINAL COPY QUALITY
+==================================================
+
+Remove or flag:
+
+- contradictory statements;
+- outdated launch-stage wording;
+- claims about features that do not exist;
+- Google Play references in the current iOS-only launch;
+- Stripe subscription references;
+- obsolete SMS/RCS claims;
+- stale ICO dates if present;
+- duplicated/conflicting appeal periods;
+- misleading guarantee language;
+- internal developer/moderation terminology exposed publicly.
+
+Do not weaken important disclaimers simply to shorten the text.
+
+==================================================
+VALIDATION
+==================================================
+
+Run:
+
+- mobile typecheck
+- relevant mobile legal/navigation tests
+- public landing synchronization checks
+- bundle syntax checks
+- API tests only if an API contract or deadline is changed
+- independent final consistency review
+
+==================================================
+WHEN COMPLETE
+==================================================
+
+Do NOT deploy.
+Do NOT create a TestFlight build.
+Do NOT push to GitHub.
+
+Return:
+
+1. Every policy/page audited
+2. Mismatches found
+3. Exact changes made
+4. Mobile surfaces changed
+5. Public-web surfaces changed
+6. Confirmation subscription wording matches current Apple-only iOS launch
+7. Confirmation moderation appeal wording is consistent
+8. Confirmation complaints timing remains separate
+9. Confirmation 18+ wording is consistent
+10. Confirmation verification wording is accurate
+11. Confirmation marketplace/job-payment wording is consistent
+12. Confirmation Cookie Policy matches actual tracking/cookie behavior
+13. Any remaining policy/legal ambiguity
+14. Files changed
+15. Tests/typechecks
+16. Backend republish required yes/no
+17. Landing/web republish required yes/no
+18. Admin republish required yes/no
+19. New TestFlight build required yes/no
+20. Whether mobile + landing legal/policy surfaces are fully synchronized for release

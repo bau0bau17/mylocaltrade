@@ -36,6 +36,10 @@ import {
   notifyJobsHandedToOwner,
 } from "../lib/job-assignment";
 import { enqueueAccountCleanup, runAccountCleanupNow } from "../lib/account-cleanup";
+import {
+  reopenConversationReportEvidenceHold,
+  settleConversationReportEvidenceHold,
+} from "../lib/conversation-report-evidence";
 import type { AuthenticatedRequest } from "../lib/types";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { serializeQuote } from "../lib/quotes";
@@ -73,11 +77,17 @@ const storage = new ObjectStorageService();
 // allowlist contains staff emails, not user IDs, so deployment can rotate
 // access without a schema role migration. Missing/blank env means nobody.
 async function requireCseaSpecialist(req: AuthenticatedRequest, res: any): Promise<boolean> {
+  if (await isCseaSpecialist(req)) return true;
   const allowlist = (process.env.CSEA_SPECIALIST_ADMIN_EMAILS ?? "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
-  if (!allowlist.length) { res.status(403).json({ error: "CSEA specialist access is not configured" }); return false; }
+  res.status(403).json({ error: allowlist.length ? "CSEA specialist access required" : "CSEA specialist access is not configured" });
+  return false;
+}
+
+async function isCseaSpecialist(req: AuthenticatedRequest): Promise<boolean> {
+  const allowlist = (process.env.CSEA_SPECIALIST_ADMIN_EMAILS ?? "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+  if (!allowlist.length) return false;
   const [user] = await db.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, req.userId)).limit(1);
-  if (!user?.email || !allowlist.includes(user.email.toLowerCase())) { res.status(403).json({ error: "CSEA specialist access required" }); return false; }
-  return true;
+  return !!user?.email && allowlist.includes(user.email.toLowerCase());
 }
 
 // A document no longer needs expiry attention once the trader has uploaded a
@@ -2090,14 +2100,120 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
         ),
       )
       .limit(1);
-    const canReadMessages = !!openReport || row.conv.status === "REPORTED";
+    const [openAppeal] = await db
+      .select({ id: reportAppealsTable.id })
+      .from(reportAppealsTable)
+      .innerJoin(
+        conversationReportsTable,
+        eq(reportAppealsTable.conversationReportId, conversationReportsTable.id),
+      )
+      .where(
+        and(
+          eq(conversationReportsTable.conversationId, id),
+          eq(reportAppealsTable.status, "OPEN"),
+        ),
+      )
+      .limit(1);
+    const canReadMessages = !!openReport || !!openAppeal || row.conv.status === "REPORTED";
     const messages = canReadMessages
       ? await db
           .select()
           .from(messagesTable)
           .where(eq(messagesTable.conversationId, id))
-          .orderBy(messagesTable.createdAt)
+          .orderBy(asc(messagesTable.createdAt), asc(messagesTable.id))
       : [];
+    // Original enquiry images are private evidence. They are exposed only
+    // while active moderation permits reading the message context, and only
+    // after the CSEA specialist gate above. Never include object paths in the
+    // admin response; each URL is short-lived and signed server-side.
+    let enquiryAttachments: Array<{ url: string; createdAt: string }> = [];
+    let enquiryContext: {
+      id: number;
+      message: string;
+      serviceRequired: string;
+      status: string;
+      createdAt: string;
+      attachments: Array<{ url: string; createdAt: string }>;
+    } | null = null;
+    if (canReadMessages && row.conv.enquiryId) {
+      const [enquiry] = await db
+        .select({
+          id: enquiriesTable.id,
+          message: enquiriesTable.message,
+          serviceRequired: enquiriesTable.serviceRequired,
+          status: enquiriesTable.status,
+          attachmentUrls: enquiriesTable.attachmentUrls,
+          createdAt: enquiriesTable.createdAt,
+        })
+        .from(enquiriesTable)
+        .where(eq(enquiriesTable.id, row.conv.enquiryId))
+        .limit(1);
+      const rawPaths = enquiry?.attachmentUrls ?? [];
+      if (rawPaths.length > 0 && enquiry) {
+        const signed = await Promise.all(
+          rawPaths.map(async (path) => {
+            try {
+              // Presigning alone does not prove that an object still exists.
+              // Avoid handing the console a URL for deleted/cleaned-up live
+              // evidence; the UI still has a graceful error state for a race
+              // between this check and image loading.
+              await storage.getObjectEntityFile(path);
+              return await storage.getObjectEntityReadURL(path, 300);
+            } catch (err) {
+              req.log.warn(
+                { err, conversationId: id },
+                "Failed to sign enquiry attachment for active moderation",
+              );
+              return null;
+            }
+          }),
+        );
+        enquiryAttachments = signed
+          .filter((url): url is string => url != null)
+          .map((url) => ({ url, createdAt: enquiry.createdAt.toISOString() }));
+      }
+      if (enquiry) {
+        enquiryContext = {
+          id: enquiry.id,
+          message: enquiry.message,
+          serviceRequired: enquiry.serviceRequired,
+          status: enquiry.status,
+          createdAt: enquiry.createdAt.toISOString(),
+          attachments: enquiryAttachments,
+        };
+      }
+    }
+    const messagesWithAttachments = await Promise.all(
+      messages.map(async (message) => {
+        const paths = Array.from(
+          new Set(
+            [message.attachmentUrl, ...(message.attachmentUrls ?? [])].filter(
+              (path): path is string => !!path,
+            ),
+          ),
+        );
+        const signed = await Promise.all(
+          paths.map(async (path) => {
+            try {
+              await storage.getObjectEntityFile(path);
+              return await storage.getObjectEntityReadURL(path, 300);
+            } catch (err) {
+              req.log.warn(
+                { err, conversationId: id, messageId: message.id },
+                "Failed to sign message attachment for active moderation",
+              );
+              return null;
+            }
+          }),
+        );
+        return {
+          ...message,
+          attachments: signed
+            .filter((url): url is string => url != null)
+            .map((url) => ({ url, createdAt: message.createdAt.toISOString() })),
+        };
+      }),
+    );
     // Structured quotes follow the same active-moderation gate as message
     // bodies: they contain pricing detail admins only need for disputes.
     const quotes = canReadMessages
@@ -2199,6 +2315,8 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
         assignedAt: row.conv.assignedAt?.toISOString() ?? null,
       },
       messagesAccessible: canReadMessages,
+      enquiryAttachments,
+      enquiry: enquiryContext,
       quotes: quotes.map((q) => serializeQuote(q)),
       booking: liveBooking
         ? {
@@ -2220,13 +2338,14 @@ router.get("/admin/conversations/:id", authMiddleware, adminOnly, async (req, re
           createdAt: a.createdAt.toISOString(),
         })),
       },
-      messages: messages.map((m) => ({
+      messages: messagesWithAttachments.map((m) => ({
         id: m.id,
         senderUserId: m.senderUserId,
         senderRole: m.senderRole,
         body: m.body,
         systemMessage: m.systemMessage,
         createdAt: m.createdAt.toISOString(),
+        attachments: m.attachments,
       })),
     });
   } catch (error) {
@@ -2269,6 +2388,7 @@ router.post("/admin/conversation-reports/:id/resolve", authMiddleware, adminOnly
         outcomeAt: new Date(),
       })
       .where(eq(conversationReportsTable.id, id));
+    await settleConversationReportEvidenceHold(db, id);
 
     if (body.action === "block") {
       await db
@@ -2597,9 +2717,25 @@ router.post("/admin/user-reports/:id/resolve", authMiddleware, adminOnly, async 
 
 // Appeal queue and resolution reuse the report moderation records. Appeal
 // decisions are internal; reporters only see the safe status on their appeal.
-router.get("/admin/report-appeals", authMiddleware, adminOnly, async (_req, res) => {
+router.get("/admin/report-appeals", authMiddleware, adminOnly, async (req, res) => {
   const rows = await db.select().from(reportAppealsTable).orderBy(desc(reportAppealsTable.createdAt));
-  res.json({ appeals: rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), resolvedAt: r.resolvedAt?.toISOString() ?? null })) });
+  const [cseaUser, cseaConversation] = await Promise.all([
+    db.select({ id: userReportsTable.id }).from(userReportsTable).where(isNotNull(userReportsTable.cseaEscalatedAt)),
+    db.select({ id: conversationReportsTable.id }).from(conversationReportsTable).where(isNotNull(conversationReportsTable.cseaEscalatedAt)),
+  ]);
+  const cseaUserIds = new Set(cseaUser.map((report) => report.id));
+  const cseaConversationIds = new Set(cseaConversation.map((report) => report.id));
+  const canViewCsea = await isCseaSpecialist(req as AuthenticatedRequest);
+  const visible = canViewCsea
+    ? rows
+    : rows.filter(
+        (appeal) =>
+          !(
+            (appeal.reportId != null && cseaUserIds.has(appeal.reportId)) ||
+            (appeal.conversationReportId != null && cseaConversationIds.has(appeal.conversationReportId))
+          ),
+      );
+  res.json({ appeals: visible.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), resolvedAt: r.resolvedAt?.toISOString() ?? null })) });
 });
 router.post("/admin/report-appeals/:id/resolve", authMiddleware, adminOnly, async (req, res) => {
   try {
@@ -2608,7 +2744,22 @@ router.post("/admin/report-appeals/:id/resolve", authMiddleware, adminOnly, asyn
     const adminId = (req as AuthenticatedRequest).userId;
     const [appeal] = await db.select().from(reportAppealsTable).where(eq(reportAppealsTable.id, id)).limit(1);
     if (!appeal) { res.status(404).json({ error: "Appeal not found" }); return; }
+    const [cseaUserReport, cseaConversationReport] = await Promise.all([
+      appeal.reportId
+        ? db.select({ id: userReportsTable.id }).from(userReportsTable).where(and(eq(userReportsTable.id, appeal.reportId), isNotNull(userReportsTable.cseaEscalatedAt))).limit(1)
+        : Promise.resolve([]),
+      appeal.conversationReportId
+        ? db.select({ id: conversationReportsTable.id }).from(conversationReportsTable).where(and(eq(conversationReportsTable.id, appeal.conversationReportId), isNotNull(conversationReportsTable.cseaEscalatedAt))).limit(1)
+        : Promise.resolve([]),
+    ]);
+    if (
+      (cseaUserReport.length > 0 || cseaConversationReport.length > 0) &&
+      !(await requireCseaSpecialist(req as AuthenticatedRequest, res))
+    ) return;
     await db.update(reportAppealsTable).set({ status: body.action === "dismiss" ? "DISMISSED" : "RESOLVED", resolution: body.outcome, resolutionNotes: body.notes ?? null, resolvedByAdminId: adminId, resolvedAt: new Date() }).where(eq(reportAppealsTable.id, id));
+    if (appeal.conversationReportId != null) {
+      await settleConversationReportEvidenceHold(db, appeal.conversationReportId);
+    }
     await logAudit({ userId: appeal.appellantUserId, action: "REPORT_APPEAL_RESOLVED", performedBy: adminId, details: { appealId: id, reportId: appeal.reportId, outcome: body.outcome }, notes: body.notes });
     res.json({ ok: true, status: body.action === "dismiss" ? "DISMISSED" : "RESOLVED", outcome: body.outcome });
   } catch (error) {
@@ -2638,7 +2789,13 @@ router.post("/admin/conversation-reports/:id/csea-escalate", authMiddleware, adm
   if (!report) { res.status(404).json({ error: "Report not found" }); return; }
   if (report.category !== "SUSPECTED_ILLEGAL_CONTENT" || report.cseaEscalatedAt) { res.status(409).json({ error: "Report is not an eligible CSEA candidate" }); return; }
   const [conv] = await db.select({ customerId: conversationsTable.customerId }).from(conversationsTable).where(eq(conversationsTable.id, report.conversationId)).limit(1);
-  await db.update(conversationReportsTable).set({ cseaEscalatedAt: new Date(), cseaEscalatedByAdminId: specialist.userId }).where(eq(conversationReportsTable.id, id));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(conversationReportsTable)
+      .set({ cseaEscalatedAt: new Date(), cseaEscalatedByAdminId: specialist.userId })
+      .where(eq(conversationReportsTable.id, id));
+    await reopenConversationReportEvidenceHold(tx, id);
+  });
   if (conv) await logAudit({ userId: conv.customerId, action: "CSEA_RESTRICTED_ESCALATION", performedBy: specialist.userId, details: { conversationReportId: id, conversationId: report.conversationId } });
   res.json({ ok: true, status: "ESCALATED" });
 });
@@ -2682,7 +2839,13 @@ router.post("/admin/csea-reports/conversation/:id/complete", authMiddleware, adm
   if (!report || !report.cseaEscalatedAt) { res.status(404).json({ error: "Escalated report not found" }); return; }
   if (report.cseaHandledAt) { res.status(409).json({ error: "Report is already handled" }); return; }
   const handledAt = new Date();
-  await db.update(conversationReportsTable).set({ cseaHandledAt: handledAt, cseaHandledByAdminId: specialist.userId }).where(eq(conversationReportsTable.id, id));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(conversationReportsTable)
+      .set({ cseaHandledAt: handledAt, cseaHandledByAdminId: specialist.userId })
+      .where(eq(conversationReportsTable.id, id));
+    await settleConversationReportEvidenceHold(tx, id);
+  });
   const [conv] = await db.select({ customerId: conversationsTable.customerId }).from(conversationsTable).where(eq(conversationsTable.id, report.conversationId)).limit(1);
   if (conv) await logAudit({ userId: conv.customerId, action: "CSEA_RESTRICTED_COMPLETED", performedBy: specialist.userId, details: { conversationReportId: id, conversationId: report.conversationId } });
   res.json({ ok: true, handledAt: handledAt.toISOString() });
