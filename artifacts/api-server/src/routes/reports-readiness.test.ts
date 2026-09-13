@@ -9,6 +9,7 @@ import {
   conversationReportsTable,
   reportAppealsTable,
   traderAuditLogTable,
+  companyMembersTable,
 } from "@workspace/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import app from "../app";
@@ -186,6 +187,113 @@ describe("Online Safety reporting API guards", () => {
       else process.env.CSEA_SPECIALIST_ADMIN_EMAILS = previousAllowlist;
     }
   });
+
+  it("submits eligible appeals once, preserves ownership and safely reports unavailable appeal states", async () => {
+    const reporterId = await fixtureUser("customer", "appeal-reporter");
+    const otherReporterId = await fixtureUser("customer", "appeal-other-reporter");
+    const subjectId = await fixtureUser("trader", "appeal-subject");
+    const [profile] = await db.insert(traderProfilesTable).values({
+      userId: subjectId,
+      businessName: `Appeal Trades ${suffix}`,
+      contactName: "Appeal Subject",
+      email: `appeal-profile-${suffix}@example.test`,
+      phone: "+447000000098",
+      mainCategory: "Plumbing",
+      town: "Milton Keynes",
+      postcode: "MK9 3XS",
+      isActive: true,
+      businessProfileCompleted: true,
+      verificationStatus: "VERIFIED",
+    }).returning({ id: traderProfilesTable.id });
+    fixtureProfiles.push(profile.id);
+    const [conversation] = await db.insert(conversationsTable).values({
+      customerId: reporterId,
+      traderUserId: subjectId,
+      traderProfileId: profile.id,
+      serviceRequired: "Appeal fixture",
+      status: "ACTIVE",
+      traderStatus: "NEW",
+    }).returning({ id: conversationsTable.id });
+    fixtureConversations.push(conversation.id);
+
+    const now = new Date();
+    const expiredAt = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000);
+    const [eligibleProfile, expiredProfile, restrictedProfile] = await db.insert(userReportsTable).values([
+      {
+        reporterUserId: reporterId, reporterRole: "customer", reportedUserId: subjectId,
+        reportedRole: "trader", reportedTraderProfileId: profile.id,
+        category: "OTHER", status: "RESOLVED", outcome: "NO_VIOLATION", outcomeAt: now,
+      },
+      {
+        reporterUserId: reporterId, reporterRole: "customer", reportedUserId: subjectId,
+        reportedRole: "trader", reportedTraderProfileId: profile.id,
+        category: "OTHER", status: "RESOLVED", outcome: "NO_VIOLATION", outcomeAt: expiredAt,
+      },
+      {
+        reporterUserId: reporterId, reporterRole: "customer", reportedUserId: subjectId,
+        reportedRole: "trader", reportedTraderProfileId: profile.id,
+        category: "SUSPECTED_ILLEGAL_CONTENT", status: "RESOLVED", outcome: "NO_VIOLATION",
+        outcomeAt: now, cseaEscalatedAt: now,
+      },
+    ]).returning({ id: userReportsTable.id });
+    fixtureUserReports.push(eligibleProfile.id, expiredProfile.id, restrictedProfile.id);
+    const [eligibleConversation] = await db.insert(conversationReportsTable).values({
+      conversationId: conversation.id, reportedByUserId: reporterId, reportedByRole: "customer",
+      reason: "Eligible conversation appeal fixture", category: "OTHER",
+      status: "RESOLVED", outcome: "NO_VIOLATION", outcomeAt: now,
+    }).returning({ id: conversationReportsTable.id });
+    fixtureConversationReports.push(eligibleConversation.id);
+
+    const reporterToken = generateToken(reporterId, "customer");
+    const otherToken = generateToken(otherReporterId, "customer");
+    const client = (ip: string) => ({ "Authorization": `Bearer ${reporterToken}`, "X-Forwarded-For": ip });
+    const statusBefore = await request(app).get("/api/reports").set(client("198.51.100.1"));
+    expect(statusBefore.status).toBe(200);
+    expect(JSON.stringify(statusBefore.body)).not.toContain("CSEA");
+    const byId = new Map<number, { id: number; appealEligible: boolean }>(
+      statusBefore.body.reports.map((r: { id: number; appealEligible: boolean }) => [r.id, r]),
+    );
+    expect(byId.get(eligibleProfile.id)?.appealEligible).toBe(true);
+    expect(byId.get(eligibleConversation.id)?.appealEligible).toBe(true);
+    expect(byId.get(expiredProfile.id)?.appealEligible).toBe(false);
+    expect(byId.get(restrictedProfile.id)?.appealEligible).toBe(false);
+
+    const profileAppeal = await request(app).post(`/api/reports/${eligibleProfile.id}/appeal`)
+      .set(client("198.51.100.2")).send({ reason: "Please review this profile report decision." });
+    const conversationAppeal = await request(app).post(`/api/conversation-reports/${eligibleConversation.id}/appeal`)
+      .set(client("198.51.100.3")).send({ reason: "Please review this conversation report decision." });
+    expect(profileAppeal.status).toBe(201);
+    expect(profileAppeal.body).toMatchObject({ status: "OPEN" });
+    expect(conversationAppeal.status).toBe(201);
+    expect(conversationAppeal.body).toMatchObject({ status: "OPEN" });
+    fixtureAppeals.push(profileAppeal.body.appealId, conversationAppeal.body.appealId);
+
+    // This is the same refetch the mobile success path performs. Check it
+    // before deliberate failure requests, which are rate-limited in this
+    // shared development database.
+    const statusAfter = await request(app).get("/api/reports").set(client("198.51.100.4"));
+    expect(statusAfter.status).toBe(200);
+    const afterById = new Map<number, { id: number; appeal: unknown; appealEligible: boolean }>(
+      statusAfter.body.reports.map((r: { id: number; appeal: unknown; appealEligible: boolean }) => [r.id, r]),
+    );
+    expect(afterById.get(eligibleProfile.id)?.appeal).toBeTruthy();
+    expect(afterById.get(eligibleProfile.id)?.appealEligible).toBe(false);
+    expect(afterById.get(eligibleConversation.id)?.appeal).toBeTruthy();
+    expect(afterById.get(eligibleConversation.id)?.appealEligible).toBe(false);
+
+    const duplicate = await request(app).post(`/api/reports/${eligibleProfile.id}/appeal`)
+      .set(client("198.51.100.5")).send({ reason: "Please review this profile report decision." });
+    const expired = await request(app).post(`/api/reports/${expiredProfile.id}/appeal`)
+      .set(client("198.51.100.6")).send({ reason: "Please review this expired report decision." });
+    const restricted = await request(app).post(`/api/reports/${restrictedProfile.id}/appeal`)
+      .set(client("198.51.100.7")).send({ reason: "Please review this restricted report decision." });
+    const foreign = await request(app).post(`/api/reports/${eligibleProfile.id}/appeal`)
+      .set({ "Authorization": `Bearer ${otherToken}`, "X-Forwarded-For": "198.51.100.8" }).send({ reason: "Please review another user's report decision." });
+    expect(duplicate.status).toBe(409);
+    expect(expired.status).toBe(409);
+    expect(restricted.status).toBe(409);
+    expect(foreign.status).toBe(404);
+  });
 });
 
 afterAll(async () => {
@@ -193,6 +301,7 @@ afterAll(async () => {
   if (fixtureConversationReports.length) await db.delete(conversationReportsTable).where(inArray(conversationReportsTable.id, fixtureConversationReports));
   if (fixtureUserReports.length) await db.delete(userReportsTable).where(inArray(userReportsTable.id, fixtureUserReports));
   if (fixtureConversations.length) await db.delete(conversationsTable).where(inArray(conversationsTable.id, fixtureConversations));
+  if (fixtureProfiles.length) await db.delete(companyMembersTable).where(inArray(companyMembersTable.traderProfileId, fixtureProfiles));
   if (fixtureProfiles.length) await db.delete(traderProfilesTable).where(inArray(traderProfilesTable.id, fixtureProfiles));
   if (fixtureUsers.length) await db.delete(traderAuditLogTable).where(inArray(traderAuditLogTable.performedBy, fixtureUsers));
   if (fixtureUsers.length) await db.delete(usersTable).where(inArray(usersTable.id, fixtureUsers));

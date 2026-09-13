@@ -41,7 +41,6 @@ router.get("/traders", async (req, res) => {
 
     const conditions: SQL[] = [
       ...publicTraderSqlConditions(),
-      eq(traderProfilesTable.businessProfileCompleted, true),
     ];
 
     // Canonical category matching: a customer-facing label like "Electrical"
@@ -74,19 +73,19 @@ router.get("/traders", async (req, res) => {
       );
     }
 
-    if (location && typeof location === "string") {
-      // Search by the trader's declared service areas (the locations they
-      // chose during signup / business profile), NOT by their company
-      // address — a trader can serve areas they're not based in.
-      const locLike = `%${location}%`;
-      conditions.push(
-        sql`EXISTS (
-          SELECT 1 FROM json_array_elements_text(
-            COALESCE(${traderProfilesTable.serviceAreas}, '[]'::json)
-          ) AS area
-          WHERE area ILIKE ${locLike}
-        )`
-      );
+    // An explicit location is matched only against a trader-configured
+    // service area. It is kept separate from the base-location radius below:
+    // with an active radius, either signal is enough to qualify a trader.
+    // Never infer coverage from a description, business name, or postcode.
+    let serviceAreaCondition: SQL | null = null;
+    if (location && typeof location === "string" && location.trim()) {
+      const locLike = `%${location.trim()}%`;
+      serviceAreaCondition = sql`EXISTS (
+        SELECT 1 FROM json_array_elements_text(
+          COALESCE(${traderProfilesTable.serviceAreas}, '[]'::json)
+        ) AS area
+        WHERE area ILIKE ${locLike}
+      )`;
     }
 
     if (featured === "true") {
@@ -145,6 +144,12 @@ router.get("/traders", async (req, res) => {
           ilike(traderProfilesTable.businessName, `%${search}%`),
           ilike(traderProfilesTable.mainCategory, `%${search}%`),
           ilike(traderProfilesTable.businessDescription, `%${search}%`),
+          sql`EXISTS (
+            SELECT 1 FROM json_array_elements_text(
+              COALESCE(${traderProfilesTable.additionalServices}, '[]'::json)
+            ) AS svc
+            WHERE svc ILIKE ${searchLike}
+          )`,
           ...(canonical ? [canonical] : []),
           sql`EXISTS (
             SELECT 1 FROM json_array_elements_text(
@@ -157,15 +162,11 @@ router.get("/traders", async (req, res) => {
     }
 
     // --- Search radius --------------------------------------------------
-    // A pure FILTER, never a ranking factor: traders outside the radius are
-    // excluded and the ordering logic below stays untouched. Anchor
-    // precedence: explicit lat/lng from the app, else a geocodable `near`
-    // string (place name / postcode / outcode). Traders without trusted
-    // coords (geocodedPostcode must match their current postcode) are
-    // excluded while a radius is active — their distance is unknowable. If
-    // no anchor can be resolved (unknown place, geocoder down), the filter
-    // is skipped entirely so results degrade to UK-wide rather than
-    // returning a misleading empty list.
+    // An active radius qualifies a trusted base location. When the customer
+    // also supplied a location text, an explicit matching service area is an
+    // alternative coverage signal: a trader who accepts jobs in Milton Keynes
+    // need not have their business base there. No resolved anchor means the
+    // radius part is skipped; an explicit service-area match still applies.
     const parseNum = (v: unknown): number | null => {
       if (typeof v !== "string" || v.trim() === "") return null;
       const n = Number(v);
@@ -200,11 +201,18 @@ router.get("/traders", async (req, res) => {
       ))))`;
 
     const radiusMilesNum = parseNum(radiusMiles);
+    let baseRadiusCondition: SQL | null = null;
     if (radiusMilesNum != null && radiusMilesNum > 0 && anchor) {
       const clampedRadius = Math.min(500, Math.max(1, radiusMilesNum));
-      conditions.push(
-        sql`(${trustedCoordsSql} AND ${haversineMilesSql(anchor)} <= ${clampedRadius})`,
-      );
+      baseRadiusCondition = sql`(${trustedCoordsSql} AND ${haversineMilesSql(anchor)} <= ${clampedRadius})`;
+    }
+
+    if (baseRadiusCondition && serviceAreaCondition) {
+      conditions.push(or(baseRadiusCondition, serviceAreaCondition)!);
+    } else if (baseRadiusCondition) {
+      conditions.push(baseRadiusCondition);
+    } else if (serviceAreaCondition) {
+      conditions.push(serviceAreaCondition);
     }
 
     // Display-only distance for each result. NULL when the request has no
@@ -217,8 +225,10 @@ router.get("/traders", async (req, res) => {
 
     const where = conditions.length > 1 ? and(...conditions) : conditions[0];
 
-    // Build ORDER BY based on requested sort. The default ("recommended")
-    // preserves the previous behaviour: verified, then featured, then newest.
+    // Build ORDER BY based on requested sort. In Recommended searches that
+    // have both a resolved radius and typed location, keep local-base matches
+    // ahead of service-area-only matches. Paid/featured and verification
+    // boosts remain in their existing order within each geographic group.
     const orderBy = (() => {
       switch (sort) {
         case "rating":
@@ -237,6 +247,9 @@ router.get("/traders", async (req, res) => {
           return [desc(traderProfilesTable.createdAt)];
         default:
           return [
+            ...(baseRadiusCondition && serviceAreaCondition
+              ? [sql`case when ${baseRadiusCondition} then 0 else 1 end`]
+              : []),
             sql`case when ${traderProfilesTable.verificationStatus} = 'VERIFIED' then 0 else 1 end`,
             // Use effective isFeatured: treat as false when the subscription
             // period has lapsed but the downgrade webhook hasn't arrived yet
@@ -362,6 +375,7 @@ router.get("/traders/:id", async (req, res) => {
       !row ||
       !isTraderPubliclyListed({
         isActive: row.profile.isActive,
+        businessProfileCompleted: row.profile.businessProfileCompleted,
         verificationStatus: row.profile.verificationStatus,
         revalidationOverdue: row.profile.revalidationOverdue,
         deletionStatus: row.deletionStatus,

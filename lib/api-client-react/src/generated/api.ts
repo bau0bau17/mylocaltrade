@@ -27,6 +27,7 @@ import type {
   AdminUserReportListResponse,
   AppealConversationReportBody,
   AppealReportBody,
+  AppealResponse,
   AuthResponse,
   BookingResponse,
   BookingSlotsResponse,
@@ -65,6 +66,7 @@ import type {
   ModerateReviewRequest,
   MuteConversationRequest,
   MuteConversationResponse,
+  MyReportsResponse,
   NewLeadCountResponse,
   OkResponse,
   PostAccountDeletionCancel200,
@@ -6004,11 +6006,11 @@ export const getGetMyReportsUrl = () => {
 }
 
 /**
- * @summary Get the authenticated user's reports and safe outcomes
+ * @summary Get the authenticated user's reports and report outcomes
  */
-export const getMyReports = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+export const getMyReports = async ( options?: Parameters<typeof customFetch>[1]): Promise<MyReportsResponse> => {
 
-  return customFetch<void>(getGetMyReportsUrl(),
+  return customFetch<MyReportsResponse>(getGetMyReportsUrl(),
   {
     ...options,
     method: 'GET'
@@ -6028,7 +6030,7 @@ export const getGetMyReportsQueryKey = () => {
     }
 
 
-export const getGetMyReportsQueryOptions = <TData = Awaited<ReturnType<typeof getMyReports>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetMyReportsQueryOptions = <TData = Awaited<ReturnType<typeof getMyReports>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -6047,14 +6049,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetMyReportsQueryResult = NonNullable<Awaited<ReturnType<typeof getMyReports>>>
-export type GetMyReportsQueryError = ErrorType<unknown>
+export type GetMyReportsQueryError = ErrorType<ErrorResponse>
 
 
 /**
- * @summary Get the authenticated user's reports and safe outcomes
+ * @summary Get the authenticated user's reports and report outcomes
  */
 
-export function useGetMyReports<TData = Awaited<ReturnType<typeof getMyReports>>, TError = ErrorType<unknown>>(
+export function useGetMyReports<TData = Awaited<ReturnType<typeof getMyReports>>, TError = ErrorType<ErrorResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -6406,7 +6408,7 @@ export const getAppealReportUrl = (id: number,) => {
  * @summary Submit one appeal linked to a decided report
  */
 export const appealReport = async (id: number,
-    appealReportBody: AppealReportBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+    appealReportBody: AppealReportBody, options?: Parameters<typeof customFetch>[1]): Promise<AppealResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -6414,7 +6416,7 @@ export const appealReport = async (id: number,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-return customFetch<void>(getAppealReportUrl(id),
+return customFetch<AppealResponse>(getAppealReportUrl(id),
   {
     ...options,
     method: 'POST',
@@ -6429,7 +6431,7 @@ return customFetch<void>(getAppealReportUrl(id),
 
 export const getAppealReportMutationKey = () => ['appealReport'] as const;
 
-export const getAppealReportMutationOptions = <TError = ErrorType<unknown>,
+export const getAppealReportMutationOptions = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appealReport>>, TError,AppealReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof appealReport>>, TError,AppealReportMutationVariables, TContext> => {
 
@@ -6458,13 +6460,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type AppealReportMutationResult = NonNullable<Awaited<ReturnType<typeof appealReport>>>
     export type AppealReportMutationBody = BodyType<AppealReportBody>
-    export type AppealReportMutationError = ErrorType<unknown>
+    export type AppealReportMutationError = ErrorType<ErrorResponse>
     export type AppealReportMutationVariables = {id: number;data: BodyType<AppealReportBody>}
 
     /**
  * @summary Submit one appeal linked to a decided report
  */
-export const useAppealReport = <TError = ErrorType<unknown>,
+export const useAppealReport = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appealReport>>, TError,AppealReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof appealReport>>,
@@ -6487,7 +6489,7 @@ export const getAppealConversationReportUrl = (id: number,) => {
  * @summary Submit one appeal for an authenticated user's decided chat report
  */
 export const appealConversationReport = async (id: number,
-    appealConversationReportBody: AppealConversationReportBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+    appealConversationReportBody: AppealConversationReportBody, options?: Parameters<typeof customFetch>[1]): Promise<AppealResponse> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -6495,7 +6497,7 @@ export const appealConversationReport = async (id: number,
     if (Array.isArray(h)) return Object.fromEntries(h);
     return h;
   };
-return customFetch<void>(getAppealConversationReportUrl(id),
+return customFetch<AppealResponse>(getAppealConversationReportUrl(id),
   {
     ...options,
     method: 'POST',
@@ -6510,7 +6512,7 @@ return customFetch<void>(getAppealConversationReportUrl(id),
 
 export const getAppealConversationReportMutationKey = () => ['appealConversationReport'] as const;
 
-export const getAppealConversationReportMutationOptions = <TError = ErrorType<unknown>,
+export const getAppealConversationReportMutationOptions = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appealConversationReport>>, TError,AppealConversationReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof appealConversationReport>>, TError,AppealConversationReportMutationVariables, TContext> => {
 
@@ -6539,13 +6541,13 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type AppealConversationReportMutationResult = NonNullable<Awaited<ReturnType<typeof appealConversationReport>>>
     export type AppealConversationReportMutationBody = BodyType<AppealConversationReportBody>
-    export type AppealConversationReportMutationError = ErrorType<unknown>
+    export type AppealConversationReportMutationError = ErrorType<ErrorResponse>
     export type AppealConversationReportMutationVariables = {id: number;data: BodyType<AppealConversationReportBody>}
 
     /**
  * @summary Submit one appeal for an authenticated user's decided chat report
  */
-export const useAppealConversationReport = <TError = ErrorType<unknown>,
+export const useAppealConversationReport = <TError = ErrorType<ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof appealConversationReport>>, TError,AppealConversationReportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof appealConversationReport>>,

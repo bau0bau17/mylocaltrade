@@ -14,9 +14,10 @@ import { clearGeocodeMemoryCache, geocodeUkLocation, type FetchLike } from "../l
 /**
  * Search-radius filter on GET /traders. Contract under test:
  *  - anchor precedence: valid lat/lng, else server-geocoded `near` (cached),
- *  - the radius is a pure FILTER — sort behaviour inside it is unchanged,
+ *  - a typed, explicit service area is an alternative geographic eligibility
+ *    signal; Recommended still puts trusted in-radius bases first,
  *  - traders without trusted coords (geocodedPostcode must equal postcode)
- *    are excluded only while a radius applies, included otherwise,
+ *    need a matching explicit service area while a radius applies,
  *  - unresolvable anchors / invalid params degrade gracefully to UK-wide.
  *
  * Geometry: the anchor is Milton Keynes centre-ish (52.0406, -0.7594). One
@@ -94,6 +95,7 @@ async function createTrader(
 let onAnchorId: number;
 let nearbyId: number;
 let farId: number;
+let serviceAreaOnlyId: number;
 let noCoordsId: number;
 let staleCoordsId: number;
 
@@ -113,6 +115,10 @@ beforeAll(async () => {
     latitude: ANCHOR.lat,
     longitude: ANCHOR.lng,
     geocodedPostcode: "MK9 3XS",
+    additionalServices: ["Boiler installation", "Websites", "Leasehold repairs"],
+    serviceAreas: ["Milton Keynes"],
+    plan: "premium",
+    isFeatured: true,
     rating: 4.5,
     reviewCount: 10,
   });
@@ -129,8 +135,23 @@ beforeAll(async () => {
     latitude: 52.62, // ~40 miles due north
     longitude: ANCHOR.lng,
     geocodedPostcode: "LE1 5AA",
+    additionalServices: ["Boiler repair"],
+    serviceAreas: ["Leicester"],
     rating: 4.8,
     reviewCount: 10,
+  });
+  // Deliberately far from Milton Keynes but explicitly opted into jobs there.
+  // This is authoritative service coverage, not an inferred location.
+  serviceAreaOnlyId = await createTrader("service-area-only", {
+    town: "Glasgow",
+    postcode: "G1 1XQ",
+    latitude: 55.8642,
+    longitude: -4.2518,
+    geocodedPostcode: "G1 1XQ",
+    additionalServices: ["Boiler servicing", "Websites", "Leasehold repairs"],
+    serviceAreas: ["Milton Keynes", "Bedford"],
+    rating: 4.7,
+    reviewCount: 8,
   });
   // Never geocoded: must be excluded under a radius, included without one.
   noCoordsId = await createTrader("no-coords", {
@@ -173,11 +194,68 @@ afterAll(async () => {
 });
 
 describe("GET /traders — search radius filter", () => {
+  it("includes explicit Milton Keynes service coverage outside the base radius, after local-base matches", async () => {
+    const response = await request(app)
+      .get("/api/traders")
+      .query({
+        search: "Boiler",
+        location: "Milton Keynes",
+        near: NEAR_TOWN,
+        radiusMiles: 20,
+        limit: 50,
+      });
+    expect(response.status).toBe(200);
+    const ids = response.body.traders.map((trader: { id: number }) => trader.id);
+    expect(ids).toEqual(expect.arrayContaining([onAnchorId, serviceAreaOnlyId]));
+    expect(ids).not.toContain(farId);
+    expect(ids.indexOf(onAnchorId)).toBeLessThan(ids.indexOf(serviceAreaOnlyId));
+    expect(response.body.total).toBe(2);
+  });
+
+  it("uses each explicitly configured service area without making a trader nationwide", async () => {
+    const response = await request(app)
+      .get("/api/traders")
+      .query({
+        search: "Boiler",
+        location: "Bedford",
+        lat: 52.1364,
+        lng: -0.4667,
+        radiusMiles: 5,
+        limit: 50,
+      });
+    expect(response.status).toBe(200);
+    const ids = response.body.traders.map((trader: { id: number }) => trader.id);
+    expect(ids).toEqual([serviceAreaOnlyId]);
+    expect(ids).not.toContain(farId);
+  });
+
+  it.each(["Boiler", "boiler", "Websites", "Leasehold repairs"])(
+    "finds an exact free-text additional service (%s) within the Milton Keynes radius",
+    async (search) => {
+      const response = await request(app)
+        .get("/api/traders")
+        .query({
+          search,
+          location: "Milton Keynes",
+          near: NEAR_TOWN,
+          radiusMiles: 20,
+          limit: 50,
+        });
+      expect(response.status).toBe(200);
+      const ids = response.body.traders.map((trader: { id: number }) => trader.id);
+      // The in-radius trader is Premium/featured, while the service-area-only
+      // trader is Basic. Neither plan is an eligibility requirement.
+      expect(ids).toEqual(expect.arrayContaining([onAnchorId, serviceAreaOnlyId]));
+      expect(response.body.total).toBeGreaterThan(0);
+    },
+  );
+
   it("radius 10 with lat/lng keeps only traders within 10 miles", async () => {
     const { ids, total } = await listIds({ radiusMiles: 10, lat: ANCHOR.lat, lng: ANCHOR.lng });
     expect(ids).toContain(onAnchorId);
     expect(ids).toContain(nearbyId);
     expect(ids).not.toContain(farId);
+    expect(ids).not.toContain(serviceAreaOnlyId);
     expect(ids).not.toContain(noCoordsId);
     expect(ids).not.toContain(staleCoordsId);
     expect(total).toBe(2);
@@ -195,9 +273,9 @@ describe("GET /traders — search radius filter", () => {
   it("no radius (UK-wide) includes traders with missing/stale coords", async () => {
     const { ids, total } = await listIds({});
     expect(ids).toEqual(
-      expect.arrayContaining([onAnchorId, nearbyId, farId, noCoordsId, staleCoordsId]),
+      expect.arrayContaining([onAnchorId, nearbyId, farId, serviceAreaOnlyId, noCoordsId, staleCoordsId]),
     );
-    expect(total).toBe(5);
+    expect(total).toBe(6);
   });
 
   it("`near` anchor resolves via the geocode cache (no live lookup)", async () => {
@@ -216,21 +294,21 @@ describe("GET /traders — search radius filter", () => {
     clearGeocodeMemoryCache();
     const { ids } = await listIds({ radiusMiles: 10, near: NEAR_UNRESOLVED });
     expect(ids).toEqual(
-      expect.arrayContaining([onAnchorId, nearbyId, farId, noCoordsId, staleCoordsId]),
+      expect.arrayContaining([onAnchorId, nearbyId, farId, serviceAreaOnlyId, noCoordsId, staleCoordsId]),
     );
   });
 
   it("radius without any anchor is ignored (UK-wide)", async () => {
     const { ids } = await listIds({ radiusMiles: 10 });
     expect(ids).toEqual(
-      expect.arrayContaining([onAnchorId, nearbyId, farId, noCoordsId, staleCoordsId]),
+      expect.arrayContaining([onAnchorId, nearbyId, farId, serviceAreaOnlyId, noCoordsId, staleCoordsId]),
     );
   });
 
   it.each(["abc", "-5", "0"])("invalid radiusMiles %s is ignored", async (bad) => {
     const { ids } = await listIds({ radiusMiles: bad, lat: ANCHOR.lat, lng: ANCHOR.lng });
     expect(ids).toEqual(
-      expect.arrayContaining([onAnchorId, nearbyId, farId, noCoordsId, staleCoordsId]),
+      expect.arrayContaining([onAnchorId, nearbyId, farId, serviceAreaOnlyId, noCoordsId, staleCoordsId]),
     );
   });
 
@@ -263,7 +341,7 @@ describe("GET /traders — distanceMiles (display-only)", () => {
     const traders = await listTraders({ lat: ANCHOR.lat, lng: ANCHOR.lng });
     // No filter: everyone is still returned…
     expect(traders.map((t) => t.id)).toEqual(
-      expect.arrayContaining([onAnchorId, nearbyId, farId, noCoordsId, staleCoordsId]),
+      expect.arrayContaining([onAnchorId, nearbyId, farId, serviceAreaOnlyId, noCoordsId, staleCoordsId]),
     );
     // …with a real distance where coords are trusted…
     expect(distanceOf(traders, onAnchorId)).toBeCloseTo(0, 1);

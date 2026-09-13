@@ -13,6 +13,9 @@ describe("canonical category ↔ service mapping", () => {
       expect.arrayContaining(["Gardener", "Landscaping"]),
     );
     expect(expandServiceTerms("Heating")).toEqual(expect.arrayContaining(["Heating engineer"]));
+    expect(expandServiceTerms("Boiler")).toEqual(
+      expect.arrayContaining(["Boiler installation", "Boiler servicing", "Boiler repair"]),
+    );
     expect(expandServiceTerms("Gas engineers")).toEqual(expect.arrayContaining(["Gas engineer"]));
     expect(expandServiceTerms("Locksmiths")).toEqual(expect.arrayContaining(["Locksmith"]));
     expect(expandServiceTerms("EV chargers")).toEqual(

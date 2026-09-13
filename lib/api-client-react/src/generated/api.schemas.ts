@@ -13,6 +13,42 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface AppealResponse {
+  appealId: number;
+  status: string;
+}
+
+export interface ReportAppealStatus {
+  id: number;
+  status: string;
+  outcome?: string | null;
+}
+
+export type MyReportReportType = typeof MyReportReportType[keyof typeof MyReportReportType];
+
+
+export const MyReportReportType = {
+  user: 'user',
+  conversation: 'conversation',
+} as const;
+
+export interface MyReport {
+  id: number;
+  reportType: MyReportReportType;
+  category: string;
+  status: string;
+  outcome: string | null;
+  outcomeAt: string | null;
+  createdAt: string;
+  appeal: ReportAppealStatus | null;
+  /** Whether the reporter can currently submit an appeal. This does not disclose internal handling details. */
+  appealEligible: boolean;
+}
+
+export interface MyReportsResponse {
+  reports: MyReport[];
+}
+
 export interface SuccessResponse {
   success: boolean;
   message?: string;

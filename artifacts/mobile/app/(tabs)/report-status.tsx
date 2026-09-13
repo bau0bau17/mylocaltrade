@@ -22,6 +22,7 @@ type ReportItem = {
   outcomeAt?: string | null;
   createdAt: string;
   appeal?: { id: number; status: string; outcome?: string | null } | null;
+  appealEligible?: boolean;
 };
 
 const APPEAL_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
@@ -37,6 +38,20 @@ function formatUkDate(date: Date): string {
   return date.toLocaleDateString('en-GB');
 }
 
+function appealFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  if (message.includes('only one appeal')) {
+    return 'You have already submitted an appeal for this decision.';
+  }
+  if (message.includes('appeal period')) {
+    return 'The appeal period for this decision has ended.';
+  }
+  if (message.includes('final decision') || message.includes('report not found')) {
+    return 'This decision is not eligible for appeal.';
+  }
+  return 'We couldn’t submit your appeal. Please try again.';
+}
+
 export default function ReportStatusScreen() {
   const { isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
@@ -49,6 +64,9 @@ export default function ReportStatusScreen() {
   const isFocusedRef = useRef(false);
   const [appealFor, setAppealFor] = useState<ReportItem | null>(null);
   const [reason, setReason] = useState('');
+  const [appealNotice, setAppealNotice] = useState<string | null>(null);
+  const [appealError, setAppealError] = useState<string | null>(null);
+  const isSubmittingAppealRef = useRef(false);
   const profileAppeal = useAppealReport();
   const conversationAppeal = useAppealConversationReport();
   const reports = ((data as unknown as { reports?: ReportItem[] } | undefined)?.reports ?? []);
@@ -78,16 +96,27 @@ export default function ReportStatusScreen() {
   }, [isAuthenticated, refetch]);
 
   const submitAppeal = () => {
-    if (!appealFor || reason.trim().length < 10) return;
+    if (isSubmittingAppealRef.current) return;
+    if (!appealFor || reason.trim().length < 10) {
+      setAppealError('Please explain your appeal in at least 10 characters.');
+      return;
+    }
     const mutation = appealFor.reportType === 'conversation' ? conversationAppeal : profileAppeal;
+    isSubmittingAppealRef.current = true;
+    setAppealError(null);
+    setAppealNotice(null);
     mutation.mutate(
       { id: appealFor.id, data: { reason: reason.trim() } },
       {
-        onSuccess: () => {
+        onSuccess: async () => {
           setAppealFor(null);
           setReason('');
-          void qc.invalidateQueries({ queryKey: getGetMyReportsQueryKey() });
+          setAppealNotice('Appeal submitted');
+          await qc.invalidateQueries({ queryKey: getGetMyReportsQueryKey() });
+          await refetch();
         },
+        onError: (error: unknown) => setAppealError(appealFailureMessage(error)),
+        onSettled: () => { isSubmittingAppealRef.current = false; },
       },
     );
   };
@@ -116,7 +145,9 @@ export default function ReportStatusScreen() {
       ) : reports.map((report) => {
         const decided = !!report.outcome;
         const deadline = appealDeadline(report.outcomeAt);
-        const appealAvailable = decided && !!deadline && Date.now() <= deadline.getTime();
+        const appealAvailable =
+          report.appealEligible ??
+          (decided && !!deadline && Date.now() <= deadline.getTime());
         return (
           <View key={`${report.reportType}-${report.id}`} style={styles.card}>
             <Text style={styles.cardTitle}>{report.category.replaceAll('_', ' ')}</Text>
@@ -134,14 +165,18 @@ export default function ReportStatusScreen() {
           </View>
         );
       })}
+      {appealNotice ? (
+        <Text style={styles.success} accessibilityRole="alert">{appealNotice}</Text>
+      ) : null}
       {appealFor ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Challenge report outcome</Text>
            <Text style={styles.paragraph}>Explain why you think this decision should be reviewed. This is a separate review and does not automatically reverse the decision. Safety handling may continue independently of an appeal. We allow one appeal for each decided report.</Text>
           <TextInput value={reason} onChangeText={setReason} multiline maxLength={2000} style={styles.input} placeholder="At least 10 characters" placeholderTextColor={Colors.light.textMuted} />
-          <Pressable style={[styles.button, reason.trim().length < 10 && styles.disabled]} disabled={reason.trim().length < 10 || profileAppeal.isPending || conversationAppeal.isPending} onPress={submitAppeal}>
-             {(profileAppeal.isPending || conversationAppeal.isPending) ? <ActivityIndicator color={Colors.light.white} /> : <Text style={styles.buttonText}>Submit appeal</Text>}
+          <Pressable style={[styles.button, (reason.trim().length < 10 || profileAppeal.isPending || conversationAppeal.isPending) && styles.disabled]} disabled={reason.trim().length < 10 || profileAppeal.isPending || conversationAppeal.isPending} onPress={submitAppeal}>
+             {(profileAppeal.isPending || conversationAppeal.isPending) ? <Text style={styles.buttonText}>Submitting…</Text> : <Text style={styles.buttonText}>Submit appeal</Text>}
           </Pressable>
+          {appealError ? <Text style={styles.error} accessibilityRole="alert">{appealError}</Text> : null}
           <Pressable onPress={() => setAppealFor(null)}><Text style={styles.cancel}>Cancel</Text></Pressable>
         </View>
       ) : null}
@@ -164,6 +199,8 @@ const styles = StyleSheet.create({
   button: { backgroundColor: Colors.light.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
   disabled: { opacity: 0.5 },
   buttonText: { color: Colors.light.white, fontWeight: '700' },
+  success: { color: Colors.light.success, fontWeight: '700', marginBottom: 12 },
+  error: { color: Colors.light.error, fontSize: 13, lineHeight: 19, marginTop: 10 },
   cancel: { textAlign: 'center', color: Colors.light.textSecondary, padding: 14 },
   notice: { fontSize: 13, color: Colors.light.textMuted, lineHeight: 20, marginTop: 10 },
 });

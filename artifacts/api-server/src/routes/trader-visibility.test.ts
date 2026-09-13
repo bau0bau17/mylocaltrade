@@ -30,6 +30,7 @@ import {
 function row(overrides: Partial<PublicListingRow> = {}): PublicListingRow {
   return {
     isActive: true,
+    businessProfileCompleted: true,
     verificationStatus: "VERIFIED",
     revalidationOverdue: false,
     deletionStatus: null,
@@ -45,6 +46,10 @@ describe("isTraderPubliclyListed", () => {
 
   it("hides an inactive profile", () => {
     expect(isTraderPubliclyListed(row({ isActive: false }))).toBe(false);
+  });
+
+  it("hides a trader whose business profile is incomplete", () => {
+    expect(isTraderPubliclyListed(row({ businessProfileCompleted: false }))).toBe(false);
   });
 
   it("hides a trader whose re-validation is overdue", () => {
@@ -234,5 +239,19 @@ describe("GET /saved-traders hides deletion-lifecycle traders", () => {
     expect(ids).toContain(visibleProfileId);
     expect(ids).not.toContain(pendingDeletionProfileId);
     expect(ids).not.toContain(softDeletedProfileId);
+  });
+
+  it("does not expose an incomplete profile through its direct public URL", async () => {
+    const incompleteUserId = await createUser("trader-incomplete", "trader");
+    const incompleteProfileId = await createTraderProfile("incomplete", incompleteUserId, {
+      businessProfileCompleted: false,
+    });
+
+    const list = await request(app).get("/api/traders").query({ search: TEST_CATEGORY });
+    expect(list.status).toBe(200);
+    expect((list.body.traders as { id: number }[]).map((trader) => trader.id)).not.toContain(incompleteProfileId);
+
+    const detail = await request(app).get(`/api/traders/${incompleteProfileId}`);
+    expect(detail.status).toBe(404);
   });
 });

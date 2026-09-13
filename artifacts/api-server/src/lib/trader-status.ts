@@ -196,6 +196,7 @@ export interface PublicListingOptions {
  */
 export interface PublicListingRow {
   isActive: boolean;
+  businessProfileCompleted: boolean;
   verificationStatus: string;
   revalidationOverdue: boolean;
   deletionStatus: string | null;
@@ -213,6 +214,7 @@ export function isTraderPubliclyListed(
   opts?: PublicListingOptions,
 ): boolean {
   if (!row.isActive) return false;
+  if (!row.businessProfileCompleted) return false;
   if (row.revalidationOverdue) return false;
   if (row.deletionStatus || row.deletedAt) return false;
   if (opts?.verifiedOnly) return row.verificationStatus === TRADER_STATUS.VERIFIED;
@@ -227,6 +229,7 @@ export function isTraderPubliclyListed(
 export function publicTraderSqlConditions(opts?: PublicListingOptions): SQL[] {
   return [
     eq(traderProfilesTable.isActive, true),
+    eq(traderProfilesTable.businessProfileCompleted, true),
     opts?.verifiedOnly
       ? eq(traderProfilesTable.verificationStatus, TRADER_STATUS.VERIFIED)
       : inArray(traderProfilesTable.verificationStatus, [...PUBLIC_TRADER_STATUSES]),

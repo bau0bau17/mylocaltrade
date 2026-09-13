@@ -1,0 +1,544 @@
+PRE-RELEASE BLOCKERS
+
+Before App Store submission, investigate and fix two live issues:
+
+A. Report Status → Submit appeal appears active but performs no visible action.
+B. Trader Search is failing to return traders that should match service + location.
+
+IMPORTANT:
+Audit first.
+Do NOT guess.
+Do NOT redesign unrelated systems.
+Do NOT deploy.
+Do NOT create a TestFlight build.
+Do NOT push to GitHub — I will use Replit Git Sync myself.
+
+==================================================
+A. REPORT STATUS → SUBMIT APPEAL DOES NOTHING
+==================================================
+
+REAL DEVICE RESULT
+
+On Report Status:
+
+- report is RESOLVED;
+- outcome is NO_VIOLATION;
+- appeal deadline is still valid;
+- “Appeal this outcome” opens the Challenge Report Outcome form;
+- appeal text can be entered;
+- “Submit appeal” appears enabled;
+- tapping Submit appeal produces no visible result.
+
+No success confirmation appears.
+No error appears.
+The form remains open.
+
+This must be fixed before App Store submission.
+
+
+1. TRACE APPEAL SUBMISSION END TO END
+
+Trace:
+
+Report Status form
+→ Submit appeal button onPress
+→ validation
+→ mutation/action
+→ generated API client
+→ request payload
+→ API route
+→ authentication/ownership
+→ appeal eligibility/deadline validation
+→ database insert
+→ API response
+→ React Query invalidation/refetch
+→ UI success/error state
+
+Determine whether:
+
+- onPress is not firing;
+- handler exits early;
+- textarea value is not reaching mutation;
+- mutation is never called;
+- generated API client signature changed;
+- request body/report ID/report type is wrong;
+- API returns 4xx/5xx but the UI swallows it;
+- conversation and user/profile reports use different appeal routes incorrectly;
+- stale React Query data makes the UI think an appeal already exists;
+- success occurs server-side but UI never refreshes.
+
+
+2. REQUIRED APPEAL UX
+
+For an eligible decision:
+
+User enters appeal
+→ Submit
+→ button shows “Submitting…”
+→ duplicate taps prevented
+→ API succeeds
+→ form closes/updates
+→ Report Status refetches
+→ appeal status appears immediately
+→ second appeal option disappears.
+
+Show clear feedback such as:
+
+“Appeal submitted”
+
+If submission fails, do NOT silently fail.
+
+Safe examples:
+
+Duplicate:
+“You have already submitted an appeal for this decision.”
+
+Expired:
+“The appeal period for this decision has ended.”
+
+Not eligible:
+“This decision is not eligible for appeal.”
+
+Network/server:
+“We couldn’t submit your appeal. Please try again.”
+
+Do not expose raw API/database/moderation errors.
+
+
+3. PRESERVE EXISTING APPEAL RULES
+
+Do not change:
+
+- one appeal per eligible decision;
+- 30-day deadline;
+- original report outcome vs appeal outcome separation;
+- appeal does not automatically reverse the decision;
+- safety handling may continue independently of an appeal;
+- CSEA specialist protections;
+- ownership/authentication.
+
+
+==================================================
+B. SEARCH SYSTEM RETURNS ZERO RESULTS INCORRECTLY
+==================================================
+
+REAL DEVICE RESULT
+
+A live/test trader profile has:
+
+Services:
+- Websites
+- Boiler
+- Leasehold repairs
+
+The trader is intended/configured to serve Milton Keynes.
+
+However:
+
+Search term:
+Boiler
+
+Location:
+Milton Keynes
+
+Search radius:
+20 miles
+
+Result:
+0 traders found.
+
+This must be investigated as an END-TO-END search-system issue, not patched only for this trader.
+
+
+IMPORTANT OBSERVATION
+
+The trader profile visibly contains “Boiler” under Services.
+
+However the Search Filters → Specialism list currently includes examples such as:
+
+- Solar panels
+- EV chargers
+- Heat pumps
+- Insulation
+- EPC improvements
+- Damp & mould
+- Cladding & remediation
+- Leasehold repairs
+
+and does not visibly include Boiler.
+
+Audit whether free-text search is incorrectly searching only specialist/specialism fields rather than the trader’s normal Services.
+
+Do NOT simply add “Boiler” to one UI list unless that is actually the root cause.
+
+
+1. TRACE SEARCH END TO END
+
+Trace:
+
+mobile Search UI
+→ query text normalization
+→ location input
+→ geocoding/location resolution
+→ radius
+→ filters
+→ generated API client
+→ search API
+→ database query/search index
+→ trader eligibility/visibility rules
+→ service matching
+→ specialism matching
+→ location/service-area matching
+→ ranking
+→ API response
+→ mobile rendering.
+
+Use the affected test trader as a concrete regression case without exposing private account information.
+
+
+2. CHECK SERVICE MATCHING
+
+Determine exactly which fields free-text search currently searches.
+
+Audit:
+
+- primary trade/category;
+- services;
+- specialisms;
+- profile/business description if intended;
+- aliases/synonyms;
+- case normalization;
+- singular/plural normalization.
+
+Example:
+
+Trader has:
+service = “Boiler”
+
+Query:
+“Boiler”
+
+This should produce a direct service match unless another legitimate visibility/location rule excludes the trader.
+
+Check whether service values are:
+
+- IDs;
+- labels;
+- slugs;
+- enums;
+- free text;
+
+and whether mobile and server use the same canonical representation.
+
+
+3. SERVICES VS SPECIALISMS
+
+Clarify the intended model:
+
+SERVICES:
+normal services offered by a trader.
+
+SPECIALISMS:
+additional/niche specialist capabilities.
+
+Search must not require a service to also exist as a specialism unless that is an explicit product rule.
+
+If “Boiler” is a valid normal Service, ensure searching “Boiler” can find traders offering that service independently of the Specialism filter.
+
+Do not merge Services and Specialisms if they are intentionally distinct.
+
+
+4. AUDIT LOCATION / SERVICE AREA
+
+The profile screenshot may display one profile location while the trader is configured to serve Milton Keynes.
+
+Determine what each field actually means:
+
+- business/base location;
+- displayed public location;
+- service-area locations;
+- postcode;
+- latitude/longitude;
+- configured service radius;
+- UK-wide setting if applicable.
+
+For the affected trader, verify from authoritative data whether it actually serves Milton Keynes.
+
+If YES:
+determine why location matching excludes it.
+
+If NO:
+report the configuration mismatch rather than forcing the trader into Milton Keynes results.
+
+
+5. GEOCODING / RADIUS
+
+Verify:
+
+“Milton Keynes”
+
+resolves to the expected coordinates/location entity.
+
+Check:
+
+- geocoder result;
+- latitude/longitude order;
+- miles vs kilometres conversion;
+- distance calculation;
+- 5 / 10 / 20 / 30 / 50 mile filters;
+- UK-wide behavior;
+- boundary rounding;
+- missing coordinates.
+
+A trader inside 20 miles should not be filtered out because of a unit conversion or coordinate bug.
+
+
+6. TRADER ELIGIBILITY / VISIBILITY
+
+Audit every eligibility condition applied to search:
+
+- active account;
+- trader role;
+- profile complete;
+- verification status;
+- admin visibility/hidden status;
+- account suspension;
+- subscription/Premium status;
+- profile publication state;
+- required service fields;
+- soft deletion;
+- business/team owner status.
+
+A free/expired/non-Premium trader must NOT disappear from normal search unless that is explicitly the intended product rule.
+
+Premium may affect ranking/featured placement, but should not silently become a basic search eligibility requirement unless the current product rules explicitly say so.
+
+Report the exact rules currently used.
+
+
+7. FILTERS
+
+Audit interactions between:
+
+- search text;
+- location;
+- radius;
+- Verified only;
+- Specialism;
+- sorting;
+- Recommended;
+- Top rated;
+- Most reviewed;
+- Newest.
+
+No inactive/unselected filter should accidentally behave as active.
+
+The Filters button in the screenshot reports:
+
+“Show 0 results”
+
+Verify that count comes from the same authoritative search logic as the main result screen.
+
+
+8. CACHE / QUERY KEY
+
+Check React Query/search caching.
+
+Ensure the cache/query key correctly includes:
+
+- query text;
+- location;
+- radius;
+- selected filters;
+- sort order.
+
+Searches must not reuse stale zero-result responses after parameters change.
+
+
+9. EXPECTED SEARCH BEHAVIOUR
+
+If trader X:
+
+- is searchable/visible;
+- offers Boiler;
+- genuinely serves Milton Keynes;
+- falls inside selected radius or explicit service area;
+
+then:
+
+Search:
+Boiler + Milton Keynes
+
+must return that trader.
+
+The trader does NOT need to be Premium merely to appear.
+
+Premium/featured status may influence ranking according to existing rules.
+
+
+10. TEST SEARCH SYSTEM MORE BROADLY
+
+Do not fix only “Boiler”.
+
+Add representative regression cases for:
+
+Exact service:
+Boiler → trader offering Boiler.
+
+Another service:
+Websites → trader offering Websites.
+
+Specialism:
+Leasehold repairs → relevant specialist trader.
+
+Case-insensitive:
+boiler / Boiler.
+
+Location:
+valid local trader inside radius.
+
+Outside radius:
+correctly excluded.
+
+20-mile radius:
+correct distance calculation.
+
+UK-wide trader:
+correct behavior.
+
+Verified-only:
+correct inclusion/exclusion.
+
+No filters:
+no accidental specialist filter.
+
+Multiple filters:
+correct intersection.
+
+Query change:
+cache does not return stale previous results.
+
+Premium vs non-Premium:
+eligibility correct; ranking rules preserved.
+
+Zero legitimate matches:
+“No traders found” still works correctly.
+
+
+==================================================
+C. DO NOT BREAK EXISTING SEARCH PRODUCT RULES
+==================================================
+
+Preserve:
+
+- existing Premium ranking/featured behavior;
+- verification badges;
+- Top Rated / Replies Fast rules;
+- hidden/admin moderation rules;
+- customer/trader account isolation;
+- service-area privacy decisions;
+- existing UK location model.
+
+Do not fabricate trader locations.
+
+Do not make all traders UK-wide just to solve this case.
+
+
+==================================================
+VALIDATION
+==================================================
+
+APPEALS:
+
+Test:
+1. eligible conversation-report appeal succeeds;
+2. eligible user/profile appeal succeeds;
+3. API called once;
+4. loading prevents duplicate submission;
+5. success refetches Report Status;
+6. duplicate appeal handled;
+7. expiry handled;
+8. server/network failure visible;
+9. ownership preserved;
+10. CSEA restrictions preserved.
+
+SEARCH:
+
+Test:
+1. Boiler exact service match;
+2. Websites exact service match;
+3. Specialism match;
+4. service ≠ specialism distinction;
+5. Milton Keynes location resolution;
+6. radius calculation;
+7. trader inside radius included;
+8. trader outside radius excluded;
+9. verified filter;
+10. Premium/non-Premium eligibility;
+11. hidden/suspended trader exclusion;
+12. cache/query-key parameter changes;
+13. filters result count matches actual results;
+14. legitimate zero-results state.
+
+Run:
+
+- relevant API tests
+- relevant Mobile tests
+- API typecheck
+- Mobile typecheck
+
+Because both are release-blocking core flows, run the full API and Mobile suites if shared code changed.
+
+Request independent final review.
+
+
+==================================================
+WHEN COMPLETE
+==================================================
+
+Do NOT deploy.
+Do NOT push to GitHub.
+Do NOT create TestFlight build.
+
+Report separately:
+
+
+APPEAL
+
+1. Exact root cause
+2. Whether onPress previously fired
+3. Whether API request was being sent
+4. Whether an error was being swallowed
+5. Exact fix
+6. Success UX
+7. Failure UX
+8. React Query refresh behavior
+
+
+SEARCH
+
+9. Exact reason “Boiler + Milton Keynes” returned zero
+10. Whether service matching was broken
+11. Whether Services and Specialisms were being confused
+12. Whether location/service-area data contributed
+13. Exact geocoding/radius behavior
+14. All search eligibility rules discovered
+15. Exact fix
+16. Whether the affected trader now appears
+17. Whether normal non-Premium traders remain searchable
+18. Whether Premium remains only a ranking/feature advantage where intended
+19. Search regression results
+
+
+RELEASE
+
+20. Files changed
+21. Tests/typechecks
+22. Database migration required yes/no
+23. Backend republish required yes/no
+24. Landing/web republish required yes/no
+25. Admin republish required yes/no
+26. New TestFlight build required yes/no
+27. Whether Appeal is release-ready
+28. Whether Search is release-ready
+29. Whether it is safe to continue to App Store submission after deployment/build

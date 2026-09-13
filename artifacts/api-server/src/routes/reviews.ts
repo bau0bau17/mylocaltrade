@@ -241,6 +241,7 @@ router.get("/traders/:id/reviews", async (req, res) => {
       .select({
         id: traderProfilesTable.id,
         isActive: traderProfilesTable.isActive,
+        businessProfileCompleted: traderProfilesTable.businessProfileCompleted,
         verificationStatus: traderProfilesTable.verificationStatus,
         revalidationOverdue: traderProfilesTable.revalidationOverdue,
         deletionStatus: usersTable.deletionStatus,

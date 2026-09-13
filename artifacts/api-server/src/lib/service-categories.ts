@@ -59,7 +59,7 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
   {
     id: "heating",
     label: "Heating",
-    terms: ["Heating engineer", "Heating & Gas", "Central heating", "Boiler installation", "Boiler servicing", "Boiler repair", "Radiator installation", "Underfloor heating"],
+    terms: ["Heating engineer", "Heating & Gas", "Central heating", "Boiler", "Boiler installation", "Boiler servicing", "Boiler repair", "Radiator installation", "Underfloor heating"],
   },
   {
     id: "gas",

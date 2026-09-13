@@ -39,6 +39,25 @@ function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error != null && "code" in error && (error as { code?: string }).code === "23505";
 }
 
+function canAppealReport(
+  report: {
+    status: string;
+    outcome: string | null;
+    outcomeAt: Date | null;
+    cseaEscalatedAt: Date | null;
+  },
+  hasAppeal: boolean,
+): boolean {
+  return Boolean(
+    !hasAppeal &&
+    report.status !== "OPEN" &&
+    report.outcome &&
+    report.outcomeAt &&
+    !report.cseaEscalatedAt &&
+    Date.now() - report.outcomeAt.getTime() <= CONVERSATION_REPORT_APPEAL_WINDOW_MS,
+  );
+}
+
 // GET /api/report-categories — public list of the predefined reasons, keyed by
 // the subject being reported. Mobile renders the picker from this so the client
 // never drifts from the server's accepted set.
@@ -188,23 +207,46 @@ router.get("/reports", authMiddleware, async (req, res) => {
   const reports = await db.select({
     id: userReportsTable.id, category: userReportsTable.category, status: userReportsTable.status,
     outcome: userReportsTable.outcome, outcomeAt: userReportsTable.outcomeAt,
-    createdAt: userReportsTable.createdAt,
+    createdAt: userReportsTable.createdAt, cseaEscalatedAt: userReportsTable.cseaEscalatedAt,
   }).from(userReportsTable).where(eq(userReportsTable.reporterUserId, userId));
   const chatReports = await db.select({
     id: conversationReportsTable.id, category: conversationReportsTable.category,
     status: conversationReportsTable.status, outcome: conversationReportsTable.outcome,
     outcomeAt: conversationReportsTable.outcomeAt, createdAt: conversationReportsTable.createdAt,
+    cseaEscalatedAt: conversationReportsTable.cseaEscalatedAt,
   }).from(conversationReportsTable).where(eq(conversationReportsTable.reportedByUserId, userId));
   const userAppeals = reports.length ? await db.select().from(reportAppealsTable).where(eq(reportAppealsTable.appellantUserId, userId)) : [];
   const chatAppeals = chatReports.length ? await db.select().from(reportAppealsTable).where(eq(reportAppealsTable.appellantUserId, userId)) : [];
   res.json({ reports: [
     ...reports.map((r) => {
       const appeal = userAppeals.find((a) => a.reportId === r.id);
-      return { ...r, reportType: "user", outcomeAt: r.outcomeAt?.toISOString() ?? null, createdAt: r.createdAt.toISOString(), appeal: appeal ? { id: appeal.id, status: appeal.status, outcome: appeal.resolution } : null };
+      return {
+        id: r.id,
+        category: r.category,
+        status: r.status,
+        outcome: r.outcome,
+        reportType: "user",
+        outcomeAt: r.outcomeAt?.toISOString() ?? null,
+        createdAt: r.createdAt.toISOString(),
+        appeal: appeal ? { id: appeal.id, status: appeal.status, outcome: appeal.resolution } : null,
+        // This intentionally exposes only a safe action-state boolean. It
+        // never reveals whether restricted safety handling is involved.
+        appealEligible: canAppealReport(r, Boolean(appeal)),
+      };
     }),
     ...chatReports.map((r) => {
       const appeal = chatAppeals.find((a) => a.conversationReportId === r.id);
-      return { ...r, reportType: "conversation", outcomeAt: r.outcomeAt?.toISOString() ?? null, createdAt: r.createdAt.toISOString(), appeal: appeal ? { id: appeal.id, status: appeal.status, outcome: appeal.resolution } : null };
+      return {
+        id: r.id,
+        category: r.category,
+        status: r.status,
+        outcome: r.outcome,
+        reportType: "conversation",
+        outcomeAt: r.outcomeAt?.toISOString() ?? null,
+        createdAt: r.createdAt.toISOString(),
+        appeal: appeal ? { id: appeal.id, status: appeal.status, outcome: appeal.resolution } : null,
+        appealEligible: canAppealReport(r, Boolean(appeal)),
+      };
     }),
   ] });
 });

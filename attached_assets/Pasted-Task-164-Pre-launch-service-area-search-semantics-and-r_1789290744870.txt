@@ -1,0 +1,216 @@
+Task #164 — Pre-launch service-area search semantics and real release regression.
+
+IMPORTANT:
+Do not deploy.
+Do not push to GitHub — I will use Replit Git Sync myself.
+Do not change Appeal functionality; that fix is complete.
+
+CURRENT FINDING
+
+Search currently applies radius using the trader’s verified business postcode / geocoded base location.
+
+A declared service area does NOT currently override an out-of-radius business base.
+
+Example:
+
+Trader business base:
+London
+
+Trader declares that they serve:
+Milton Keynes
+
+Customer search:
+Boiler
+Milton Keynes
+20 miles
+
+Current result:
+Trader is excluded because the business base is outside the 20-mile radius.
+
+This may not match the intended MyLocalTrade marketplace model.
+
+AUDIT BEFORE CHANGING ANYTHING.
+
+==================================================
+1. DETERMINE THE CURRENT SERVICE-AREA DATA MODEL
+==================================================
+
+Inspect exactly how traders declare where they work.
+
+Identify:
+
+- business/base postcode;
+- verified business location;
+- trader service areas;
+- towns/cities served;
+- postcode areas served;
+- service radius, if any;
+- UK-wide setting, if any;
+- latitude/longitude fields;
+- whether service areas are geocoded or only textual;
+- whether Team/business profiles share these settings.
+
+Report what “serves Milton Keynes” currently means technically.
+
+==================================================
+2. DEFINE CORRECT SEARCH SEMANTICS
+==================================================
+
+For a trades marketplace, distinguish:
+
+BUSINESS BASE
+Where the trader/business is located.
+
+SERVICE AREA
+Where the trader is willing to accept jobs.
+
+A customer searching in Milton Keynes should normally be able to find a trader who has explicitly configured Milton Keynes as a valid service area, even if the trader's business base is outside the customer's selected radius.
+
+However:
+do NOT make every trader nationwide.
+do NOT infer service areas from profile text.
+do NOT fabricate geographic coverage.
+
+Use only authoritative trader-configured service coverage.
+
+Preferred rule, if supported safely by the existing data model:
+
+A trader qualifies geographically if EITHER:
+
+A. their verified business/base location falls within the selected customer radius;
+
+OR
+
+B. the customer's searched location falls within a service area explicitly configured by that trader.
+
+The selected customer radius should still apply normally to base-location matches.
+
+An explicit configured service-area match is a separate positive coverage signal and should not be rejected merely because the trader's office/base is outside that radius.
+
+If this interpretation conflicts with the existing product model, report that before implementing.
+
+==================================================
+3. SEARCH RANKING
+==================================================
+
+Do not treat a distant service-area trader exactly the same as a nearby local trader unless existing ranking already intends that.
+
+Preferred ranking:
+
+1. strong service match + local base within radius;
+2. strong service match + explicit service-area coverage;
+3. weaker text/synonym matches.
+
+Preserve:
+- Premium ranking boost;
+- featured placement;
+- verification ranking;
+- ratings/reviews;
+- existing Recommended logic.
+
+Premium must not become a basic eligibility requirement.
+
+==================================================
+4. LOCATION PRIVACY
+==================================================
+
+Do not expose a trader's private exact address.
+
+Search may use verified/geocoded coordinates internally while continuing to display only the intended public location representation.
+
+==================================================
+5. REAL REGRESSION CASE
+==================================================
+
+The current development trader inspected is NOT a valid test fixture yet because:
+
+- profile is incomplete;
+- phone verification is pending;
+- trusted base location is London.
+
+Do not weaken profile/verification rules just to make that record appear.
+
+Instead create/use a valid test fixture representing the intended real scenario:
+
+- completed public trader profile;
+- eligible/searchable account;
+- Boiler service;
+- verified business location;
+- explicitly configured Milton Keynes service coverage.
+
+Then confirm:
+
+Search:
+Boiler
+Milton Keynes
+
+returns the trader according to the finalized service-area rule.
+
+Also test a trader who does NOT serve Milton Keynes and whose base is outside radius — that trader must remain excluded.
+
+==================================================
+6. REGRESSION COVERAGE
+==================================================
+
+Test:
+
+1. base inside radius + service match → included;
+2. base outside radius + no service area → excluded;
+3. base outside radius + explicit Milton Keynes service area → behavior according to finalized rule;
+4. Boiler exact service;
+5. Websites exact service;
+6. Leasehold repairs specialism;
+7. case-insensitive service search;
+8. Premium and non-Premium eligibility;
+9. incomplete profile excluded;
+10. unverified/hidden/suspended trader exclusion according to current rules;
+11. UK-wide coverage if supported;
+12. multiple service areas;
+13. stale React Query/search cache does not affect location changes;
+14. filter count matches returned results.
+
+==================================================
+7. BROAD PUBLIC PROFILE RULE
+==================================================
+
+The previous fix also made “completed business profile” part of the shared public-listing rule across:
+
+- search;
+- direct public profile URLs;
+- reviews;
+- saved traders;
+- featured results;
+- public media.
+
+Audit this once more.
+
+Confirm that this broad behavior is intentional and does not accidentally make legitimate existing profiles disappear merely because an optional non-critical profile field is empty.
+
+Report exactly what fields make a profile “complete”.
+
+Do not loosen required safety/identity fields.
+
+==================================================
+WHEN COMPLETE
+==================================================
+
+Do not deploy.
+Do not push to GitHub.
+
+Report:
+
+1. Exact business-base model
+2. Exact service-area model
+3. What “serves Milton Keynes” means in data
+4. Final geographic eligibility rule
+5. Whether explicit service areas override an out-of-radius base
+6. Ranking behavior for service-area vs nearby-base matches
+7. Exact profile-completeness criteria
+8. Whether the broad completed-profile rule is safe
+9. Real regression result for Boiler + Milton Keynes
+10. Tests/typechecks
+11. Files changed
+12. Database migration required yes/no
+13. Backend republish required yes/no
+14. New TestFlight build required yes/no
+15. Whether Search is truly release-ready

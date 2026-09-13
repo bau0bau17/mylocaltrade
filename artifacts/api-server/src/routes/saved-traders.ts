@@ -28,6 +28,7 @@ router.get("/saved-traders", authMiddleware, customerOnly, async (req, res) => {
         isTraderPubliclyListed(
           {
             isActive: t.isActive,
+            businessProfileCompleted: t.businessProfileCompleted,
             verificationStatus: t.verificationStatus,
             revalidationOverdue: t.revalidationOverdue,
             deletionStatus,

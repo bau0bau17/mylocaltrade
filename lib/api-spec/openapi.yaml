@@ -2328,10 +2328,21 @@ paths:
     get:
       operationId: getMyReports
       tags: [reports]
-      summary: Get the authenticated user's reports and safe outcomes
+      summary: Get the authenticated user's reports and report outcomes
       security: [{ bearerAuth: [] }]
       responses:
-        "200": { description: Reports }
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyReportsResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       operationId: createReport
       tags: [reports]
@@ -2450,7 +2461,36 @@ paths:
               properties:
                 reason: { type: string, minLength: 10, maxLength: 2000 }
       responses:
-        "201": { description: Appeal created }
+        "201":
+          description: Appeal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppealResponse"
+        "400":
+          description: Invalid appeal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Appeal is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /conversation-reports/{id}/appeal:
     post:
@@ -2470,7 +2510,36 @@ paths:
               properties:
                 reason: { type: string, minLength: 10, maxLength: 2000 }
       responses:
-        "201": { description: Appeal created }
+        "201":
+          description: Appeal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppealResponse"
+        "400":
+          description: Invalid appeal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Report not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Appeal is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /admin/report-appeals:
     get:
@@ -2714,6 +2783,67 @@ components:
           type: string
       required:
         - error
+
+    AppealResponse:
+      type: object
+      properties:
+        appealId:
+          type: integer
+        status:
+          type: string
+      required: [appealId, status]
+
+    ReportAppealStatus:
+      type: object
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+        outcome:
+          type: string
+          nullable: true
+      required: [id, status]
+
+    MyReport:
+      type: object
+      properties:
+        id:
+          type: integer
+        reportType:
+          type: string
+          enum: [user, conversation]
+        category:
+          type: string
+        status:
+          type: string
+        outcome:
+          type: string
+          nullable: true
+        outcomeAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        appeal:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ReportAppealStatus"
+        appealEligible:
+          type: boolean
+          description: Whether the reporter can currently submit an appeal. This does not disclose internal handling details.
+      required: [id, reportType, category, status, outcome, outcomeAt, createdAt, appeal, appealEligible]
+
+    MyReportsResponse:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/MyReport"
+      required: [reports]
 
     SuccessResponse:
       type: object

@@ -2531,9 +2531,25 @@ export const ResolveAdminConversationReportResponse = zod.object({
 
 
 /**
- * @summary Get the authenticated user's reports and safe outcomes
+ * @summary Get the authenticated user's reports and report outcomes
  */
-export const GetMyReportsResponse = zod.unknown()
+export const GetMyReportsResponse = zod.object({
+  "reports": zod.array(zod.object({
+  "id": zod.number().int(),
+  "reportType": zod.enum(['user', 'conversation']),
+  "category": zod.string(),
+  "status": zod.string(),
+  "outcome": zod.string().nullable(),
+  "outcomeAt": zod.date().nullable(),
+  "createdAt": zod.date(),
+  "appeal": zod.object({
+  "id": zod.number().int(),
+  "status": zod.string(),
+  "outcome": zod.string().nullish()
+}).nullable(),
+  "appealEligible": zod.boolean().describe('Whether the reporter can currently submit an appeal. This does not disclose internal handling details.')
+}))
+})
 
 
 /**
@@ -2642,7 +2658,10 @@ export const AppealReportBody = zod.object({
   "reason": zod.string().min(appealReportBodyReasonMin).max(appealReportBodyReasonMax)
 })
 
-export const AppealReportResponse = zod.void()
+export const AppealReportResponse = zod.object({
+  "appealId": zod.number().int(),
+  "status": zod.string()
+})
 
 
 /**
@@ -2661,7 +2680,10 @@ export const AppealConversationReportBody = zod.object({
   "reason": zod.string().min(appealConversationReportBodyReasonMin).max(appealConversationReportBodyReasonMax)
 })
 
-export const AppealConversationReportResponse = zod.void()
+export const AppealConversationReportResponse = zod.object({
+  "appealId": zod.number().int(),
+  "status": zod.string()
+})
 
 
 /**

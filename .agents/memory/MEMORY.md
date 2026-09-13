@@ -94,3 +94,4 @@
 - [CSEA specialist moderation](csea-specialist-moderation.md) — safeguarding escalation is fail-closed, specialist-only, and separate from ordinary report decisions.
 - [CSEA escalation and appeal independence](csea-escalation-appeal-independence.md) — an open appeal never blocks specialist escalation; active CSEA retains restricted evidence.
 - [Conversation report evidence retention](conversation-report-evidence-retention.md) — active cases hold private media through the enforced appeal period; never copy sensitive evidence bytes.
+- [OpenAPI nullable references](openapi-nullable-references.md) — Orval cannot generate a nullable component-object interface; make the property nullable around a non-nullable component reference.

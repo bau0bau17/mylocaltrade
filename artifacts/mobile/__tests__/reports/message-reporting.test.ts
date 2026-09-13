@@ -35,6 +35,7 @@ describe('mobile reporting readiness regressions', () => {
     expect(statusScreen).toContain('report.appeal');
     expect(statusScreen).toContain('We share only information appropriate to your report');
     expect(statusScreen).toContain('Reports are not an emergency service');
+    expect(statusScreen).toContain('appealEligible');
   });
 
   it('limits appeals to 30 days and preserves existing appeal status', () => {
@@ -68,6 +69,18 @@ describe('mobile reporting readiness regressions', () => {
     expect(statusScreen).toContain("AppState.addEventListener('change'");
     expect(statusScreen).toContain("state === 'active' && isFocusedRef.current && isAuthenticated");
     expect(statusScreen).toContain('getGetMyReportsQueryKey()');
+    expect(statusScreen).toContain('await refetch()');
+  });
+
+  it('shows a submit state and safe feedback instead of silently swallowing appeal failures', () => {
+    expect(statusScreen).toContain('Submitting…');
+    expect(statusScreen).toContain('isSubmittingAppealRef.current');
+    expect(statusScreen).toContain("setAppealNotice('Appeal submitted')");
+    expect(statusScreen).toContain('onError: (error: unknown) => setAppealError(appealFailureMessage(error))');
+    expect(statusScreen).toContain('You have already submitted an appeal for this decision.');
+    expect(statusScreen).toContain('The appeal period for this decision has ended.');
+    expect(statusScreen).toContain('This decision is not eligible for appeal.');
+    expect(statusScreen).toContain('We couldn’t submit your appeal. Please try again.');
   });
 
   it('reports reviews by review ID without accepting customer identity', () => {
