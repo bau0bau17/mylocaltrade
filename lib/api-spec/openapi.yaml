@@ -4181,9 +4181,29 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ConversationSummary"
+        claimedPlaceholders:
+          type: array
+          description: |
+            Minimal non-openable rows returned only to an ACTIVE Company Teams
+            employee for jobs assigned to another employee. They intentionally
+            contain no customer, job, message, media, quote, booking, status,
+            timing, or contact data.
+          items:
+            $ref: "#/components/schemas/ClaimedConversationPlaceholder"
         total:
           type: integer
       required: [conversations, total]
+
+    ClaimedConversationPlaceholder:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Internal stable list key. It must not be used to navigate to a conversation.
+        assignedTraderName:
+          type: string
+          description: Permitted display name of the colleague currently handling the job.
+      required: [id, assignedTraderName]
 
     ConversationMessage:
       type: object

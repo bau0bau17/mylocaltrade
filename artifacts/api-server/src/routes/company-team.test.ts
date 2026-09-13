@@ -367,6 +367,42 @@ describe("team-context (flag ON)", () => {
     expect(bare.body).toEqual({ enabled: true, role: null });
   });
 
+  it("shares the owner's email only with an ACTIVE employee restricted by effective Team access", async () => {
+    setFlag(true);
+    const [owner] = await db
+      .select({ email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.id, ctx.ownerUserId))
+      .limit(1);
+    expect(owner).toBeDefined();
+
+    // This models the request-time window after an effective provider-confirmed
+    // downgrade, before the asynchronous seat reconciliation has persisted it.
+    await db.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, ctx.ownerUserId));
+    try {
+      const employee = await request(app)
+        .get("/api/company/team-context")
+        .set("Authorization", `Bearer ${ctx.employeeToken}`);
+      expect(employee.body).toEqual({
+        enabled: true,
+        role: "EMPLOYEE",
+        viewerRole: "EMPLOYEE",
+        viewerCanManageBilling: false,
+        viewerCanManageTeam: false,
+        viewerCanInvite: false,
+        seatSuspended: true,
+        ownerEmail: owner.email,
+      });
+
+      const ownerContext = await request(app)
+        .get("/api/company/team-context")
+        .set("Authorization", `Bearer ${ctx.ownerToken}`);
+      expect(ownerContext.body.ownerEmail).toBeUndefined();
+    } finally {
+      await giveOwnerTeamSubscription(ctx.ownerUserId);
+    }
+  });
+
   it("customers cannot use it", async () => {
     setFlag(true);
     const res = await request(app)

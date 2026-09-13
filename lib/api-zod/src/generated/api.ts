@@ -1787,6 +1787,10 @@ export const GetConversationsResponse = zod.object({
   "viewerCanReassign": zod.boolean().nullish().describe('Trader-side viewers only: whether the caller may REASSIGN this job\nto another team member (company owner, teams enabled, live job\nwith a current assignee). Only meaningful on the conversation\ndetail endpoint; always null for customers and false with teams\ndisabled.\n'),
   "createdAt": zod.date()
 })),
+  "claimedPlaceholders": zod.array(zod.object({
+  "id": zod.number().int().describe('Internal stable list key. It must not be used to navigate to a conversation.'),
+  "assignedTraderName": zod.string().describe('Permitted display name of the colleague currently handling the job.')
+})).optional().describe('Minimal non-openable rows returned only to an ACTIVE Company Teams\nemployee for jobs assigned to another employee. They intentionally\ncontain no customer, job, message, media, quote, booking, status,\ntiming, or contact data.\n'),
   "total": zod.number().int()
 })
 

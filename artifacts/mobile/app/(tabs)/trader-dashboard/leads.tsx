@@ -8,18 +8,23 @@ import { EnquiryCard } from '@/components/EnquiryCard';
 import { JobReferenceSearch } from '@/components/JobReferenceSearch';
 import { useGetEnquiries, useGetNewLeadCount, getGetEnquiriesQueryKey } from '@workspace/api-client-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTeamContext } from '@/hooks/useTeamContext';
 import { matchesLeadSearch } from '@/lib/job-reference-search';
+import { TeamRestrictedAccess } from '@/components/TeamRestrictedAccess';
 
 export default function LeadsScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const { isTrader } = useAuth();
+  const { teamContext, isEmployee, roleUnknown, seatSuspended } = useTeamContext();
+  const accessRestricted = isEmployee && seatSuspended;
+  const canLoadLeads = isTrader && !roleUnknown && !accessRestricted;
 
   const { data, isLoading, refetch, isRefetching } = useGetEnquiries({
-    query: { enabled: isTrader, queryKey: getGetEnquiriesQueryKey() },
+    query: { enabled: canLoadLeads, queryKey: getGetEnquiriesQueryKey() },
   });
   const { data: newCountData, refetch: refetchNewCount } = useGetNewLeadCount({
-    query: { queryKey: ['/api/enquiries/new-count'], enabled: isTrader },
+    query: { queryKey: ['/api/enquiries/new-count'], enabled: canLoadLeads },
   });
   const newCount = newCountData?.newCount ?? 0;
 
@@ -41,8 +46,9 @@ export default function LeadsScreen() {
   // stamps `traderViewedAt` server-side, so the count should drop on return.
   useFocusEffect(
     useCallback(() => {
+      if (!canLoadLeads) return;
       void refetchNewCount();
-    }, [refetchNewCount])
+    }, [canLoadLeads, refetchNewCount])
   );
 
   const handleRefresh = useCallback(() => {
@@ -57,6 +63,18 @@ export default function LeadsScreen() {
         <Text style={styles.subtitle}>
           Customer enquiries are only visible to verified trader accounts.
         </Text>
+      </View>
+    );
+  }
+
+  if (accessRestricted) {
+    return <TeamRestrictedAccess ownerEmail={teamContext?.ownerEmail} />;
+  }
+
+  if (roleUnknown) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
       </View>
     );
   }

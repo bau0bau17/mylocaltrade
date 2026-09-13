@@ -41,6 +41,44 @@ export function isProtectedQuery(query: Query): boolean {
 }
 
 /**
+ * Company conversations are especially sensitive for Team employees: a
+ * suspended seat may still have an old list/thread mounted while the server
+ * context request is resolving. Keep the context query itself (it is the
+ * authority that tells us the seat is suspended), but evict every company and
+ * conversation or enquiry response once that authority says access is gone.
+ */
+export function isProtectedCompanyConversationQuery(query: Query): boolean {
+  const [path, scope] = query.queryKey;
+  if (path === 'company') {
+    return scope !== 'team-context';
+  }
+
+  if (typeof path === 'string') {
+    return (
+      path === '/api/conversations' ||
+      path.startsWith('/api/conversations/') ||
+      path === '/api/enquiries' ||
+      path.startsWith('/api/enquiries/')
+    );
+  }
+
+  return false;
+}
+
+export async function clearProtectedCompanyConversationCache(queryClient: QueryClient) {
+  await queryClient.cancelQueries(
+    { predicate: isProtectedCompanyConversationQuery },
+    { revert: false, silent: true },
+  );
+
+  for (const query of queryClient
+    .getQueryCache()
+    .findAll({ predicate: isProtectedCompanyConversationQuery })) {
+    queryClient.getQueryCache().remove(query);
+  }
+}
+
+/**
  * A 401 only invalidates the session that supplied its bearer token. A response
  * from Account A arriving after Account B signs in must be ignored.
  */

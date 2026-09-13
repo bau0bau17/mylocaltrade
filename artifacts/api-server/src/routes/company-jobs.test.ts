@@ -45,9 +45,10 @@ import { ObjectStorageService } from "../lib/objectStorage";
  *    claims it atomically inside the same transaction as their write. Losers
  *    of a race get 409 JOB_CLAIMED_BY_OTHER and their write never persists.
  *  - Viewing, customer messages and cancelling an unclaimed lead never claim.
- *  - A claimed job is read-only for every other member INCLUDING the owner
- *    (until Phase 3 reassignment): message/quote/close/cancel/mark-done/
- *    booking actions all 409 with the assignee's name.
+ *  - A claimed job is private to its assignee and the owner. Other employees
+ *    receive no list row and cannot retrieve its conversation, media, report,
+ *    or booking-slot data. Job actions still return the existing claim
+ *    conflict response without disclosing conversation content.
  *  - Notifications: unclaimed → all ACTIVE members; claimed → assignee +
  *    owner (deduped); new-enquiry email stays owner-only while push fans out.
  *  - Customer-facing identity: business logo pre-claim, personal name +
@@ -360,6 +361,15 @@ beforeAll(async () => {
   profileB = await createTraderProfile(ownerB, "beta");
   process.env["TEAM_PRODUCT_SEAT_MAP"] = JSON.stringify({ [TEAM_PRODUCT]: 20 });
   await db.insert(subscriptionsTable).values({
+    userId: ownerA,
+    planId: "premium",
+    status: "active",
+    productIdentifier: TEAM_PRODUCT,
+    currentPeriodStart: new Date(),
+    currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    originalPurchaseAt: new Date(),
+  });
+  await db.insert(subscriptionsTable).values({
     userId: ownerB,
     planId: "premium",
     status: "active",
@@ -590,6 +600,114 @@ describe("claim races (flag ON)", () => {
 // Read-only enforcement once claimed
 // ---------------------------------------------------------------------------
 describe("claimed jobs are read-only for other members (flag ON)", () => {
+  it("keeps a colleague's claimed conversation private while preserving owner and assignee access", async () => {
+    const convId = await seedLead({ assignedTo: empOne, hired: true });
+
+    const unreadBefore = await request(app)
+      .get("/api/conversations/unread-count")
+      .set("Authorization", `Bearer ${empTwoToken}`);
+    const colleagueDetail = await getDetail(convId, empTwoToken);
+    expect(colleagueDetail.status).toBe(403);
+    expect(colleagueDetail.body).toEqual({
+      error: "This conversation is assigned to another team member.",
+      code: "CONVERSATION_ASSIGNED_TO_OTHER",
+    });
+    expect(colleagueDetail.body.conversation).toBeUndefined();
+    expect(colleagueDetail.body.messages).toBeUndefined();
+    expect(colleagueDetail.body.enquiryAttachments).toBeUndefined();
+    expect(colleagueDetail.body.quotes).toBeUndefined();
+    expect(colleagueDetail.body.contactDetails).toBeUndefined();
+    const [afterForbiddenRead] = await db
+      .select({ traderViewedAt: conversationsTable.traderViewedAt })
+      .from(conversationsTable)
+      .where(eq(conversationsTable.id, convId))
+      .limit(1);
+    expect(afterForbiddenRead.traderViewedAt).toBeNull();
+    const unreadAfter = await request(app)
+      .get("/api/conversations/unread-count")
+      .set("Authorization", `Bearer ${empTwoToken}`);
+    expect(unreadAfter.body).toEqual(unreadBefore.body);
+
+    const [assigneeDetail, ownerDetail] = await Promise.all([
+      getDetail(convId, empOneToken),
+      getDetail(convId, ownerAToken),
+    ]);
+    expect(assigneeDetail.status).toBe(200);
+    expect(ownerDetail.status).toBe(200);
+
+    const colleagueList = await request(app)
+      .get("/api/conversations")
+      .set("Authorization", `Bearer ${empTwoToken}`);
+    expect(colleagueList.status).toBe(200);
+    expect(
+      colleagueList.body.conversations.some((row: { id: number }) => row.id === convId),
+    ).toBe(false);
+    const placeholder = (
+      colleagueList.body.claimedPlaceholders as Array<Record<string, unknown>>
+    ).find((row) => row.id === convId);
+    if (!placeholder) {
+      throw new Error("Expected a safe claimed-job placeholder for the assigned conversation");
+    }
+    expect(placeholder).toMatchObject({
+      id: convId,
+      assignedTraderName: expect.any(String),
+    });
+    // The safe row is intentionally not a redacted conversation. Its exact
+    // shape is the regression boundary against accidental customer, job,
+    // message, media, quote, booking, status, or timing disclosure.
+    expect(Object.keys(placeholder).sort()).toEqual(["assignedTraderName", "id"]);
+    const colleagueEnquiries = await request(app)
+      .get("/api/enquiries")
+      .set("Authorization", `Bearer ${empTwoToken}`);
+    expect(colleagueEnquiries.status).toBe(200);
+    expect(
+      colleagueEnquiries.body.enquiries.some(
+        (row: { conversationId: number | null }) => row.conversationId === convId,
+      ),
+    ).toBe(false);
+
+    const [mute, report, messageReport, bookingSlots] = await Promise.all([
+      request(app)
+        .patch(`/api/conversations/${convId}/mute`)
+        .set("Authorization", `Bearer ${empTwoToken}`)
+        .send({ muted: true }),
+      request(app)
+        .post(`/api/conversations/${convId}/report`)
+        .set("Authorization", `Bearer ${empTwoToken}`)
+        .send({ reason: "Trying to access another employee's assigned job" }),
+      request(app)
+        .post(`/api/conversations/${convId}/messages/999999999/report`)
+        .set("Authorization", `Bearer ${empTwoToken}`)
+        .send({ reason: "Trying to access another employee's assigned job" }),
+      request(app)
+        .get(`/api/conversations/${convId}/booking-slots?date=2030-01-01&durationMinutes=60`)
+        .set("Authorization", `Bearer ${empTwoToken}`),
+    ]);
+    for (const response of [mute, report, messageReport]) {
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("CONVERSATION_ASSIGNED_TO_OTHER");
+    }
+    expect(bookingSlots.status).toBe(404);
+
+    const unclaimedId = await seedLead();
+    const unclaimedDetail = await getDetail(unclaimedId, empTwoToken);
+    expect(unclaimedDetail.status).toBe(200);
+    const unclaimedList = await request(app)
+      .get("/api/conversations")
+      .set("Authorization", `Bearer ${empTwoToken}`);
+    expect(
+      unclaimedList.body.conversations.some((row: { id: number }) => row.id === unclaimedId),
+    ).toBe(true);
+    const unclaimedEnquiries = await request(app)
+      .get("/api/enquiries")
+      .set("Authorization", `Bearer ${empTwoToken}`);
+    expect(
+      unclaimedEnquiries.body.enquiries.some(
+        (row: { conversationId: number | null }) => row.conversationId === unclaimedId,
+      ),
+    ).toBe(true);
+  });
+
   it("other members and the owner get 409 with the assignee's name on every action", async () => {
     const convId = await seedLead({ assignedTo: undefined });
     // empOne claims properly (via API) so the audit trail mirrors reality.
@@ -644,8 +762,7 @@ describe("claimed jobs are read-only for other members (flag ON)", () => {
       .post(`/api/conversations/${convId}/bookings`)
       .set("Authorization", `Bearer ${empTwoToken}`)
       .send({ startAt: futureSlot.toISOString() });
-    expect(proposeAsEmpTwo.status).toBe(409);
-    expect(proposeAsEmpTwo.body.code).toBe("JOB_CLAIMED_BY_OTHER");
+    expect(proposeAsEmpTwo.status).toBe(404);
 
     const proposeAsOwner = await request(app)
       .post(`/api/conversations/${convId}/bookings`)
@@ -782,6 +899,35 @@ describe("notification routing (flag ON)", () => {
     expect(await waitForPushes(1, forMessage(res.body.id))).toEqual([ownerA]);
   });
 
+  it("excludes employees immediately after the owner's effective Team entitlement ends", async () => {
+    const [subscription] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, ownerA))
+      .limit(1);
+    expect(subscription).toBeDefined();
+
+    try {
+      await db.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, ownerA));
+
+      const claimedId = await seedLead({ assignedTo: empOne });
+      pushMock.mockClear();
+      const claimedReply = await sendMsg(claimedId, customerToken, "Please confirm the appointment");
+      expect(claimedReply.status).toBe(201);
+      expect(await waitForPushes(1, forMessage(claimedReply.body.id))).toEqual([ownerA]);
+
+      const unclaimedId = await seedLead();
+      pushMock.mockClear();
+      const unclaimedReply = await sendMsg(unclaimedId, customerToken, "Could anyone help with this job");
+      expect(unclaimedReply.status).toBe(201);
+      expect(await waitForPushes(1, forMessage(unclaimedReply.body.id))).toEqual([ownerA]);
+    } finally {
+      if (subscription) {
+        await db.insert(subscriptionsTable).values(subscription);
+      }
+    }
+  });
+
   it("new enquiry pushes all members but emails the owner only", async () => {
     pushMock.mockClear();
     newEnquiryEmailMock.mockClear();
@@ -806,6 +952,28 @@ describe("notification routing (flag ON)", () => {
     // Flag ON: the conversation is born UNASSIGNED.
     const conv = await getConv(res.body.conversationId);
     expect(conv.assignedTraderUserId).toBeNull();
+  });
+});
+
+describe("effective Team entitlement access", () => {
+  it("keeps the company owner operational after a Team-to-Solo effective downgrade", async () => {
+    const [subscription] = await db
+      .select()
+      .from(subscriptionsTable)
+      .where(eq(subscriptionsTable.userId, ownerA))
+      .limit(1);
+    expect(subscription).toBeDefined();
+
+    try {
+      await db.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, ownerA));
+      const convId = await seedLead({ assignedTo: ownerA });
+      const response = await sendMsg(convId, ownerAToken, "I can still manage this job for the customer");
+      expect(response.status).toBe(201);
+    } finally {
+      if (subscription) {
+        await db.insert(subscriptionsTable).values(subscription);
+      }
+    }
   });
 });
 
@@ -858,8 +1026,10 @@ describe("assigned-person identity (flag ON)", () => {
 
     const asAssignee = (await getDetail(convId, empOneToken)).body.conversation;
     expect(asAssignee.viewerCanAct).toBe(true);
-    const asColleague = (await getDetail(convId, empTwoToken)).body.conversation;
-    expect(asColleague.viewerCanAct).toBe(false);
+    const asColleague = await getDetail(convId, empTwoToken);
+    expect(asColleague.status).toBe(403);
+    expect(asColleague.body.code).toBe("CONVERSATION_ASSIGNED_TO_OTHER");
+    expect(asColleague.body.conversation).toBeUndefined();
     const asOwner = (await getDetail(convId, ownerAToken)).body.conversation;
     expect(asOwner.viewerCanAct).toBe(false);
   });
@@ -1294,7 +1464,9 @@ describe("owner reassignment (flag ON)", () => {
     const convId = await seedLead({ assignedTo: empOne });
     expect((await getDetail(convId, ownerAToken)).body.conversation.viewerCanReassign).toBe(true);
     expect((await getDetail(convId, empOneToken)).body.conversation.viewerCanReassign).toBe(false);
-    expect((await getDetail(convId, empTwoToken)).body.conversation.viewerCanReassign).toBe(false);
+    const colleague = await getDetail(convId, empTwoToken);
+    expect(colleague.status).toBe(403);
+    expect(colleague.body.code).toBe("CONVERSATION_ASSIGNED_TO_OTHER");
     expect(
       (await getDetail(convId, customerToken)).body.conversation.viewerCanReassign == null,
     ).toBe(true);
@@ -1532,7 +1704,9 @@ describe("Phase 3 flag OFF — fail closed", () => {
   it("reassign 404s and the detail payload exposes no reassign affordance", async () => {
     const convId = await seedLead({ company: "B", assignedTo: ownerB });
     expect((await reassign(convId, ownerBToken, ownerB)).status).toBe(404);
-    const detail = (await getDetail(convId, ownerBToken)).body.conversation;
+    const detailResponse = await getDetail(convId, ownerBToken);
+    expect(detailResponse.status).toBe(200);
+    const detail = detailResponse.body.conversation;
     expect(detail.viewerCanReassign ?? false).toBe(false);
     expect(await handoverMessages(convId)).toHaveLength(0);
   });

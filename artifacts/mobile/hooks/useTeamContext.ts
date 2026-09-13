@@ -1,7 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
 import { teamContextQueryKey } from '@/lib/team-billing-queries';
+import { clearProtectedCompanyConversationCache } from '@/lib/auth-query-cache';
 
 export type TeamContext = {
   enabled: boolean;
@@ -16,6 +18,9 @@ export type TeamContext = {
   // Employee-only: this member's seat is suspended (read-only mode — they
   // keep their login and history but can't act until reactivated).
   seatSuspended?: boolean;
+  // Employee-only and only while their Team access is restricted. The server
+  // authorizes this from the caller's ACTIVE membership; it is never public.
+  ownerEmail?: string | null;
   // Owner-only seat utilisation (always plan-derived; never the legacy cap).
   effectiveBusinessPlan?: string | null;
   employeeSeatLimit?: number;
@@ -40,6 +45,7 @@ export type TeamContext = {
 // the answer is fetched once and stays consistent.
 export function useTeamContext() {
   const { isAuthenticated, isTrader, token, user } = useAuth();
+  const queryClient = useQueryClient();
   const query = useQuery({
     // Scoped PER IDENTITY: a global key would hand the previous user's
     // resolved role to the next login on the same device (owner → employee
@@ -64,6 +70,16 @@ export function useTeamContext() {
   const teamContext = query.data;
   const isEmployee = teamContext?.enabled === true && teamContext.role === 'EMPLOYEE';
   const isTeamOwner = teamContext?.enabled === true && teamContext.role === 'OWNER';
+  const seatSuspended = isEmployee && teamContext?.seatSuspended === true;
+
+  // The context response is the server's authority for employee access. Once
+  // it positively confirms a suspended seat, remove any company/conversation
+  // responses that could otherwise remain visible in a mounted screen or be
+  // reused by a later focus/refetch.
+  useEffect(() => {
+    if (!seatSuspended) return;
+    void clearProtectedCompanyConversationCache(queryClient);
+  }, [queryClient, seatSuspended]);
   // True while we don't positively know an authenticated trader's role —
   // loading, errored, or user object not hydrated yet. Owner-only surfaces
   // must fail closed (stay hidden / refuse purchase) while this is true so
@@ -78,6 +94,7 @@ export function useTeamContext() {
     userId: user?.id ?? null,
     isEmployee,
     isTeamOwner,
+    seatSuspended,
     roleUnknown,
   };
 }

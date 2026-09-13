@@ -4,12 +4,16 @@ import { db } from "@workspace/db";
 import {
   getActiveMembership,
   companyTeamsEnabled,
-  traderSideRecipientUserIds,
-  activeCompanyMemberUserIds,
 } from "../lib/company-membership";
 import {
+  traderSideRecipientUserIds,
+  activeCompanyMemberUserIds,
+} from "../lib/team-notification-recipients";
+import {
   claimOrRequireAssigned,
+  canViewJob,
   canActOnJob,
+  employeeSeatAccessRestricted,
   JobClaimedByOtherError,
   jobClaimedByOtherBody,
   logJobClaimed,
@@ -19,6 +23,7 @@ import {
   logJobReassigned,
   jobIsActive,
   respondCannotActOnJob,
+  respondCannotViewJob,
   SeatSuspendedError,
   SEAT_SUSPENDED_RESPONSE,
 } from "../lib/job-assignment";
@@ -34,7 +39,7 @@ import {
   bookingsTable,
   CONVERSATION_REPORT_CATEGORIES,
 } from "@workspace/db/schema";
-import { and, eq, desc, sql, inArray, isNull, asc } from "drizzle-orm";
+import { and, eq, desc, sql, inArray, isNull, asc, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 // Second reference to users for joining the TRADER user on a conversation
@@ -315,10 +320,28 @@ router.get("/conversations/unread-count", authMiddleware, async (req, res) => {
       actor.role === "customer"
         ? conversationsTable.customerUnreadCount
         : conversationsTable.traderUnreadCount;
+    if (
+      actor.role === "trader" &&
+      actor.membershipRole === "EMPLOYEE" &&
+      actor.traderProfileId != null &&
+      (await employeeSeatAccessRestricted(db, userId, actor.traderProfileId))
+    ) {
+      res.json({ unreadCount: 0 });
+      return;
+    }
+
     const where =
       actor.role === "customer"
         ? eq(conversationsTable.customerId, userId)
-        : eq(conversationsTable.traderProfileId, actor.traderProfileId!);
+        : actor.membershipRole === "EMPLOYEE"
+          ? and(
+              eq(conversationsTable.traderProfileId, actor.traderProfileId!),
+              or(
+                isNull(conversationsTable.assignedTraderUserId),
+                eq(conversationsTable.assignedTraderUserId, userId),
+              ),
+            )
+          : eq(conversationsTable.traderProfileId, actor.traderProfileId!);
 
     const [row] = await db
       .select({ total: sql<number>`COALESCE(SUM(${column}), 0)::int` })
@@ -348,10 +371,22 @@ router.get("/conversations", authMiddleware, async (req, res) => {
       return;
     }
 
+    if (
+      actor.role === "trader" &&
+      actor.membershipRole === "EMPLOYEE" &&
+      actor.traderProfileId != null &&
+      (await employeeSeatAccessRestricted(db, userId, actor.traderProfileId))
+    ) {
+      res.json({ conversations: [], total: 0 });
+      return;
+    }
+
     const where =
       actor.role === "customer"
         ? eq(conversationsTable.customerId, userId)
-        : eq(conversationsTable.traderProfileId, actor.traderProfileId!);
+        : actor.membershipRole === "EMPLOYEE"
+          ? eq(conversationsTable.traderProfileId, actor.traderProfileId!)
+          : eq(conversationsTable.traderProfileId, actor.traderProfileId!);
 
     const rows = await db
       .select({
@@ -370,7 +405,30 @@ router.get("/conversations", authMiddleware, async (req, res) => {
       .orderBy(desc(conversationsTable.lastMessageAt));
 
     const teamsOn = companyTeamsEnabled();
-    const conversations = rows.map(({ conv, customerName, traderBusinessName, traderVerificationStatus, traderLogoUrl, assignedTraderName }) =>
+    // A non-assigned employee may know that a colleague has taken a company
+    // job, but must not receive a ConversationSummary: that object includes
+    // customer/contact/job/message fields. Return a separate, minimal shape
+    // instead so clients cannot accidentally render protected metadata.
+    const claimedPlaceholders =
+      actor.role === "trader" && actor.membershipRole === "EMPLOYEE"
+        ? rows
+            .filter(
+              ({ conv }) =>
+                conv.assignedTraderUserId != null && conv.assignedTraderUserId !== userId,
+            )
+            .map(({ conv, assignedTraderName }) => ({
+              id: conv.id,
+              assignedTraderName: assignedTraderName ?? "A team member",
+            }))
+        : [];
+    const viewableRows =
+      actor.role === "trader" && actor.membershipRole === "EMPLOYEE"
+        ? rows.filter(
+            ({ conv }) =>
+              conv.assignedTraderUserId == null || conv.assignedTraderUserId === userId,
+          )
+        : rows;
+    const conversations = viewableRows.map(({ conv, customerName, traderBusinessName, traderVerificationStatus, traderLogoUrl, assignedTraderName }) =>
       serializeConversation(conv, {
         customerName,
         customerId: conv.customerId,
@@ -389,7 +447,11 @@ router.get("/conversations", authMiddleware, async (req, res) => {
       }),
     );
 
-    res.json({ conversations, total: conversations.length });
+    res.json({
+      conversations,
+      total: conversations.length,
+      ...(claimedPlaceholders.length > 0 ? { claimedPlaceholders } : {}),
+    });
   } catch (error) {
     req.log.error({ err: error }, "List conversations failed");
     res.status(500).json({ error: "Failed to list conversations" });
@@ -437,6 +499,13 @@ router.get("/conversations/:id", authMiddleware, async (req, res) => {
     if (!isCustomer && !isTrader) {
       res.status(403).json({ error: "You do not have access to this conversation" });
       return;
+    }
+    if (isTrader) {
+      const access = await canViewJob(row.conv, userId, actor.membershipRole);
+      if (!access.ok) {
+        respondCannotViewJob(res, access);
+        return;
+      }
     }
 
     const messages = await db
@@ -1671,6 +1740,13 @@ router.patch("/conversations/:id/mute", authMiddleware, requireActiveSeat, async
       res.status(403).json({ error: "You do not have access to this conversation" });
       return;
     }
+    if (isTrader) {
+      const access = await canViewJob(conv, userId, actor.membershipRole);
+      if (!access.ok) {
+        respondCannotViewJob(res, access);
+        return;
+      }
+    }
 
     const now = new Date();
     const at = body.muted ? now : null;
@@ -1735,6 +1811,13 @@ router.post("/conversations/:id/report", authMiddleware, requireActiveSeat, asyn
       res.status(403).json({ error: "You do not have access to this conversation" });
       return;
     }
+    if (isTrader) {
+      const access = await canViewJob(conv, userId, actor.membershipRole);
+      if (!access.ok) {
+        respondCannotViewJob(res, access);
+        return;
+      }
+    }
 
     await db.transaction(async (tx) => {
       const [created] = await tx
@@ -1796,6 +1879,13 @@ router.post("/conversations/:id/messages/:messageId/report", authMiddleware, req
     const isCustomer = actor.role === "customer" && conv.customerId === userId;
     const isTrader = actor.role === "trader" && actor.traderProfileId === conv.traderProfileId;
     if (!isCustomer && !isTrader) { res.status(403).json({ error: "You do not have access to this conversation" }); return; }
+    if (isTrader) {
+      const access = await canViewJob(conv, userId, actor.membershipRole);
+      if (!access.ok) {
+        respondCannotViewJob(res, access);
+        return;
+      }
+    }
     const [message] = await db.select({ id: messagesTable.id }).from(messagesTable)
       .where(and(eq(messagesTable.id, messageId), eq(messagesTable.conversationId, conversationId))).limit(1);
     if (!message) { res.status(404).json({ error: "Message not found in this conversation" }); return; }

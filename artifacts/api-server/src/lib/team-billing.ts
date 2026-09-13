@@ -21,12 +21,10 @@ import { logger } from "./logger";
  * COMPANY_MAX_ACTIVE_MEMBERS cap is NEVER presented or enforced as a seat
  * allowance — it survives only as the operational kill-switch ceiling.
  *
- * Seat ENFORCEMENT (suspending over-allowance employees: reconciliation,
- * the hourly sweep, and the owner suspend/reactivate routes) stays behind
- * TEAM_BILLING_ENFORCED. With the flag OFF nobody is ever suspended, so
- * companies that exceed their allowance (e.g. a Solo owner with a
- * grandfathered employee) keep every member active — they simply cannot
- * invite MORE people until they move to a Team plan.
+ * Seat ENFORCEMENT (suspending over-allowance employees: reconciliation and
+ * the hourly sweep) always follows the effective plan while Company Teams is
+ * enabled. TEAM_BILLING_ENFORCED still gates owner-managed seat actions, but
+ * cannot keep employees operational once the effective Team entitlement ends.
  */
 
 export function teamBillingEnforced(): boolean {
@@ -188,7 +186,7 @@ function operationalCeiling(): number {
   return maxActiveMembersPerCompany();
 }
 
-type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * Seat consumption for one company:
@@ -406,16 +404,19 @@ export interface SeatReconciliationResult {
  * never occupies a seat and is never suspended by this function (EMPLOYEE
  * rows only, by role filter).
  *
- * Runs only with COMPANY_TEAMS_ENABLED and TEAM_BILLING_ENFORCED both on —
- * with either flag off it is a no-op, so legacy behaviour is byte-identical.
- * Serialised per company via the shared advisory lock, so it cannot race
- * invite acceptance or owner seat actions.
+ * Runs whenever Company Teams is enabled. The entitlement is confirmed by
+ * RevenueCat before callers reach this function, so a scheduled Apple
+ * product change does not affect seats until it is effective. The
+ * TEAM_BILLING_ENFORCED flag still controls owner-managed seat actions; it
+ * cannot leave employees operational after an effective Team entitlement is
+ * gone. Serialised per company via the shared advisory lock, so it cannot
+ * race invite acceptance or owner seat actions.
  */
 export async function reconcileCompanySeats(
   traderProfileId: number,
   trigger: string,
 ): Promise<SeatReconciliationResult | null> {
-  if (!companyTeamsEnabled() || !teamBillingEnforced()) return null;
+  if (!companyTeamsEnabled()) return null;
 
   return db.transaction(async (tx) => {
     await tx.execute(
@@ -562,11 +563,11 @@ export interface SeatSweepResult {
  *
  * Scans every company that has at least one ACTIVE EMPLOYEE membership
  * (seated or seat-suspended) and reconciles each under the usual per-company
- * advisory lock. With either feature flag off, reconcileCompanySeats is a
- * no-op, so the sweep is safe to run unconditionally.
+ * advisory lock. With Company Teams disabled, reconciliation is a no-op, so
+ * the sweep is safe to run unconditionally.
  */
 export async function sweepCompanySeatReconciliation(): Promise<SeatSweepResult> {
-  if (!companyTeamsEnabled() || !teamBillingEnforced()) {
+  if (!companyTeamsEnabled()) {
     return { companies: 0, changed: 0, errors: 0 };
   }
 

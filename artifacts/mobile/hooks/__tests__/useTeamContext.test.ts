@@ -172,6 +172,49 @@ describe('useTeamContext', () => {
     expect(result.current.roleUnknown).toBe(false);
   });
 
+  it('clears protected company and conversation caches for a suspended employee', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        enabled: true,
+        role: 'EMPLOYEE',
+        seatSuspended: true,
+      }),
+    }) as jest.Mock;
+
+    mockUseAuth.mockReturnValue(traderAuth());
+
+    const qc = freshClient();
+    qc.setQueryData(['/api/conversations'], { conversations: [{ id: 42 }] });
+    qc.setQueryData(['/api/conversations/42'], { conversation: { id: 42 } });
+    qc.setQueryData(['company', 'team', 'user-1'], { members: [{ id: 1 }] });
+    qc.setQueryData(['company', 'team-context', 'user-1'], {
+      enabled: true,
+      role: 'EMPLOYEE',
+      seatSuspended: true,
+    });
+
+    const { result } = renderHook(() => useTeamContext(), {
+      wrapper: makeWrapper(qc),
+    });
+
+    await waitFor(() => expect(result.current.seatSuspended).toBe(true));
+    await waitFor(() => {
+      expect(qc.getQueryData(['/api/conversations'])).toBeUndefined();
+      expect(qc.getQueryData(['/api/conversations/42'])).toBeUndefined();
+      expect(qc.getQueryData(['company', 'team', 'user-1'])).toBeUndefined();
+    });
+
+    // The context query itself remains available as the authority that
+    // established the restriction.
+    expect(qc.getQueryData(['company', 'team-context', 'user-1'])).toEqual({
+      enabled: true,
+      role: 'EMPLOYEE',
+      seatSuspended: true,
+    });
+  });
+
   it('resolves isTeamOwner when the server returns OWNER role', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,

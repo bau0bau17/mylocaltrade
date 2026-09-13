@@ -1,4 +1,4 @@
-import { beforeAll } from "vitest";
+import { beforeAll, beforeEach } from "vitest";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
@@ -33,8 +33,13 @@ delete process.env.EARLY_ACCESS_UNSUBSCRIBE_SECRET_PREVIOUS;
 // Rate-limit counters live in a shared Postgres table (see
 // lib/pg-rate-limit-store.ts), so back-to-back test runs against the same
 // development database accumulate hits and eventually make requests fail
-// with 429 instead of the expected status. Clear the counters once at the
-// start of every test run so each run starts from a clean window.
+// with 429 instead of the expected status. Reset them before EVERY test:
+// individual limiter tests still exercise their real budgets within a test,
+// while unrelated tests cannot inherit an exhausted window.
 beforeAll(async () => {
+  await db.execute(sql`DELETE FROM rate_limit_hits`);
+});
+
+beforeEach(async () => {
   await db.execute(sql`DELETE FROM rate_limit_hits`);
 });

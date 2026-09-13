@@ -1007,8 +1007,22 @@ export interface UnreadCountResponse {
   unreadCount: number;
 }
 
+export interface ClaimedConversationPlaceholder {
+  /** Internal stable list key. It must not be used to navigate to a conversation. */
+  id: number;
+  /** Permitted display name of the colleague currently handling the job. */
+  assignedTraderName: string;
+}
+
 export interface ConversationListResponse {
   conversations: ConversationSummary[];
+  /**
+     * Minimal non-openable rows returned only to an ACTIVE Company Teams
+     * employee for jobs assigned to another employee. They intentionally
+     * contain no customer, job, message, media, quote, booking, status,
+     * timing, or contact data.
+     */
+  claimedPlaceholders?: ClaimedConversationPlaceholder[];
   total: number;
 }
 

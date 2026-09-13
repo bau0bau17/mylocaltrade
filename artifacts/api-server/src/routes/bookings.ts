@@ -3,9 +3,10 @@ import { z } from "zod";
 import { db } from "@workspace/db";
 import {
   getActiveMembership,
-  traderSideRecipientUserIds,
 } from "../lib/company-membership";
+import { traderSideRecipientUserIds } from "../lib/team-notification-recipients";
 import {
+  canViewJob,
   canActOnJob,
   JobClaimedByOtherError,
   jobClaimedByOtherBody,
@@ -70,10 +71,14 @@ async function participantRole(
   userId: number,
 ): Promise<"customer" | "trader" | null> {
   if (conv.customerId === userId) return "customer";
-  // Company Teams: any active member of the conversation's company counts as
-  // its trader participant (owner-only while the flag is off).
+  // Company Teams: an active employee can only inspect their own assigned
+  // work or an unclaimed lead. Keep this check here because booking slots are
+  // a read route and otherwise reveal the company's working availability for
+  // a colleague's private job.
   const membership = await getActiveMembership(userId);
-  return membership?.traderProfileId === conv.traderProfileId ? "trader" : null;
+  if (membership?.traderProfileId !== conv.traderProfileId) return null;
+  const access = await canViewJob(conv, userId, membership.role);
+  return access.ok ? "trader" : null;
 }
 
 // Bookings only make sense while the hired job is still live.

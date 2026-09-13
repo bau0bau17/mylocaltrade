@@ -3,10 +3,8 @@ import { randomUUID } from "node:crypto";
 import { db } from "@workspace/db";
 import { getActiveMembership } from "../lib/company-membership";
 import { enquiriesTable, usersTable, traderProfilesTable, conversationsTable, messagesTable, quotesTable } from "@workspace/db/schema";
-import {
-  companyTeamsEnabled,
-  activeCompanyMemberUserIds,
-} from "../lib/company-membership";
+import { companyTeamsEnabled } from "../lib/company-membership";
+import { activeCompanyMemberUserIds } from "../lib/team-notification-recipients";
 import { eq, desc, and, isNull, isNotNull, inArray, sql, gte } from "drizzle-orm";
 import { deriveStage } from "../lib/conversation-stage";
 import { jobReferenceOf } from "../lib/job-reference";
@@ -22,6 +20,7 @@ import { detectContactInfo, contactViolationMessage } from "../lib/content-filte
 import { recordContactBlockAttempt } from "../lib/contact-block-tracker";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { sendPhoneVerificationRequired } from "../lib/customer-phone-gate";
+import { canViewJob } from "../lib/job-assignment";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -319,8 +318,8 @@ router.get("/enquiries/new-count", authMiddleware, async (req, res) => {
       return;
     }
     const profile = { id: membership.traderProfileId };
-    const [row] = await db
-      .select({ count: sql<number>`COUNT(*)::int` })
+    const conversations = await db
+      .select()
       .from(conversationsTable)
       .where(
         and(
@@ -329,7 +328,10 @@ router.get("/enquiries/new-count", authMiddleware, async (req, res) => {
           isNull(conversationsTable.traderViewedAt),
         ),
       );
-    res.json({ newCount: row?.count ?? 0 });
+    const viewable = await Promise.all(
+      conversations.map((conv) => canViewJob(conv, userId, membership.role)),
+    );
+    res.json({ newCount: viewable.filter((access) => access.ok).length });
   } catch (error) {
     req.log.error({ err: error }, "Get new lead count failed");
     res.status(500).json({ error: "Failed to get new lead count" });
@@ -500,15 +502,16 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
     const { userId, userRole } = req as AuthenticatedRequest;
 
     let enquiries;
+    let traderMembership: Awaited<ReturnType<typeof getActiveMembership>> | null = null;
 
     if (userRole === "trader") {
-      const membership = await getActiveMembership(userId);
+      traderMembership = await getActiveMembership(userId);
 
-      if (!membership) {
+      if (!traderMembership) {
         res.json({ enquiries: [], total: 0 });
         return;
       }
-      const profile = membership.profile;
+      const profile = traderMembership.profile;
 
       enquiries = await db
         .select({
@@ -537,6 +540,21 @@ router.get("/enquiries", authMiddleware, async (req, res) => {
         .leftJoin(conversationsTable, eq(conversationsTable.enquiryId, enquiriesTable.id))
         .where(eq(enquiriesTable.customerId, userId))
         .orderBy(desc(enquiriesTable.createdAt));
+    }
+
+    // Employees must not receive the enquiry text, attachment paths, customer
+    // identity, or lifecycle metadata for a colleague's assigned job. Filter
+    // before deriving any of those projections; owners retain supervisory
+    // access, and unclaimed leads remain actionable for employees.
+    if (userRole === "trader" && traderMembership?.role === "EMPLOYEE") {
+      const access = await Promise.all(
+        enquiries.map(async (row) =>
+          row.conv
+            ? await canViewJob(row.conv, userId, traderMembership.role)
+            : { ok: false as const },
+        ),
+      );
+      enquiries = enquiries.filter((_, index) => access[index].ok);
     }
 
     // Company Teams: resolve assigned-member names in one batch so the leads

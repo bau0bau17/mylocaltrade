@@ -17,9 +17,13 @@ import { Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { JobReferenceSearch } from "@/components/JobReferenceSearch";
+import { TeamRestrictedAccess } from "@/components/TeamRestrictedAccess";
 import { matchesLeadSearch } from "@/lib/job-reference-search";
 import { objectImageUrl } from "@/lib/api-url";
+import { clearProtectedCompanyConversationCache } from "@/lib/auth-query-cache";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamContext } from "@/hooks/useTeamContext";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetConversations,
   getGetConversationsQueryKey,
@@ -95,6 +99,14 @@ const TRADER_STATUS_COLORS: Record<string, { text: string; bg: string }> = {
   COMPLETED: { text: Colors.light.success, bg: "rgba(6, 214, 160, 0.12)" },
 };
 
+function isForbiddenError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { status?: unknown }).status === 403
+  );
+}
+
 export default function MessagesIndexScreen() {
   const router = useRouter();
   const { isAuthenticated, isTrader, isAdmin } = useAuth();
@@ -144,6 +156,8 @@ export default function MessagesIndexScreen() {
 
 function MessagesList({ isTrader }: { isTrader: boolean }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const { isEmployee, roleUnknown, seatSuspended, teamContext } = useTeamContext();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
@@ -154,25 +168,45 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
     const sub = AppState.addEventListener("change", (s) => setAppActive(s === "active"));
     return () => sub.remove();
   }, []);
-  const { data, isLoading, isError, refetch, isRefetching } = useGetConversations({
+  const teamAccessUnknown = isTrader && roleUnknown;
+  const teamAccessRestricted = isTrader && isEmployee && seatSuspended;
+  const [forbidden, setForbidden] = React.useState(false);
+  const { data, isLoading, isError, error, refetch, isRefetching } = useGetConversations({
     query: {
       queryKey: getGetConversationsQueryKey(),
+      enabled: !teamAccessUnknown && !teamAccessRestricted && !forbidden,
       refetchInterval: appActive ? 30_000 : false,
+      retry: (failureCount, queryError) =>
+        !isForbiddenError(queryError) && failureCount < 3,
     },
   });
+  const requestForbidden = isForbiddenError(error);
+  const accessRestricted = teamAccessRestricted || forbidden || requestForbidden;
+  const canLoadConversations = !teamAccessUnknown && !accessRestricted;
+
+  React.useEffect(() => {
+    if (!requestForbidden) return;
+    setForbidden(true);
+    void clearProtectedCompanyConversationCache(queryClient);
+  }, [queryClient, requestForbidden]);
 
   // Re-pull the list (and its per-row unread badges) each time the screen gains
   // focus, so counts clear right after the user reads a thread and comes back.
   useFocusEffect(
     React.useCallback(() => {
-      void refetch();
-    }, [refetch]),
+      if (canLoadConversations) void refetch();
+    }, [canLoadConversations, refetch]),
   );
 
   // Conversation search: matches job reference (MLT-000123 / 000123 / "mlt 12",
   // case/dash/zero-padding tolerant), job/category title and the other party's
   // name — client-side over the already-loaded list; clearing restores it.
   const conversations: ConversationSummary[] = data?.conversations ?? [];
+  // This deliberately uses a distinct server shape, rather than a redacted
+  // ConversationSummary. The list may show only that a colleague took a job
+  // and their permitted display name; no customer or conversation metadata
+  // enters the mobile process for these rows.
+  const claimedPlaceholders = isTrader ? data?.claimedPlaceholders ?? [] : [];
   const [jobQuery, setJobQuery] = React.useState("");
   // Conversation ids whose business logo failed to load — those rows fall
   // back to the initials tile (customer list only; trader rows never get one).
@@ -196,6 +230,21 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [data, trimmedJobQuery, isTrader],
   );
+
+  if (accessRestricted) {
+    return <TeamRestrictedAccess ownerEmail={teamContext?.ownerEmail} />;
+  }
+
+  // Do not let an identity-scoped conversation result render while the Team
+  // context is still unknown. This prevents a previously mounted thread/list
+  // from flashing before the server confirms the employee's access.
+  if (teamAccessUnknown) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
+      </View>
+    );
+  }
 
   if (isLoading && !isRefetching) {
     return (
@@ -274,6 +323,16 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
               <Text style={styles.emptyTitle}>No conversations match</Text>
               <Text style={styles.emptySub}>
                 Nothing matches “{trimmedJobQuery}”. Try a name, job title or MLT number.
+              </Text>
+            </View>
+          ) : claimedPlaceholders.length > 0 ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Feather name="inbox" size={28} color={Colors.light.primary} />
+              </View>
+              <Text style={styles.emptyTitle}>No available conversations</Text>
+              <Text style={styles.emptySub}>
+                Jobs being handled by colleagues are shown below.
               </Text>
             </View>
           ) : (
@@ -478,6 +537,34 @@ function MessagesList({ isTrader }: { isTrader: boolean }) {
             </Pressable>
           );
         }}
+        ListFooterComponent={
+          claimedPlaceholders.length > 0 ? (
+            <View style={styles.claimedPlaceholderSection}>
+              <Text style={styles.claimedPlaceholderHeading}>Handled by your team</Text>
+              {claimedPlaceholders.map((placeholder) => (
+                <View
+                  key={`claimed-${placeholder.id}`}
+                  style={[styles.row, styles.claimedPlaceholder]}
+                  accessible
+                  accessibilityRole="text"
+                  accessibilityLabel={`Job claimed by ${placeholder.assignedTraderName}. This job is being handled by them.`}
+                >
+                  <View style={[styles.avatar, styles.claimedPlaceholderAvatar]}>
+                    <Feather name="briefcase" size={20} color={Colors.light.textSecondary} />
+                  </View>
+                  <View style={styles.rowBody}>
+                    <Text style={styles.claimedPlaceholderTitle} numberOfLines={1}>
+                      Claimed by {placeholder.assignedTraderName}
+                    </Text>
+                    <Text style={styles.claimedPlaceholderBody} numberOfLines={1}>
+                      This job is being handled by {placeholder.assignedTraderName}.
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null
+        }
       />
     </View>
   );
@@ -494,6 +581,35 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   empty: { alignItems: "center", padding: 32, marginTop: 40 },
+  claimedPlaceholderSection: {
+    marginTop: 8,
+    gap: 10,
+  },
+  claimedPlaceholderHeading: {
+    marginTop: 12,
+    marginBottom: 2,
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.light.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  claimedPlaceholder: {
+    opacity: 0.82,
+  },
+  claimedPlaceholderAvatar: {
+    backgroundColor: Colors.light.primaryMuted,
+  },
+  claimedPlaceholderTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: Colors.light.text,
+  },
+  claimedPlaceholderBody: {
+    marginTop: 3,
+    fontSize: 13,
+    color: Colors.light.textSecondary,
+  },
   searchWrap: { paddingHorizontal: 16, paddingTop: 12 },
   // Logged-out state: anchored in the upper portion of the screen under the
   // compact header, rather than floating in the vertical centre.

@@ -16,6 +16,7 @@ import {
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { useTeamContext } from "@/hooks/useTeamContext";
 
 // Inner routes that live inside the (tabs) group so they inherit the same
 // bottom tab bar as the four primary tabs. They are hidden from the bar
@@ -205,9 +206,16 @@ function NativeTabLayout() {
 // the route changes (e.g. the user reads a thread and navigates away), since
 // refetchOnWindowFocus does not fire on in-app navigation in React Native.
 function useUnreadBadgeCount(): number {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, isTrader } = useAuth();
+  const { roleUnknown, seatSuspended } = useTeamContext();
   const pathname = usePathname();
-  const enabled = isAuthenticated && !isAdmin;
+  // The unread endpoint is conversation-owned data too. Do not let an old
+  // badge query keep recreating the cache while an employee's Team access is
+  // unknown or has been positively suspended.
+  const enabled =
+    isAuthenticated &&
+    !isAdmin &&
+    !(isTrader && (roleUnknown || seatSuspended));
   // Poll every 60s, but only while the app is actually in the foreground.
   // Users who denied push permission get no live badge updates from the
   // notification listener, so this keeps the badge honest for everyone.

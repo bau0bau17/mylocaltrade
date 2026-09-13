@@ -1,7 +1,9 @@
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import {
+  clearProtectedCompanyConversationCache,
   clearProtectedAuthCache,
   isCurrentSessionUnauthorized,
+  isProtectedCompanyConversationQuery,
   isPublicQueryKey,
 } from '@/lib/auth-query-cache';
 
@@ -76,6 +78,43 @@ describe('authenticated query cache isolation', () => {
     expect(isPublicQueryKey(['/api/subscriptions/status', 123])).toBe(false);
     expect(isPublicQueryKey(['company', 'team', 123])).toBe(false);
     expect(isPublicQueryKey(['future-unreviewed-key'])).toBe(false);
+  });
+
+  it('evicts suspended employee company and conversation data but keeps Team context authority', async () => {
+    const queryClient = freshClient();
+    const listKey = ['/api/conversations'];
+    const detailKey = ['/api/conversations/42'];
+    const unreadKey = ['/api/conversations/unread-count'];
+    const enquiriesKey = ['/api/enquiries'];
+    const newEnquiriesKey = ['/api/enquiries/new-count'];
+    const teamKey = ['company', 'team', 7];
+    const contextKey = ['company', 'team-context', 7];
+    const profileKey = ['/api/profile'];
+
+    queryClient.setQueryData(listKey, { conversations: [{ id: 42 }] });
+    queryClient.setQueryData(detailKey, { conversation: { id: 42 } });
+    queryClient.setQueryData(unreadKey, { unreadCount: 1 });
+    queryClient.setQueryData(enquiriesKey, { enquiries: [{ id: 42, customerName: 'Customer' }] });
+    queryClient.setQueryData(newEnquiriesKey, { newCount: 1 });
+    queryClient.setQueryData(teamKey, { members: [{ id: 7 }] });
+    queryClient.setQueryData(contextKey, { enabled: true, role: 'EMPLOYEE', seatSuspended: true });
+    queryClient.setQueryData(profileKey, { fullName: 'Employee' });
+
+    await clearProtectedCompanyConversationCache(queryClient);
+
+    expect(queryClient.getQueryData(listKey)).toBeUndefined();
+    expect(queryClient.getQueryData(detailKey)).toBeUndefined();
+    expect(queryClient.getQueryData(unreadKey)).toBeUndefined();
+    expect(queryClient.getQueryData(enquiriesKey)).toBeUndefined();
+    expect(queryClient.getQueryData(newEnquiriesKey)).toBeUndefined();
+    expect(queryClient.getQueryData(teamKey)).toBeUndefined();
+    expect(queryClient.getQueryData(contextKey)).toEqual({
+      enabled: true,
+      role: 'EMPLOYEE',
+      seatSuspended: true,
+    });
+    expect(queryClient.getQueryData(profileKey)).toEqual({ fullName: 'Employee' });
+    expect(isProtectedCompanyConversationQuery(queryClient.getQueryCache().find({ queryKey: contextKey })!)).toBe(false);
   });
 
   it('ignores a delayed Account A 401 but accepts an immediate Account B 401', () => {

@@ -25,7 +25,7 @@ import {
 } from "../lib/team-billing";
 
 /**
- * Team billing — plan-truthful seat accounting + gated enforcement.
+ * Team billing — plan-truthful seat accounting + automatic entitlement enforcement.
  *
  * Contract under test:
  *  - Seat accounting is ALWAYS plan-based, in EVERY regime: the owner's
@@ -34,9 +34,9 @@ import {
  *    count; the owner never occupies a seat; COMPANY_MAX_ACTIVE_MEMBERS
  *    acts only as a kill-switch ceiling when explicitly set — never as a
  *    seat allowance.
- *  - TEAM_BILLING_ENFORCED gates ONLY the destructive machinery
- *    (suspension reconciliation + owner seat routes): flag off, nobody is
- *    ever suspended — over-allowance members are grandfathered in place.
+ *  - An effective entitlement loss always suspends over-allowance employees,
+ *    regardless of TEAM_BILLING_ENFORCED. The flag remains limited to
+ *    owner-managed seat actions.
  */
 
 const SUFFIX = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -393,7 +393,7 @@ describe("getCompanyPlanContext", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Flag OFF — plan-truthful accounting, never destructive
+// Flag OFF — plan-truthful accounting; automatic entitlement enforcement remains
 // ---------------------------------------------------------------------------
 
 describe("TEAM_BILLING_ENFORCED off (default)", () => {
@@ -462,7 +462,7 @@ describe("TEAM_BILLING_ENFORCED off (default)", () => {
     expect(res.body.seats.allowance).toBeUndefined();
   });
 
-  it("grandfathered employee on Solo: stays active, owner uncounted, new invites blocked", async () => {
+  it("effective Solo restriction preserves the membership but suspends its seat", async () => {
     setFlags({ teams: true, billing: false });
     const employee = await createTrader("grandfathered-emp");
     const [member] = await db
@@ -475,24 +475,25 @@ describe("TEAM_BILLING_ENFORCED off (default)", () => {
       })
       .returning({ id: companyMembersTable.id });
     try {
+      await reconcileCompanySeats(ctx.soloProfileId, "test:effective-solo");
       const team = await request(app)
         .get("/api/company/team")
         .set("Authorization", `Bearer ${ctx.soloOwner.token}`);
       expect(team.status).toBe(200);
-      // Owner + employee both listed, both active — nobody suspended.
+      // The membership remains ACTIVE, but its operational seat is suspended.
       const roles = team.body.members
         .map((m: { role: string }) => m.role)
         .sort();
       expect(roles).toEqual(["EMPLOYEE", "OWNER"]);
       expect(
-        team.body.members.every((m: { seatSuspended?: boolean }) => !m.seatSuspended),
+        team.body.members.find((m: { role: string }) => m.role === "EMPLOYEE")?.seatSuspended,
       ).toBe(true);
-      // ...but the seat math is truthful: 1 employee over a 0-seat plan.
+      // Seat math remains truthful: 0 effective employee seats.
       expect(team.body.seats).toMatchObject({
-        used: 1,
+        used: 0,
         max: 0,
-        activeEmployees: 1,
-        overCapacity: true,
+        activeEmployees: 0,
+        overCapacity: false,
         enforcement: false,
       });
       // And no NEW invitations while on Solo.
@@ -509,22 +510,25 @@ describe("TEAM_BILLING_ENFORCED off (default)", () => {
     }
   });
 
-  it("Team → Solo downgrade with the flag off reports over-capacity but suspends nobody", async () => {
+  it("Team → effective Solo suspends members even with the owner-seat flag off", async () => {
     setFlags({ teams: true, billing: false, teamMap: TEAM_MAP });
     await setSubscription(ctx.teamOwner.id, "com.mylocaltrade.app.trader.yearly");
     try {
+      const result = await reconcileCompanySeats(ctx.teamProfileId, "test:effective-downgrade");
+      expect(result).toMatchObject({ changed: true, allowance: 0 });
       const team = await request(app)
         .get("/api/company/team")
         .set("Authorization", `Bearer ${ctx.teamOwner.token}`);
       expect(team.status).toBe(200);
-      expect(team.body.seats).toMatchObject({ max: 0, overCapacity: true });
+      expect(team.body.seats).toMatchObject({ max: 0, overCapacity: false });
       const employees = team.body.members.filter(
         (m: { role: string }) => m.role === "EMPLOYEE",
       );
       expect(employees).toHaveLength(1);
-      expect(employees[0].seatSuspended).toBeFalsy();
+      expect(employees[0].seatSuspended).toBeTruthy();
     } finally {
       await setSubscription(ctx.teamOwner.id, FUTURE_TEAM5_PRODUCT);
+      await reconcileCompanySeats(ctx.teamProfileId, "test:effective-upgrade");
     }
   });
 });
@@ -619,7 +623,7 @@ describe("TEAM_BILLING_ENFORCED on", () => {
     });
   });
 
-  it("employees get gating booleans only — no billing tier or seat counts", async () => {
+  it("employees get gating booleans and an owner contact only when effective Team access is absent", async () => {
     setFlags({ teams: true, billing: true });
     const employee = await createTrader("ctx-employee");
     await db.insert(companyMembersTable).values({
@@ -640,8 +644,11 @@ describe("TEAM_BILLING_ENFORCED on", () => {
         viewerCanManageBilling: false,
         viewerCanManageTeam: false,
         viewerCanInvite: false,
-        // Phase D: employees learn their own seat state — nothing else.
-        seatSuspended: false,
+        // Unknown products fail closed to Solo. The employee gets only their
+        // own gate plus a contact for the owner who can restore access, never
+        // billing tier or seat counts.
+        seatSuspended: true,
+        ownerEmail: expect.any(String),
       });
     } finally {
       await db
@@ -898,9 +905,70 @@ async function memberSeatState(memberId: number) {
 }
 
 describe("reconcileCompanySeats — deterministic suspension rule", () => {
-  it("is a no-op (null) while TEAM_BILLING_ENFORCED is off", async () => {
-    setFlags({ teams: true });
-    expect(await reconcileCompanySeats(ctx.teamProfileId, "test:flag-off")).toBeNull();
+  it("runs while TEAM_BILLING_ENFORCED is off when Company Teams is enabled", async () => {
+    setFlags({ teams: true, billing: false, teamMap: TEAM_MAP });
+    expect(await reconcileCompanySeats(ctx.teamProfileId, "test:flag-off")).not.toBeNull();
+  });
+
+  it("restricts an employee only once the effective Team entitlement is gone, then restores them on re-upgrade", async () => {
+    setFlags({ teams: true, billing: false, teamMap: TEAM_MAP });
+    const employee = await addEmployee(
+      ctx.teamProfileId,
+      "effective-entitlement",
+      new Date(Date.now() - 1_000),
+    );
+    try {
+      // The existing Team entitlement still grants access. A deferred Apple
+      // product change has not altered this row yet, so reconciliation must
+      // keep the employee active.
+      expect(
+        await reconcileCompanySeats(ctx.teamProfileId, "test:pending-product-change"),
+      ).toMatchObject({ allowance: 5 });
+      expect((await memberSeatState(employee.memberId)).seatSuspendedAt).toBeNull();
+
+      // RevenueCat has now confirmed the Solo entitlement as effective.
+      await setSubscription(ctx.teamOwner.id, "com.mylocaltrade.app.trader.yearly");
+      expect(
+        await reconcileCompanySeats(ctx.teamProfileId, "test:effective-solo"),
+      ).toMatchObject({
+        allowance: 0,
+        suspendedMemberUserIds: expect.arrayContaining([employee.userId]),
+      });
+      const restricted = await memberSeatState(employee.memberId);
+      expect(restricted.seatSuspendedAt).not.toBeNull();
+      expect(restricted.seatSuspensionSource).toBe("SYSTEM");
+
+      const employeeContext = await request(app)
+        .get("/api/company/team-context")
+        .set("Authorization", `Bearer ${employee.token}`);
+      expect(employeeContext.status).toBe(200);
+      expect(employeeContext.body).toMatchObject({
+        enabled: true,
+        role: "EMPLOYEE",
+        seatSuspended: true,
+      });
+
+      // Membership is retained for the owner and can be restored later.
+      const [membership] = await db
+        .select({ status: companyMembersTable.status })
+        .from(companyMembersTable)
+        .where(eq(companyMembersTable.id, employee.memberId))
+        .limit(1);
+      expect(membership.status).toBe("ACTIVE");
+
+      await setSubscription(ctx.teamOwner.id, FUTURE_TEAM5_PRODUCT);
+      expect(
+        await reconcileCompanySeats(ctx.teamProfileId, "test:effective-team-reupgrade"),
+      ).toMatchObject({
+        allowance: 5,
+        reactivatedMemberUserIds: expect.arrayContaining([employee.userId]),
+      });
+      expect((await memberSeatState(employee.memberId)).seatSuspendedAt).toBeNull();
+    } finally {
+      await setSubscription(ctx.teamOwner.id, FUTURE_TEAM5_PRODUCT);
+      await reconcileCompanySeats(ctx.teamProfileId, "test:effective-entitlement-cleanup");
+      await db.delete(companyMembersTable).where(eq(companyMembersTable.id, employee.memberId));
+    }
   });
 
   it("suspends only the NEWEST seated employees beyond the allowance; reactivates longest-standing first; never auto-reactivates OWNER-suspended seats", async () => {
@@ -1005,13 +1073,7 @@ describe("exemption expiry & the reconciliation sweep", () => {
     expect(seat.seatSuspensionSource).toBe("SYSTEM");
   });
 
-  it("the sweep is a hard no-op while either flag is off", async () => {
-    setFlags({ teams: true }); // billing off
-    expect(await sweepCompanySeatReconciliation()).toEqual({
-      companies: 0,
-      changed: 0,
-      errors: 0,
-    });
+  it("the sweep is a hard no-op only while Company Teams is off", async () => {
     setFlags({ billing: true, teamMap: TEAM_MAP }); // teams off
     expect(await sweepCompanySeatReconciliation()).toEqual({
       companies: 0,

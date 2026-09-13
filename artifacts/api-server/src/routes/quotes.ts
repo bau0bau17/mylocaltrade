@@ -3,8 +3,8 @@ import { z } from "zod";
 import { db } from "@workspace/db";
 import {
   getActiveMembership,
-  traderSideRecipientUserIds,
 } from "../lib/company-membership";
+import { traderSideRecipientUserIds } from "../lib/team-notification-recipients";
 import {
   canActOnJob,
   claimOrRequireAssigned,

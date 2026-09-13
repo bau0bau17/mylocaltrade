@@ -5,9 +5,17 @@
  * MyLocalTrade API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ClaimedConversationPlaceholder } from './claimedConversationPlaceholder';
 import type { ConversationSummary } from './conversationSummary';
 
 export interface ConversationListResponse {
   conversations: ConversationSummary[];
+  /**
+     * Minimal non-openable rows returned only to an ACTIVE Company Teams
+     * employee for jobs assigned to another employee. They intentionally
+     * contain no customer, job, message, media, quote, booking, status,
+     * timing, or contact data.
+     */
+  claimedPlaceholders?: ClaimedConversationPlaceholder[];
   total: number;
 }

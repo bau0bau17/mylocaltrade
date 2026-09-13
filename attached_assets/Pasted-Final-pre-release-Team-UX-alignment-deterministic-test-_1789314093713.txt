@@ -1,0 +1,192 @@
+Final pre-release Team UX alignment + deterministic test cleanup.
+
+The security implementation is correct, but two user-facing requirements need alignment and the full API suite should be deterministic before App Store submission.
+
+IMPORTANT:
+Do not weaken any server-side authorization.
+Do not expose customer/job/conversation data to unauthorized employees.
+Do not change RevenueCat/Apple subscription semantics.
+Do not change production rate-limit policy just to make tests pass.
+Do not deploy.
+Do not push to GitHub — I will use Replit Git Sync myself.
+Do not create a TestFlight build.
+
+==================================================
+1. OTHER EMPLOYEE'S CLAIMED JOB — SAFE PLACEHOLDER
+==================================================
+
+CURRENT IMPLEMENTATION
+
+A conversation claimed by another employee is currently omitted completely from the employee's Messages list.
+
+SECURITY:
+This is safe.
+
+UX REQUIREMENT:
+The intended product behavior is for team employees to know that a company job has already been claimed by a colleague, without seeing any protected customer/conversation content.
+
+For an ACTIVE team employee, show a minimal safe placeholder entry for a conversation assigned to another employee.
+
+Example:
+
+Claimed by Lucian
+
+or:
+
+Assigned to Lucian
+
+Nothing more sensitive should be exposed.
+
+The placeholder must NOT reveal:
+
+- customer name
+- customer initials/avatar if derived from customer
+- phone/email
+- enquiry text
+- service description unless explicitly proven safe and desired
+- message preview
+- photos
+- quote
+- appointment
+- contact details
+- last message
+- signed media
+- moderation/report information
+
+Use only the minimum identifiers needed to render a stable placeholder plus the assignee's permitted display name.
+
+The placeholder must NOT be openable as a conversation.
+
+Tapping it should either do nothing or show a simple informational message such as:
+
+“This job is being handled by Lucian.”
+
+Do not allow navigation to /messages/:id from this placeholder.
+
+DIRECT API SECURITY MUST REMAIN:
+
+Employee B requesting Employee A's conversation directly:
+403 CONVERSATION_ASSIGNED_TO_OTHER
+
+No protected content returned.
+
+Owner:
+continues to receive/open the full conversation.
+
+Assigned employee:
+continues to receive/open the full conversation.
+
+==================================================
+2. OWNER CONTACT ON TEAM-RESTRICTED SCREEN
+==================================================
+
+CURRENT RESULT
+
+When an employee loses Team access because the owner no longer has an effective Team entitlement, mobile tells them to contact the business owner.
+
+Audit whether the server already has a safe owner-contact field available for an authenticated existing member of that company.
+
+If safe and already authorized, display:
+
+Team access unavailable
+
+This company no longer has an active Team subscription.
+
+Please contact the business account owner to restore Team access.
+
+Account owner: owner@example.com
+
+Use the actual server-authoritative owner email/contact.
+
+Requirements:
+
+- never hardcode an email;
+- only return it to a legitimate existing member of that company;
+- do not expose it publicly;
+- do not expose it after membership is deleted/revoked;
+- do not show Billing/purchase controls to the employee;
+- owner remains unrestricted and can manage Billing.
+
+If exposing the owner email would conflict with current privacy/access design, report that clearly and keep the existing generic “contact the owner” message rather than weakening privacy.
+
+==================================================
+3. FULL API SUITE MUST BE DETERMINISTIC
+==================================================
+
+Previous result:
+
+693 / 695 API tests passed.
+
+The two failures were reported as shared test-environment rate-limit interference, with the relevant test passing in isolation.
+
+Audit and fix the TEST behavior only.
+
+Do NOT disable or weaken production rate limiting.
+
+Determine why the full suite shares rate-limit state.
+
+Preferred approaches include:
+
+- reset/inject isolated rate-limit state between tests;
+- unique test identities/IP context;
+- deterministic test-only limiter dependency;
+- existing supported test bypass where appropriate.
+
+Do not introduce production behavior differences beyond test dependency/configuration boundaries.
+
+After correction, run the complete API suite again.
+
+Target:
+695/695 or the updated total with ALL tests passing.
+
+Also rerun:
+- Mobile full suite;
+- API typecheck;
+- Mobile typecheck;
+- Team authorization tests;
+- Team entitlement tests.
+
+==================================================
+4. SECURITY REGRESSIONS
+==================================================
+
+Confirm:
+
+- placeholder response contains no protected conversation data;
+- direct conversation access remains 403;
+- no signed media URLs leak;
+- no message preview leak;
+- stale React Query protected data remains cleared;
+- owner continues to see all company conversations;
+- assigned employee retains full access;
+- unrelated employee sees only safe claimed placeholder;
+- Solo-effective Team restriction still applies immediately server-side;
+- pending Apple downgrade does NOT restrict employees early.
+
+Request final independent security review.
+
+==================================================
+WHEN COMPLETE
+==================================================
+
+Do NOT deploy.
+Do NOT push to GitHub.
+Do NOT build TestFlight.
+
+Report:
+
+1. Exact placeholder fields returned to unrelated employees
+2. Screenshot/UI description of the placeholder
+3. Confirmation it cannot open the protected conversation
+4. Confirmation direct API still returns 403
+5. Whether owner email is shown on restricted Team screen
+6. Exact authorization protecting owner contact
+7. Final full API suite result
+8. Final Mobile suite result
+9. Typecheck results
+10. Files changed
+11. Database migration required yes/no
+12. Backend republish required yes/no
+13. New TestFlight build required yes/no
+14. Final independent security-review result
+15. Whether Team privacy/subscription UX is fully release-ready

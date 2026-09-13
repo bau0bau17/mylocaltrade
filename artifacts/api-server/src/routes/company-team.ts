@@ -30,6 +30,7 @@ import {
   teamBillingEnforced,
 } from "../lib/team-billing";
 import {
+  employeeSeatAccessRestricted,
   handoverActiveJobsToOwner,
   logJobsHandedToOwner,
   notifyJobsHandedToOwner,
@@ -261,16 +262,22 @@ router.get(
         // billing tier or seat utilisation (billing metadata is owner-only).
         // seatSuspended is the employee's OWN state, so it belongs here: it
         // drives the read-only banner and hides purchase/restore prompts.
-        const [selfRow] = await db
-          .select({ seatSuspendedAt: companyMembersTable.seatSuspendedAt })
-          .from(companyMembersTable)
-          .where(
-            and(
-              eq(companyMembersTable.userId, (req as AuthenticatedRequest).userId!),
-              eq(companyMembersTable.status, "ACTIVE"),
-            ),
-          )
-          .limit(1);
+        const seatSuspended = await employeeSeatAccessRestricted(
+          db,
+          (req as AuthenticatedRequest).userId!,
+          membership.traderProfileId,
+        );
+        // A restricted employee needs a trustworthy way to reach the person
+        // who can restore the plan. This is deliberately a narrow disclosure:
+        // only an ACTIVE employee in their own company receives the owner's
+        // account email, never a customer, revoked member, non-member or owner.
+        const [ownerContact] = seatSuspended
+          ? await db
+              .select({ email: usersTable.email })
+              .from(usersTable)
+              .where(eq(usersTable.id, membership.profile.userId))
+              .limit(1)
+          : [];
         res.json({
           enabled: true,
           role: membership.role,
@@ -278,7 +285,8 @@ router.get(
           viewerCanManageBilling: false,
           viewerCanManageTeam: false,
           viewerCanInvite: false,
-          seatSuspended: selfRow?.seatSuspendedAt != null,
+          seatSuspended,
+          ...(seatSuspended ? { ownerEmail: ownerContact?.email ?? null } : {}),
         });
         return;
       }

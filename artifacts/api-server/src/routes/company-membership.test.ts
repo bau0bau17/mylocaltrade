@@ -456,8 +456,12 @@ describe("endpoint behaviour with flag ON (employee access boundaries)", () => {
     }
   });
 
-  it("employee sees the company's shared leads via GET /api/enquiries", async () => {
-    await createEnquiry(ctx.companyProfileId, ctx.customerId);
+  it("employee receives no enquiries when the owner has no effective Team entitlement", async () => {
+    await createConversation({
+      customerId: ctx.customerId,
+      traderUserId: ctx.ownerUserId,
+      traderProfileId: ctx.companyProfileId,
+    });
     await insertMembership({ traderProfileId: ctx.companyProfileId, userId: ctx.employeeUserId });
     try {
       setFlag(true);
@@ -466,7 +470,16 @@ describe("endpoint behaviour with flag ON (employee access boundaries)", () => {
         .set("Authorization", `Bearer ${ctx.employeeToken}`);
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.enquiries)).toBe(true);
-      expect(res.body.enquiries.length).toBeGreaterThanOrEqual(1);
+      expect(res.body.enquiries).toEqual([]);
+      const conversations = await request(app)
+        .get("/api/conversations")
+        .set("Authorization", `Bearer ${ctx.employeeToken}`);
+      expect(conversations.status).toBe(200);
+      expect(conversations.body.conversations).toEqual([]);
+      const unread = await request(app)
+        .get("/api/conversations/unread-count")
+        .set("Authorization", `Bearer ${ctx.employeeToken}`);
+      expect(unread.body).toEqual({ unreadCount: 0 });
     } finally {
       await deleteMembership(ctx.employeeUserId);
     }

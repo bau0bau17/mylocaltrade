@@ -24,6 +24,9 @@ import * as ImagePicker from "expo-image-picker";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeamContext } from "@/hooks/useTeamContext";
+import { TeamRestrictedAccess } from "@/components/TeamRestrictedAccess";
+import { clearProtectedCompanyConversationCache } from "@/lib/auth-query-cache";
 import { detectContactInfo, contactViolationMessage } from "@/lib/content-filter";
 import { confirmAction } from "@/lib/confirm";
 import { avatarImageUrl, getApiUrl, objectImageUrl } from "@/lib/api-url";
@@ -36,6 +39,14 @@ function isNoOfferYet(err: unknown): boolean {
   const data = (err as { data?: unknown }).data;
   if (!data || typeof data !== "object") return false;
   return (data as { code?: unknown }).code === "NO_OFFER_YET";
+}
+
+function isForbiddenError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { status?: unknown }).status === 403
+  );
 }
 
 // Company Teams: the server answers 409 with this code when a teammate has
@@ -234,7 +245,13 @@ export default function ConversationThreadScreen() {
       (returnTo ?? "/messages") as Parameters<typeof router.replace>[0],
     );
   const { isTrader, isAdmin, user, token } = useAuth();
+  const { isEmployee, roleUnknown, seatSuspended, teamContext } = useTeamContext();
   const listRef = useRef<FlatList>(null);
+  const [forbidden, setForbidden] = useState(false);
+  const teamAccessUnknown = isTrader && roleUnknown;
+  const teamAccessRestricted = isTrader && isEmployee && seatSuspended;
+  const canFetchConversation =
+    !isAdmin && !teamAccessUnknown && !teamAccessRestricted && !forbidden;
 
   // Keyboard-aware layout: the composer sits between the message trail and the
   // quote/appointment/contact/status cards. While the keyboard is up, those
@@ -271,11 +288,23 @@ export default function ConversationThreadScreen() {
   }, []);
   const { data, isLoading, error, refetch } = useGetConversation(conversationId, {
     query: {
-      enabled: !isAdmin,
+      enabled: canFetchConversation,
       queryKey: getGetConversationQueryKey(conversationId),
       refetchInterval: !isAdmin && appActive ? 12_000 : false,
+      retry: (failureCount, queryError) =>
+        !isForbiddenError(queryError) && failureCount < 3,
     },
   });
+  const requestForbidden = isForbiddenError(error);
+  const accessRestricted = teamAccessRestricted || forbidden || requestForbidden;
+
+  useEffect(() => {
+    if (!requestForbidden) return;
+    setForbidden(true);
+    // A reassignment or seat change can make a previously cached thread
+    // inaccessible. Remove it before any later focus/refetch can reuse it.
+    void clearProtectedCompanyConversationCache(qc);
+  }, [qc, requestForbidden]);
 
   const sendMutation = useSendConversationMessage({
     mutation: {
@@ -424,7 +453,7 @@ export default function ConversationThreadScreen() {
     },
     {
       query: {
-        enabled: bookingOpen && !!bookingDayKey,
+        enabled: canFetchConversation && bookingOpen && !!bookingDayKey,
         queryKey: getGetBookingSlotsQueryKey(conversationId, {
           date: bookingDayKey ?? "",
           durationMinutes: bookingDuration as 30 | 60 | 90 | 120 | 180 | 240 | 480,
@@ -1218,6 +1247,20 @@ export default function ConversationThreadScreen() {
         <Pressable style={styles.cta} onPress={() => router.replace('/(tabs)/account')}>
           <Text style={styles.ctaText}>Back to Account</Text>
         </Pressable>
+      </View>
+    );
+  }
+
+  if (accessRestricted) {
+    return <TeamRestrictedAccess ownerEmail={teamContext?.ownerEmail} />;
+  }
+
+  // Wait for the server-derived role before allowing a cached conversation
+  // response to reach the screen. The Team hook fails closed while unknown.
+  if (teamAccessUnknown) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={Colors.light.primary} />
       </View>
     );
   }

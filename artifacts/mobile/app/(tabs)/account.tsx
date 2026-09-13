@@ -92,6 +92,13 @@ function AccountScreenInner() {
   const { user, isAuthenticated, isTrader, isAdmin, logout, token: adminToken, refreshUser } = useAuth();
   const qc = useQueryClient();
   const { refreshing, onRefresh } = usePullToRefresh();
+  const {
+    isEmployee,
+    isTeamOwner: showTeamRow,
+    teamContext,
+    roleUnknown: teamRoleUnknown,
+    seatSuspended,
+  } = useTeamContext();
 
   // --- Personal profile photo (headshot) — traders only. This is the
   // individual's photo, NOT the business logo (managed in Edit Profile).
@@ -180,7 +187,10 @@ function AccountScreenInner() {
   const { data: unreadData, refetch: refetchUnread } = useGetConversationsUnreadCount({
     query: {
       queryKey: getGetConversationsUnreadCountQueryKey(),
-      enabled: isAuthenticated && !isAdmin,
+      enabled:
+        isAuthenticated &&
+        !isAdmin &&
+        !(isTrader && (teamRoleUnknown || seatSuspended)),
       refetchOnWindowFocus: true,
     },
   });
@@ -192,10 +202,21 @@ function AccountScreenInner() {
   // otherwise stay stale until the next cold app foreground.
   useFocusEffect(
     React.useCallback(() => {
-      if (isAuthenticated && !isAdmin) {
+      if (
+        isAuthenticated &&
+        !isAdmin &&
+        !(isTrader && (teamRoleUnknown || seatSuspended))
+      ) {
         void refetchUnread();
       }
-    }, [isAuthenticated, isAdmin, refetchUnread]),
+    }, [
+      isAuthenticated,
+      isAdmin,
+      isTrader,
+      teamRoleUnknown,
+      seatSuspended,
+      refetchUnread,
+    ]),
   );
 
   const { data: me } = useGetMe({
@@ -253,12 +274,6 @@ function AccountScreenInner() {
       return json.total ?? (json.items?.length ?? 0);
     },
   });
-
-  // Company Teams: which menu rows this trader gets. Flag off (the default)
-  // → { enabled: false } and the menu is exactly the classic single-login
-  // layout. Owners additionally get the Team row; employees get a reduced
-  // menu (no business profile / billing / team — those are owner-only).
-  const { isEmployee, isTeamOwner: showTeamRow, teamContext } = useTeamContext();
 
   const { data: reminderSettings } = useGetLeadReminderSettings({
     query: {

@@ -1,0 +1,527 @@
+PRE-APP-STORE RELEASE BLOCKERS
+
+Audit and fix two connected Team-account authorization issues before App Store submission:
+
+A. Team employees can currently read conversations claimed by other employees.
+B. Team employees must lose company/team access automatically when the business owner no longer has an effective Team subscription.
+
+Attached screenshots show the current real-device behaviour.
+
+IMPORTANT:
+These are authorization/privacy issues, not just UI issues.
+
+Audit first.
+Do not solve them only by hiding UI.
+Server-side authorization must enforce the same rules.
+
+Do NOT:
+- change Apple/RevenueCat products or offerings;
+- change TEAM_PRODUCT_SEAT_MAP;
+- force deferred subscription changes to become immediate;
+- delete team memberships unnecessarily;
+- redesign unrelated flows;
+- deploy;
+- create a TestFlight build;
+- push to GitHub.
+
+I will use Replit Git Sync myself.
+
+
+==================================================
+A. TEAM CONVERSATION PRIVACY / CLAIM OWNERSHIP
+==================================================
+
+CURRENT REAL DEVICE BEHAVIOUR
+
+A company owner can invite employees/team members.
+
+When one employee claims/handles a job, other employees in the same company can currently:
+
+- see the conversation in Messages;
+- open it;
+- read messages;
+- see customer/job information;
+- see appointment information and other conversation details.
+
+The UI already indicates things such as:
+
+“CLAIMED · LUCIAN”
+
+and inside the thread:
+
+“Lucian Sabău is handling this job — it’s read-only for you.”
+
+Read-only is NOT sufficient.
+
+A non-assigned employee should not be able to read another employee’s customer conversation merely because they belong to the same company.
+
+
+==================================================
+1. REQUIRED ROLE MODEL
+==================================================
+
+BUSINESS OWNER / MAIN TRADER ACCOUNT
+
+The company owner may:
+
+- see all company conversations;
+- open all company conversations;
+- supervise jobs handled by employees;
+- manage Team members;
+- manage subscription/billing.
+
+This owner access is intentional.
+
+
+TEAM EMPLOYEE
+
+For a conversation claimed/assigned to THAT employee:
+
+- full authorized conversation access;
+- messages;
+- enquiry context;
+- photos;
+- quotes;
+- appointment information;
+- customer contact details where existing job rules permit them;
+- normal job workflow.
+
+For a conversation claimed/assigned to ANOTHER employee:
+
+The employee must NOT receive or view the conversation content.
+
+In the Messages list, show only a minimal safe state such as:
+
+“Claimed by Lucian”
+
+or:
+
+“Assigned to Lucian”
+
+Do not expose unnecessary additional information.
+
+In particular, for a conversation claimed by somebody else, audit and prevent leakage of:
+
+- customer name;
+- customer email;
+- customer phone number;
+- service/job description;
+- job reference if not necessary;
+- last-message preview;
+- conversation messages;
+- images;
+- enquiry photos;
+- quotes;
+- appointment details;
+- contact details;
+- report/moderation data;
+- signed media URLs.
+
+The user specifically wants the employee-facing card to communicate who claimed the job, without exposing the other employee’s conversation content.
+
+
+==================================================
+2. UNCLAIMED CONVERSATIONS
+==================================================
+
+Audit the existing intended workflow for unclaimed company enquiries.
+
+Do not break employees’ ability to see/claim new work if that is the current Team workflow.
+
+Report exactly what an employee can see BEFORE claiming a conversation.
+
+Preserve the minimum information necessary for an employee to decide whether to claim a job.
+
+Once Employee A claims it:
+
+- Employee A gets full access;
+- Owner retains full access;
+- Employee B/C/etc lose conversation-content access.
+
+Do not allow another employee to bypass this through reopening an old screen or cached query.
+
+
+==================================================
+3. SERVER-SIDE AUTHORIZATION
+==================================================
+
+Do not implement this only in React Native.
+
+Trace and protect every relevant route:
+
+conversation list
+→ conversation detail
+→ messages
+→ message attachments
+→ enquiry context
+→ quotes
+→ appointments
+→ customer contact details
+→ signed media
+→ report-related conversation access
+→ any direct/deep-link route.
+
+Authorization should effectively be:
+
+business owner
+OR
+currently assigned/claimed employee
+
+for protected claimed-conversation content.
+
+If neither:
+return a safe authorization response.
+
+Do not leak protected data in the response and merely hide it on mobile.
+
+
+==================================================
+4. DIRECT URL / DEEP LINK / CACHE / NOTIFICATIONS
+==================================================
+
+Test bypass paths.
+
+An unauthorized team employee must not regain another employee’s conversation through:
+
+- direct conversation ID;
+- `/messages/:id`;
+- Universal Link;
+- push-notification tap;
+- stale React Query cache;
+- app foreground/background transition;
+- account switching;
+- previously opened thread;
+- signed image URL generation.
+
+When authorization changes because a conversation is claimed/reassigned:
+
+invalidate/refetch the relevant team conversation state.
+
+A previously authorized screen must not continue displaying protected content after the employee loses authorization.
+
+
+==================================================
+5. NOTIFICATIONS
+==================================================
+
+Audit conversation-message notification recipients.
+
+After a conversation is claimed:
+
+new protected conversation/message notifications should go only to the correct authorized recipients according to the Team model:
+
+- business owner;
+- assigned employee;
+
+and not unrelated employees.
+
+If company-wide notification behavior is intentionally different for non-sensitive events, preserve it, but do not include protected customer/message content for unauthorized employees.
+
+
+==================================================
+B. TEAM SUBSCRIPTION DOWNGRADE → EMPLOYEE ACCESS
+==================================================
+
+PRODUCT RULE
+
+Team plans provide employee seats.
+
+Solo plans:
+
+Premium Monthly £9.99
+Premium Annual
+
+do NOT provide employee seats.
+
+If the OWNER changes from a Team subscription to a Solo subscription, Team employees must no longer retain company access once the Solo subscription becomes EFFECTIVE.
+
+
+==================================================
+6. VERY IMPORTANT — APPLE DEFERRED DOWNGRADE
+==================================================
+
+Preserve the subscription lifecycle fix already implemented.
+
+Example:
+
+Owner currently has:
+Team 5 Annual
+
+Owner chooses:
+Premium Monthly £9.99
+
+Apple schedules the downgrade for the next renewal.
+
+BEFORE renewal:
+
+Team 5 remains the effective product.
+The paid Team period is still active.
+Employees KEEP their Team access and seats.
+
+Do NOT restrict them early merely because PRODUCT_CHANGE or a scheduled downgrade exists.
+
+
+AFTER Apple/RevenueCat confirms Premium Monthly is the EFFECTIVE active product:
+
+Team seat allowance becomes 0.
+
+At that point:
+
+- Team employees lose company/team operational access automatically;
+- owner remains able to use their own trader account;
+- owner keeps Billing & Plan access;
+- owner can upgrade back to an eligible Team plan.
+
+RevenueCat/server-effective entitlement is authoritative.
+
+Do NOT use a locally selected future product to restrict employees early.
+
+
+==================================================
+7. DO NOT DELETE TEAM MEMBERS JUST BECAUSE PLAN CHANGES
+==================================================
+
+Preferred behaviour:
+
+Do NOT permanently delete existing Team memberships when the owner moves to Solo.
+
+Instead make them subscription-restricted/inactive for Team access.
+
+Reason:
+
+If the owner later upgrades back to an eligible Team plan, existing membership relationships can be restored according to the available seat allowance rather than requiring every employee to be recreated.
+
+Audit whether the current schema already supports this through entitlement/seat gating.
+
+Use the smallest safe implementation.
+
+Do not introduce a major new membership-state architecture unless necessary.
+
+
+==================================================
+8. EMPLOYEE EXPERIENCE WHEN TEAM PLAN IS NO LONGER ACTIVE
+==================================================
+
+Employees should still be able to authenticate enough to understand why access is unavailable.
+
+Do NOT leave them inside the company dashboard with broken/403 screens everywhere.
+
+Show a clear restricted-access state such as:
+
+“Team access unavailable”
+
+“This company no longer has an active Team subscription.”
+
+“Please contact the business account owner to restore Team access.”
+
+Where safely available to an existing authorized Team member, show the server-authoritative owner contact, for example:
+
+“Account owner: owner@example.com”
+
+Do not hardcode an email address.
+
+Do not expose an email to people who are not members of that company.
+
+Employees should NOT be shown subscription purchase/change controls intended for the owner.
+
+
+OWNER EXPERIENCE
+
+The business owner must NOT be locked out by the Team-plan restriction.
+
+Owner retains access to:
+
+- their own trader account/profile;
+- Billing & Plan;
+- subscription management;
+- Team management as appropriate;
+- legal/support/account settings.
+
+This is essential so the owner can upgrade back to a Team plan.
+
+
+==================================================
+9. ACTIVE SESSION ENFORCEMENT
+==================================================
+
+Do not rely on employees logging out.
+
+Once the effective Team entitlement disappears:
+
+an already-signed-in employee must become restricted on the next authoritative refresh/request.
+
+Handle:
+
+- app launch;
+- foreground;
+- screen refocus;
+- protected API request;
+- subscription reconciliation/webhook;
+- Restore Purchases;
+- owner plan transition.
+
+Clear/remove protected company React Query data when Team authorization is lost.
+
+Do not leave customer/conversation data cached and visible.
+
+
+==================================================
+10. REACTIVATION
+==================================================
+
+Audit the reverse path.
+
+If owner later moves from Solo back to an effective Team plan:
+
+- Team access should become available again according to seat allowance;
+- owner remains owner;
+- eligible existing Team membership should not require unnecessary reinvitation if existing architecture supports restoring it safely.
+
+Do not exceed the active plan’s employee-seat limit.
+
+If existing team membership count exceeds a newly effective lower Team seat allowance, report the existing deterministic rule and ensure excess members cannot gain unauthorized access.
+
+Do not invent an arbitrary member ordering without reporting it.
+
+
+==================================================
+11. REQUIRED AUTHORIZATION TEST MATRIX
+==================================================
+
+Test at minimum:
+
+OWNER
+- owner can see all company conversations;
+- owner can open Employee A conversation;
+- owner can open Employee B conversation;
+- owner retains Billing access on Solo.
+
+EMPLOYEE A
+- can see/open conversation claimed by A;
+- cannot read conversation claimed by B;
+- claimed-by-B list entry exposes only permitted minimal assignment state.
+
+EMPLOYEE B
+- symmetric behavior.
+
+UNCLAIMED
+- existing claim workflow still works.
+
+DIRECT ACCESS
+- unauthorized employee using conversation ID is denied;
+- deep link denied;
+- protected media URL cannot be generated;
+- stale cached conversation disappears after authorization loss.
+
+NOTIFICATIONS
+- unauthorized employees receive no protected message content for another employee’s claimed conversation.
+
+SUBSCRIPTION
+- Team 5 active → employees authorized;
+- Team 5 → pending Solo downgrade → employees remain authorized until renewal;
+- Solo becomes effective → employees automatically restricted;
+- owner remains operational;
+- employees see clear Team-access-unavailable state;
+- owner upgrades to Team again → eligible team access restores;
+- seat limits remain enforced.
+
+ACCOUNT SWITCH
+- Employee A → logout → Employee B must not inherit A conversation data.
+
+
+==================================================
+12. PRIVACY / API RESPONSE DESIGN
+==================================================
+
+Prefer server responses that simply do not contain protected conversation fields for unauthorized employees.
+
+Do not send:
+customer PII,
+message contents,
+media URLs,
+quotes,
+appointments,
+or contact details
+
+and rely on mobile hiding them.
+
+Existing owner/assignee authorization must be the source of truth.
+
+
+==================================================
+VALIDATION
+==================================================
+
+Run:
+
+- Team authorization API tests;
+- conversation/message authorization tests;
+- attachment/signed-media tests;
+- notification recipient tests;
+- Team subscription lifecycle tests;
+- RevenueCat reconciliation tests;
+- account/cache isolation tests;
+- Mobile Team restriction tests;
+- API typecheck;
+- Mobile typecheck.
+
+Because this is privacy/security-critical release code, run full API + Mobile suites if practical.
+
+Request an independent final security review focusing on:
+
+- horizontal access between employees;
+- direct-ID bypass;
+- signed-media leakage;
+- stale cache leakage;
+- subscription downgrade timing;
+- owner lockout risk;
+- restoration after Team reactivation.
+
+
+==================================================
+WHEN COMPLETE
+==================================================
+
+Do NOT deploy.
+Do NOT push to GitHub.
+Do NOT create TestFlight build.
+
+Report:
+
+CONVERSATION PRIVACY
+
+1. Why employees could previously read conversations claimed by colleagues
+2. Exact owner authorization rule
+3. Exact employee authorization rule
+4. What an employee now sees for another employee’s claimed conversation
+5. Direct/deep-link protection
+6. Attachment/media protection
+7. Notification behavior
+8. Cache invalidation behavior
+
+SUBSCRIPTION / TEAM ACCESS
+
+9. Exact effective-plan rule for Team access
+10. What happens during a pending Team → Solo downgrade
+11. What happens when Solo becomes effective
+12. What the restricted employee sees
+13. Whether the owner email/contact is shown and how it is authorized
+14. Why the owner remains unrestricted
+15. Whether memberships are preserved or deleted
+16. What happens when owner upgrades back to Team
+17. Behavior when active members exceed a lower Team seat allowance
+
+RELEASE
+
+18. Files changed
+19. Database migration required yes/no
+20. Production schema update required yes/no
+21. Backend republish required yes/no
+22. Admin republish required yes/no
+23. Landing/web republish required yes/no
+24. New TestFlight build required yes/no
+25. Tests/typechecks
+26. Independent security-review result
+27. Whether Team conversation privacy is release-ready
+28. Whether Team subscription downgrade handling is release-ready
+29. Whether it is safe to continue to App Store submission after deployment/build

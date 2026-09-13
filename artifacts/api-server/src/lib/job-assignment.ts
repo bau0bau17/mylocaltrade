@@ -7,6 +7,7 @@ import {
   usersTable,
 } from "@workspace/db/schema";
 import { companyTeamsEnabled } from "./company-membership";
+import { getCompanyPlanContext, type DbExecutor } from "./team-billing";
 import { deriveStage } from "./conversation-stage";
 import { logAudit } from "./trader-status";
 import { jobReferenceOf } from "./job-reference";
@@ -31,7 +32,7 @@ type ConversationRow = typeof conversationsTable.$inferSelect;
 
 // Matches both the root `db` handle and a drizzle transaction handle for the
 // few queries we need inside/outside transactions.
-type Executor = Pick<typeof db, "select" | "update">;
+type Executor = DbExecutor;
 
 export class JobClaimedByOtherError extends Error {
   constructor(
@@ -44,8 +45,8 @@ export class JobClaimedByOtherError extends Error {
 }
 
 /**
- * The caller's employee seat is suspended (Team billing): they remain a
- * member with read access, but every company-acting write must refuse.
+ * The caller's employee seat is inactive (Team billing): they remain a
+ * member, but all company job access must refuse.
  */
 export class SeatSuspendedError extends Error {
   constructor() {
@@ -60,6 +61,53 @@ export const SEAT_SUSPENDED_RESPONSE = {
     "Your seat is currently inactive, so you can't act on jobs right now. Ask the business owner about seat availability.",
   code: "SEAT_SUSPENDED",
 } as const;
+
+/**
+ * Read access to a Company Teams job.
+ *
+ * The owner may always supervise every company conversation. An active
+ * employee may inspect an unclaimed conversation in order to decide whether
+ * to claim it, and any conversation currently assigned to them. Once another
+ * employee holds the job, the conversation itself is private to that assignee
+ * and the owner — this guard must run before loading messages, contacts,
+ * quotes, bookings, reports, or creating signed media URLs.
+ */
+export async function canViewJob(
+  conv: ConversationRow,
+  userId: number,
+  membershipRole: "OWNER" | "EMPLOYEE" | null,
+): Promise<
+  | { ok: true }
+  | { ok: false; seatSuspended: true }
+  | { ok: false; assignedName: string }
+> {
+  if (!companyTeamsEnabled() || membershipRole !== "EMPLOYEE") return { ok: true };
+  if (await employeeSeatAccessRestricted(db, userId, conv.traderProfileId)) {
+    return { ok: false, seatSuspended: true };
+  }
+  if (conv.assignedTraderUserId == null || conv.assignedTraderUserId === userId) {
+    return { ok: true };
+  }
+  return {
+    ok: false,
+    assignedName: await displayNameOf(db, conv.assignedTraderUserId),
+  };
+}
+
+/** Stable 403 response for a teammate's private assigned conversation. */
+export function respondCannotViewJob(
+  res: { status(code: number): { json(body: unknown): unknown } },
+  access: { ok: false; assignedName: string } | { ok: false; seatSuspended: true },
+): void {
+  if ("seatSuspended" in access) {
+    res.status(403).json(SEAT_SUSPENDED_RESPONSE);
+    return;
+  }
+  res.status(403).json({
+    error: "This conversation is assigned to another team member.",
+    code: "CONVERSATION_ASSIGNED_TO_OTHER",
+  });
+}
 
 /**
  * True when the user's ACTIVE EMPLOYEE membership has a suspended seat. The
@@ -89,6 +137,40 @@ export async function userSeatSuspended(
     )
     .limit(1);
   return row != null;
+}
+
+/**
+ * A persisted seat suspension takes effect immediately. Separately, the
+ * owner's *current effective* entitlement is checked on every employee job
+ * request, closing the interval between a confirmed provider downgrade and
+ * the reconciliation job writing the suspension rows. A pending store product
+ * change is harmless here: getCompanyPlanContext reads the existing effective
+ * subscription record, which RevenueCat reconciliation updates only when the
+ * change has actually taken effect.
+ */
+export async function employeeSeatAccessRestricted(
+  executor: Executor,
+  userId: number,
+  traderProfileId: number,
+): Promise<boolean> {
+  if (!companyTeamsEnabled()) return false;
+  const [membership] = await executor
+    .select({ seatSuspendedAt: companyMembersTable.seatSuspendedAt })
+    .from(companyMembersTable)
+    .where(
+      and(
+        eq(companyMembersTable.userId, userId),
+        eq(companyMembersTable.traderProfileId, traderProfileId),
+        eq(companyMembersTable.status, "ACTIVE"),
+        eq(companyMembersTable.role, "EMPLOYEE"),
+      ),
+    )
+    .limit(1);
+  // Owners (and non-members) never consume an employee seat.
+  if (!membership) return false;
+  if (membership.seatSuspendedAt != null) return true;
+  const plan = await getCompanyPlanContext(traderProfileId, executor);
+  return plan.effectiveSeatAllowance === 0;
 }
 
 /** Stable response body for “someone else holds this job”. */
@@ -136,14 +218,20 @@ async function displayNameOf(
  * so "whichever transaction commits first determines the valid state" holds
  * for every trader-side write.
  */
-async function lockAssignment(tx: Executor, conversationId: number): Promise<number | null> {
+async function lockAssignment(
+  tx: Executor,
+  conversationId: number,
+): Promise<{ assigned: number | null; traderProfileId: number } | null> {
   const [current] = await tx
-    .select({ assigned: conversationsTable.assignedTraderUserId })
+    .select({
+      assigned: conversationsTable.assignedTraderUserId,
+      traderProfileId: conversationsTable.traderProfileId,
+    })
     .from(conversationsTable)
     .where(eq(conversationsTable.id, conversationId))
     .for("update")
     .limit(1);
-  return current?.assigned ?? null;
+  return current ?? null;
 }
 
 /**
@@ -167,11 +255,17 @@ export async function claimOrRequireAssigned(
   if (!companyTeamsEnabled()) return { claimedNow: false };
   // Seat gate BEFORE any claim/assignment logic: a suspended seat is
   // read-only even on jobs the member already holds.
-  if (await userSeatSuspended(tx, userId)) throw new SeatSuspendedError();
-  const assigned = await lockAssignment(tx, conv.id);
-  if (assigned === userId) return { claimedNow: false };
-  if (assigned != null) {
-    throw new JobClaimedByOtherError(assigned, await displayNameOf(tx, assigned));
+  if (await employeeSeatAccessRestricted(tx, userId, conv.traderProfileId)) {
+    throw new SeatSuspendedError();
+  }
+  const current = await lockAssignment(tx, conv.id);
+  if (!current) throw new JobClaimedByOtherError(null, "a team member");
+  if (current.assigned === userId) return { claimedNow: false };
+  if (current.assigned != null) {
+    throw new JobClaimedByOtherError(
+      current.assigned,
+      await displayNameOf(tx, current.assigned),
+    );
   }
   await tx
     .update(conversationsTable)
@@ -197,10 +291,16 @@ export async function requireAssignedInTx(
   userId: number,
 ): Promise<void> {
   if (!companyTeamsEnabled()) return;
-  if (await userSeatSuspended(tx, userId)) throw new SeatSuspendedError();
-  const assigned = await lockAssignment(tx, conversationId);
-  if (assigned != null && assigned !== userId) {
-    throw new JobClaimedByOtherError(assigned, await displayNameOf(tx, assigned));
+  const current = await lockAssignment(tx, conversationId);
+  if (!current) return;
+  if (await employeeSeatAccessRestricted(tx, userId, current.traderProfileId)) {
+    throw new SeatSuspendedError();
+  }
+  if (current.assigned != null && current.assigned !== userId) {
+    throw new JobClaimedByOtherError(
+      current.assigned,
+      await displayNameOf(tx, current.assigned),
+    );
   }
 }
 
@@ -216,7 +316,9 @@ export async function canActOnJob(
   userId: number,
 ): Promise<{ ok: true } | { ok: false; assignedName: string } | { ok: false; seatSuspended: true }> {
   if (!companyTeamsEnabled()) return { ok: true };
-  if (await userSeatSuspended(db, userId)) return { ok: false, seatSuspended: true };
+  if (await employeeSeatAccessRestricted(db, userId, conv.traderProfileId)) {
+    return { ok: false, seatSuspended: true };
+  }
   if (conv.assignedTraderUserId == null || conv.assignedTraderUserId === userId) {
     return { ok: true };
   }

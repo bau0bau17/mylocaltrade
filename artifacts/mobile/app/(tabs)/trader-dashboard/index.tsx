@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getApiUrl } from '@/lib/api-url';
 import type { FeatherIconName } from '@/types/feather-icons';
 import { PromoCountdownBadge } from '@/components/PromoCountdownBadge';
+import { useTeamContext } from '@/hooks/useTeamContext';
 import {
   useGetTraderOnboardingStatus,
   useGetMyTraderReviews,
@@ -27,6 +28,10 @@ export default function TraderOnboardingDashboard() {
   const tabBarHeight = useBottomTabBarHeight();
   const router = useRouter();
   const { token, user, isTrader, resendVerification } = useAuth();
+  const { isEmployee, roleUnknown, seatSuspended } = useTeamContext();
+  const canLoadDashboard = Boolean(
+    token && isTrader && !roleUnknown && !(isEmployee && seatSuspended),
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [resending, setResending] = useState(false);
   const [resendMsg, setResendMsg] = useState<string | null>(null);
@@ -45,21 +50,21 @@ export default function TraderOnboardingDashboard() {
   } = useGetTraderOnboardingStatus({
     query: {
       queryKey: ['/api/trader/onboarding-status'],
-      enabled: Boolean(token && isTrader),
+      enabled: canLoadDashboard,
     },
   });
 
   const { data: reviewsData, refetch: refetchReviews } = useGetMyTraderReviews({
     query: {
       queryKey: ['/api/trader/reviews'],
-      enabled: Boolean(token && isTrader),
+      enabled: canLoadDashboard,
     },
   });
 
   const { data: newLeadsData, refetch: refetchNewLeads } = useGetNewLeadCount({
     query: {
       queryKey: ['/api/enquiries/new-count'],
-      enabled: Boolean(token && isTrader),
+      enabled: canLoadDashboard,
     },
   });
   const newLeadsCount = newLeadsData?.newCount ?? 0;
@@ -71,10 +76,11 @@ export default function TraderOnboardingDashboard() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!canLoadDashboard) return;
       void refetchStatus();
       void refetchReviews();
       void refetchNewLeads();
-    }, [refetchStatus, refetchReviews, refetchNewLeads])
+    }, [canLoadDashboard, refetchStatus, refetchReviews, refetchNewLeads])
   );
 
   const loading = queryLoading;

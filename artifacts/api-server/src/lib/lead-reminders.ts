@@ -8,7 +8,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { sendPushToUser } from "./push-notifications";
-import { traderSideRecipientUserIds } from "./company-membership";
+import { traderSideRecipientUserIds } from "./team-notification-recipients";
 import { sendLeadReminderEmail } from "./email";
 import { generateUnsubscribeToken } from "./auth";
 
