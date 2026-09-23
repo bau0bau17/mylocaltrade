@@ -1,0 +1,71 @@
+FINAL PRE-APP-STORE BLOCKER — Upgrade Nodemailer only
+
+Implement ONLY the confirmed Nodemailer security remediation identified by the final read-only Security Center audit.
+
+Required change:
+- Upgrade the API server's direct production dependency `nodemailer` from 9.0.3 to at least 9.1.1.
+- Prefer exactly 9.1.1 unless the package manager requires a newer compatible 9.x patch release.
+- Update the pnpm lockfile correctly.
+
+This task must remain narrowly scoped.
+
+DO NOT:
+- use “Fix all”
+- upgrade unrelated dependencies
+- change @xmldom/xmldom
+- change js-yaml
+- change browserslist
+- change baseline-browser-mapping
+- change Vitest
+- remove or modify the existing image-size pnpm security patch
+- change Node or pnpm versions
+- change Expo / React Native / EAS
+- change RevenueCat or Apple IAP
+- change database schema
+- change authentication/authorization
+- change application functionality
+- refactor the email system
+- replace Brevo
+- change production environment variables or secrets
+- deploy or republish
+- create a TestFlight build
+- push to GitHub
+
+IMPORTANT:
+Do not push to GitHub. I will use Replit Git Sync myself.
+
+After upgrading Nodemailer:
+
+1. Confirm the resolved Nodemailer version from the actual pnpm dependency tree.
+2. Confirm that it is >= 9.1.1.
+3. Run the API server typecheck.
+4. Run the complete API test suite.
+5. Run the relevant email/transactional-email tests.
+6. Verify that the existing email architecture is unchanged:
+   - Brevo remains the primary transactional email route.
+   - SMTP/Nodemailer remains only the existing fallback.
+7. Verify that existing email attachments, sender/reply-to handling and transactional templates still compile/work.
+8. Run a dependency/security check specifically for Nodemailer and confirm that these advisories are no longer applicable:
+   - CVE-2026-92596
+   - CVE-2026-92595
+   - CVE-2026-92597
+   - CVE-2026-92598
+9. Confirm that no unrelated dependency was intentionally upgraded.
+10. Perform a final independent review of the diff for regression/security risk.
+
+At the end report clearly:
+
+- old Nodemailer version
+- new resolved Nodemailer version
+- files changed
+- API typecheck result
+- API test result
+- email test result
+- whether the four Nodemailer advisories are resolved
+- whether any unrelated dependency changed
+- whether database migration is required
+- whether backend republish is required
+- whether a new TestFlight build is required specifically because of this Nodemailer change
+- whether the repository is now clear of all MUST-FIX dependency blockers identified in the 23 September 2026 pre-release audit
+
+Do not perform deployment, GitHub push, or TestFlight build.

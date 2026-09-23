@@ -1,0 +1,70 @@
+FINAL PRE-APP-STORE SECURITY CENTER AUDIT — READ ONLY FIRST
+
+We are immediately before the final production iOS build and App Store submission.
+
+Replit Security Center currently reports 22 unresolved potential vulnerabilities, including repeated findings involving:
+
+- @xmldom/xmldom 0.8.13
+- js-yaml 3.15.1
+- nodemailer 9.0.3
+- image-size 1.2.1
+- browserslist 4.28.1
+- @vitest/mocker 3.2.6
+- and any remaining findings currently visible in Security Center.
+
+IMPORTANT:
+
+DO NOT click or emulate “Fix all”.
+DO NOT blindly upgrade dependencies.
+DO NOT make any code or dependency changes yet.
+DO NOT deploy.
+DO NOT publish.
+DO NOT push to GitHub.
+DO NOT create a TestFlight build.
+DO NOT change Node, pnpm, Expo, React Native, EAS, RevenueCat, Apple IAP, database schema, or production configuration.
+
+This task is READ-ONLY.
+
+Audit all 22 current Security Center findings against the ACTUAL installed dependency tree and application usage.
+
+For every unique vulnerability/package determine:
+
+1. exact package/version;
+2. severity;
+3. advisory/CVE if available;
+4. whether it is direct or transitive;
+5. which workspace/package introduces it;
+6. whether it is production runtime, server runtime, mobile runtime, build tooling, development-only, or test-only;
+7. whether the vulnerable code path is actually reachable in MyLocalTrade;
+8. whether an existing pnpm patch/override already mitigates the issue despite the scanner still flagging the package version;
+9. minimum safe fixed version;
+10. whether upgrading before App Store submission is low-risk or could cause regression.
+
+Pay particular attention to nodemailer 9.0.3 because this is a newly visible High finding. Determine whether MyLocalTrade actually uses Nodemailer in production and whether any vulnerable behavior is reachable.
+
+Re-check our previous finding that image-size 1.2.1 had a local pnpm patch mitigating the relevant vulnerability. Verify that this is STILL true in the current repository; do not assume it from memory.
+
+Also distinguish duplicate Security Center entries caused by the same vulnerable dependency appearing through multiple dependency paths.
+
+Then classify each UNIQUE issue as:
+
+A. MUST FIX BEFORE APP STORE SUBMISSION
+B. SAFE TO DEFER UNTIL AFTER LAUNCH
+C. SCANNER FALSE POSITIVE / ALREADY MITIGATED
+
+For any A issue, propose the smallest targeted fix only.
+
+Do not implement anything in this task.
+
+Finally report:
+
+- total Security Center findings;
+- total UNIQUE vulnerable packages/advisories;
+- which findings are duplicates;
+- all MUST FIX issues;
+- all safe-to-defer issues;
+- all already-mitigated/false-positive issues;
+- whether any vulnerability affects authentication, authorization, private media, OTP, subscriptions, payments, moderation evidence, account deletion, email, or other production-sensitive paths;
+- whether the current repository is safe to proceed to the final App Store production build WITHOUT dependency changes.
+
+Run no destructive commands and make no repository changes.
